@@ -15,6 +15,7 @@ Only the MOD project foundation exists at this time. No in-game safehouse featur
 [*] [b]Custom safehouse areas[/b]: Let players select a valid safehouse area
 [*] [b]Area protection[/b]: Exclude roads and resource points
 [*] [b]Faction management[/b]: Manage faction safehouses and automatically add members of the same faction
+[*] [b]Deed access and rent[/b]: Plan free or currency-based deed access, plus daily or monthly charges through the optional Economy integration
 [*] [b]Optional integrations[/b]: Planned integration with the MiniMap and Economy systems
 [/list]
 

@@ -17,6 +17,7 @@ description=[*] [b]Tiered deeds[/b]: Limit safehouse size according to deed tier
 description=[*] [b]Custom safehouse areas[/b]: Let players select a valid safehouse area
 description=[*] [b]Area protection[/b]: Exclude roads and resource points
 description=[*] [b]Faction management[/b]: Manage faction safehouses and automatically add members of the same faction
+description=[*] [b]Deed access and rent[/b]: Plan free or currency-based deed access, plus daily or monthly charges through the optional Economy integration
 description=[*] [b]Optional integrations[/b]: Planned integration with the MiniMap and Economy systems
 description=[/list]
 description=
