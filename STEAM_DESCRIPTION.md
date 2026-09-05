@@ -33,9 +33,9 @@
 [*] [url=https://discord.gg/Gur2V67]Discord 社群[/url]
 [/list]
 
-[h2]📺 關注作者[/h2]
-[list]
-[*] [url=https://www.twitch.tv/minidoracat]Twitch 直播[/url]
-[/list]
+
+[h2]☕ 支持作者[/h2]
+MOD 永遠免費。喜歡的話可以請我喝杯咖啡，贊助會用在伺服器與 MOD 開發上。
+[url=https://ko-fi.com/minidoracat][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_kofi.png[/img][/url]
 
 [b]#Minidoracat[/b]

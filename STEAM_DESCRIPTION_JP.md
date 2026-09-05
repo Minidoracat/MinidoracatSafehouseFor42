@@ -33,9 +33,9 @@
 [*] [url=https://discord.gg/Gur2V67]Discordコミュニティ[/url]
 [/list]
 
-[h2]📺 作者をフォロー[/h2]
-[list]
-[*] [url=https://www.twitch.tv/minidoracat]Twitch配信[/url]
-[/list]
+
+[h2]☕ 作者を応援[/h2]
+この MOD は今後もずっと無料です。気に入ったらコーヒーを一杯おごってください。支援はサーバーと MOD 開発に使います。
+[url=https://ko-fi.com/minidoracat][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_kofi.png[/img][/url]
 
 [b]#Minidoracat[/b]
