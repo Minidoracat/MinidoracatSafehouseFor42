@@ -11,5 +11,11 @@
         "tchinese": "STEAM_DESCRIPTION.md",
         "schinese": "STEAM_DESCRIPTION.md",
         "japanese": "STEAM_DESCRIPTION_JP.md"
+    },
+    "titles": {
+        "english": "Minidoracat Safehouse for B42",
+        "tchinese": "[B42] Minidoracat 安全屋 Safehouse",
+        "schinese": "[B42] Minidoracat 安全屋 Safehouse",
+        "japanese": "[B42] Minidoracat セーフハウス Safehouse"
     }
 }
