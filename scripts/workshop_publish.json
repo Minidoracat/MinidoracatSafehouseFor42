@@ -1,0 +1,15 @@
+{
+    "app_id": 108600,
+    "published_file_id": null,
+    "owner_steamid64": "76561198033176898",
+    "workshop_root": "MOD/MinidoracatSafehouseFor42",
+    "mod_info": "MOD/MinidoracatSafehouseFor42/Contents/mods/MinidoracatSafehouseFor42/42/mod.info",
+    "preview_gif": null,
+    "changelog": "STEAM_CHANGELOG.md",
+    "descriptions": {
+        "english": "STEAM_DESCRIPTION_EN.md",
+        "tchinese": "STEAM_DESCRIPTION.md",
+        "schinese": "STEAM_DESCRIPTION.md",
+        "japanese": "STEAM_DESCRIPTION_JP.md"
+    }
+}
