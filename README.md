@@ -30,8 +30,8 @@ Project Zomboid Build 42 MOD。
 
 ## 開發
 
-- `link_workshop.bat`：把 repo 掛載到 `Zomboid\Workshop\` 與 `Zomboid\mods\`（符號連結，repo 改動即時生效）
-- `PZ_Test.bat`：啟動測試（客戶端 / 專用伺服器 / 多客戶端組合）
+- `link_workshop.bat`：手動同步、狀態檢查與歸檔卸載（實體副本）
+- `PZ_Test.bat`：啟動前自動同步 MOD 與家族依賴；Steam／no-Steam／Debug／多開皆保留。資料邊界見 `../pz-family-docs/tools.md`
 
 ## 版本
 
