@@ -37,6 +37,13 @@ Project Zomboid Build 42 MOD。
 
 版本號格式：`{PZ 版本}-{mod 版本}`（例 `42.20.4-0.1.0`），詳見 [CHANGELOG.md](CHANGELOG.md)。
 
+## 授權
+
+本專案採 MIT 授權，全文見 [LICENSE](LICENSE)（Copyright (c) 2026 Minidoracat）。
+
+MIT 只涵蓋本 repo 內由 Minidoracat 撰寫的程式與文件。Project Zomboid 本體、其遊戲素材與反編譯參考資料不屬本專案，
+未包含在本 repo，各自沿用原授權；`scripts/publish_workshop.py` 只在本機呼叫既有 Steam 用戶端，不散布 Steamworks SDK。
+
 ## 作者
 
 Minidoracat — [Discord](https://discord.gg/Gur2V67) | [Twitch](https://www.twitch.tv/minidoracat)
