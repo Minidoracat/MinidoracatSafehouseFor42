@@ -5,11 +5,14 @@ description=[h3]By Minidoracat[/h3]
 description=
 description=[hr][/hr]
 description=
-description=[h2]✨ What is this?[/h2]
 description=A planned safehouse system with tiered deeds, custom claim areas, faction member management, and exclusion of roads and resource points.
+description=[b]🚧 In development:[/b] only the MOD project foundation exists at this time. No in-game safehouse features have been implemented yet.
 description=
-description=[h2]🚧 Development status[/h2]
-description=Only the MOD project foundation exists at this time. No in-game safehouse features have been implemented yet.
+description=[h2]📦 Requirements[/h2]
+description=[list]
+description=[*] [b]Required:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3789836701]Minidoracat UI Library[/url]
+description=[*] Build 42.20.4+; singleplayer and multiplayer both supported
+description=[/list]
 description=
 description=[h2]🧰 Planned features[/h2]
 description=[list]
@@ -17,29 +20,26 @@ description=[*] [b]Tiered deeds[/b]: Limit safehouse size according to deed tier
 description=[*] [b]Custom safehouse areas[/b]: Let players select a valid safehouse area
 description=[*] [b]Area protection[/b]: Exclude roads and resource points
 description=[*] [b]Faction management[/b]: Manage faction safehouses and automatically add members of the same faction
-description=[*] [b]Deed access and rent[/b]: Plan free or currency-based deed access, plus daily or monthly charges through the optional Economy integration
+description=[*] [b]Deed access and rent[/b]: Planned free or paid deeds, plus daily or monthly rent
 description=[*] [b]Optional integrations[/b]: Planned integration with the MiniMap and Economy systems
 description=[/list]
 description=
-description=[h2]📋 MOD information[/h2]
-description=[list]
-description=[*] [b]Workshop ID:[/b] Not assigned
-description=[*] [b]Mod ID:[/b] MinidoracatSafehouseFor42
-description=[*] [b]Supported version:[/b] Build 42.20.4+
-description=[*] [b]Single-player / Multiplayer:[/b] Both supported
-description=[*] [b]Required dependencies:[/b] None
-description=[/list]
+description=[h2]🔗 More Minidoracat mods[/h2]
+description=All my mods are in the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url] — pick what you need.
 description=
-description=[h2]💬 Feedback and community[/h2]
+description=[h2]💬 Feedback & community[/h2]
 description=[list]
-description=[*] [url=https://discord.gg/Gur2V67]Discord community[/url]
+description=[*] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42/issues]GitHub Issues[/url]
+description=[*] [url=https://discord.gg/Gur2V67]Discord[/url]
 description=[/list]
-description=
 description=
 description=[h2]☕ Support the author[/h2]
 description=The mod is free and always will be, and the source code is open on GitHub. If you enjoy it, consider buying me a coffee - tips go straight into servers and mod development.
 description=[url=https://ko-fi.com/minidoracat][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_kofi.png[/img][/url] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_github.png[/img][/url]
 description=
 description=[b]#Minidoracat[/b]
+description=
+description=Workshop ID: Not assigned
+description=Mod ID: MinidoracatSafehouseFor42
 tags=Build 42;Interface;Multiplayer
 visibility=public
