@@ -9,7 +9,7 @@
 - 邏輯回歸：安全把關（範圍／阻隔／保護規則）被改壞時，「執行到並斷言」是唯一防線
 
 限制（必須誠實面對）：這是標準 Lua，不是遊戲的 Kahlua。
-- 標準 Lua 有 next/assert/xpcall，Kahlua 沒有——本 harness **測不出**誤用，
+- 標準 Lua 有 next/xpcall，Kahlua 沒有——本 harness **測不出**誤用，
   那由 scripts/verify_mod.py 的靜態掃描負責（發版前兩者都要跑）
 - Kahlua 專屬行為（table.sort 遞迴深度、Java instance field 不暴露、rawget 呼叫形式、
   每個 table 都是 LinkedHashMap 的記憶體成本）只能靠反編譯查證與實機測試
