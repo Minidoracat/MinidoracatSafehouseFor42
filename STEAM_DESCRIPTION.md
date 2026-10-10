@@ -3,24 +3,38 @@
 
 [hr][/hr]
 
-提供分級地契、自訂安全屋區域、陣營成員管理，以及道路與資源點排除的安全屋系統。
-[b]🚧 開發中：[/b]目前僅建立 MOD 專案骨架，尚未開放遊戲內功能。
+多人伺服器的安全屋系統：用地契自訂安全屋範圍，再分享給朋友或陣營、逐項授權。
 
 [h2]📦 需要安裝[/h2]
 [list]
 [*] [b]必裝：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3789836701]Minidoracat UI Library[/url]
-[*] 支援 Build 42.20.4+；單人／多人皆支援
+[*] [b]選裝：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap[/url]（建立時避開資源點）
+[*] [b]選裝：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3801482125]Minidoracat Economy[/url]（伺服器開放時，用遊戲幣購買或租用更多安全屋名額）
+[*] 只支援多人專用伺服器；伺服器管理員要先調整幾項原版安全屋設定（見完整說明）
+[*] [b]中途加入／移除：[/b]可加入，存檔裡已有安全屋時管理員要先完成遷移；移除前請先看完整說明，地契會消失、已建的安全屋無法再管理
+[*] [b]介面語言：[/b]繁體中文、简体中文、English、日本語、한국어、Русский、Español、Português、Türkçe、Français、Polski、Deutsch（翻譯有問題請回報）
 [/list]
 
-[h2]🧰 規劃功能[/h2]
+[h2]🚀 快速上手[/h2]
+[olist]
+[*] 找到或製作安全屋地契（伺服器也可能設成免費建立）
+[*] 對地契按右鍵，或從家族工具列開啟「安全屋管理」，選擇建立安全屋
+[*] 拖曳滑鼠或走到兩個角落框出範圍，站在範圍裡確認
+[*] 在管理視窗把安全屋分享給朋友或陣營
+[/olist]
+
+[h2]✨ 主要功能[/h2]
 [list]
-[*] [b]分級地契[/b]：依地契等級限制可設定的安全屋大小
-[*] [b]自訂安全屋區域[/b]：由玩家選擇符合規則的安全屋範圍
-[*] [b]區域保護[/b]：排除道路與資源點
-[*] [b]陣營管理[/b]：管理陣營安全屋，並讓同陣營成員自動加入
-[*] [b]地契取得與租賃[/b]：規劃免費或付費取得，並可日租或月租
-[*] [b]選用整合[/b]：規劃與 MiniMap 及 Economy 系統串接
+[*] [b]分級地契[/b]：地契等級決定安全屋能圈多大
+[*] [b]自訂範圍[/b]：自己框出矩形，建好後短時間內還能重畫
+[*] [b]避開道路與資源點[/b]：大馬路與軍警醫療等建築圈不進來
+[*] [b]逐項分享[/b]：分享給玩家或陣營，分開授權電器、建造、農耕
+[*] [b]管理視窗[/b]：查看自己與分享給你的安全屋，改名或放棄
+[*] [b]原版保護[/b]：非成員進不去也拿不走東西，殭屍仍可能在屋內生成
+[*] [b]管理員面板[/b]：在遊戲內調整規則、地契、排除與付費名額
+[*] [b]從 Better Safehouse 遷移[/b]：管理員審核後一次匯入既有安全屋
 [/list]
+📖 [b]伺服器設定、遷移流程與已知限制：[/b][url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse 完整說明（GitHub）[/url]
 
 [h2]🔗 Minidoracat 全系列[/h2]
 其他作品都在[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat 全系列收藏[/url]，依需求自選訂閱。

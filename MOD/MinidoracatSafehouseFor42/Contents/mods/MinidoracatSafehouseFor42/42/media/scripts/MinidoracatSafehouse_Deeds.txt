@@ -1,0 +1,78 @@
+module MinidoracatSafehouse
+{
+    /*
+        地契 8 種（計畫 §7.1）：等級只由 full type 決定，不寫 modData、不加自訂 tag；種類只加不刪、不改名。
+        屬性照 deeds-mp spike（2026-10-10 實測）；顯示名稱在 Translate/<LANG>/ItemName.json（MinidoracatSafehouse.Deed<N>）。
+    */
+    item Deed1
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+
+    item Deed2
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+
+    item Deed3
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+
+    item Deed4
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+
+    item Deed5
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+
+    item Deed6
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+
+    item Deed7
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+
+    item Deed8
+    {
+        DisplayCategory = Literature,
+        ItemType = base:normal,
+        Weight = 0.1,
+        Icon = Paper,
+        WorldStaticModel = SheetOfPaper,
+    }
+}

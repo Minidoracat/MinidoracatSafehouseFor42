@@ -37,6 +37,9 @@ luac.out
 temp/
 tmp/
 
+# 競品研究（含其他 MOD 的已查證風險；家族 conventions「攻擊面分析不入庫」），只留本機
+docs/research/
+
 # poster 產生器輸出（正式檔已部署至 MOD 目錄，此為重產暫存）
 scripts/poster/posters/
 # 未採用的封面候選（留在本機備查，不進版控）

@@ -1,0 +1,578 @@
+module Base
+{
+    /*
+        地契配方 24 條（計畫 §7.7）：每級寬鬆／標準／嚴格三條，沙盒 Tier<N>Craft 選一條（1＝不開放）。
+        module Base：短名引用只查 Base（pitfalls.md「CraftRecipe 學習管線」）；NeedToBeLearn = false 避開學習管線。
+        Tags = InHandCraft：AnySurfaceCraft 要站在工作台旁（BaseCraftingLogic.java:921-923）。不加 CanBeDoneInDark（寫地契要光線）。
+        OnTest = MSH_Recipe.deed<N><Level>（點號可用，CraftRecipe.java:1020）；OnAddToMenu 只能寫全域名稱
+        MSH_menuDeed<N><Level>（callLuaBool 用 env.rawget，LuaManager.java:5745-5746）。函式在 lua/shared/MinidoracatSafehouse/Recipes.lua。
+        輸入語法照 deeds-mp spike 實測；物品都在 42.21.0 原版 generated/items/（literature、normal、weapon、container、map、key）。
+    */
+    craftRecipe CraftMinidoracatSafehouseDeed1Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed1Easy,
+        OnAddToMenu = MSH_menuDeed1Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 2 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed1,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed1Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed1Standard,
+        OnAddToMenu = MSH_menuDeed1Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 4 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 1 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed1,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed1Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed1Strict,
+        OnAddToMenu = MSH_menuDeed1Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 6 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 2 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed1,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed2Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed2Easy,
+        OnAddToMenu = MSH_menuDeed2Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 4 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed2,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed2Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed2Standard,
+        OnAddToMenu = MSH_menuDeed2Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 6 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 2 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed2,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed2Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed2Strict,
+        OnAddToMenu = MSH_menuDeed2Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 8 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 4 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed2,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed3Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed3Easy,
+        OnAddToMenu = MSH_menuDeed3Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 6 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed3,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed3Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed3Standard,
+        OnAddToMenu = MSH_menuDeed3Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 8 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 3 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed3,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed3Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed3Strict,
+        OnAddToMenu = MSH_menuDeed3Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 10 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 6 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed3,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed4Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed4Easy,
+        OnAddToMenu = MSH_menuDeed4Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 8 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed4,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed4Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed4Standard,
+        OnAddToMenu = MSH_menuDeed4Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 10 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 4 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed4,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed4Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed4Strict,
+        OnAddToMenu = MSH_menuDeed4Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 12 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 8 [Base.MoneyBundle],
+            item 1 tags[base:lock],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed4,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed5Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed5Easy,
+        OnAddToMenu = MSH_menuDeed5Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 10 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed5,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed5Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed5Standard,
+        OnAddToMenu = MSH_menuDeed5Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 12 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 5 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed5,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed5Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed5Strict,
+        OnAddToMenu = MSH_menuDeed5Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 14 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 10 [Base.MoneyBundle],
+            item 1 tags[base:lock],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed5,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed6Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed6Easy,
+        OnAddToMenu = MSH_menuDeed6Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 12 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed6,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed6Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed6Standard,
+        OnAddToMenu = MSH_menuDeed6Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 14 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 6 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed6,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed6Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed6Strict,
+        OnAddToMenu = MSH_menuDeed6Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 16 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 2 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 12 [Base.MoneyBundle],
+            item 1 tags[base:lock],
+            item 1 [Base.Briefcase],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed6,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed7Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed7Easy,
+        OnAddToMenu = MSH_menuDeed7Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 14 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed7,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed7Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed7Standard,
+        OnAddToMenu = MSH_menuDeed7Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 16 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 7 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed7,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed7Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed7Strict,
+        OnAddToMenu = MSH_menuDeed7Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 18 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 2 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 14 [Base.MoneyBundle],
+            item 1 tags[base:lock],
+            item 1 [Base.Briefcase],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed7,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed8Easy
+    {
+        timedAction = Making,
+        time = 100,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed8Easy,
+        OnAddToMenu = MSH_menuDeed8Easy,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 16 [Base.SheetPaper2],
+            item 1 tags[base:write] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed8,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed8Standard
+    {
+        timedAction = Making,
+        time = 300,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed8Standard,
+        OnAddToMenu = MSH_menuDeed8Standard,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 18 [Base.SheetPaper2],
+            item 1 tags[base:idcard],
+            item 1 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 8 [Base.MoneyBundle],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed8,
+        }
+    }
+
+    craftRecipe CraftMinidoracatSafehouseDeed8Strict
+    {
+        timedAction = Making,
+        time = 600,
+        NeedToBeLearn = false,
+        OnTest = MSH_Recipe.deed8Strict,
+        OnAddToMenu = MSH_menuDeed8Strict,
+        Tags = InHandCraft,
+        category = Miscellaneous,
+        inputs
+        {
+            item 20 [Base.SheetPaper2],
+            item 1 [Base.Notebook],
+            item 1 tags[base:idcard],
+            item 2 [Base.MuldraughMap;Base.WestpointMap;Base.RiversideMap;Base.RosewoodMap;Base.MarchRidgeMap;Base.LouisvilleMap1;Base.LouisvilleMap2;Base.LouisvilleMap3;Base.LouisvilleMap4;Base.LouisvilleMap5;Base.LouisvilleMap6;Base.LouisvilleMap7;Base.LouisvilleMap8;Base.LouisvilleMap9],
+            item 16 [Base.MoneyBundle],
+            item 1 tags[base:lock],
+            item 1 [Base.Briefcase],
+            item 1 tags[base:write] mode:keep,
+            item 1 [Base.Clipboard] mode:keep,
+            item 1 [Base.Stapler] mode:keep,
+        }
+        outputs
+        {
+            item 1 MinidoracatSafehouse.Deed8,
+        }
+    }
+}

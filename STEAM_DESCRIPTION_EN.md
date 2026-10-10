@@ -3,24 +3,38 @@
 
 [hr][/hr]
 
-A planned safehouse system with tiered deeds, custom claim areas, faction member management, and exclusion of roads and resource points.
-[b]🚧 In development:[/b] only the MOD project foundation exists at this time. No in-game safehouse features have been implemented yet.
+A safehouse system for multiplayer servers: use a deed to claim the area you choose, then share it with friends or your faction, one permission at a time.
 
 [h2]📦 Requirements[/h2]
 [list]
 [*] [b]Required:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3789836701]Minidoracat UI Library[/url]
-[*] Build 42.20.4+; singleplayer and multiplayer both supported
+[*] [b]Optional:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap[/url] (keep claims off resource points)
+[*] [b]Optional:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3801482125]Minidoracat Economy[/url] (buy or rent extra safehouse slots with in-game money, if the server sells them)
+[*] Dedicated multiplayer servers only; the server admin must change a few vanilla safehouse settings first (see the full guide)
+[*] [b]Add/remove mid-save:[/b] can be added, but if the save already has safehouses an admin must finish the migration first; read the full guide before removing it: deeds disappear and existing safehouses can no longer be managed
+[*] [b]Languages:[/b] 繁體中文, 简体中文, English, 日本語, 한국어, Русский, Español, Português, Türkçe, Français, Polski, Deutsch (please report any translation issues)
 [/list]
 
-[h2]🧰 Planned features[/h2]
+[h2]🚀 Quick start[/h2]
+[olist]
+[*] Find or craft a safehouse deed (the server may also allow free claims)
+[*] Right-click the deed, or open Safehouse Manager from the family toolbar, and choose to create a safehouse
+[*] Drag with the mouse or walk to two corners to mark the area, then confirm while standing inside it
+[*] Share the safehouse with friends or your faction from the manager window
+[/olist]
+
+[h2]✨ Features[/h2]
 [list]
-[*] [b]Tiered deeds[/b]: Limit safehouse size according to deed tier
-[*] [b]Custom safehouse areas[/b]: Let players select a valid safehouse area
-[*] [b]Area protection[/b]: Exclude roads and resource points
-[*] [b]Faction management[/b]: Manage faction safehouses and automatically add members of the same faction
-[*] [b]Deed access and rent[/b]: Planned free or paid deeds, plus daily or monthly rent
-[*] [b]Optional integrations[/b]: Planned integration with the MiniMap and Economy systems
+[*] [b]Tiered deeds[/b]: the deed tier sets how large your safehouse can be
+[*] [b]Custom area[/b]: mark your own rectangle, and redraw it shortly after claiming
+[*] [b]Avoids roads and resource points[/b]: main roads and buildings such as military, police and medical sites cannot be claimed
+[*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately
+[*] [b]Manager window[/b]: see your own and shared safehouses, rename or release them
+[*] [b]Vanilla protection[/b]: non-members cannot enter or take items; zombies can still spawn inside
+[*] [b]Admin panel[/b]: adjust rules, deeds, exclusions and paid slots in game
+[*] [b]Move from Better Safehouse[/b]: admins review and import existing safehouses in one pass
 [/list]
+📖 [b]Server settings, migration and known limits:[/b] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse full guide on GitHub[/url] (Traditional Chinese)
 
 [h2]🔗 More Minidoracat mods[/h2]
 All my mods are in the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url] — pick what you need.
