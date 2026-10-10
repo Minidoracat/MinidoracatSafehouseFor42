@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "Первый угол",
     "IGUI_MSH_Select_Done": "Готово",
     "IGUI_MSH_Select_Redo": "Заново",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / макс. %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (макс. размер: %4 x %4, макс. площадь: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Убежище",
     "IGUI_MSH_Product_tier1": "Место для убежища — купчая уровня 1",

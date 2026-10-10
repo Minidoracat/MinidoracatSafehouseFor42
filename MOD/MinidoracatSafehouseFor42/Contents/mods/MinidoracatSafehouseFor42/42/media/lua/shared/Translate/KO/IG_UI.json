@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "첫 모서리 지정",
     "IGUI_MSH_Select_Done": "완료",
     "IGUI_MSH_Select_Redo": "다시 지정",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / 최대 %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (최대 크기: %4 x %4, 최대 면적: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "은신처",
     "IGUI_MSH_Product_tier1": "은신처 슬롯 - 1등급 증서",

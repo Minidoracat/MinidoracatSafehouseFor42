@@ -26,7 +26,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [h2]✨ Features[/h2]
 [list]
 [*] [b]Tiered deeds[/b]: the deed tier sets how large your safehouse can be
-[*] [b]Custom area[/b]: mark your own rectangle, and redraw it shortly after claiming
+[*] [b]Custom area[/b]: mark your own rectangle with the size limit shown as you go and road tiles in the way marked red; redraw it shortly after claiming
 [*] [b]Avoids roads and resource points[/b]: main roads and buildings such as military, police and medical sites cannot be claimed
 [*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately; friends can also be allowed just to invite others
 [*] [b]Manager window[/b]: see your own and shared safehouses, rename or release them

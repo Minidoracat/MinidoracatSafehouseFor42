@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "最初の角を設定",
     "IGUI_MSH_Select_Done": "完了",
     "IGUI_MSH_Select_Redo": "再指定",
-    "IGUI_MSH_Select_Size": "%1 × %2 = %3 / 最大 %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 × %2 = %3（上限：%4 × %4、面積 %5マス）",
     "IGUI_MSH_Select_SizeNoLimit": "%1 × %2 = %3",
     "IGUI_MSH_SourceName": "セーフハウス",
     "IGUI_MSH_Product_tier1": "セーフハウス枠 - ランク1の権利書",

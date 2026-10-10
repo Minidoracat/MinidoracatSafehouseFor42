@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "Ustaw pierwszy róg",
     "IGUI_MSH_Select_Done": "Gotowe",
     "IGUI_MSH_Select_Redo": "Zaznacz ponownie",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / maks. %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (maks. rozmiar: %4 x %4, maks. powierzchnia: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Schronienie",
     "IGUI_MSH_Product_tier1": "Miejsce na schronienie - akt poziomu 1",

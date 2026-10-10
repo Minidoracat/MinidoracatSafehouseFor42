@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "設第一角",
     "IGUI_MSH_Select_Done": "完成",
     "IGUI_MSH_Select_Redo": "重新框選",
-    "IGUI_MSH_Select_Size": "%1 × %2 ＝ %3／上限 %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 × %2 ＝ %3（上限 %4 × %4、%5 格）",
     "IGUI_MSH_Select_SizeNoLimit": "%1 × %2 ＝ %3",
     "IGUI_MSH_SourceName": "安全屋",
     "IGUI_MSH_Product_tier1": "安全屋名額 - 1 級地契",

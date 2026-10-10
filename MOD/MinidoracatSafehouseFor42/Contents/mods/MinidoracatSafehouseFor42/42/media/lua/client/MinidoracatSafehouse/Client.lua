@@ -38,6 +38,13 @@ function C.ui(caps, minRev)
     return UI
 end
 
+-- UI.Window.new 的參數：框架有不透明視窗（CAPABILITIES.opaqueWindow）時帶 opaque = true，疊在一起不透出底下的字
+-- （使用者 2026-10-11）；舊框架沒有這個旗標就不帶，行為照舊。回傳同一張 opts
+function C.windowOpts(UI, opts)
+    if UI and UI.CAPABILITIES and UI.CAPABILITIES.opaqueWindow == true then opts.opaque = true end
+    return opts
+end
+
 -- warning 色票：框架 rev 18 起內建（DARK 值與這裡相同，MinidoracatUIFor42 docs/ARCHITECTURE.md §3.2）；舊框架由本 MOD 注入，
 -- consumer token 會原樣保留。色相離 accent 18.75°、對深色 surface 9.07:1（計畫 §10.1 的條件；框架 test_rev18.lua 驗）。
 C.WARNING = { r = 1.0, g = 0.55, b = 0.2, a = 1 }

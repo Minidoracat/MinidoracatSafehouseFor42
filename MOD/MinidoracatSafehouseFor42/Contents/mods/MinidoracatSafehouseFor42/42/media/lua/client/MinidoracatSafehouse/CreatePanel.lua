@@ -163,6 +163,42 @@ end
 
 local function clearPreview(m)
     m.checks, m.pass, m.failCode, m.failDetail, m.previewWant, m.previewRid = nil, nil, nil, nil, false, nil
+    m.marks, m.rangeBad = nil, false
+end
+
+-- 沒過的項目帶的座標（伺服器 detail 併進預檢項目或失敗結果）：道路 { areas }（Exclusions.roads，全部違規格合併成的
+-- 矩形，扁平 x, y, w, h, ...）、未載入 { x, y }（第一個沒載入的格子）、資源點 { x, y, w, h }（整棟外框，可能超出範圍）、
+-- 重疊與間距不足 { x, y, w, h }（對方範圍，Claims.checkOverlap）。收到結果時抽成平的數字陣列 x, y, w, h, ...，
+-- 每幀只讀（V.frame 不配置）
+local function addArea(marks, x, y, w, h)
+    if not MSH.isInt(x) or not MSH.isInt(y) then return end
+    local n = #marks
+    marks[n + 1], marks[n + 2] = x, y
+    marks[n + 3] = MSH.isInt(w) and w >= 1 and w or 1
+    marks[n + 4] = MSH.isInt(h) and h >= 1 and h or 1
+end
+
+local function addMark(marks, e)
+    if type(e) ~= "table" then return end
+    local a = e.areas
+    if type(a) == "table" and #a >= 4 then
+        for i = 1, #a - 3, 4 do addArea(marks, a[i], a[i + 1], a[i + 2], a[i + 3]) end
+    else
+        addArea(marks, e.x, e.y, e.w, e.h)
+    end
+end
+
+-- rangeBad：範圍本身就是問題（太大，沒有座標可指）時範圍改畫錯誤色；其餘範圍維持 accent、只標出問題格
+function P.collectMarks(m)
+    local marks, bad = {}, m.failCode == CODE.TOO_BIG
+    for _, c in ipairs(m.checks or {}) do
+        if c.ok == false then
+            addMark(marks, c)
+            if c.code == CODE.TOO_BIG then bad = true end
+        end
+    end
+    if m.failCode ~= nil then addMark(marks, m.failDetail) end
+    m.marks, m.rangeBad = marks, bad
 end
 
 -- 回 idle（取消、死亡、離線）；notice＝要在 idle 顯示的原因碼
@@ -233,6 +269,7 @@ function P.onPreview(m, res)
     else
         m.checks, m.pass, m.failCode, m.failDetail = {}, false, res.code, res
     end
+    P.collectMarks(m)
     changed(m)
 end
 
@@ -331,6 +368,7 @@ function P.onSubmit(m, res)
     end
     if m.closed then return end
     m.phase, m.failCode, m.failDetail, m.pass = P.PREVIEW, res.code, res, false
+    P.collectMarks(m)
     changed(m)
 end
 
@@ -634,7 +672,7 @@ function V.layout(v)
     if Focus ~= nil and Focus.invalidate ~= nil then Focus.invalidate(v.win) end
 end
 
--- 即時大小行；回是否超過上限（範圍變了才重組字串）
+-- 即時大小行：w × h ＝ 面積，加上邊長與面積上限（只有邊長超過時也看得出原因）；回是否超過上限（範圍變了才重組字串）
 local function sizeLine(v)
     local _, _, w, h = Sel.bounds(v.m.sel)
     if w == nil then w, h = 0, 0 end
@@ -642,7 +680,8 @@ local function sizeLine(v)
     if w ~= v.sizeW or h ~= v.sizeH then
         v.sizeW, v.sizeH = w, h
         if v.maxArea ~= nil then
-            v.sizeText = getText("IGUI_MSH_Select_Size", tostring(w), tostring(h), tostring(w * h), tostring(v.maxArea))
+            v.sizeText = getText("IGUI_MSH_Select_SizeLimit", tostring(w), tostring(h), tostring(w * h),
+                tostring(v.maxSide), tostring(v.maxArea))
         else
             v.sizeText = getText("IGUI_MSH_Select_SizeNoLimit", tostring(w), tostring(h), tostring(w * h))
         end
@@ -651,17 +690,39 @@ local function sizeLine(v)
     return over
 end
 
--- 每個 UI 幀（Body:prerender）：走位終點、即時大小、重加範圍高亮（§2.8 只畫一層）
+P.RANGE_ALPHA, P.MARK_ALPHA = 0.5, 0.9
+
+-- 預檢之後（preview、confirm、送出中）：照樣畫提案範圍，沒過的項目帶的格子用錯誤色、更不透明地疊在上面。
+-- addAreaHighlightForPlayer(playerIndex, x1, y1, x2, y2, z, r, g, b, a)：x2／y2 不含（LuaManager.java:12519）
+local function drawProposal(v, m, p)
+    local r, z = m.rect, math.floor(p:getZ())   -- IsoMovingObject.java:525
+    local c = m.rangeBad and v.colors.errorText or v.colors.accent
+    addAreaHighlightForPlayer(m.playerNum, r.x, r.y, r.x + r.w, r.y + r.h, z, c.r, c.g, c.b, P.RANGE_ALPHA)
+    local mk = m.marks
+    if mk == nil then return end
+    local e = v.colors.errorText
+    for i = 1, #mk, 4 do
+        local x, y = mk[i], mk[i + 1]
+        addAreaHighlightForPlayer(m.playerNum, x, y, x + mk[i + 2], y + mk[i + 3], z, e.r, e.g, e.b, P.MARK_ALPHA)
+    end
+end
+
+-- 每個 UI 幀（Body:prerender）：重加範圍高亮（§2.8 只畫一層）；框選中另有走位終點與即時大小
 function V.frame(v)
     local m = v.m
-    if m.phase ~= P.SELECTING or m.sel == nil then return end
     local p = player()
     if p == nil then return end
+    local phase = m.phase
+    if phase == P.PREVIEW or phase == P.CONFIRM or phase == P.SUBMITTING then
+        if m.rect ~= nil then drawProposal(v, m, p) end
+        return
+    end
+    if phase ~= P.SELECTING or m.sel == nil then return end
     local s = m.sel
     Sel.update(s, p)
     if (s.ax ~= nil) ~= v.corner or (s.tool == Sel.DRAG and Sel.usingJoypad(s)) ~= v.joy then V.layout(v) end
     local c = sizeLine(v) and v.colors.errorText or v.colors.accent
-    Sel.draw(s, p, c.r, c.g, c.b, 0.5)
+    Sel.draw(s, p, c.r, c.g, c.b, P.RANGE_ALPHA)
 end
 
 function V.draw(el, v)
@@ -791,9 +852,10 @@ function V.build(m, UI)
         lineH = tm:getFontHeight(FONT) + 2, wrapOK = caps.textWrap == true and UI.Text ~= nil and UI.Text.wrap ~= nil,
         invalidOK = caps.textFieldInvalid == true }
     v.iconDY = math.floor((v.lineH - 2 - ICON) / 2)
-    -- 非 modal、不 alwaysOnTop；放右側，框選時不擋住角色附近的地面
-    local win = UI.Window.new({ x = math.max(0, sw - w - 60), y = 120, width = w, height = 200, icon = "house", theme = theme,
-        title = getText(m.mode == "redraw" and "IGUI_MSH_Create_RedrawTitle" or "IGUI_MSH_Create_Title") })
+    -- 非 modal、不 alwaysOnTop；放右側，框選時不擋住角色附近的地面；框架有 opaqueWindow 時不透明（Client.windowOpts）
+    local win = UI.Window.new(MSH.Client.windowOpts(UI, { x = math.max(0, sw - w - 60), y = 120, width = w, height = 200,
+        icon = "house", theme = theme,
+        title = getText(m.mode == "redraw" and "IGUI_MSH_Create_RedrawTitle" or "IGUI_MSH_Create_Title") }))
     v.win, v.top = win, win:contentTop()
     local body = bodyClass():new(0, v.top, w, 100)
     body.background = false

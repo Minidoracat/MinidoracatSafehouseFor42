@@ -2,9 +2,10 @@
 -- 道路＝地面層地板圖塊（只看 getFloor，路緣、標線等覆蓋圖掛在 attachedAnimSprite、不看：CellLoader.java:256-264）；
 -- 自家車道放寬（使用者 2026-10-10 裁定 driveway、parkingsrc）：住宅外框＋roadMargin＋2 格內只有主要道路與 MiniMap 停車場算路。
 -- 資源點＝MiniMap `MinidoracatMiniMapResourceAPI.buildingsIn`；MiniMap 缺席或版本不符＝不擋、設定隱藏（§8.2）。
--- 成本（§12.4）：每格只讀一次、遇到第一個違規就停；配置只隨請求（住宅數、停車區數）成長，不逐格建表。
--- 回傳一律 nil（通過）或 code, detail：ROAD { x, y, kind }、NOT_LOADED { x, y }、RESOURCE { cat, x, y, w, h }、
--- RESOURCE_PENDING、RESOURCE_ERROR。
+-- 成本（§12.4）：每格只讀一次；道路違規時照樣掃完（和通過時一樣多），違規格合併成矩形回給客戶端標紅（使用者 2026-10-11
+-- 裁定預檢標紅）；配置只隨請求（住宅數、停車區數、道路矩形數）成長，不逐格建表。
+-- 回傳一律 nil（通過）或 code, detail：ROAD { x, y, kind, areas }（第一格與它的類別；areas＝全部違規格的矩形，
+-- 扁平 x, y, w, h, ...）、NOT_LOADED { x, y }、RESOURCE { cat, x, y, w, h }、RESOURCE_PENDING、RESOURCE_ERROR。
 
 if isClient() then return end
 
@@ -110,32 +111,67 @@ local function parkingLots(scan)
 end
 
 -- ===== 道路（§8.1）=====
+E.MAX_ROAD_AREAS = 128   -- 回給客戶端標紅的矩形上限（封包大小與每幀繪製數）；滿了就停掃，結果照樣是 ROAD
+
+-- 一列內連續的道路格 [x0, x1)：上一列有同起點、同寬的矩形就往下延伸（直的路併成一塊），否則新開一個
+local function addRun(st, x0, x1, y)
+    local areas = st.areas
+    local i = st.prev[x0]
+    if i ~= nil and areas[i + 2] == x1 - x0 then
+        areas[i + 3] = areas[i + 3] + 1
+    elseif #areas >= E.MAX_ROAD_AREAS * 4 then
+        st.full = true
+        return
+    else
+        i = #areas + 1
+        areas[i], areas[i + 1], areas[i + 2], areas[i + 3] = x0, y, x1 - x0, 1
+    end
+    st.cur[x0] = i
+end
+
 function E.roads(rect, cfg)
     if not cfg.avoidRoads then return nil end
     local kinds = cfg.roadKinds
     local scan = Rect.expand(rect, cfg.roadMargin)
     local cell = getCell()
+    local xEnd = scan.x + scan.w
     local near, lots   -- 第一次遇到非主要道路的勾選類別才查（每次 roads 最多一次）
+    local hit, st      -- 第一個違規格（回傳的 detail）與合併矩形的狀態
     for y = scan.y, scan.y + scan.h - 1 do
-        for x = scan.x, scan.x + scan.w - 1 do
-            -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）
+        local run = nil   -- 這一列進行中的違規段起點
+        for x = scan.x, xEnd - 1 do
+            -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路
             local sq = cell:getGridSquare(x, y, 0)
-            if sq == nil then return CODE.NOT_LOADED, { x = x, y = y } end
-            local floor = sq:getFloor()                   -- IsoGridSquare.java:4652（solidfloor 物件）
+            if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
+            local floor = sq and sq:getFloor()            -- IsoGridSquare.java:4652（solidfloor 物件）
             local sprite = floor and floor:getSprite()    -- IsoObject.java:1999
             local kind = sprite and E.classify(sprite:getName())   -- IsoSprite.java:1980
-            if kind and kinds[kind] then
-                if kind ~= "main" then
-                    if near == nil then
-                        near = nearZones(rect, cfg.roadMargin + 2)
-                        lots = #near > 0 and parkingLots(scan) or {}
-                    end
-                    if inAny(near, x, y) and not inAny(lots, x, y) then kind = nil end
+            if kind and not kinds[kind] then kind = nil end
+            if kind and kind ~= "main" then
+                if near == nil then
+                    near = nearZones(rect, cfg.roadMargin + 2)
+                    lots = #near > 0 and parkingLots(scan) or {}
                 end
-                if kind then return CODE.ROAD, { x = x, y = y, kind = kind } end
+                if inAny(near, x, y) and not inAny(lots, x, y) then kind = nil end
+            end
+            if kind then
+                if hit == nil then
+                    st = { areas = {}, prev = {}, cur = {} }
+                    hit = { x = x, y = y, kind = kind, areas = st.areas }
+                end
+                run = run or x
+            elseif run ~= nil then
+                addRun(st, run, x, y)
+                run = nil
             end
         end
+        if run ~= nil then addRun(st, run, xEnd, y) end
+        if st ~= nil then
+            if st.full then return CODE.ROAD, hit end
+            st.prev, st.cur = st.cur, {}
+        end
     end
+    if hit ~= nil then return CODE.ROAD, hit end
     return nil
 end
 

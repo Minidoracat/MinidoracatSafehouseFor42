@@ -579,6 +579,8 @@ return function(T)
     end
     check(#swallowed == 0, "回呼沒有被吞掉的錯誤（" .. table.concat(swallowed, " / ") .. "）")
 
+    AP.instance, SW.instance = nil, nil
+
     MinidoracatUI = nil
     check(pcall(AP.open, {}) and pcall(SW.open, {}), "沒有 UI 框架：退最小 fallback、不報錯")
     AP.instance, SW.instance = nil, nil

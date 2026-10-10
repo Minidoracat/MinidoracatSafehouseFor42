@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "Marcar primera esquina",
     "IGUI_MSH_Select_Done": "Listo",
     "IGUI_MSH_Select_Redo": "Redibujar",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / máx. %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (tamaño máx.: %4 x %4, área máx.: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Refugio",
     "IGUI_MSH_Product_tier1": "Plaza de refugio - escritura de nivel 1",

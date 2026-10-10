@@ -273,7 +273,8 @@ function SW.build(UI)
     local theme = MSH.Client.theme(UI)
     local x, y, W, H = K.center(480, 540)
     local w = { UI = UI, theme = theme, seen = {} }
-    w.win = UI.Window.new({ x = x, y = y, width = W, height = H, title = getText("IGUI_MSH_Slots_Title"), theme = theme })
+    w.win = UI.Window.new(MSH.Client.windowOpts(UI, { x = x, y = y, width = W, height = H,
+        title = getText("IGUI_MSH_Slots_Title"), theme = theme }))
     local top = w.win:contentTop()
     w.body = UI.ScrollPanel.new({ x = 0, y = top, width = W, height = H - top, theme = theme })
     w.win:addChild(w.body)
@@ -492,9 +493,9 @@ end
 
 -- 確認頁（框架 Dialog）：金額＝伺服器摘要的價格，也是報價要對上的值
 function SW.confirm(w, text, onOk)
-    w.UI.Dialog.show({ title = getText("IGUI_MSH_Slots_Title"), text = text, theme = w.theme,
+    w.UI.Dialog.show(MSH.Client.windowOpts(w.UI, { title = getText("IGUI_MSH_Slots_Title"), text = text, theme = w.theme,
         confirmText = getText("IGUI_MSH_Slots_Pay"), cancelText = getText("UI_Cancel"),
-        onResult = function(ok) if ok then onOk() end end })
+        onResult = function(ok) if ok then onOk() end end }))
 end
 
 function SW.onBuy(w, btn)
@@ -652,12 +653,12 @@ function SW.onAutoRenew(w, checked, box)
     if not checked then return SW.sendAutoRenew(w, box.tier, false, ent.revision, plan.revision, r.id) end
     if plan.autoRenewAllowed ~= true then return end
     local price = { amount = (plan.rentalPrice or 0) * (r.quantity or 1), currency = plan.rentalCurrency }
-    w.UI.Dialog.show({ title = getText("IGUI_MSH_Slots_Title"), theme = w.theme,
+    w.UI.Dialog.show(MSH.Client.windowOpts(w.UI, { title = getText("IGUI_MSH_Slots_Title"), theme = w.theme,
         text = getText("IGUI_MSH_Slots_ConfirmAuto", SW.money(E, price), plan.rentalDays or 0),
         confirmText = getText("IGUI_MSH_Slots_Agree"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
             if ok then SW.sendAutoRenew(w, box.tier, true, ent.revision, plan.revision, r.id) end
-        end })
+        end }))
 end
 
 function SW.sendAutoRenew(w, tier, enabled, revision, termsRevision, rental)

@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "Set first corner",
     "IGUI_MSH_Select_Done": "Done",
     "IGUI_MSH_Select_Redo": "Redraw",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / max %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (max size: %4 x %4, max area: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Safehouse",
     "IGUI_MSH_Product_tier1": "Safehouse slot - tier 1 deed",

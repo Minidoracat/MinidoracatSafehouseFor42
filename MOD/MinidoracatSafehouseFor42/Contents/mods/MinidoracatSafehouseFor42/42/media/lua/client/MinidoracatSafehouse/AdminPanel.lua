@@ -267,8 +267,8 @@ function AP.build(UI)
     local theme = MSH.Client.theme(UI)
     local x, y, W, H = K.center(AP.panelWidth(), AP.PANEL_H)
     local P = { UI = UI, theme = theme, pages = {}, pager = AP.pager(), current = "rules", tips = {} }
-    P.win = UI.Window.new({ x = x, y = y, width = W, height = H, title = getText("IGUI_MSH_Admin_Title"), theme = theme,
-        onClose = function() AP.hideTips(P) end })
+    P.win = UI.Window.new(MSH.Client.windowOpts(UI, { x = x, y = y, width = W, height = H,
+        title = getText("IGUI_MSH_Admin_Title"), theme = theme, onClose = function() AP.hideTips(P) end }))
     local top = P.win:contentTop()
     local items = {}
     for i, id in ipairs(AP.TABS) do items[i] = { id = id, label = getText("IGUI_MSH_Admin_Tab_" .. id) } end
@@ -689,7 +689,7 @@ end
 
 function AP.onRebind(P, b)
     local c = b.internal
-    P.UI.Dialog.show({ title = getText("IGUI_MSH_Admin_Rebind"), theme = P.theme,
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_Rebind"), theme = P.theme,
         text = getText("IGUI_MSH_Admin_RebindText", c.claimId),
         input = { text = c.owner or "", placeholder = getText("IGUI_MSH_Admin_OwnerPlaceholder") },
         confirmText = getText("IGUI_MSH_Admin_Rebind"), cancelText = getText("UI_Cancel"),
@@ -702,12 +702,13 @@ function AP.onRebind(P, b)
                 args.targetUsername = who
             end
             AP.mutate(P, "adminRecover", args, function(res) AP.recoverDone(P, res) end)
-        end })
+        end }))
 end
 
 function AP.onForceRelease(P, b)
     local c = b.internal
-    P.UI.Dialog.show({ title = getText("IGUI_MSH_Admin_ForceRelease"), theme = P.theme, danger = true,
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_ForceRelease"), theme = P.theme,
+        danger = true,
         text = getText("IGUI_MSH_Admin_ForceReleaseText", c.claimId, tostring(c.owner or "-")),
         confirmText = getText("IGUI_MSH_Admin_ForceRelease"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
@@ -715,7 +716,7 @@ function AP.onForceRelease(P, b)
                 AP.mutate(P, "adminRecover", { claimId = c.claimId, action = "release" },
                     function(res) AP.recoverDone(P, res) end)
             end
-        end })
+        end }))
 end
 
 -- ===== 地契頁 =====
@@ -1118,7 +1119,7 @@ end
 function AP.onOverride(P, b)
     local r = b.internal
     local def = AP.effective(P.values, "ClaimsPerPlayer")
-    P.UI.Dialog.show({ title = getText("IGUI_MSH_Admin_SetLimit"), theme = P.theme,
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_SetLimit"), theme = P.theme,
         text = getText("IGUI_MSH_Admin_OverrideText", r.name, def),
         input = { text = r.override >= 0 and tostring(r.override) or "", placeholder = getText("IGUI_MSH_Admin_OverridePlaceholder") },
         confirmText = getText("IGUI_MSH_Admin_Save"), cancelText = getText("UI_Cancel"),
@@ -1135,13 +1136,14 @@ function AP.onOverride(P, b)
                     AP.say(P, AP.codeText(res.code), "errorText")
                 end
             end)
-        end })
+        end }))
 end
 
 -- 代為放棄：danger 對話框；帶畫面上那一版的 revision，期間被改過就 STALE_REVISION、不放棄
 function AP.onRelease(P, b)
     local c = b.internal
-    P.UI.Dialog.show({ title = getText("IGUI_MSH_Admin_Release"), theme = P.theme, danger = true,
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_Release"), theme = P.theme,
+        danger = true,
         text = getText("IGUI_MSH_Admin_ReleaseText", b.owner, tostring(c.title or ""), c.claimId),
         confirmText = getText("IGUI_MSH_Admin_Release"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
@@ -1155,7 +1157,7 @@ function AP.onRelease(P, b)
                 AP.pagerInvalidate(P.pager)
                 AP.loadClaims(P)
             end)
-        end })
+        end }))
 end
 
 -- 每 tick：玩家頁才送分頁請求（debounce、一次一筆、送出間隔都在 pagerPump）

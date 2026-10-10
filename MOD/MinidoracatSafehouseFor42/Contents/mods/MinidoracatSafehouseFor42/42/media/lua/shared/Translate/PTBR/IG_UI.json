@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "Marcar 1º canto",
     "IGUI_MSH_Select_Done": "Pronto",
     "IGUI_MSH_Select_Redo": "Redesenhar",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / máx. %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (tamanho máx.: %4 x %4, área máx.: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Base",
     "IGUI_MSH_Product_tier1": "Vaga de base - escritura de nível 1",

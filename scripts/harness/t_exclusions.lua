@@ -36,6 +36,13 @@ return function(T)
         T.squareReads = 0
         return E.roads(rect, cfg)
     end
+    local function sameAreas(a, want)
+        if type(a) ~= "table" or #a ~= #want then return false end
+        for i = 1, #want do
+            if a[i] ~= want[i] then return false end
+        end
+        return true
+    end
     local code, d = roads()
     check(code == nil and T.squareReads == 144, "乾淨範圍：邊界 1 擴張後每格恰讀一次（12×12＝144，實際 "
         .. T.squareReads .. "）")
@@ -71,16 +78,39 @@ return function(T)
     cfg.roadMargin = 1
     T.floor(99, 105, nil)
 
+    -- 違規格全部回給客戶端標紅：同一列連續的併成一段，和上一列同起點、同寬的往下延伸
     T.floor(101, 99, "blends_street_01_80")
     T.floor(108, 108, "blends_street_01_80")
     code, d = roads()
-    check(code == C.ROAD and d.x == 101 and d.y == 99 and T.squareReads == 3,
-        "第一個違規就停（只讀 3 格，實際 " .. T.squareReads .. "）")
+    check(code == C.ROAD and d.x == 101 and d.y == 99 and sameAreas(d.areas, { 101, 99, 1, 1, 108, 108, 1, 1 }),
+        "回第一格，areas 列出每一塊道路格")
     T.floor(101, 99, nil)
     T.floor(108, 108, nil)
+    for y = 99, 110 do
+        T.floor(102, y, "blends_street_01_96")
+        T.floor(103, y, "blends_street_01_96")
+    end
+    code, d = roads()
+    check(code == C.ROAD and sameAreas(d.areas, { 102, 99, 2, 12 }), "直的路（12 列、寬 2）併成一塊")
+    for y = 99, 110 do
+        T.floor(102, y, nil)
+        T.floor(103, y, nil)
+    end
+    for i = 0, 3 do T.floor(100 + i, 100 + i, "blends_street_01_96") end
+    code, d = roads()
+    check(sameAreas(d.areas, { 100, 100, 1, 1, 101, 101, 1, 1, 102, 102, 1, 1, 103, 103, 1, 1 }), "斜的路每列一塊")
+    E.MAX_ROAD_AREAS = 2
+    code, d = roads()
+    check(code == C.ROAD and sameAreas(d.areas, { 100, 100, 1, 1, 101, 101, 1, 1 }), "矩形到上限就停：結果照樣是 ROAD")
+    E.MAX_ROAD_AREAS = 128
+    for i = 0, 3 do T.floor(100 + i, 100 + i, nil) end
     T.unloaded["104,103"] = true
     code, d = roads()
     check(code == C.NOT_LOADED and d.x == 104 and d.y == 103, "範圍內有未載入格→NOT_LOADED｛x, y｝")
+    T.floor(101, 99, "blends_street_01_80")
+    code, d = roads()
+    check(code == C.ROAD and sameAreas(d.areas, { 101, 99, 1, 1 }), "先遇到道路再遇到未載入格：ROAD，未載入格不標")
+    T.floor(101, 99, nil)
     T.unloaded["104,103"] = nil
     check(roads() == nil, "清掉後通過")
 
@@ -94,7 +124,8 @@ return function(T)
     check(roads() == nil, "外框旁的街道（自家車道）不擋")
     T.floor(211, 206, "blends_street_01_80")
     code, d = roads()
-    check(code == C.ROAD and d.kind == "main" and d.x == 211, "近區內主要道路照擋")
+    check(code == C.ROAD and d.kind == "main" and d.x == 211 and sameAreas(d.areas, { 211, 206, 1, 1 }),
+        "近區內主要道路照擋；放寬的街道格不標")
     T.floor(211, 206, nil)
     T.floor(213, 207, "blends_street_01_96")
     code, d = roads()

@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "Premier coin",
     "IGUI_MSH_Select_Done": "Terminé",
     "IGUI_MSH_Select_Redo": "Redessiner",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / max. %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (taille max. : %4 x %4, surface max. : %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Abri",
     "IGUI_MSH_Product_tier1": "Place d'abri - titre de niveau 1",

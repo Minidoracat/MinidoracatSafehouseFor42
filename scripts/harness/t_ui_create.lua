@@ -179,6 +179,167 @@ return function(T)
     local o1 = menu(1, { deed })
     check(#o1 == 1 and o1[1].notAvailable == true, "分割畫面次玩家：選項不可用")
 
+    T.section("建立面板：畫面（假框架）—不透明視窗、即時大小、預檢後的範圍與問題格")
+    local G = { "MinidoracatUI", "ISPanel", "getCore", "getTextManager", "UIFont", "getJoypadData", "getText",
+        "addAreaHighlightForPlayer" }
+    local savedG = {}
+    for _, k in ipairs(G) do savedG[k] = _G[k] end
+    local function class(base)
+        local c = {}
+        c.__index = c
+        if base then setmetatable(c, { __index = base }) end
+        function c:derive() return class(self) end
+        return c
+    end
+    local Base = class()
+    function Base:new(x, y, w, h)
+        return setmetatable({ x = x or 0, y = y or 0, width = w or 60, height = h or 20, visible = true }, self)
+    end
+    for _, k in ipairs({ "initialise", "addChild", "bringToTop", "drawText", "setTooltip", "setStyle", "setActive",
+        "fitWidth", "setInvalid", "removeFromUIManager", "addToUIManager", "onMouseMoveOutside", "onMouseUpOutside",
+        "onJoypadDirUp", "onJoypadDirDown", "onJoypadDirLeft", "onJoypadDirRight", "onFocusShoulder" }) do
+        Base[k] = function() end
+    end
+    function Base:setVisible(b) self.visible = b end
+    function Base:getIsVisible() return self.visible end
+    function Base:setX(n) self.x = n end
+    function Base:setY(n) self.y = n end
+    function Base:setWidth(n) self.width = n end
+    function Base:setHeight(n) self.height = n end
+    function Base:setEnabled(b) self.enabled = b end
+    function Base:setTitle(t) self.title = t end
+    function Base:getText() return "" end
+    function Base:contentTop() return 24 end
+    function Base:close() self.visible = false end
+    ISPanel = class(Base)
+    UIFont = { Small = "Small", Medium = "Medium" }
+    getCore = function() return { getScreenWidth = function() return 1280 end } end
+    getTextManager = function() return { getFontHeight = function() return 16 end } end
+    getJoypadData = function() return nil end
+    getText = function(k, ...)
+        local a = { ... }
+        return #a == 0 and k or (k .. "|" .. table.concat(a, ","))
+    end
+    local function col(r) return { r = r, g = 0, b = 0, a = 1 } end
+    local colors = { text = col(0.1), textMuted = col(0.2), warning = col(0.3), accent = col(0.4), errorText = col(0.5) }
+    local caps = { window = true, controls = true, focus = true }
+    local function make(o) local e = Base.new(Base, o.x, o.y, o.width, o.height or 20) for k, x in pairs(o) do e[k] = x end return e end
+    MinidoracatUI = { v1 = { API_MAJOR = 1, API_REVISION = 17, CAPABILITIES = caps,
+        Theme = { defaultPalette = function() return {} end, create = function() return { colors = colors } end },
+        Window = { new = function(o) return make(o) end },
+        Button = { new = function(o) return make(o) end },
+        TextField = { new = function(o) return make(o) end },
+    } }
+    MSH.Client._theme = nil
+    P.open({ deedType = "MinidoracatSafehouse.Deed2" })
+    local vm = P.model
+    local v = vm.view
+
+    local calls = {}
+    addAreaHighlightForPlayer = function(pn, x1, y1, x2, y2, z, r, g, b, a)
+        calls[#calls + 1] = { x1 = x1, y1 = y1, x2 = x2, y2 = y2, r = r, a = a }
+    end
+    local function frame() calls = {} P.View.frame(v) return calls end
+    -- 每幀不配置：先暖一幀，停掉 GC 量 200 幀的記憶體增量（假 addAreaHighlightForPlayer 只累加計數）
+    local function grownKB()
+        local real, n = addAreaHighlightForPlayer, 0
+        addAreaHighlightForPlayer = function() n = n + 1 end
+        P.View.frame(v)
+        collectgarbage("collect")
+        collectgarbage("stop")
+        local kb = collectgarbage("count")
+        for _ = 1, 200 do P.View.frame(v) end
+        local grown = collectgarbage("count") - kb
+        collectgarbage("restart")
+        addAreaHighlightForPlayer = real
+        return grown, n
+    end
+    p.x, p.y = 10, 10
+    P.startSelect(vm, Sel.WALK)
+    Sel.mark(vm.sel, p)
+    p.x, p.y = 39, 19
+    local c1 = frame()
+    check(v.sizeText == "IGUI_MSH_Select_SizeLimit|30,10,300,40,1600" and v.sizeTok == "text" and c1[1].r == colors.accent.r,
+        "大小行寫出邊長與面積上限（2 級 40 × 40、1,600）")
+    p.x, p.y = 59, 19
+    local c2 = frame()
+    check(v.sizeText == "IGUI_MSH_Select_SizeLimit|50,10,500,40,1600" and v.sizeTok == "errorText"
+        and c2[1].r == colors.errorText.r, "只有邊長超過：字與範圍都變錯誤色，上限寫得出原因")
+    local gs, ns = grownKB()
+    check(ns == 201 and gs < 1, "框選畫面每幀不配置（200 幀增加 " .. string.format("%.2f", gs) .. " KB）")
+    p.x, p.y = 17, 17
+    frame()
+    P.finish(vm, T.now)
+    T.tick(7)
+    local pvs = lastSent()
+    check(pvs.command == "preview" and pvs.args.rect.w == 8, "完成後送預檢")
+    local c3 = frame()
+    check(#c3 == 1 and c3[1].x1 == 10 and c3[1].x2 == 18 and c3[1].y2 == 18 and c3[1].r == colors.accent.r,
+        "等預檢時照樣每幀畫範圍（accent）")
+    reply(pvs, { pass = false, checks = {
+        { name = "roads", ok = false, code = "ROAD", x = 12, y = 13, kind = "main", areas = { 12, 13, 1, 1, 15, 11, 2, 7 } },
+        { name = "resources", ok = false, code = "RESOURCE", cat = "police", x = 5, y = 5, w = 20, h = 30 },
+        { name = "overlap", ok = false, code = "TOO_CLOSE", x = 19, y = 10, w = 4, h = 4 },
+        { name = "quota", ok = false, code = "QUOTA_FULL", tier = 2 },
+        { name = "identity", ok = true } } })
+    local c4 = frame()
+    check(#c4 == 5 and c4[1].r == colors.accent.r and c4[1].a == P.RANGE_ALPHA, "預檢沒過：範圍仍是 accent")
+    check(#c4 == 5 and c4[2].x1 == 12 and c4[2].y1 == 13 and c4[2].x2 == 13 and c4[2].y2 == 14
+        and c4[3].x1 == 15 and c4[3].y1 == 11 and c4[3].x2 == 17 and c4[3].y2 == 18
+        and c4[4].x1 == 5 and c4[4].x2 == 25 and c4[4].y2 == 35 and c4[5].x1 == 19 and c4[5].x2 == 23
+        and c4[2].r == colors.errorText.r and c4[5].r == colors.errorText.r and c4[2].a > P.RANGE_ALPHA,
+        "沒過的項目：每塊道路格、資源點整棟、相鄰範圍用錯誤色、更不透明標出；沒座標的不畫")
+    local c5 = frame()
+    check(#c5 == 5, "每幀重加同一組（只畫一層）")
+    local gp, np = grownKB()
+    check(np == 201 * 5 and gp < 1, "預檢畫面每幀不配置（200 幀增加 " .. string.format("%.2f", gp) .. " KB）")
+    P.recheck(vm, T.now)
+    T.tick(7)
+    reply(lastSent(), { pass = true, checks = { { name = "roads", ok = true } } })
+    local c6 = frame()
+    check(#c6 == 1 and c6[1].r == colors.accent.r, "預檢通過：只畫範圍、沒有問題格")
+    P.toConfirm(vm)
+    local c7 = frame()
+    check(vm.phase == P.CONFIRM and #c7 == 1 and c7[1].x1 == 10, "confirm 照樣畫範圍")
+    P.submit(vm, "")
+    local c8 = frame()
+    check(vm.phase == P.SUBMITTING and #c8 == 1, "送出中照樣畫範圍")
+    reply(lastSent(), { ok = false, code = "ROAD", x = 14, y = 11, kind = "street", areas = { 14, 11, 3, 1 } })
+    local c9 = frame()
+    check(vm.phase == P.PREVIEW and #c9 == 2 and c9[2].x1 == 14 and c9[2].x2 == 17 and c9[2].y1 == 11
+        and c9[2].r == colors.errorText.r, "建立失敗回 preview：失敗結果帶的道路格也標出")
+    P.recheck(vm, T.now)
+    T.tick(7)
+    reply(lastSent(), { pass = false, checks = { { name = "size", ok = false, code = "TOO_BIG", maxSide = 40, maxArea = 1600 } } })
+    local c10 = frame()
+    check(#c10 == 1 and c10[1].r == colors.errorText.r, "太大（沒有座標可指）：範圍本身改錯誤色")
+    local function anyError(cs)
+        for _, c in ipairs(cs) do
+            if c.r == colors.errorText.r then return true end
+        end
+        return false
+    end
+    P.recheck(vm, T.now)
+    T.tick(7)
+    reply(lastSent(), { pass = false, checks = {
+        { name = "size", ok = false, code = "TOO_BIG", maxSide = 40, maxArea = 1600 },
+        { name = "roads", ok = false, code = "ROAD", areas = { 12, 13, 1, 1 } } } })
+    check(anyError(frame()), "（對照）重新框選前地上有紅色")
+    P.reselect(vm)
+    check(not anyError(frame()), "重新框選：地上不留上一輪的問題格與紅色範圍")
+    p.x, p.y = 10, 10
+    Sel.mark(vm.sel, p)
+    p.x, p.y = 17, 17
+    frame()
+    P.finish(vm, T.now)
+    T.tick(7)
+    reply(lastSent(), { pass = false, checks = { { name = "roads", ok = false, code = "ROAD", areas = { 12, 13, 1, 1 } } } })
+    P.back(vm)
+    check(vm.phase == P.IDLE and #frame() == 0, "取消回 idle：地上什麼都不畫")
+    P.close(vm)
+    MSH.Client._theme = nil
+    for _, k in ipairs(G) do _G[k] = savedG[k] end
+
     T.section("建立面板：框架不在時不報錯")
     local okOpen = pcall(P.open, { deedType = "MinidoracatSafehouse.Deed2" })
     check(okOpen and P.model == nil, "沒有 UI 框架：open 不丟錯、不留半套狀態（退 fallback）")

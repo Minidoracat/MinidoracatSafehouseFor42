@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "Erste Ecke setzen",
     "IGUI_MSH_Select_Done": "Fertig",
     "IGUI_MSH_Select_Redo": "Neu zeichnen",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / max. %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (max. Größe: %4 x %4, max. Fläche: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Safehouse",
     "IGUI_MSH_Product_tier1": "Safehouse-Platz – Urkunde Stufe 1",

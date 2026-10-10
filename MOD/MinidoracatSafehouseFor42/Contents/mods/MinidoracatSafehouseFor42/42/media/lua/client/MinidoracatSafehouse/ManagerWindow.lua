@@ -223,11 +223,11 @@ function W.new(UI)
     local sw, sh = getCore():getScreenWidth(), getCore():getScreenHeight()
     local w = math.min(860, math.floor(sw * 0.9))
     local h = math.min(560, math.floor(sh * 0.9))
-    self.win = UI.Window.new({ x = math.floor((sw - w) / 2), y = math.floor((sh - h) / 2), width = w, height = h,
-        title = getText("IGUI_MSH_Manager_Title"), icon = "house", theme = self.theme, resizable = true,
-        minWidth = 300, minHeight = 280,
+    self.win = UI.Window.new(MSH.Client.windowOpts(UI, { x = math.floor((sw - w) / 2), y = math.floor((sh - h) / 2),
+        width = w, height = h, title = getText("IGUI_MSH_Manager_Title"), icon = "house", theme = self.theme,
+        resizable = true, minWidth = 300, minHeight = 280,
         onResize = function() self:layout() end,
-        onClose = function() self:onClose() end })
+        onClose = function() self:onClose() end }))
     self:build()
     return self
 end
@@ -937,7 +937,8 @@ end
 function W.onRename(self)
     local d = self.detail
     if d == nil or self.busy ~= nil then return end
-    self.UI.Dialog.show({ title = getText("IGUI_MSH_Manager_Rename"), text = getText("IGUI_MSH_Manager_RenameText"),
+    self.UI.Dialog.show(MSH.Client.windowOpts(self.UI, { title = getText("IGUI_MSH_Manager_Rename"),
+        text = getText("IGUI_MSH_Manager_RenameText"),
         theme = self.theme, input = { text = d.title or "" }, confirmText = getText("IGUI_MSH_Manager_RenameOk"),
         cancelText = getText("UI_Cancel"),
         onResult = function(ok, input)
@@ -949,7 +950,7 @@ function W.onRename(self)
             end
             self:mutate("rename", { claimId = d.claimId, title = title, expectedRevision = d.revision },
                 getText("IGUI_MSH_Manager_Renamed"))
-        end })
+        end }))
 end
 
 -- 放棄：danger 確認框，確認鈕「放棄安全屋」、另一顆「取消」；只限屋主（§10.3）
@@ -958,7 +959,8 @@ function W.onRelease(self)
     if d == nil or self.busy ~= nil then return end
     local parts = {}
     for i, k in ipairs(MW.releaseKeys(d, self:redrawLeft())) do parts[i] = getText(k) end
-    self.UI.Dialog.show({ title = getText("IGUI_MSH_Manager_ReleaseTitle"), text = table.concat(parts, "\n"),
+    self.UI.Dialog.show(MSH.Client.windowOpts(self.UI, { title = getText("IGUI_MSH_Manager_ReleaseTitle"),
+        text = table.concat(parts, "\n"),
         theme = self.theme, danger = true, confirmText = getText("IGUI_MSH_Manager_ReleaseOk"),
         cancelText = getText("UI_Cancel"),
         onResult = function(ok)
@@ -966,13 +968,13 @@ function W.onRelease(self)
                 self:mutate("release", { claimId = d.claimId, expectedRevision = d.revision },
                     getText("IGUI_MSH_Manager_Released"))
             end
-        end })
+        end }))
 end
 
 function W.onLeave(self)
     local d = self.detail
     if d == nil or self.busy ~= nil then return end
-    self.UI.Dialog.show({ title = getText("IGUI_MSH_Manager_LeaveTitle"),
+    self.UI.Dialog.show(MSH.Client.windowOpts(self.UI, { title = getText("IGUI_MSH_Manager_LeaveTitle"),
         text = getText("IGUI_MSH_Manager_LeaveText", d.title or ""), theme = self.theme, danger = true,
         confirmText = getText("IGUI_MSH_Manager_LeaveOk"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
@@ -981,7 +983,7 @@ function W.onLeave(self)
                 if res.viaFaction then return getText("IGUI_MSH_Manager_LeftViaFaction") end
                 return nil
             end)
-        end })
+        end }))
 end
 
 -- 結果待定：同一 requestId 重送；伺服器 60 秒內回快取的原結果（Client.retry）

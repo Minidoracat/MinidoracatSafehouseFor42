@@ -40,6 +40,7 @@ local SCENARIOS = {
     "t_ui_manager",
     "t_ui_admin",
     "t_ui_entry",
+    "t_public_api",
 }
 
 local only = arg and arg[1]

@@ -235,7 +235,7 @@
     "IGUI_MSH_Select_Mark": "İlk köşeyi belirle",
     "IGUI_MSH_Select_Done": "Bitti",
     "IGUI_MSH_Select_Redo": "Yeniden çiz",
-    "IGUI_MSH_Select_Size": "%1 x %2 = %3 / en fazla %4",
+    "IGUI_MSH_Select_SizeLimit": "%1 x %2 = %3 (en büyük boyut: %4 x %4, en büyük alan: %5)",
     "IGUI_MSH_Select_SizeNoLimit": "%1 x %2 = %3",
     "IGUI_MSH_SourceName": "Güvenli Ev",
     "IGUI_MSH_Product_tier1": "Güvenli ev hakkı - seviye 1 tapu",
