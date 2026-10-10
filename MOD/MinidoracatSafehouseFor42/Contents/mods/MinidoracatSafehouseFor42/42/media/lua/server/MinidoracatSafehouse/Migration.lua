@@ -1,24 +1,29 @@
--- MinidoracatSafehouse/Migration.lua：Better Safehouse 遷移（計畫 §9 第 4、5、7–12 點）。
--- 三次開服：
---   1. 第一次開服（registry 全新、存檔裡有 foreign 原生）：唯讀掃描、寫 candidate report（migration-candidates.txt）、
---      migrationCompleted=false 拒絕所有 client mutation；operator 審核後放 selection manifest（migration-selection.txt）。
---   2. 下一次開服：selection 的快照指紋與每筆 identity hash 全部對得上才照 allow 匯入（importLegacy），寫 completion manifest；
---      對不上整批不匯入、重寫 report、等 operator 重審。
---   3. 再下一次開服：verify 核對這一代的 completion manifest：每個 allow hash 都有紀錄才 migrationCompleted=true；
---      還沒匯入的（寫檔失敗、匯入中途丟錯）留在遷移中，同一次開服只補匯入這些 hash，再下一次開服核對。
--- 沒有 foreign 原生的全新伺服器、或 registry 已經有紀錄的伺服器，第一次檢查就記成不遷移，之後永不進入遷移。
--- 快照綁定與 §9 第 4 點的差異：Lua 讀不到 map_meta.bin 的大小與修改時間（getFileReader 只開 Lua cache 目錄，LuaManager.java:5936），
---   改用「原生總筆數＋全部候選 identity hash 的摘要」；候選的 rect／owner／title／成員任一變動都會讓指紋不同。
--- completion manifest：與私有檔同目錄的 migration-completion.txt，append-only（伺服器私有檔，可放名字與座標）：
---   `want<TAB>代號<TAB>hash<TAB>x,y,w,h<TAB>owner<TAB>成員<TAB>title`：這一代要匯入的 allow 項（匯入前先寫，補匯入照它）；
---   `hash<TAB>claimId<TAB>代號`：匯入一筆（先寫檔、成功才改 registry 與原生，照 Registry 私有檔的 write-then-update）。
--- 代號（與 §9 第 9 點「registry generation」的差異）：registry 的 generation 計數器會跟著崩潰一起回滾、之後再長回同一個值，
---   分不出「回滾掉的那次」與「這次」；改用匯入當下的「毫秒時間-nextClaimId」，與 want 行同時寫進 registry 的 md.migrationGen。
---   verify 只看代號等於 md.migrationGen 的行：崩潰回滾掉的嘗試、同伺服器名的別的世界留下的舊檔一律忽略（只用來抬 nextClaimId）。
---   同一代裡一個 hash 有存活紀錄就不再匯入（open-issues 第 19 條）；換一代（回滾後重匯）從頭來。
--- 檔案存在不等於完成：匯入後的開服逐筆核對，全部吻合才寫 migrationCompleted=true；
---   之後只看這個旗標，legacy claim 的正常 release／GC 不再被當成缺件（§9 第 9 點）。
--- md.migration（Global ModData，公開）只放階段、筆數與結果碼；名字與座標只寫進伺服器本機的檔案（§9 第 11 點）。
+-- MinidoracatSafehouse/Migration.lua：自動接管既有的原版安全屋（計畫 §9；使用者 2026-10-11 決定全自動）。
+-- 目標：伺服器中途安裝本 MOD，管理員照 README 改好必要伺服器設定以外不用做任何事；玩家從不被擋。
+-- 觸發：第一次檢查時 registry 全新（沒有紀錄、tombstone、遷移狀態）、沒有對不到 imp 行的 @MSH 標記原生，而且有 foreign 原生
+--   （owner 不是 @MSH 標記）。已有紀錄的伺服器、或沒有 foreign 原生的全新伺服器，記成 none，之後永不接管（之後才出現的
+--   foreign 一律不收）。有對不到 imp 行的標記原生＝registry 遺失（玩家建的屋原生存了、Global ModData 沒存），不是第一次安裝：
+--   imp 行能還原的照樣還原，不接管任何 foreign，狀態記 done（有還原）或 none，其餘標記原生交給首輪 reconcile 的 RECOVERED。
+-- 前置：Health 沒有 blocked（必要伺服器設定都對）、Better Safehouse 沒啟用。不符就記 waiting＋原因，下次開服再試。
+-- 接管（開服 startup hook order 11，在首輪 reconcile order 20 之前）：沒有問題的 foreign 原生依原生建立時間由舊到新接管，
+--   屋主、範圍、成員照舊（成員＝SHARE_LEGACY），標題照建立時的規則清理（cleanTitle，40 字）。同一個順序套三個上限：
+--   全服 256 間、registry 估算大小 ≤ REGISTRY_BYTES 的 M.REGISTRY_SHARE、原生名單名字總數 ≤ NATIVE_NAMES 的 M.NAMES_SHARE；
+--   第一間放不下之後全部 OVER_CAP（不讓較新的小屋插隊）。有問題的（範圍不合法、屋主名不合法、同範圍或同起點有兩間）
+--   與超過上限的留在原版、照常受原版保護（§9 第 10 點：不猜、不刪）。
+-- 任何 allocId 之前先把 nextClaimId 抬過每一個 @MSH:<id> 標記原生與 completion 檔的 id（claimId 永不重用，§4.2）。
+-- completion 檔（與私有檔同目錄的 migration-completion.txt，伺服器私有，append-only，可放名字與座標）：
+--   `imp<TAB>代號<TAB>claimId<TAB>x,y,w,h<TAB>原生建立時間<TAB>屋主<TAB>成員(逗號分隔)<TAB>標題`：接管一間寫一行，
+--     先寫檔、成功才改原生與 registry（write-then-update）；
+--   `skip<TAB>代號<TAB>原因<TAB>x,y,w,h<TAB>屋主<TAB>標題`：留在原版的，給管理員查是哪幾間。
+--   代號＝接管當下的「毫秒時間-nextClaimId」，只標示是哪一次接管寫的行。
+-- 當機自動修復（每次開服、接管之前）：
+--   - 兩邊都沒存：registry 全新、原生還是原本的屋主 → 照觸發條件重新接管（舊行的 claimId 對不到任何標記原生，等於忽略）。
+--   - 原生已存（owner 是 @MSH:<id>）、registry 沒存：用 imp 行重建紀錄。對身分用 claimId＋範圍＋原生建立時間三項都相同，
+--     不靠代號（代號存在 registry，這時已經跟著回滾）；別的世界留下的舊行建立時間不同，不會誤認。
+--   - registry 已存、原生沒存：legacy 紀錄沒有標記原生、同範圍有一間屋主是紀錄屋主而且建立時間相同的 foreign → 重新 setOwner。
+--   - 對不上的不在這裡猜：沒有紀錄的標記原生由首輪 reconcile 轉 RECOVERED quarantined、找不到原生的紀錄照 recovery matrix，
+--     都在管理員面板「需要處理的安全屋」。
+-- md.migration（Global ModData，公開）只放狀態、原因碼與筆數；名字與座標只寫進伺服器本機的 completion 檔（§9 第 11 點）。
 -- 字串字面值只用 ASCII：Kahlua 把非 ASCII 字面值截成單 byte（sh-mig-1011a 實踩）。
 -- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/（下稱 SafeHouse.java＝iso/areas/SafeHouse.java、
 --   LuaManager.java＝Lua/LuaManager.java）。
@@ -29,6 +34,7 @@ require "MinidoracatSafehouse/Contract"
 require "MinidoracatSafehouse/Audit"
 require "MinidoracatSafehouse/Registry"
 require "MinidoracatSafehouse/Native"
+require "MinidoracatSafehouse/Health"
 require "MinidoracatSafehouse/Server"
 
 local MSH = MinidoracatSafehouse
@@ -37,18 +43,24 @@ MSH.Migration = M
 
 local LC = MSH.LIFECYCLE
 
+M.BSH_MOD_ID = "BetterSafehouse"   -- Workshop 3634569678 的 42.19/mod.info:2（docs/research/better-safehouse-3634569678-analysis.md:18）
+M.SKIP_REASONS = { "BAD_RECT", "BAD_OWNER", "DUPLICATE_RECT", "DUPLICATE_ID", "OVER_CAP" }
+-- 接管最多用掉的容量比例，其餘留給之後玩家正常建立與分享（從不擋玩家）：
+--   registry 一半（128 KiB）：另一半要放 1,024 筆 tombstone（一筆約 60 bytes，約 64 KiB，§4.2）＋之後的新屋與分享；
+--     一般舊屋一間約 400 bytes，256 間約 100 KiB，正常伺服器碰不到這條。
+--   原生名單名字 3/4（3,072）：留 1,024 個名字給之後的分享與新屋。
+M.REGISTRY_SHARE = 0.5
+M.NAMES_SHARE = 0.75
+
 -- 與 R.privatePath() 同目錄（<cachedir>/Lua/MinidoracatSafehouse/<server>/）；.txt 在 getFileWriter 允許的副檔名內（LuaManager.java:1035）
-local function sibling(name)
-    return (string.gsub(MSH.Registry.privatePath(), "private%.txt$", name))
+function M.manifestPath()
+    return (string.gsub(MSH.Registry.privatePath(), "private%.txt$", "migration-completion.txt"))
 end
-function M.manifestPath() return sibling("migration-completion.txt") end
-function M.reportPath() return sibling("migration-candidates.txt") end
-function M.selectionPath() return sibling("migration-selection.txt") end
 
 -- getFileWriter(path, createIfNull, append)：LuaManager.java:6727（UTF-8）；writeln：LuaManager.java:12834
-local function writeLines(path, lines, append)
+local function appendLines(lines)
     local writer
-    local opened = pcall(function() writer = getFileWriter(path, true, append) end)
+    local opened = pcall(function() writer = getFileWriter(M.manifestPath(), true, true) end)
     if not opened or writer == nil then return false end
     local written = pcall(function()
         for _, line in ipairs(lines) do writer:writeln(line) end
@@ -57,47 +69,9 @@ local function writeLines(path, lines, append)
     return written and closed
 end
 
-local function appendLine(line)
-    return writeLines(M.manifestPath(), { line }, true)
-end
-
--- 檔案欄位不能含 tab／換行（manifest 以 tab、selection 以空白切欄）
-local function field(v)
-    return (string.gsub(tostring(v), "%c", " "))
-end
-
--- 一行切成欄位（tab 分隔、保留空欄）
-local function split(line)
-    local out, pos = {}, 1
-    while true do
-        local s = string.find(line, "\t", pos, true)
-        if s == nil then
-            out[#out + 1] = string.sub(line, pos)
-            return out
-        end
-        out[#out + 1] = string.sub(line, pos, s - 1)
-        pos = s + 1
-    end
-end
-
--- 這一代的代號：「毫秒時間-nextClaimId」。崩潰回滾後 verify 先把 nextClaimId 抬過舊行的 id，所以不會撞到回滾掉的那一代
-local function newGen(now)
-    return tostring(math.floor(now or getTimestampMs())) .. "-" .. tostring(MSH.Registry.md.nextClaimId)
-end
-
--- 遷移中沿用 md.migrationGen；沒有代號或上一次遷移已完成就開新的一代
-local function currentGen(now)
-    local md = MSH.Registry.md
-    if md.migrationGen == nil or md.migrationCompleted == true then md.migrationGen = newGen(now) end
-    return md.migrationGen
-end
-
-local function importLine(hash, id, gen)
-    return hash .. "\t" .. tostring(id) .. "\t" .. gen
-end
-
--- 回傳行陣列；檔案不存在回 nil；存在卻讀不開回 false（fail closed）
-local function readLines(path)
+-- 回傳行陣列；檔案不存在回 nil；存在卻讀不開回 false
+local function readLines()
+    local path = M.manifestPath()
     local reader
     -- getFileReader 吞掉 IOException 回 nil（LuaManager.java:5936；UTF-8）；用 cacheFileExists（LuaManager.java:5544）分辨不存在與讀不開
     local opened = pcall(function() reader = getFileReader(path, false) end)
@@ -116,505 +90,333 @@ local function readLines(path)
     return lines
 end
 
-local function validItem(it)
-    return type(it) == "table" and MSH.Rect.valid(it.rect) and MSH.validUsername(it.owner)
-        and type(it.title) == "string" and type(it.members) == "table"
-        and type(it.hash) == "string" and #it.hash <= 128 and string.find(it.hash, "^[%w%-_]+$") ~= nil
+-- 檔案欄位不能含 tab／換行
+local function field(v)
+    return (string.gsub(tostring(v), "%c", " "))
+end
+
+-- 一行切成欄位（tab 分隔、保留空欄）
+local function split(line)
+    local out, pos = {}, 1
+    while true do
+        local s = string.find(line, "\t", pos, true)
+        if s == nil then
+            out[#out + 1] = string.sub(line, pos)
+            return out
+        end
+        out[#out + 1] = string.sub(line, pos, s - 1)
+        pos = s + 1
+    end
+end
+
+-- 原生建立時間（毫秒，double）寫成整數字串；兩邊都用它比對，不比浮點數
+local function createdText(house)
+    local v = house:getDatetimeCreated()   -- SafeHouse.java:681-683
+    if not MSH.isFinite(v) then return "-" end
+    return string.format("%.0f", v)
+end
+
+-- 成員：合法名字、不重複、不含屋主與逗號（檔案以逗號分隔）
+local function cleanMembers(owner, list)
+    local out, seen = {}, { [owner] = true }
+    for _, u in ipairs(list) do
+        if MSH.validUsername(u) and not seen[u] and not string.find(u, ",", 1, true) then
+            seen[u] = true
+            out[#out + 1] = u
+        end
+    end
+    return out
 end
 
 -- 舊成員轉 grants（MEMBER＋USE＋MOVE＋BUILD＋FARM，等同原版成員；respawn flags 不保存，§4.4）
-local function legacyGrants(it)
-    local out, seen = {}, { [it.owner] = true }
-    for _, u in ipairs(it.members) do
-        if MSH.validUsername(u) and not seen[u] then
-            seen[u] = true
-            out[#out + 1] = { user = u, bits = MSH.SHARE_LEGACY }
-        end
-    end
+local function legacyGrants(members)
+    local out = {}
+    for _, u in ipairs(members) do out[#out + 1] = { user = u, bits = MSH.SHARE_LEGACY } end
     return out
 end
 
--- items = { { rect = {x,y,w,h}, owner, title, members = {..}, hash } }；呼叫端持全域鎖，網路送出經 defer。
--- 回傳 { imported = { { hash, claimId } }, skipped = { { index, hash, reason } } }。
--- 冪等：同 rect 已經是標記 owner 的原生（先前匯入過）略過，不重複建紀錄。
-function M.importLegacy(items, now, defer)
-    local gen = nil
-    local N, R = MSH.Native, MSH.Registry
-    local out = { imported = {}, skipped = {} }
-    local function skip(i, it, reason)
-        out.skipped[#out.skipped + 1] = { index = i, hash = type(it) == "table" and it.hash or nil, reason = reason }
+local function legacyRecord(id, rect, owner, title, members, house, now)
+    return MSH.Registry.newRecord({ claimId = id, rect = rect, title = title, owner = owner, source = MSH.SOURCE.LEGACY,
+        deedTier = 1, grants = legacyGrants(members), createdAt = now, nativeCreatedAt = house:getDatetimeCreated() })
+end
+
+-- 標題照建立時的規則（MSH.cleanTitle：去頭尾空白、1–40 字、不含控制字元與 []）；不合格的先去掉那些字元、截 40 字，
+-- 還是不行（例如空的）就用屋主名，和建立時沒給標題一樣
+local function legacyTitle(raw, owner)
+    local t = MSH.cleanTitle(raw)
+    if t ~= nil then return t end
+    if type(raw) == "string" then
+        local s = MSH.trim((string.gsub(raw, "[%c%[%]]", "")))
+        t = MSH.cleanTitle(string.sub(s, 1, MSH.LIMIT.TITLE_CHARS))
+        if t ~= nil then return t end
     end
-    if not R.ready() then
-        for i, it in ipairs(items) do skip(i, it, "NOT_READY") end
-        return out
-    end
-    local idx = N.index()
-    for i, it in ipairs(items) do
-        if not validItem(it) then
-            skip(i, it, "BAD_ITEM")
-        else
-            local managed, hits = false, {}
-            for _, e in ipairs(idx.byRect[N.rectKey(it.rect)] or {}) do
-                if e.claimId ~= nil then managed = true elseif e.owner == it.owner then hits[#hits + 1] = e end
-            end
-            if managed then
-                skip(i, it, "ALREADY_MANAGED")
-            elseif #hits == 0 then
-                skip(i, it, "NO_NATIVE")
-            elseif #hits > 1 then
-                skip(i, it, "AMBIGUOUS")   -- 同 rect 同 owner 多間：不猜（§9 第 10 點）
-            else
-                local house = hits[1].house
-                local id = R.allocId()     -- 寫檔失敗也用掉（claimId 不重用）
-                gen = gen or currentGen(now)
-                if not appendLine(importLine(it.hash, id, gen)) then
-                    skip(i, it, "WRITE_FAILED")
-                else
-                    local rec = R.newRecord({ claimId = id, rect = it.rect, title = it.title, owner = it.owner,
-                        source = MSH.SOURCE.LEGACY, deedTier = 1, grants = legacyGrants(it), createdAt = now,
-                        nativeCreatedAt = house:getDatetimeCreated() })   -- SafeHouse.java:681-683
-                    -- setOwner 換成 service-owner（並把標記移出 players，SafeHouse.java:660-663），原屋主改放 players（:292-297）
-                    house:setOwner(MSH.marker(id))
-                    house:addPlayer(it.owner)
-                    R.put(rec)
-                    MSH.Audit.write("MIGRATED", { actor = it.owner, claimId = id, code = "LEGACY" })
-                    if defer then defer(function() N.broadcast(house) end) else N.broadcast(house) end
-                    out.imported[#out.imported + 1] = { hash = it.hash, claimId = id }
-                end
-            end
+    return MSH.cleanTitle(owner) or owner
+end
+
+-- setOwner 換成 service-owner（並把標記移出 players，SafeHouse.java:660-663），原屋主改放 players（:292-297）
+local function mark(house, id, owner)
+    house:setOwner(MSH.marker(id))
+    house:addPlayer(owner)
+end
+
+-- Better Safehouse 是否啟用：getActivatedMods（LuaManager.java:7458-7462 → ZomboidFileSystem.getModIDs :873，已載入的 MOD id）。
+-- ini 的 Mods= 寫成 \ModId，比對前去掉開頭的反斜線
+function M.bshActive()
+    local ok, found = pcall(function()
+        local list = getActivatedMods()
+        for i = 0, list:size() - 1 do
+            local id = string.gsub(tostring(list:get(i)), "^\\", "")
+            if id == M.BSH_MOD_ID then return true end
         end
-    end
-    if #out.imported > 0 then R.md.migrationCompleted = false end
-    return out
+        return false
+    end)
+    return ok and found == true
 end
 
--- want 行 → importLegacy 的 item（成員寫檔前已濾成合法名字，不含逗號）
-local function wantItem(f)
-    local x, y, w, h = string.match(f[4], "^(%-?%d+),(%-?%d+),(%d+),(%d+)$")
-    if x == nil then return nil end
-    local members = {}
-    for u in string.gmatch(f[6], "[^,]+") do members[#members + 1] = u end
-    return { hash = f[3], rect = { x = tonumber(x), y = tonumber(y), w = tonumber(w), h = tonumber(h) }, owner = f[5],
-        members = members, title = f[7] }
-end
+-- ===== 當機修復 =====
 
--- 回傳 { ids＝全部行的 claimId（抬 nextClaimId 用），want／wantOrder＝這一代的 allow 項，got／gotOrder＝這一代 hash → claimId 清單 }
-local function parseManifest(lines, gen)
-    local m = { ids = {}, want = {}, wantOrder = {}, got = {}, gotOrder = {} }
+-- imp 行 → claimId → { rectKey, created, owner, members, title }（同一 claimId 以最後一行為準）
+local function parseImports(lines)
+    local out = {}
     for _, line in ipairs(lines) do
         local f = split(line)
-        if f[1] == "want" then
-            if gen ~= nil and f[2] == gen and #f >= 7 and m.want[f[3]] == nil then
-                local it = wantItem(f)
-                if it ~= nil then
-                    m.want[f[3]] = it
-                    m.wantOrder[#m.wantOrder + 1] = f[3]
-                end
-            end
-        else
-            local id = tonumber(f[2] or "")
+        if f[1] == "imp" and #f >= 8 then
+            local id = tonumber(f[3])
             if MSH.isInt(id) then
-                m.ids[#m.ids + 1] = id
-                if gen ~= nil and f[3] == gen then
-                    local l = m.got[f[1]]
-                    if l == nil then
-                        l = {}
-                        m.got[f[1]] = l
-                        m.gotOrder[#m.gotOrder + 1] = f[1]
-                    end
-                    l[#l + 1] = id
-                end
+                local members = {}
+                for u in string.gmatch(f[7], "[^,]+") do members[#members + 1] = u end
+                out[id] = { rectKey = f[4], created = f[5], owner = f[6], members = members, title = f[8] }
             end
         end
     end
-    return m
+    return out
 end
 
--- 同一代裡一個 hash 的狀態：ok＝有紀錄且原生在，或已正常放棄（released 只剩 tombstone）；
--- missing＝紀錄在、原生不在（該筆 quarantined），或只剩標記原生（首輪 reconcile 會建 RECOVERED）；
--- failed＝寫了行卻沒有紀錄也沒有標記原生：匯入交易沒做完（寫檔後丟錯），可以照 want 重匯
-local function hashState(R, idx, ids)
-    local rec, orphan = nil, false
-    for _, id in ipairs(ids) do
-        local r = R.get(id)
-        if R.tomb(id) ~= nil or (r ~= nil and idx.byClaim[id] ~= nil) then return "ok" end
-        if r ~= nil then rec = r elseif idx.byClaim[id] ~= nil then orphan = true end
-    end
-    if rec ~= nil then
-        if rec.lifecycle ~= LC.QUARANTINED then R.markQuarantined(rec, "MIGRATION_MISSING") end
-        return "missing"
-    end
-    return orphan and "missing" or "failed"
-end
-
--- 核對 completion manifest。開服 startup hook order 10，排在首輪 reconcile 之前（缺件的先 quarantined，reconcile 就不會重建它）；
--- 管理員 targeted recovery 後也會在鎖內重跑（只讀檔、改 registry，不送網路），全部吻合就解除遷移中。
--- 每次都先把 nextClaimId 抬過 manifest 裡全部的 id（含別代、已完成的遷移）：claimId 不重用（§4.2）。
--- 只核對 md.migrationGen 這一代；這一代每個 want hash 都有 ok 才完成。還沒匯入的放 M.pending，同一次開服由 operate 補匯入。
-function M.verify(now)
+-- 原生已存、registry 沒存：沒有紀錄也沒有 tombstone 的標記原生，照 imp 行重建紀錄（claimId＋範圍＋建立時間都要相同）
+local function restore(idx, imports, now)
     local R = MSH.Registry
-    M.pending = nil
-    if not R.ready() then return end
-    local md = R.md
-    local lines = readLines(M.manifestPath())
-    if lines == false then
-        if md.migrationCompleted ~= false or md.migrationGen == nil then return end
-        MSH.Audit.write("MIGRATION_INCOMPLETE", { code = "MANIFEST_UNREADABLE" })
-        return
-    end
-    local m = parseManifest(lines or {}, md.migrationGen)
-    for _, id in ipairs(m.ids) do R.raiseNextId(id) end
-    -- 沒在遷移、或還沒開始匯入（等 selection）：舊檔只用來抬 nextClaimId
-    if md.migrationCompleted ~= false or md.migrationGen == nil then return end
-    if lines == nil then
-        MSH.Audit.write("MIGRATION_INCOMPLETE", { code = "MANIFEST_MISSING" })
-        return
-    end
-    local idx = MSH.Native.index()
-    local st = md.migration
-    local ok, missing, pending = 0, 0, {}
-    for _, h in ipairs(m.gotOrder) do
-        local s = hashState(R, idx, m.got[h])
-        if s == "ok" then
-            ok = ok + 1
-        elseif s == "failed" and m.want[h] ~= nil then
-            pending[#pending + 1] = m.want[h]
-        else
-            missing = missing + 1
+    local todo = {}
+    for id, list in pairs(idx.byClaim) do
+        local it = imports[id]
+        if R.md.claims[id] == nil and R.md.tombs[id] == nil and #list == 1 and it ~= nil
+            and MSH.Native.rectKey(list[1].rect) == it.rectKey and createdText(list[1].house) == it.created
+            and MSH.validUsername(it.owner) then
+            todo[#todo + 1] = { id = id, e = list[1], it = it }
         end
     end
-    for _, h in ipairs(m.wantOrder) do
-        if m.got[h] == nil then pending[#pending + 1] = m.want[h] end
+    for _, t in ipairs(todo) do
+        local members = cleanMembers(t.it.owner, t.it.members)
+        R.put(legacyRecord(t.id, t.e.rect, t.it.owner, legacyTitle(t.it.title, t.it.owner), members, t.e.house, now))
+        R.raiseNextId(t.id)
+        t.e.house:addPlayer(t.it.owner)
+        MSH.Audit.write("MIGRATION_RESTORED", { claimId = t.id })
     end
-    -- want 行比 selection 的 allow 少（檔案被截掉或改過）：少的那幾筆沒有資料可補，算缺件
-    if st ~= nil and MSH.isInt(st.allowed) and #m.wantOrder < st.allowed then
-        missing = missing + st.allowed - #m.wantOrder
-    end
-    M.pending = pending
-    if st ~= nil then st.missing, st.pending = missing, #pending end
-    -- aggregate log 只寫筆數（§9 第 11 點）
-    if missing == 0 and #pending == 0 then
-        md.migrationCompleted = true
-        MSH.Audit.write("MIGRATION_COMPLETED", { detail = "verified=" .. ok })
-    else
-        MSH.Audit.write("MIGRATION_INCOMPLETE", { code = "MISSING",
-            detail = "verified=" .. ok .. " missing=" .. missing .. " pending=" .. #pending })
-    end
+    return #todo
 end
 
--- ===== operator 流程（§9 第 4、5、7、11、12 點）=====
-
--- 字串摘要：兩組 31 位元多項式雜湊（Kahlua 沒有位元運算；double 乘積 < 2^53 不失準）。
--- ponytail: 不防刻意碰撞；候選之間撞號會標 DUPLICATE_HASH、不能匯入，要防偽造再換密碼學雜湊。
-local function digest(s)
-    local a, b = 7, 11
-    for i = 1, #s do
-        local c = string.byte(s, i)
-        a = (a * 31 + c) % 2147483629
-        b = (b * 131 + c) % 2147483587
-    end
-    return tostring(math.floor(a)) .. "-" .. tostring(math.floor(b))
-end
-
--- Better Safehouse 的 Global ModData（§9 第 7 點：唯讀）。只用 exists＋get，不用 getOrCreate（會建空表）：
--- ModData.exists／get（world/moddata/ModData.java:16、24 → GlobalModData.java:70、83）。
--- 鍵（BetterSafehouse 3.1.1 42.19/media/lua/）：BetterSafehouseExpansionState 的 baseRects／baseAreas／counts 以 "x:y:w:h"
---   （shared/BetterSafehouse/BetterSafehouse_Expansion_Shared.lua:7,629-640；server/…/BetterSafehouse_Expansion_Server.lua:33-54,150-175）；
---   BetterSafehouse_SubOwners／BetterSafehouse_SubOwnersMembers 以 getDatetimeCreated 的 "%.0f"
---   （shared/…/02_BetterSafehouse_SubOwner_Shared.lua:34,39；server/…/BetterSafehouse_SubOwner_Server.lua:124-143）；
---   BetterSafehouse_PrimaryRespawns[名字] 帶 safeX/Y/W/H（server/…/BetterSafehouse_Server.lua:13,713-735）。
-local function rectText(x, y, w, h)
-    return string.format("%d:%d:%d:%d", math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0),
-        math.floor(tonumber(w) or 0), math.floor(tonumber(h) or 0))
-end
-
-local function foreignTable(tag)
-    local ok, t = pcall(function()
-        if ModData.exists(tag) then return ModData.get(tag) end
-        return nil
-    end)
-    if ok and type(t) == "table" then return t end
-    return nil
-end
-
-local function bshIndex()
-    local rects, created = {}, {}
-    local ex = foreignTable("BetterSafehouseExpansionState")
-    if ex ~= nil then
-        for _, field in ipairs({ "baseRects", "baseAreas", "counts" }) do
-            if type(ex[field]) == "table" then
-                for k in pairs(ex[field]) do rects[tostring(k)] = true end
+-- registry 已存、原生沒存：legacy 紀錄沒有標記原生，同範圍恰好一間屋主相同、建立時間相同（N.matches）的 foreign → 重新接上
+local function reattach(idx)
+    local N = MSH.Native
+    local n = 0
+    for _, rec in ipairs(MSH.Registry.list()) do
+        if rec.source == MSH.SOURCE.LEGACY and rec.lifecycle == LC.ACTIVE and idx.byClaim[rec.claimId] == nil then
+            local hits = {}
+            for _, e in ipairs(idx.byRect[N.rectKey(rec.rect)] or {}) do
+                if e.claimId == nil and e.owner == rec.owner and N.matches(rec, e) then hits[#hits + 1] = e end
+            end
+            if #hits == 1 then
+                mark(hits[1].house, rec.claimId, rec.owner)
+                n = n + 1
+                MSH.Audit.write("MIGRATION_REATTACHED", { claimId = rec.claimId })
             end
         end
     end
-    for _, tag in ipairs({ "BetterSafehouse_SubOwners", "BetterSafehouse_SubOwnersMembers" }) do
-        local t = foreignTable(tag)
-        if t ~= nil then
-            for k in pairs(t) do created[tostring(k)] = true end
-        end
-    end
-    local rs = foreignTable("BetterSafehouse_PrimaryRespawns")
-    if rs ~= nil then
-        for _, r in pairs(rs) do
-            if type(r) == "table" then rects[rectText(r.safeX, r.safeY, r.safeW, r.safeH)] = true end
-        end
-    end
-    return rects, created
+    return n
 end
 
--- 唯讀掃 foreign 原生（owner 不是 @MSH 標記）。candidate = { rect, owner, title, members（排序）, hash, bsh, problem }；
--- identity hash＝rect＋owner＋title＋成員（§9 第 4 點）；problem 的不能匯入（§9 第 10 點：不猜）。
--- 回傳 { list（照 hash 排序）, byHash, fingerprint }
-function M.scan()
+-- ===== 接管 =====
+
+-- foreign 原生 → 候選 { e, created, problem }；problem 的留在原版
+local function candidates(idx)
     local N = MSH.Native
-    local idx = N.index()
-    local bRects, bCreated = bshIndex()
-    local list, seen = {}, {}
+    local out = {}
     for _, e in ipairs(idx.foreign) do
-        local house, r = e.house, e.rect
-        local owner = type(e.owner) == "string" and e.owner or ""
-        local title = house:getTitle()   -- SafeHouse.java:727-729
-        if type(title) ~= "string" then title = "" end
-        local members = N.players(house)
-        MSH.sortSafe(members, function(a, b) return a < b end)
-        local created = house:getDatetimeCreated()   -- SafeHouse.java:681-683
-        local c = { rect = r, owner = owner, title = title, members = members,
-            bsh = bRects[rectText(r.x, r.y, r.w, r.h)] == true
-                or (MSH.isFinite(created) and bCreated[string.format("%.0f", created)] == true) }
-        c.hash = digest(N.rectKey(r) .. "\n" .. owner .. "\n" .. title .. "\n" .. table.concat(members, "\n"))
-        if not MSH.Rect.valid(r) then
+        local c = { e = e, created = e.house:getDatetimeCreated() }
+        if not MSH.isFinite(c.created) then c.created = 0 end
+        if not MSH.Rect.valid(e.rect) then
             c.problem = "BAD_RECT"
-        elseif not MSH.validUsername(owner) then
+        elseif not MSH.validUsername(e.owner) then
             c.problem = "BAD_OWNER"
-        elseif #idx.byRect[N.rectKey(r)] > 1 then
+        elseif #idx.byRect[N.rectKey(e.rect)] > 1 then
             c.problem = "DUPLICATE_RECT"
+        elseif idx.onlineIds[e.onlineId] > 1 then
+            c.problem = "DUPLICATE_ID"   -- 同起點：原生封包以 onlineId first-match 找房（SafeHouse.java:577-579、785）
         end
-        seen[c.hash] = (seen[c.hash] or 0) + 1
-        list[#list + 1] = c
+        out[#out + 1] = c
     end
-    MSH.sortSafe(list, function(a, b) return a.hash < b.hash end)
-    local byHash, hashes = {}, {}
-    for i, c in ipairs(list) do
-        if seen[c.hash] > 1 and c.problem == nil then c.problem = "DUPLICATE_HASH" end
-        byHash[c.hash] = c
-        hashes[i] = c.hash
-    end
-    return { list = list, byHash = byHash,
-        fingerprint = "n" .. idx.count .. "-c" .. #list .. "-" .. digest(table.concat(hashes, ",")) }
+    return out
 end
 
--- candidate report＋selection 範本。預填：Better Safehouse 對得上且沒有問題的 allow，其他 deny（來源不明不猜）
--- 檔頭只能用 ASCII：Kahlua 把非 ASCII 字面值截成單 byte，截出的 \r 會讓 readLine 把註解切成壞行（sh-mig-1011a 實踩 BAD_LINE）
-local function writeReport(scan)
-    local N = MSH.Native
-    local lines = {
-        "# MinidoracatSafehouse migration candidates. After review, copy this file to migration-selection.txt.",
-        "# Set the first column of each row to allow (import) or deny (skip; the vanilla safehouse is left as is). Keep the snapshot row.",
-        "# Rows whose problem column is not - cannot be allowed. Columns: decision hash x,y,w,h owner members bsh problem title",
-        "snapshot\t" .. scan.fingerprint,
-    }
-    for _, c in ipairs(scan.list) do
-        lines[#lines + 1] = table.concat({ (c.bsh and c.problem == nil) and "allow" or "deny", c.hash, N.rectKey(c.rect),
-            field(c.owner), tostring(#c.members), c.bsh and "bsh" or "-", c.problem or "-", field(c.title) }, "\t")
-    end
-    return writeLines(M.reportPath(), lines, false)
+local function skipLine(gen, reason, e)
+    local title = e.house:getTitle()   -- SafeHouse.java:727-729
+    return table.concat({ "skip", gen, reason, MSH.Native.rectKey(e.rect), field(e.owner), field(title or "") }, "\t")
 end
 
--- 解析 selection：每行前兩欄（空白分隔）；# 開頭與空行略過；開頭的 BOM／空白去掉。
--- 指紋要相同、每個 hash 都要是目前的候選、每個候選都要有決定、allow 的不能有問題；任何一項不合整批不匯入。
--- 回傳 items（給 importLegacy）, allowed, denied 或 nil, 結果碼
-local function readSelection(scan, lines)
-    local snap, decided, rows = nil, {}, {}
-    for _, line in ipairs(lines) do
-        local body = string.match(line, "^[^%w#]*(.-)%s*$") or ""
-        if body ~= "" and string.sub(body, 1, 1) ~= "#" then
-            local a, b = string.match(body, "^(%S+)%s+(%S+)")
-            if a == "snapshot" and snap == nil then
-                snap = b
-            elseif a == "allow" or a == "deny" then
-                rows[#rows + 1] = { a, b }
+-- 接管一間：先預檢容量（用 nextClaimId 當草稿 id，放不下不消耗 claimId），再寫 imp 行，成功才改原生與 registry。
+-- 回傳 "ok"、"cap"（放不下）或 false（寫檔失敗；claimId 照樣用掉、不重用）
+local function adoptOne(c, gen, now, budget)
+    local R, N = MSH.Registry, MSH.Native
+    local e = c.e
+    local house, owner = e.house, e.owner
+    local title = legacyTitle(house:getTitle(), owner)
+    local members = cleanMembers(owner, N.players(house))
+    local rec = legacyRecord(R.md.nextClaimId, e.rect, owner, title, members, house, now)
+    -- 和 Claims.checkCapacity 同一套：registry 估算大小（含這筆）、全部原生名單名字數
+    local names = #N.desiredPlayers(rec)
+    if R.estimateBytes(rec) > budget.bytes or budget.names + names > budget.maxNames then return "cap" end
+    local id = R.allocId()
+    rec.claimId = id
+    local line = table.concat({ "imp", gen, tostring(id), N.rectKey(e.rect), createdText(house), owner,
+        table.concat(members, ","), field(title) }, "\t")
+    if not appendLines({ line }) then return false end
+    mark(house, id, owner)
+    R.put(rec)
+    budget.names = budget.names + names
+    MSH.Audit.write("MIGRATED", { actor = owner, claimId = id, code = "LEGACY" })
+    return "ok"
+end
+
+-- 一輪接管；寫檔失敗或中途丟錯的留在原版，狀態維持 waiting（IMPORT_FAILED），下次開服只會再看到還是 foreign 的那幾間
+local function adopt(st, now)
+    local R, N = MSH.Registry, MSH.Native
+    local gen = tostring(math.floor(now)) .. "-" .. tostring(R.md.nextClaimId)
+    local list = candidates(N.index())
+    local skipped, failed, skipLines, houses = {}, 0, {}, {}
+    local eligible = {}
+    for _, c in ipairs(list) do
+        if c.problem == nil then
+            eligible[#eligible + 1] = c
+        else
+            skipped[c.problem] = (skipped[c.problem] or 0) + 1
+            skipLines[#skipLines + 1] = skipLine(gen, c.problem, c.e)
+        end
+    end
+    MSH.sortSafe(eligible, function(a, b)
+        if a.created ~= b.created then return a.created < b.created end
+        return N.rectKey(a.e.rect) < N.rectKey(b.e.rect)
+    end)
+    local room = MSH.LIMIT.MAX_CLAIMS - R.liveCount()
+    local budget = { bytes = math.floor(MSH.LIMIT.REGISTRY_BYTES * M.REGISTRY_SHARE),
+        maxNames = math.floor(MSH.LIMIT.NATIVE_NAMES * M.NAMES_SHARE), names = 0 }
+    for _, r in ipairs(R.list()) do
+        if R.isLive(r) then budget.names = budget.names + #N.desiredPlayers(r) end
+    end
+    local done, full = 0, false
+    local res = MSH.Srv.withLock(function()
+        for _, c in ipairs(eligible) do
+            local got = nil
+            if not full and done < room then got = adoptOne(c, gen, now, budget) end
+            if got == "ok" then
+                done = done + 1
+                houses[#houses + 1] = c.e.house
+            elseif got == false then
+                failed = failed + 1
             else
-                return nil, "BAD_LINE"
+                full = true
+                skipped.OVER_CAP = (skipped.OVER_CAP or 0) + 1
+                skipLines[#skipLines + 1] = skipLine(gen, "OVER_CAP", c.e)
             end
         end
-    end
-    if snap ~= scan.fingerprint then return nil, "SNAPSHOT_MISMATCH" end
-    for _, row in ipairs(rows) do
-        local c = scan.byHash[row[2]]
-        if c == nil then return nil, "UNKNOWN_HASH" end
-        if decided[row[2]] ~= nil and decided[row[2]] ~= row[1] then return nil, "DUPLICATE_HASH" end
-        if row[1] == "allow" and c.problem ~= nil then return nil, "NOT_ALLOWED" end
-        decided[row[2]] = row[1]
-    end
-    local items, denied = {}, 0
-    for _, c in ipairs(scan.list) do
-        local d = decided[c.hash]
-        if d == nil then return nil, "UNDECIDED" end
-        if d == "allow" then
-            items[#items + 1] = { rect = c.rect, owner = c.owner, title = c.title, members = c.members, hash = c.hash }
-        else
-            denied = denied + 1
-        end
-    end
-    return items, #items, denied
-end
-
--- want 行：這一代要匯入的 allow 項（伺服器私有檔）。成員只留合法名字（不含逗號），標題去掉控制字元
-local function wantLine(gen, it)
-    local members = {}
-    for _, u in ipairs(it.members) do
-        if MSH.validUsername(u) and not string.find(u, ",", 1, true) then members[#members + 1] = u end
-    end
-    return table.concat({ "want", gen, it.hash, MSH.Native.rectKey(it.rect), it.owner, table.concat(members, ","),
-        field(it.title) }, "\t")
-end
-
--- 補匯入時原生已不在或對不上：建 quarantined 佔位（MIGRATION_MISSING），讓管理員 targeted recovery 處理
--- （rebind 照 rect 重建、release 放棄），處理完 verify 重跑就能完成；照 write-then-update 先寫 manifest 行
-local HOLD = { NO_NATIVE = true, AMBIGUOUS = true, ALREADY_MANAGED = true }
-local function hold(it, now)
-    local R = MSH.Registry
-    local id = R.allocId()
-    if not appendLine(importLine(it.hash, id, R.md.migrationGen)) then return false end
-    local rec = R.newRecord({ claimId = id, lifecycle = LC.QUARANTINED, rect = it.rect, title = it.title, owner = it.owner,
-        source = MSH.SOURCE.LEGACY, deedTier = 1, grants = legacyGrants(it), createdAt = now })
-    rec.quarantineReason = "MIGRATION_MISSING"
-    R.put(rec)
-    MSH.Audit.write("QUARANTINE", { claimId = id, code = "MIGRATION_MISSING" })
-    return true
-end
-
--- 照 items 匯入（第一次與補匯入共用）；持全域鎖，放鎖後才送原生廣播。importLegacy 中途丟錯時已做完的照樣留著，
--- 下一次開服 verify 以 hash 找出還沒完成的再補
-local function runImport(st, items, now)
-    local sends, held = {}, 0
-    local out = MSH.Srv.withLock(function()
-        local res = M.importLegacy(items, now, function(fn) sends[#sends + 1] = fn end)
-        for _, s in ipairs(res.skipped) do
-            if HOLD[s.reason] and hold(items[s.index], now) then held = held + 1 end
-        end
-        return res
+        return MSH.Srv.ok()
     end)
-    for _, fn in ipairs(sends) do
-        local ok, err = pcall(fn)
-        if not ok then MSH.log("migration send failed: " .. tostring(err)) end
+    for _, h in ipairs(houses) do N.broadcast(h) end   -- 放鎖後才送（開服首輪 netUp 前不送，登入時整份清單會帶到）
+    if not (type(res) == "table" and res.ok) then failed = failed + 1 end
+    if #skipLines > 0 then appendLines(skipLines) end
+    st.adopted = (st.adopted or 0) + done
+    st.skipped = skipped
+    st.at = now
+    local detail = "adopted=" .. done .. " failed=" .. failed
+    for _, reason in ipairs(M.SKIP_REASONS) do
+        if skipped[reason] then detail = detail .. " " .. reason .. "=" .. skipped[reason] end
     end
-    if type(out) ~= "table" or out.imported == nil then return "IMPORT_FAILED" end
-    st.imported = (st.imported or 0) + #out.imported
-    st.skipped = #out.skipped - held
-    st.held = (st.held or 0) + held
-    local lines = {}
-    for _, it in ipairs(out.imported) do lines[#lines + 1] = "# imported " .. it.hash .. " " .. tostring(it.claimId) end
-    for _, it in ipairs(out.skipped) do lines[#lines + 1] = "# skipped " .. tostring(it.hash) .. " " .. it.reason end
-    writeLines(M.reportPath(), lines, true)
-    MSH.Audit.write("MIGRATION_IMPORTED", { detail = "allowed=" .. tostring(st.allowed) .. " denied=" .. tostring(st.denied)
-        .. " imported=" .. #out.imported .. " skipped=" .. st.skipped .. (held > 0 and (" held=" .. held) or "") })
-    return nil
+    -- aggregate log 只寫筆數（§9 第 11 點）
+    MSH.Audit.write("MIGRATION_ADOPTED", { detail = detail })
+    if failed > 0 then
+        st.state, st.reason = "waiting", "IMPORT_FAILED"
+    else
+        st.state, st.reason = "done", nil
+    end
 end
 
--- 第一次匯入：開新的一代，先把全部 want 行寫進 completion manifest，成功才把代號寫進 registry、轉 imported 階段
-local function startImport(st, items, now)
-    local R = MSH.Registry
-    -- legacy 一律 grandfather（不看每人名額，§9 第 5 點）；全服上限 256 是 registry 大小的 ship gate，超過要 operator 再 deny
-    if #items > MSH.LIMIT.MAX_CLAIMS - R.liveCount() then return "TOO_MANY" end
-    st.importedAt = now
-    if #items == 0 then
-        -- 全部 deny：沒有東西要核對，直接完成
-        st.phase, st.imported, st.skipped = "imported", 0, 0
-        R.md.migrationCompleted = true
-        MSH.Audit.write("MIGRATION_IMPORTED", { detail = "allowed=0 denied=" .. tostring(st.denied) .. " imported=0 skipped=0" })
-        MSH.Audit.write("MIGRATION_COMPLETED", { detail = "verified=0" })
-        return nil
-    end
-    local gen = newGen(now)
-    local lines = {}
-    for _, it in ipairs(items) do lines[#lines + 1] = wantLine(gen, it) end
-    if not writeLines(M.manifestPath(), lines, true) then return "WRITE_FAILED" end
-    R.md.migrationGen = gen
-    st.phase = "imported"
-    return runImport(st, items, now)
-end
-
--- startup hook order 11：verify（10）之後、首輪 reconcile（20）之前
-function M.operate(now)
-    local R = MSH.Registry
+-- startup hook order 11：首輪 reconcile（order 20）之前
+function M.startup(now)
+    local R, N = MSH.Registry, MSH.Native
     if not R.ready() then return end
     local md = R.md
-    local st = md.migration or {}
-    md.migration = st
-    if st.phase == nil then
-        -- 只在這份存檔第一次跑本 MOD（registry 沒有紀錄、tombstone、遷移旗標）且有 foreign 原生時進入遷移
-        if md.migrationCompleted ~= nil or R.liveCount() > 0 or R.tombstoneCount() > 0
-            or #MSH.Native.index().foreign == 0 then
-            st.phase = "none"
+    local fresh = md.migration == nil and R.liveCount() == 0 and R.tombstoneCount() == 0
+    local lines = readLines()
+    if lines == false then MSH.Audit.write("MIGRATION_CHECK", { code = "FILE_UNREADABLE" }) end
+    local imports = parseImports(lines or {})
+    -- claimId 永不重用：先抬過檔案裡全部的 id（含別的世界、回滾掉的接管）與每一個標記原生（含玩家建的屋，
+    -- registry 遺失時它們只剩原生）。必須在任何 allocId 之前（§4.2；recoverOrphans 在 order 20 才抬，太晚）
+    for id in pairs(imports) do R.raiseNextId(id) end
+    local idx = N.index()
+    for id in pairs(idx.byClaim) do R.raiseNextId(id) end
+    local fix = MSH.Srv.withLock(function()
+        return { restored = restore(idx, imports, now), reattached = reattach(idx) }
+    end)
+    if type(fix) ~= "table" or fix.restored == nil then fix = { restored = 0, reattached = 0 } end
+    M.lastCheck = { restored = fix.restored, reattached = fix.reattached, at = now }
+    if fix.restored + fix.reattached > 0 then
+        MSH.Audit.write("MIGRATION_REPAIRED", { detail = "restored=" .. fix.restored .. " reattached=" .. fix.reattached })
+    end
+    local st = md.migration
+    if st == nil then
+        -- 還原後仍沒有紀錄的標記原生＝registry 遺失：不是第一次安裝，不接管 foreign
+        local orphans = 0
+        for id in pairs(idx.byClaim) do
+            if md.claims[id] == nil and md.tombs[id] == nil then orphans = orphans + 1 end
+        end
+        if orphans > 0 then
+            MSH.Audit.write("MIGRATION_CHECK", { code = "REGISTRY_LOST", detail = "orphans=" .. orphans })
+            md.migration = fix.restored > 0 and { state = "done", adopted = fix.restored, at = now } or { state = "none" }
             return
         end
-        st.phase = "select"
-        md.migrationCompleted = false
-    end
-    if md.migrationCompleted ~= false then return end
-    if st.phase == "imported" then
-        -- 補匯入 verify（同一次開服、order 10）找出的還沒完成的 hash；已有紀錄的不重匯。下一次開服再核對
-        local pending = M.pending
-        if pending ~= nil and #pending > 0 then
-            local abort = runImport(st, pending, now)
-            st.abort = abort
-            if abort ~= nil then
-                MSH.Audit.write("MIGRATION_ABORTED", { code = abort, detail = "pending=" .. #pending })
-            end
+        if not fresh or (#idx.foreign == 0 and fix.restored == 0) then
+            md.migration = { state = "none" }
+            return
         end
+        st = { state = "waiting", adopted = fix.restored }
+        md.migration = st
+    end
+    if st.state ~= "waiting" then return end
+    local reason = nil
+    if MSH.Health.blocked() then
+        reason = "HEALTH_BLOCKED"
+    elseif M.bshActive() then
+        reason = "BSH_ACTIVE"
+    end
+    if reason ~= nil then
+        st.reason = reason
+        MSH.Audit.write("MIGRATION_WAITING", { code = reason })
         return
     end
-    if st.phase ~= "select" then return end
-    local scan = M.scan()
-    local bsh, problems = 0, 0
-    for _, c in ipairs(scan.list) do
-        if c.bsh then bsh = bsh + 1 end
-        if c.problem ~= nil then problems = problems + 1 end
-    end
-    st.candidates, st.bshMatched, st.problems, st.reportedAt = #scan.list, bsh, problems, now
-    st.abort = not writeReport(scan) and "REPORT_WRITE_FAILED" or nil
-    MSH.Audit.write("MIGRATION_REPORT", { detail = "candidates=" .. #scan.list .. " bsh=" .. bsh .. " problems=" .. problems })
-    local lines = readLines(M.selectionPath())
-    if lines == nil then return end
-    local abort
-    if lines == false then
-        abort = "SELECTION_UNREADABLE"
-    else
-        local items, allowed, denied = readSelection(scan, lines)
-        if items == nil then
-            abort = allowed
-        else
-            st.allowed, st.denied = allowed, denied
-            abort = startImport(st, items, now)
-        end
-    end
-    st.abort = abort
-    if abort ~= nil then
-        MSH.Audit.write("MIGRATION_ABORTED", { code = abort, detail = "candidates=" .. #scan.list })
-    end
+    adopt(st, now)
 end
 
--- 給管理員面板（§10.6）：只有階段、筆數、結果碼與檔案位置（相對 Zomboid/Lua/），不含名字與座標
+-- 給管理員面板（§10.6）：狀態、等待原因、接管與略過筆數、這次開服的當機修復筆數；不含名字與座標
 function M.status()
     local md = MSH.Registry.md or {}
     local st = md.migration or {}
-    local status = "none"
-    if md.migrationCompleted == true then
-        status = "completed"
-    elseif md.migrationCompleted == false then
-        status = st.phase == "select" and "awaitingSelection" or "verifying"
-    end
-    return { status = status, completed = md.migrationCompleted, candidates = st.candidates, bshMatched = st.bshMatched,
-        problems = st.problems, allowed = st.allowed, denied = st.denied, imported = st.imported, skipped = st.skipped,
-        missing = st.missing, pending = st.pending, held = st.held, abort = st.abort, reportedAt = st.reportedAt,
-        importedAt = st.importedAt,
-        files = { report = M.reportPath(), selection = M.selectionPath(), completion = M.manifestPath() } }
+    local skipped = {}
+    for k, v in pairs(st.skipped or {}) do skipped[k] = v end
+    local last = M.lastCheck or {}
+    return { state = st.state or "none", reason = st.reason, adopted = st.adopted or 0, skipped = skipped, at = st.at,
+        restored = last.restored or 0, reattached = last.reattached or 0, file = M.manifestPath() }
 end
 
 MSH.Srv.define("adminMigration", { kind = "query", admin = true, fields = {}, run = function()
     return MSH.Srv.ok({ migration = M.status() })
 end })
 
-MSH.Srv.hook("startup", "migration", function(now) MSH.Migration.verify(now) end, 10)
-MSH.Srv.hook("startup", "migrationOps", function(now) MSH.Migration.operate(now) end, 11)
+MSH.Srv.hook("startup", "migration", function(now) MSH.Migration.startup(now) end, 11)

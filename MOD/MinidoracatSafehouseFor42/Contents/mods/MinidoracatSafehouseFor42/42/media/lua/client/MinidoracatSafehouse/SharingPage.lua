@@ -1,9 +1,11 @@
 -- MinidoracatSafehouse/SharingPage.lua：管理視窗「成員與分享」頁（M3，計畫 §10.5、§6.5）。
 -- 照 VM 車隊視窗「先勾權限，再選對象」（MinidoracatVehicleManager_FleetWindow.lua layoutOwner :1096-1175）：
 --   上半「目前分享給」逐列（陣營「名稱」：權限、玩家：權限）各一顆〔停止〕，陣營暫停時寫原因並給〔恢復分享〕；
---   下半先勾權限 chip（後五個自動帶成員），再輸入玩家名稱〔分享給玩家〕或〔分享給陣營〕（屋主目前所在陣營）。
--- 只送提案，畫面以伺服器結果與重抓的 detail 為準（§10.4 最後一段）。MANAGE 成員只能給自己有的位元、不能給 MANAGE、
---   不能動屋主、自己、實際持有 MANAGE 的人與帶 MANAGE 的陣營分享：這裡只是不給按（體驗），伺服器才是防線（契約 M2）。
+--   下半先勾權限 chip（成員以外的都自動帶成員），再輸入玩家名稱〔分享給玩家〕或〔分享給陣營〕（屋主目前所在陣營）。
+-- 只送提案，畫面以伺服器結果與重抓的 detail 為準（§10.4 最後一段）。這裡只是不給按（體驗），伺服器才是防線（契約 M2）：
+--   屋主全部可給；MANAGE 成員只能給自己有的位元（另外可給 INVITE）、不能給 MANAGE、不能動屋主、自己、實際持有 MANAGE
+--   的人；只有 INVITE 的成員只能把新玩家加進來（名單上已有的名字送出前就擋），位元 ⊆ 自己的、不含 INVITE 與 MANAGE，
+--   不能停止任何分享、不能動陣營分享（使用者 2026-10-11）。陣營分享一律不帶 INVITE 與 MANAGE（SP.factionBits）。
 -- 元件與送出都借管理視窗（host：button／newLines／place／fit／mutate／say），本檔只排版與組指令。
 
 if not isClient() then return end
@@ -15,7 +17,7 @@ local SHARE = MSH.SHARE
 local SP = MSH.SharingPage or {}
 MSH.SharingPage = SP
 
-SP.CHIPS = { "MEMBER", "USE", "MOVE", "BUILD", "FARM", "MANAGE" }
+SP.CHIPS = { "MEMBER", "USE", "MOVE", "BUILD", "FARM", "INVITE", "MANAGE" }
 SP.DEFAULT_BITS = SHARE.MEMBER + SHARE.USE   -- 預設勾成員與用電器（§10.5）
 
 -- ===== 純邏輯（t_ui_manager.lua 測）=====
@@ -43,25 +45,64 @@ function SP.bitsText(bits)
     return table.concat(parts, getText("IGUI_MSH_Share_ListSep"))
 end
 
+-- 能不能新增分享（「成員與分享」頁是否出現）：active 且是屋主、MANAGE 或 INVITE 成員（SharingServer 的 ACL；
+-- detail 沒有專用欄位，從 actorRole／bits／lifecycle 推）
+function SP.canAdd(d)
+    if d.lifecycle ~= MSH.LIFECYCLE.ACTIVE then return false end
+    return d.actorRole == "owner" or MSH.hasBit(d.bits, SHARE.MANAGE) or MSH.hasBit(d.bits, SHARE.INVITE)
+end
+
+-- 能不能改既有分享（停止、陣營分享按鈕）：屋主或 MANAGE 成員（actions.canManageShares）
+function SP.canEdit(d)
+    return (d.actions or {}).canManageShares == true
+end
+
 -- 能不能停止分享給這位玩家：屋主都可以；MANAGE 成員不能動自己與實際持有 MANAGE 的人（伺服器用 roleOf 判定，
 -- 陣營給的 MANAGE 也算：看 effBits＝grant 與有效陣營分享的聯集；舊伺服器沒有這欄時退回 bits）
 function SP.canStopGrant(d, grant, me)
     if d.actorRole == "owner" then return true end
-    local a = d.actions or {}
-    return a.canManageShares == true and grant.user ~= me and not MSH.hasBit(grant.effBits or grant.bits, SHARE.MANAGE)
+    if not SP.canEdit(d) then return false end
+    return grant.user ~= me and not MSH.hasBit(grant.effBits or grant.bits, SHARE.MANAGE)
 end
 
--- 能不能停止陣營分享：屋主可以；MANAGE 成員不能停一個帶 MANAGE 的陣營分享（伺服器回 NOT_OWNER）
+-- 能不能停止陣營分享：屋主或 MANAGE 成員（陣營分享不帶 INVITE／MANAGE，所以不再看陣營分享的位元）
 function SP.canStopFaction(d)
-    local a, fs = d.actions or {}, d.factionShare
-    if a.canManageShares ~= true or type(fs) ~= "table" then return false end
-    return d.actorRole == "owner" or not MSH.hasBit(fs.bits, SHARE.MANAGE)
+    return SP.canEdit(d) and type(d.factionShare) == "table"
 end
 
--- 能勾的 chip：屋主全部；成員只能給自己有的位元（伺服器要求子集），而且不能給 MANAGE
+-- 陣營分享能帶的位元：一律去掉 INVITE 與 MANAGE（主代理裁定 2026-10-11；伺服器收到會回 BAD_ARGS）。
+-- 上限取 Contract 的 SHARE_FACTION_MAX；舊 Contract 沒有時用一般位元的和。Kahlua 沒有位元運算子，逐位元取交集
+function SP.factionBits(bits)
+    local max = MSH.SHARE_FACTION_MAX or (SHARE.MEMBER + SHARE.USE + SHARE.MOVE + SHARE.BUILD + SHARE.FARM)
+    local out = 0
+    for _, name in ipairs(SP.CHIPS) do
+        local bit = SHARE[name]
+        if MSH.hasBit(bits, bit) and MSH.hasBit(max, bit) then out = out + bit end
+    end
+    return out
+end
+
+-- 只有 INVITE 的成員只能加新人：輸入的名字已經是屋主或在 grants 裡（屋主與 MANAGE 成員輸入既有名字＝改權限，不擋）
+function SP.alreadyListed(d, user)
+    if d.actorRole == "owner" or SP.canEdit(d) then return false end
+    for _, r in ipairs(d.roster or {}) do
+        if r.role == "owner" and r.user == user then return true end
+    end
+    for _, g in ipairs(d.grants or {}) do
+        if g.user == user then return true end
+    end
+    return false
+end
+
+-- 能勾的 chip：屋主全部；成員不能給 MANAGE；MANAGE 成員可給 INVITE（自己沒有也可以），其餘只能給自己有的位元
+-- （伺服器要求子集）；只有 INVITE 的成員不能給 INVITE；兩者都沒有的成員一個都不能勾
 function SP.chipAllowed(d, name)
     if d.actorRole == "owner" then return true end
-    return name ~= "MANAGE" and MSH.hasBit(d.bits, SHARE[name])
+    if name == "MANAGE" then return false end
+    local manager = MSH.hasBit(d.bits, SHARE.MANAGE)
+    if not manager and not MSH.hasBit(d.bits, SHARE.INVITE) then return false end
+    if name == "INVITE" then return manager end
+    return MSH.hasBit(d.bits, SHARE[name])
 end
 
 -- 要送出的位元：只留能勾的 chip（換了屋或自己的位元變少時把已勾的收回）
@@ -100,6 +141,7 @@ function SP.new(host, parent)
     p.user:setVisible(false)
     p.btnUser = host:button(parent, getText("IGUI_MSH_Share_ToPlayer"), Page.onShareUser, p, "primary")
     p.btnFaction = host:button(parent, getText("IGUI_MSH_Share_ToFaction"), Page.onShareFaction, p)
+    p.btnFaction:setTooltip(getText("IGUI_MSH_Share_FactionNoInvite"))   -- 共用同一排 chip：說明陣營分享不含這兩位
     p.btnResume = host:button(parent, getText("IGUI_MSH_Share_Resume"), Page.onResume, p, "primary")
     p.btnFactionStop = host:button(parent, getText("IGUI_MSH_Share_Stop"), Page.onStopFaction, p, nil, "close")
     p.fixed = { p.lines, p.user, p.btnUser, p.btnFaction, p.btnResume, p.btnFactionStop }
@@ -158,7 +200,8 @@ function Page:layout(d, x0, y0, w)
             resume:setEnabled(idle)
             right = right - gap
         end
-        L:add(host:fit(getText("IGUI_MSH_Share_FactionRow", fs.name or "", SP.bitsText(fs.bits or 0)), right), 0, y + textDy, "text")
+        L:add(host:fit(getText("IGUI_MSH_Share_FactionRow", fs.name or "", SP.bitsText(SP.factionBits(fs.bits or 0))), right),
+            0, y + textDy, "text")
         y = y + ch + 2
         if fs.state == "SUSPENDED" then
             L:add(host:fit(getText(SP.reasonKey(fs)), w - host.iconW), 0, y, "warning", "warning")
@@ -173,13 +216,20 @@ function Page:layout(d, x0, y0, w)
         self.btnResume:setVisible(false)
     end
 
+    -- 只有 INVITE 的成員：名單照列，但每列都沒有〔停止〕（不能改既有成員）
+    local edit = SP.canEdit(d) or d.actorRole == "owner"
     for i, g in ipairs(grants) do
         local b = self:rowButton(i)
-        b.internal = g.user
-        b:setTooltip(getText("IGUI_MSH_Share_StopTip", g.user))
-        b:setEnabled(idle and SP.canStopGrant(d, g, host.me))
-        host:place(b, x0 + w - b.width, y0 + y)
-        L:add(host:fit(getText("IGUI_MSH_Share_PlayerRow", g.user, SP.bitsText(g.bits)), w - b.width - gap), 0, y + textDy, "text")
+        local textW = w
+        b:setVisible(false)
+        if edit then
+            b.internal = g.user
+            b:setTooltip(getText("IGUI_MSH_Share_StopTip", g.user))
+            b:setEnabled(idle and SP.canStopGrant(d, g, host.me))
+            host:place(b, x0 + w - b.width, y0 + y)
+            textW = w - b.width - gap
+        end
+        L:add(host:fit(getText("IGUI_MSH_Share_PlayerRow", g.user, SP.bitsText(g.bits)), textW), 0, y + textDy, "text")
         y = y + ch + 2
     end
     for i = #grants + 1, #self.rows do self.rows[i]:setVisible(false) end
@@ -243,6 +293,7 @@ function Page.onShareUser(p)
     if d == nil then return end
     local user = MSH.trim(p.user:getText() or "")
     if not MSH.validUsername(user) then return host:say(getText("IGUI_MSH_Share_NeedUser"), "errorText") end
+    if SP.alreadyListed(d, user) then return host:say(getText("IGUI_MSH_Share_AlreadyListed"), "errorText") end
     local bits = SP.shareBits(d, p.bits)
     if bits <= 0 then return host:say(getText("IGUI_MSH_Share_NeedBits"), "errorText") end
     host:mutate("share", { claimId = d.claimId, expectedRevision = d.revision, targetUsername = user, bits = bits },
@@ -252,7 +303,7 @@ end
 function Page.onShareFaction(p)
     local host, d = p.host, p.host.detail
     if d == nil then return end
-    local bits = SP.shareBits(d, p.bits)
+    local bits = SP.factionBits(SP.shareBits(d, p.bits))
     if bits <= 0 then return host:say(getText("IGUI_MSH_Share_NeedBits"), "errorText") end
     host:mutate("shareFaction", { claimId = d.claimId, expectedRevision = d.revision, bits = bits },
         getText("IGUI_MSH_Share_FactionDone"), function() p:reset() end)

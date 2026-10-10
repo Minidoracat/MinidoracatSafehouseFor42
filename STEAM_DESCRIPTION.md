@@ -11,7 +11,7 @@
 [*] [b]選裝：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap[/url]（建立時避開資源點）
 [*] [b]選裝：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3801482125]Minidoracat Economy[/url]（伺服器開放時，用遊戲幣購買或租用更多安全屋名額）
 [*] 只支援多人專用伺服器；伺服器管理員要先調整幾項原版安全屋設定（見完整說明）
-[*] [b]中途加入／移除：[/b]可加入，存檔裡已有安全屋時管理員要先完成遷移；移除前請先看完整說明，地契會消失、已建的安全屋無法再管理
+[*] [b]中途加入／移除：[/b]可以中途加入，存檔裡原有的安全屋會在開服時自動接管；移除前請先看完整說明，地契會消失、已建的安全屋無法再管理
 [*] [b]介面語言：[/b]繁體中文、简体中文、English、日本語、한국어、Русский、Español、Português、Türkçe、Français、Polski、Deutsch（翻譯有問題請回報）
 [/list]
 
@@ -28,13 +28,13 @@
 [*] [b]分級地契[/b]：地契等級決定安全屋能圈多大
 [*] [b]自訂範圍[/b]：自己框出矩形，建好後短時間內還能重畫
 [*] [b]避開道路與資源點[/b]：大馬路與軍警醫療等建築圈不進來
-[*] [b]逐項分享[/b]：分享給玩家或陣營，分開授權電器、建造、農耕
+[*] [b]逐項分享[/b]：分享給玩家或陣營，分開授權電器、建造、農耕，也能只讓朋友幫忙邀人
 [*] [b]管理視窗[/b]：查看自己與分享給你的安全屋，改名或放棄
 [*] [b]原版保護[/b]：非成員進不去也拿不走東西，殭屍仍可能在屋內生成
 [*] [b]管理員面板[/b]：在遊戲內調整規則、地契、排除與付費名額
-[*] [b]從 Better Safehouse 遷移[/b]：管理員審核後一次匯入既有安全屋
+[*] [b]接手舊安全屋[/b]：原版或 Better Safehouse 的安全屋開服就自動接管，屋主與成員照舊
 [/list]
-📖 [b]伺服器設定、遷移流程與已知限制：[/b][url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse 完整說明（GitHub）[/url]
+📖 [b]伺服器設定、接手舊安全屋與已知限制：[/b][url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse 完整說明（GitHub）[/url]
 
 [h2]🔗 Minidoracat 全系列[/h2]
 其他作品都在[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat 全系列收藏[/url]，依需求自選訂閱。

@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "Läuft eine Miete ab und wird ein Safehouse ausgesetzt, bleibt sein Bereich so viele Tage reserviert und niemand sonst kann dort eines erstellen. Wird die Miete verlängert, ist es wieder aktiv; danach wird der Bereich freigegeben.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Frist zum Neuzeichnen (Minuten)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "So viele Minuten nach dem Erstellen kann der Bereich neu gezogen werden; die Urkunde wird weder verbraucht noch zurückgegeben.\n0 schaltet das Neuzeichnen aus.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Neuzeichnen-Limit pro Safehouse",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "Wie oft der Eigentümer ein Safehouse innerhalb der Frist zum Neuzeichnen nach dem Erstellen neu ziehen kann. Neuzeichnen verbraucht keine Urkunde.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Straßen meiden",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "Der Bereich eines Safehouses darf keine Straßen enthalten.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Abstand zu Straßen (Kacheln)",

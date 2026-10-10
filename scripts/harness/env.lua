@@ -164,6 +164,9 @@ end
 function getServerName() return "servertest" end
 T.steam = false
 function getSteamModeActive() return T.steam end
+-- 已載入的 MOD id（LuaManager.java:7458-7462 → ZomboidFileSystem.getModIDs :873）；opts.mods 覆寫，預設只有本 MOD
+T.activeMods = { "MinidoracatSafehouseFor42" }
+function getActivatedMods() return T.javaList(T.activeMods) end
 
 -- ServerWorldDatabase.java:766-788（不含髒話過濾）
 function isValidUserName(user)
@@ -647,6 +650,7 @@ local function resetWorld(opts)
     T.randQueue = {}
     T.factions = {}
     T.steam = opts.steam or false
+    T.activeMods = opts.mods or { "MinidoracatSafehouseFor42" }
     T.squareReads = 0
     T.nextOnlineId = 0
     MinidoracatMiniMapResourceAPI = nil

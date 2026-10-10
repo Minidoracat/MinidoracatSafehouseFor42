@@ -136,7 +136,7 @@ function P.gate(m)
     return nil
 end
 
--- 名額與伺服器閘門（slots：Economy 代理的查詢；blocked＝MIGRATION_IN_PROGRESS／HEALTH_BLOCKED／NOT_SURVIVED）
+-- 名額與伺服器閘門（slots：Economy 代理的查詢；blocked＝HEALTH_BLOCKED／NOT_SURVIVED）
 function P.refreshSlots(m)
     m.slotsRid = MSH.Client.send("slots", {}, function(res) P.onSlots(m, res) end)
 end

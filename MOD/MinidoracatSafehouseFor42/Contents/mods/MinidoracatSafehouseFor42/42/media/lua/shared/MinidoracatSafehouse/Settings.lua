@@ -39,6 +39,8 @@ local OPTIONS = {
     { key = "AllowFactionShare", type = "bool", default = true },
     { key = "LapseKeepDays", type = "int", min = 0, max = 365, default = 7 },
     { key = "RedrawMinutes", type = "int", min = 0, max = 1440, default = 30 },
+    -- 每間在重新框選時限內最多重畫幾次（使用者 2026-10-11 同意改成沙盒選項；每次多一筆 tombstone 與兩次全服廣播）
+    { key = "RedrawLimit", type = "int", min = 1, max = 20, default = 5 },
     { key = "AvoidRoads", type = "bool", default = true },
     { key = "RoadMargin", type = "int", min = 0, max = 8, default = 1 },
     { key = "RoadKinds", type = "string", default = "" },
@@ -148,6 +150,7 @@ function S.get()
         allowFactionShare = raw.AllowFactionShare,
         lapseKeepDays = raw.LapseKeepDays,
         redrawMinutes = raw.RedrawMinutes,
+        redrawLimit = raw.RedrawLimit,
         avoidRoads = raw.AvoidRoads,
         roadMargin = raw.RoadMargin,
         avoidResources = raw.AvoidResources,

@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "レンタル期限切れで停止したセーフハウスの範囲を保持する日数です。その間は他の人がここに作成できません。更新すれば元に戻り、期間が過ぎると解放されます。",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "範囲の再指定期限（分）",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "作成後この分数以内なら範囲を指定し直せます。権利書は消費も返却もされません。\n0にすると再指定できません。",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "セーフハウスごとの再指定回数上限",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "作成後の再指定期限内に、所有者が範囲を指定し直せる回数です。権利書は消費されません。",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "道路を避ける",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "セーフハウスの範囲に道路を含めることはできません。",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "道路からの余白（マス）",

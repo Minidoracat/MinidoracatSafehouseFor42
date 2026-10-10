@@ -211,7 +211,7 @@ function C.redraws(rec)
     return MSH.isInt(rec.redraws) and rec.redraws or 0
 end
 
--- 新紀錄（交易與容量估算共用）；重畫的新紀錄帶 redraws＝舊的＋1（每間上限 LIMIT.REDRAWS_PER_CLAIM）
+-- 新紀錄（交易與容量估算共用）；重畫的新紀錄帶 redraws＝舊的＋1（每間上限沙盒 RedrawLimit）
 function C.draft(v, claimId)
     local old = v.old
     local f = { claimId = claimId, rect = v.rect, title = v.cleanTitle, deedTier = v.tier, owner = v.who,
@@ -404,8 +404,15 @@ function C.release(ctx)
     return S.ok({ claimId = rec.claimId })
 end
 
+-- 還能重畫幾次：沙盒 RedrawLimit 減已重畫次數；上限改小時已用掉的照算（已 3 次、上限改 2 → 0）
+function C.redrawsLeft(rec, cfg)
+    return math.max(0, cfg.redrawLimit - C.redraws(rec))
+end
+
+-- 重新框選剩多久：不是 active、legacy、RedrawMinutes＝0、次數用完都回 0（客戶端不顯示按鈕）
 function C.redrawRemainingMs(rec, cfg, now)
-    if rec.lifecycle ~= LC.ACTIVE or rec.source == SRC.LEGACY or cfg.redrawMinutes <= 0 then return 0 end
+    if rec.lifecycle ~= LC.ACTIVE or rec.source == SRC.LEGACY or cfg.redrawMinutes <= 0
+        or C.redrawsLeft(rec, cfg) <= 0 then return 0 end
     return math.max(0, rec.createdAt + cfg.redrawMinutes * 60000 - now)
 end
 
@@ -413,9 +420,7 @@ end
 function C.redrawTarget(ctx, cfg)
     local rec, code = C.owned(ctx, nil)
     if rec == nil then return nil, code end
-    if C.redrawRemainingMs(rec, cfg, ctx.now) <= 0 or C.redraws(rec) >= LIMIT.REDRAWS_PER_CLAIM then
-        return nil, CODE.REDRAW_CLOSED
-    end
+    if C.redrawRemainingMs(rec, cfg, ctx.now) <= 0 then return nil, CODE.REDRAW_CLOSED end
     return rec
 end
 
@@ -550,14 +555,15 @@ function C.grantOf(rec, user)
 end
 
 -- actor 在這間的角色（位元的唯一來源，Permissions 也用它）：owner（全部位元）或 member（帶 MEMBER 的 grant 與
--- 投影中的陣營分享取聯集，§6.4、§6.5）；沒有角色回 nil。陣營超過投影上限時不算（和原生名單一致）
+-- 投影中的陣營分享取聯集，§6.4、§6.5）；沒有角色回 nil。陣營超過投影上限時不算（和原生名單一致）。
+-- 陣營位元一律遮成 SHARE_FACTION_MAX：舊資料裡的邀請／管理也不生效
 function C.roleOf(rec, who)
     if rec.owner == who then return "owner", MSH.SHARE_ALL end
     local g = C.grantOf(rec, who)
     local bits = (g and MSH.hasBit(g.bits, MSH.SHARE.MEMBER)) and g.bits or nil
     for _, u in ipairs(N.projectedMembers(rec) or {}) do
         if u == who then
-            bits = unionBits(bits or 0, rec.factionShare.bits)
+            bits = unionBits(bits or 0, MSH.maskBits(rec.factionShare.bits, MSH.SHARE_FACTION_MAX))
             break
         end
     end
@@ -585,8 +591,8 @@ local function factionView(rec)
     local fs = rec.factionShare
     if type(fs) ~= "table" then return nil end
     local members = N.factionMembers(rec)
-    return { name = fs.name, leader = fs.leader, bits = fs.bits, state = fs.state, reason = fs.reason,
-        members = members and #members or 0, projected = N.projectedMembers(rec) ~= nil }
+    return { name = fs.name, leader = fs.leader, bits = MSH.maskBits(fs.bits, MSH.SHARE_FACTION_MAX), state = fs.state,
+        reason = fs.reason, members = members and #members or 0, projected = N.projectedMembers(rec) ~= nil }
 end
 
 -- 沒有角色一律 NOT_FOUND（不透露存在與否）；malformed（沒有合法 rect）不給屋主看，和清單一致
@@ -618,6 +624,7 @@ function C.detail(ctx)
             canRelease = owner and RELEASABLE[rec.lifecycle] == true,
             canRename = owner and active,
             redrawRemainingMs = owner and C.redrawRemainingMs(rec, cfg, ctx.now) or 0,
+            redrawsLeft = owner and C.redrawsLeft(rec, cfg) or nil,
             -- 和 Sharing 的 ACL 一致：屋主或帶 MANAGE 的成員；陣營分享與恢復只限屋主
             canManageShares = active and (owner or MSH.hasBit(bits, MSH.SHARE.MANAGE)),
             canShareFaction = owner and active and cfg.allowFactionShare,

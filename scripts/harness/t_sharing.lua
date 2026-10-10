@@ -256,16 +256,10 @@ return function(T)
     T.tick(20)
     check(fs.state == "SUSPENDED" and fs.reason == "GONE", "同進程內解散後同名同領袖重建（物件不同）→ GONE")
 
-    T.section("停止陣營分享：MANAGE 成員可以，但陣營分享含 MANAGE 時只限屋主")
+    T.section("停止陣營分享：MANAGE 成員可以")
     check(cmd(alice, "resumeFaction", rec).ok and has(hs, "gina"), "恢復")
     check(cmd(alice, "share", rec, { targetUsername = "carol", bits = MANAGE }).ok, "carol 有 MANAGE")
     local carol2 = T.player({ name = "carol" })
-    check(cmd(alice, "shareFaction", rec, { bits = USE + MANAGE }).ok and rec.factionShare.bits == USE + MANAGE + MEMBER,
-        "屋主把陣營分享改成含 MANAGE")
-    check(code(cmd(carol2, "unshareFaction", rec)) == "NOT_OWNER" and rec.factionShare ~= nil,
-        "陣營分享含 MANAGE：MANAGE 成員停止被拒")
-    check(cmd(alice, "unshareFaction", rec).ok and rec.factionShare == nil, "陣營分享含 MANAGE：屋主可以停止")
-    check(cmd(alice, "shareFaction", rec, { bits = USE }).ok and has(hs, "gina"), "重新分享給陣營（不含 MANAGE）")
     T.teleports = {}
     res = cmd(carol2, "unshareFaction", rec)
     check(res.ok and rec.factionShare == nil and not has(hs, "gina") and not has(hs, "fred") and has(hs, "bob"),
@@ -428,4 +422,127 @@ return function(T)
     local back = T.houseOf(MSH.marker(r15.claimId))
     check(back ~= nil and not back.players:contains("pete") and MSH.Claims.grantOf(R.get(r15.claimId), "pete") == nil,
         "重開：registry 沒有 grant，收斂把 pete 從原生名單拿掉、不從原生名單補回 grant")
+
+    T.section("邀請（INVITE）：只能邀新人、位元受限；和管理分開")
+    do
+        local INVITE, MOVE = MSH.SHARE.INVITE, 4
+        boot()
+        local al = T.player({ name = "alice", x = 5, y = 5 })
+        local ivy = T.player({ name = "ivy", x = 500, y = 500 })
+        local max = T.player({ name = "max", x = 500, y = 500 })
+        local fox1 = T.player({ name = "fox1", x = 500, y = 500 })
+        local r, h = seed("alice", rect(100, 100, 10, 10))
+        check(MSH.SHARE_ALL == 127 and INVITE == 64, "INVITE＝64、SHARE_ALL＝127")
+        check(cmd(al, "share", r, { targetUsername = "ivy", bits = INVITE + USE }).ok
+            and MSH.Claims.grantOf(r, "ivy").bits == INVITE + USE + MEMBER, "INVITE 自動帶 MEMBER")
+        check(cmd(al, "share", r, { targetUsername = "bob", bits = MEMBER }).ok, "bob 是一般成員")
+        check(cmd(ivy, "share", r, { targetUsername = "nora", bits = USE }).ok and has(h, "nora")
+            and MSH.Claims.grantOf(r, "nora").bits == USE + MEMBER, "只有 INVITE：邀新人、給自己有的位元")
+        check(code(cmd(ivy, "share", r, { targetUsername = "omar", bits = BUILD })) == "NOT_OWNER"
+            and MSH.Claims.grantOf(r, "omar") == nil, "只有 INVITE：給自己沒有的位元被拒")
+        check(code(cmd(ivy, "share", r, { targetUsername = "omar", bits = INVITE })) == "NOT_OWNER", "只有 INVITE：不能給 INVITE")
+        check(code(cmd(ivy, "share", r, { targetUsername = "omar", bits = MANAGE })) == "NOT_OWNER", "只有 INVITE：不能給 MANAGE")
+        check(code(cmd(ivy, "share", r, { targetUsername = "bob", bits = USE })) == "NOT_OWNER"
+            and MSH.Claims.grantOf(r, "bob").bits == MEMBER, "只有 INVITE：改既有成員被拒")
+        check(code(cmd(ivy, "share", r, { targetUsername = "nora", bits = MEMBER })) == "NOT_OWNER",
+            "只有 INVITE：自己邀的人也不能再改")
+        check(code(cmd(ivy, "unshare", r, { targetUsername = "bob" })) == "NOT_OWNER" and has(h, "bob"),
+            "只有 INVITE：unshare 被拒")
+        local foxes = T.faction("Foxes", "alice", { "fox1" })
+        check(cmd(al, "shareFaction", r, { bits = USE }).ok, "陣營分享")
+        check(code(cmd(ivy, "unshareFaction", r)) == "NOT_OWNER" and r.factionShare ~= nil,
+            "只有 INVITE：unshareFaction 被拒")
+        check(code(cmd(ivy, "shareFaction", r, { bits = USE })) == "NOT_OWNER", "只有 INVITE：shareFaction 被拒")
+        check(cmd(al, "share", r, { targetUsername = "max", bits = MANAGE + USE }).ok, "max 有 MANAGE＋USE（沒有 INVITE）")
+        check(cmd(max, "share", r, { targetUsername = "pia", bits = INVITE + USE }).ok
+            and MSH.Claims.grantOf(r, "pia").bits == INVITE + USE + MEMBER, "MANAGE 成員能給 INVITE")
+        check(cmd(max, "share", r, { targetUsername = "ivy", bits = USE }).ok
+            and MSH.Claims.grantOf(r, "ivy").bits == USE + MEMBER, "MANAGE 成員能拿掉別人的 INVITE")
+        check(code(cmd(max, "share", r, { targetUsername = "pia", bits = MOVE })) == "NOT_OWNER",
+            "MANAGE 成員仍只能給自己有的一般位元")
+        check(cmd(al, "share", r, { targetUsername = "quinn", bits = MSH.SHARE_ALL }).ok
+            and MSH.Claims.grantOf(r, "quinn").bits == 127, "屋主能給全部位元")
+        local pia = T.player({ name = "pia", x = 500, y = 500 })
+        check(cmd(pia, "share", r, { targetUsername = "rex", bits = USE }).ok and has(h, "rex"),
+            "只有 INVITE：邀沒有任何資格的人可以")
+        check(code(cmd(pia, "share", r, { targetUsername = "fox1", bits = USE })) == "NOT_OWNER"
+            and MSH.Claims.grantOf(r, "fox1") == nil, "只有 INVITE：不能邀只靠陣營的成員（不替既有成員加權限）")
+        local revF = r.revision
+        check(code(cmd(al, "shareFaction", r, { bits = USE + INVITE })) == "BAD_ARGS"
+            and code(cmd(al, "shareFaction", r, { bits = USE + MANAGE })) == "BAD_ARGS" and r.revision == revF
+            and r.factionShare.bits == USE + MEMBER, "陣營分享帶 INVITE／MANAGE：BAD_ARGS、沒有改動")
+        r.factionShare.bits = MEMBER + USE + MANAGE + INVITE   -- 舊資料
+        local _, foxBits = MSH.Claims.roleOf(r, "fox1")
+        check(foxBits == USE + MEMBER, "舊資料裡陣營的 MANAGE／INVITE 不給權限")
+        check(code(cmd(fox1, "share", r, { targetUsername = "sam", bits = MEMBER })) == "NOT_OWNER"
+            and code(cmd(fox1, "unshare", r, { targetUsername = "rex" })) == "NOT_OWNER", "舊資料：陣營成員不能邀人、不能移除")
+        local dv = T.cmd(al, "detail", { claimId = r.claimId })
+        check(dv.factionShare.bits == USE + MEMBER, "detail 的陣營位元也遮掉")
+        r.factionShare.state = "SUSPENDED"
+        check(cmd(al, "resumeFaction", r).ok and r.factionShare.bits == USE + MEMBER, "恢復時遮掉舊資料的 MANAGE／INVITE")
+        local want = {}
+        for _, u in ipairs(MSH.Native.desiredPlayers(r)) do want[u] = true end
+        local same = h.players:size() == #MSH.Native.desiredPlayers(r)
+        for _, u in ipairs(h.players._raw) do same = same and want[u] == true end
+        check(same and has(h, "fox1") and has(h, "pia") and has(h, "ivy"), "原生名單＝desiredPlayers，INVITE 不改投影")
+        T.disband(foxes)
+    end
+
+    T.section("身分：上線就綁定（Steam 模式，來源 LOGIN）")
+    do
+        local function refusals(name)
+            local n = 0
+            for _, line in ipairs(T.logs) do
+                if string.find(line, "BIND_REFUSED\t" .. name .. "\t", 1, true) then n = n + 1 end
+            end
+            return n
+        end
+        boot({ steam = true })
+        local una = T.player({ name = "una", sid = 76561198000000101 })
+        T.tick(15)
+        local bu = R.binding("una")
+        check(bu ~= nil and bu.sid == 76561198000000101 and bu.src == "LOGIN" and T.logged("BIND\tuna\t-\tLOGIN"),
+            "在線未綁定：一次掃描後綁定、來源 LOGIN")
+        check(MSH.Identity.principal(una) == "una", "綁定後 principal 照舊回名字")
+        -- 改名證據：同一 SteamID 兩分鐘內以別的名字 OnNewGame
+        local sidV = 76561198000000102
+        T.fire("OnNewGame", T.player({ name = "vera2", sid = sidV, offline = true }))
+        T.player({ name = "vera", sid = sidV })
+        T.tick(40)
+        check(R.binding("vera") == nil and refusals("vera") == 1, "有改名證據：不綁、BIND_REFUSED 只寫一次")
+        T.player({ name = "walt", sid = 76561198000000103, dead = true })
+        T.player({ name = "xena", sid = 76561198000000104, num = 1 })
+        T.tick(15)
+        check(R.binding("walt") == nil, "死亡不綁")
+        check(R.binding("xena") == nil, "分割畫面次座位不綁")
+        R.setBinding("yuri", 76561198000000105, "NEWGAME", T.now)
+        T.player({ name = "yuri", sid = 76561198000000105 })
+        R.setBinding("zack", 76561198000000106, "NEWGAME", T.now)
+        local zack = T.player({ name = "zack", sid = 76561198000000199 })
+        T.tick(15)
+        check(R.binding("yuri").src == "NEWGAME", "已綁定同 SteamID：不動")
+        check(R.binding("zack").sid == 76561198000000106 and MSH.Identity.principal(zack) == nil,
+            "已綁定不同 SteamID：不改、principal 回 nil")
+        boot()
+        T.player({ name = "una", sid = 76561198000000101 })
+        T.tick(15)
+        check(R.binding("una") == nil, "非 Steam 模式不綁")
+        boot({ steam = true })
+        local writes = 0
+        local origSet = R.setBinding
+        R.setBinding = function(...)
+            writes = writes + 1
+            return origSet(...)
+        end
+        T.failWrites = true
+        T.player({ name = "vic", sid = 76561198000000107 })
+        T.tick(15)
+        check(writes == 1 and R.binding("vic") == nil, "寫檔失敗：不綁定")
+        T.tick(500)                         -- 再 50 秒
+        check(writes == 1, "寫檔失敗後 60 秒內不再寫檔")
+        T.failWrites = false
+        T.tick(150)                         -- 超過 60 秒
+        check(writes == 2 and R.binding("vic") ~= nil and R.binding("vic").src == "LOGIN", "60 秒後重試、成功綁定")
+        R.setBinding = origSet
+    end
 end

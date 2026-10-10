@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "Cuando vence un alquiler y el refugio queda suspendido, su área se conserva estos días y nadie más puede crear un refugio ahí. Al renovar el alquiler se restaura; al terminar el plazo, el área se libera.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Plazo para redibujar (minutos)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "Durante estos minutos después de crearlo, el dueño puede volver a marcar el área; la escritura no se gasta ni se devuelve.\n0 desactiva el redibujado.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Límite de redibujados por refugio",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "Cuántas veces el dueño puede volver a marcar el área de un refugio dentro del plazo para redibujar tras crearlo. Redibujar no gasta escritura.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Evitar carreteras",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "El área de un refugio no puede incluir carreteras.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Margen de carreteras (casillas)",

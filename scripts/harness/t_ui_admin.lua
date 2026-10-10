@@ -273,7 +273,11 @@ return function(T)
     end
     answer("adminPlans", { economy = "READY", currencies = { "survivor" }, tiers = { planRow(1, 3), planRow(2, 7) } })
     answer("adminClaims", { claims = { { claimId = 9, lifecycle = "quarantined", quarantineReason = "MISSING", owner = "eve" } } })
-    answer("adminMigration", { migration = { status = "verifying", completed = false, missing = 1, files = {} } })
+    answer("adminMigration", { migration = { state = "waiting", reason = "BSH_ACTIVE", adopted = 2,
+        skipped = { OVER_CAP = 1, BAD_OWNER = 2 }, restored = 0, reattached = 0, file = "x/migration-completion.txt" } })
+    local rules = P.pages.rules and P.pages.rules.flow and P.pages.rules.flow.pool or {}
+    check(rules["mw#1"] ~= nil and rules["ma#1"] ~= nil and rules["ms#1"] ~= nil and rules["mf#1"] ~= nil
+        and rules["mr#1"] == nil, "遷移區：等待原因、已接管、依原因略過、清單檔位置；沒有修補就不顯示")
     local deeds = P.pages.deeds.flow.pool
     check(deeds["f:Tier1Side"] ~= nil and deeds["f:Tier8Rent"] ~= nil and deeds["warn2#1"] == nil, "地契頁 8 級全部排出、沒有警告")
     check(deeds["f:Tier4Side"].enabled == false and deeds["f:Tier3Side"].enabled ~= false, "未啟用的等級灰階（不能改）")
@@ -535,6 +539,33 @@ return function(T)
     check(#narrow == 0, "付費頁價格、租金與共用欄位放得下範圍上限（太窄：" .. table.concat(narrow, ",") .. "）")
     fw.charW = 7
     getText = realGetText
+    AP.instance = nil
+
+    T.section("AdminPanel：規則頁的重新框選次數上限")
+    local PR = AP.open({ tab = "rules" })
+    answer("adminOptions", { values = values, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
+    local rl = PR.pages.rules.flow.pool["f:RedrawLimit"]
+    check(rl ~= nil and rl:isVisible() and rl:getText() == "5" and rl.width >= measure("20") + 16,
+        "RedrawMinutes 後面有次數上限欄，顯示伺服器值 5、放得下上限 20")
+    local sentN = countCmd("adminSetOptions")
+    rl:setText("21")
+    fw.click(PR.barFlow.pool.apply)
+    check(countCmd("adminSetOptions") == sentN and rl.invalid == true, "超出 1–20：本機標錯、不送出")
+    rl:setText("0")
+    fw.click(PR.barFlow.pool.apply)
+    check(countCmd("adminSetOptions") == sentN and rl.invalid == true, "0 也不合法（最少 1）")
+    rl:setText("2")
+    fw.click(PR.barFlow.pool.apply)
+    local ss = lastCmd("adminSetOptions")
+    local nk = 0
+    for _ in pairs(ss and ss.args.changes or {}) do nk = nk + 1 end
+    check(countCmd("adminSetOptions") == sentN + 1 and nk == 1 and ss.args.changes.RedrawLimit == 2,
+        "改成 2：只送 RedrawLimit = 2")
+    local saved2 = {}
+    for k, v in pairs(values) do saved2[k] = v end
+    saved2.RedrawLimit = 2
+    answer("adminSetOptions", { values = saved2 })
+    check(rl:getText() == "2" and not rl.invalid and PR.values.RedrawLimit == 2, "存檔成功：欄位改回伺服器值 2、清掉錯誤")
     AP.instance = nil
 
     MinidoracatEconomy = nil

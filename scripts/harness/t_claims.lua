@@ -484,19 +484,57 @@ return function(T)
     ned = T.player({ name = "ned", x = 6005, y = 6005, items = { D1 } })
     res = T.cmd(ned, "create", { rect = rect(6000, 6000, 10, 10), deedType = D1 })
     cur = R.get(res.claimId)
-    for i = 1, MSH.LIMIT.REDRAWS_PER_CLAIM do
+    local lefts = {}
+    local function leftNow()
+        local d = T.cmd(ned, "detail", { claimId = cur.claimId })
+        return d.actions.redrawsLeft, d.actions.redrawRemainingMs
+    end
+    lefts[1] = leftNow()
+    for i = 1, 5 do
         res = T.cmd(ned, "redraw", { claimId = cur.claimId, rect = rect(6000 + i % 2, 6000, 10, 10),
             expectedRevision = cur.revision })
         if not res.ok then break end
         cur = R.get(res.claimId)
+        lefts[#lefts + 1] = leftNow()
     end
-    check(res.ok and cur.redraws == MSH.LIMIT.REDRAWS_PER_CLAIM, "連續重畫 5 次都成功、次數沿用＋1")
+    check(res.ok and cur.redraws == 5, "預設上限 5：連續重畫 5 次都成功、次數沿用＋1")
+    check(table.concat(lefts, ",") == "5,4,3,2,1,0", "detail 的 redrawsLeft 隨重畫遞減（實際 " .. table.concat(lefts, ",") .. "）")
+    local left0, ms0 = leftNow()
+    check(left0 == 0 and ms0 == 0, "次數用完：redrawsLeft 0、redrawRemainingMs 也是 0（按鈕不顯示）")
     local nextR = R.md.nextClaimId
     res = T.cmd(ned, "redraw", { claimId = cur.claimId, rect = rect(6001, 6000, 10, 10), expectedRevision = cur.revision })
     check(res.code == "REDRAW_CLOSED" and cur.lifecycle == "active" and R.md.nextClaimId == nextR,
         "第 6 次：REDRAW_CLOSED（不燒 claimId）")
     res = T.cmd(ned, "preview", { rect = rect(6001, 6000, 10, 10), claimId = cur.claimId })
     check(res ~= nil and res.code == "REDRAW_CLOSED", "重畫預檢也回 REDRAW_CLOSED")
+
+    boot({ sandbox = { ClaimsPerPlayer = 5, RedrawLimit = 2 } })
+    ned = T.player({ name = "ned", x = 6005, y = 6005, items = { D1, D1 } })
+    res = T.cmd(ned, "create", { rect = rect(6000, 6000, 10, 10), deedType = D1 })
+    cur = R.get(res.claimId)
+    local okN = 0
+    for i = 1, 3 do
+        res = T.cmd(ned, "redraw", { claimId = cur.claimId, rect = rect(6000 + i % 2, 6000, 10, 10),
+            expectedRevision = cur.revision })
+        if not res.ok then break end
+        okN = okN + 1
+        cur = R.get(res.claimId)
+    end
+    check(okN == 2 and res.code == "REDRAW_CLOSED", "上限改成 2：第 3 次 REDRAW_CLOSED")
+    ned.x, ned.y = 6205, 6205
+    res = T.cmd(ned, "create", { rect = rect(6200, 6200, 10, 10), deedType = D1 })
+    local three = R.get(res.claimId or -1)
+    check(three ~= nil, "第二間建立成功（" .. tostring(res.code) .. "）")
+    three = three or cur
+    three.redraws = 3   -- 上限 5 時已重畫 3 次，之後管理員把上限改成 2
+    res = T.cmd(ned, "detail", { claimId = three.claimId })
+    local d3 = res.actions
+    res = T.cmd(ned, "redraw", { claimId = three.claimId, rect = rect(6201, 6200, 10, 10), expectedRevision = three.revision })
+    check(d3.redrawsLeft == 0 and d3.redrawRemainingMs == 0 and res.code == "REDRAW_CLOSED",
+        "上限改小：已用掉的次數照算（已 3 次、上限 2 → 不能再重畫）")
+    T.sandbox("RedrawLimit", 4)
+    res = T.cmd(ned, "detail", { claimId = three.claimId })
+    check(res.actions.redrawsLeft == 1 and res.actions.redrawRemainingMs > 0, "上限改回 4：還能重畫 1 次（每次重讀沙盒）")
     boot({ sandbox = { ClaimsPerPlayer = 5 } })
     ned = T.player({ name = "ned", x = 6005, y = 6005, items = { D1 } })
     res = T.cmd(ned, "create", { rect = rect(6000, 6000, 10, 10), deedType = D1 })
@@ -549,8 +587,8 @@ return function(T)
     check(res.code == "NOT_FOUND", "released 的詳細：NOT_FOUND")
     res = T.cmd(mem, "detail", { claimId = cA })
     check(res.ok and res.actorRole == "member" and res.rect.x == 8000 and #res.roster == 3 and res.roster[1].user == "rae"
-        and res.actions.canRelease == false and res.actions.canRename == false and res.actions.redrawRemainingMs == 0,
-        "成員看詳細：沒有屋主操作")
+        and res.actions.canRelease == false and res.actions.canRename == false and res.actions.redrawRemainingMs == 0
+        and res.actions.redrawsLeft == nil, "成員看詳細：沒有屋主操作（沒有 redrawsLeft）")
     res = T.cmd(own, "detail", { claimId = cA })
     check(res.ok and res.actions.canRelease and res.actions.canRename and res.actions.redrawRemainingMs > 0
         and res.deedTier == 1 and res.source == "deed" and res.createdAt == R.get(cA).createdAt, "屋主看詳細：可放棄、改名、重畫")

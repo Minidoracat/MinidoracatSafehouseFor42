@@ -148,7 +148,8 @@ PC.BIT_KEYS = { [BIT.USE] = "USE", [BIT.MOVE] = "MOVE", [BIT.BUILD] = "BUILD", [
 function PC.deniedText(args)
     local name = PC.BIT_KEYS[args.bit]
     if name == nil then return (MSH.Client.codeText(args.code or MSH.CODE.PERM_DENIED)) end
-    return getText("IGUI_MSH_Perm_Denied", getText("IGUI_MSH_Perm_" .. name))
+    -- 權限名用分享頁 chip 的同一個詞（IGUI_MSH_Share_Bit_*），玩家才知道要跟屋主要哪一個
+    return getText("IGUI_MSH_Perm_Denied", getText("IGUI_MSH_Share_Bit_" .. name))
 end
 
 function PC.onDenied(args)

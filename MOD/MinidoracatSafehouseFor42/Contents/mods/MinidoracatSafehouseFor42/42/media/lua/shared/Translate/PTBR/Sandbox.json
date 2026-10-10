@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "Quando um aluguel vence e a base fica suspensa, a área dela é mantida por esses dias e ninguém mais pode criar uma base ali. Renovando o aluguel, ela volta; depois do prazo, a área é liberada.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Prazo para redesenhar (minutos)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "Durante esses minutos após a criação, o dono pode marcar a área de novo; a escritura não é gasta nem devolvida.\n0 desativa o redesenho.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Limite de redesenhos por base",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "Quantas vezes o dono pode marcar de novo a área de uma base dentro do prazo para redesenhar após criá-la. Redesenhar não gasta escritura.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Evitar estradas",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "A área de uma base não pode incluir estradas.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Margem das estradas (quadrados)",

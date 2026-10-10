@@ -1,7 +1,6 @@
 -- MinidoracatSafehouse/Admin.lua：管理員指令（計畫 §10.6）與沙盒選項寫回／每分鐘比對（§7.1）。
 -- 全部指令 admin = true（分派器以 Capability.CanSetupSafehouses 判斷）；mutation 都標 whenBlocked：
--- blocked mode 照常修設定、代為放棄與 targeted recovery（§5、§6.2）。代為放棄與 recovery 另標 duringMigration：
--- 遷移缺件時伺服器整體停在遷移中，管理員要能在遊戲內處理缺件，處理完立刻重跑 manifest 核對（§9 第 9 點）。
+-- blocked mode 照常修設定、代為放棄與 targeted recovery（§5、§6.2）。
 -- 沙盒寫回照 VehicleManager writeSandbox／saveSandbox（MinidoracatVehicleManager_Server.lua:307-331）：
 --   全部 set 完只 toLua＋存一次檔；存檔不是 true 就還原舊值、回 SAVE_FAILED；成功才把整份快照 sandboxSync 給在線玩家。
 -- 原版伺服器設定畫面直接改 SandboxVars 沒有 Lua 事件（VM :270-273 註解），所以每分鐘比對一次（VM S.watchSandbox :285-305）。
@@ -17,7 +16,6 @@ require "MinidoracatSafehouse/Native"
 require "MinidoracatSafehouse/Health"
 require "MinidoracatSafehouse/Lifecycle"
 require "MinidoracatSafehouse/Server"
-require "MinidoracatSafehouse/Migration"
 
 local MSH = MinidoracatSafehouse
 local A = MSH.Admin or {}
@@ -34,7 +32,7 @@ A.FILTERS = { all = true, owners = true, overrides = true }
 
 -- ===== 沙盒選項 =====
 
--- 送整份 80 鍵快照給每位在線玩家（getOnlinePlayers LuaManager.java:4457；sendServerCommand(player, ...) :8966-8970）
+-- 送整份 81 鍵快照給每位在線玩家（getOnlinePlayers LuaManager.java:4457；sendServerCommand(player, ...) :8966-8970）
 function A.pushSync(snapshot)
     local list = getOnlinePlayers()
     for i = 0, list:size() - 1 do
@@ -239,12 +237,7 @@ local function liveRecord(id)
     return nil, S.fail(R.tomb(id) ~= nil and CODE.WRONG_LIFECYCLE or CODE.NOT_FOUND)
 end
 
--- 遷移中（migrationCompleted == false）：處理完缺件立刻重新核對 manifest，全部吻合就解除遷移中
-local function recheckMigration(now)
-    if MSH.Registry.md.migrationCompleted == false then MSH.Migration.verify(now) end
-end
-
-S.define("adminRelease", { kind = "mutation", admin = true, whenBlocked = true, duringMigration = true,
+S.define("adminRelease", { kind = "mutation", admin = true, whenBlocked = true,
     fields = { claimId = "claimId", expectedRevision = "revision?" },
     run = function(ctx)
         local rec, fail = liveRecord(ctx.args.claimId)
@@ -257,7 +250,6 @@ S.define("adminRelease", { kind = "mutation", admin = true, whenBlocked = true, 
         local ok, code = MSH.Lifecycle.release(rec, "ADMIN_RELEASE", ctx.args.requestId, ctx.now, ctx.defer)
         if not ok then return S.fail(code, { claimId = rec.claimId }) end
         MSH.Audit.write("ADMIN_RELEASE", { actor = ctx.who, claimId = rec.claimId, detail = owner })
-        recheckMigration(ctx.now)
         return S.ok({ claimId = rec.claimId })
     end })
 
@@ -314,7 +306,7 @@ local function rebind(ctx, rec)
 end
 
 -- release 走 forceRelease：不看指紋，連 DUPLICATE／MISMATCH／malformed 的原生一起移除（§6 狀態圖 quarantined → released）
-S.define("adminRecover", { kind = "mutation", admin = true, whenBlocked = true, duringMigration = true,
+S.define("adminRecover", { kind = "mutation", admin = true, whenBlocked = true,
     fields = { claimId = "claimId", action = "word", targetUsername = "username?" },
     run = function(ctx)
         local action = ctx.args.action
@@ -332,7 +324,6 @@ S.define("adminRecover", { kind = "mutation", admin = true, whenBlocked = true, 
         A.lastRecovery = { claimId = rec.claimId, action = action, code = res.code, at = ctx.now }
         if res.ok then
             MSH.Audit.write("ADMIN_RECOVER", { actor = ctx.who, claimId = rec.claimId, code = action, detail = rec.owner })
-            recheckMigration(ctx.now)
         end
         return res
     end })

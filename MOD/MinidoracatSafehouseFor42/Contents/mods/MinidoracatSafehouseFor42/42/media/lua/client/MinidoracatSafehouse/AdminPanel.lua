@@ -32,7 +32,7 @@ AP.QUERY_DEBOUNCE_MS = 650   -- Economy QUERY_DEBOUNCE_MS
 AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服器 cooldownMs = 500）
 AP.FILTERS = { "all", "owners", "overrides" }
 AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxSide", "FreeMaxArea", "ClaimGap", "MaxShares",
-    "AllowFactionShare", "LapseKeepDays", "RedrawMinutes" }
+    "AllowFactionShare", "LapseKeepDays", "RedrawMinutes", "RedrawLimit" }
 AP.CRAFT_LEVELS = { [2] = "Easy", [3] = "Standard", [4] = "Strict" }
 -- Economy 方案 12 欄（entitlements-api.md；ECEntitlementPlans.lua:3-61）與付費頁可改欄位的範圍
 AP.PLAN_FIELDS = { "permanentEnabled", "permanentCurrency", "permanentPrice", "permanentLimit", "rentalEnabled",
@@ -619,19 +619,38 @@ function AP.layoutStatus(P, pg)
     AP.layoutRecovery(P, pg)
 end
 
+-- 遷移（自動接管原版安全屋，§9）：狀態、等待原因、已接管與依原因略過的筆數、這次開服的當機修復
+AP.MIG_SKIPS = { "BAD_RECT", "BAD_OWNER", "DUPLICATE_RECT", "DUPLICATE_ID", "OVER_CAP" }
 function AP.layoutMigration(P, pg)
     local m = P.migration
     if type(m) ~= "table" then return end
     local F = pg.flow
-    F:text("mg", getText("IGUI_MSH_Admin_Migration", getText("IGUI_MSH_Admin_Mig_" .. tostring(m.status))),
-        m.completed == false and "warning" or "textMuted")
-    if m.status == "none" then return end
-    local function n(v) return v ~= nil and tostring(v) or "-" end
-    F:text("mc", getText("IGUI_MSH_Admin_MigCounts", n(m.candidates), n(m.bshMatched), n(m.allowed), n(m.denied),
-        n(m.imported), n(m.skipped), n(m.missing)), "textMuted")
-    if m.abort ~= nil then F:text("ma", getText("IGUI_MSH_Admin_MigAbort", tostring(m.abort)), "errorText") end
-    local files = type(m.files) == "table" and m.files or {}
-    F:text("mf", getText("IGUI_MSH_Admin_MigFiles", n(files.report), n(files.selection), n(files.completion)), "textMuted")
+    local state = m.state == "waiting" and "waiting" or (m.state == "done" and "done" or "none")
+    F:text("mg", getText("IGUI_MSH_Admin_Migration", getText("IGUI_MSH_Admin_Mig_" .. state)),
+        state == "waiting" and "warning" or "textMuted")
+    if state == "none" then return end
+    if state == "waiting" and m.reason ~= nil then
+        F:text("mw", getText("IGUI_MSH_Admin_MigWait_" .. tostring(m.reason)), "warning")
+    end
+    F:text("ma", getText("IGUI_MSH_Admin_MigAdopted", tonumber(m.adopted) or 0), "textMuted")
+    local parts, total = {}, 0
+    local skipped = type(m.skipped) == "table" and m.skipped or {}
+    for _, code in ipairs(AP.MIG_SKIPS) do
+        local n = tonumber(skipped[code])
+        if n ~= nil and n > 0 then
+            total = total + n
+            parts[#parts + 1] = getText("IGUI_MSH_Admin_MigSkip_" .. code, n)
+        end
+    end
+    if total > 0 then
+        F:text("ms", getText("IGUI_MSH_Admin_MigSkipped", total, table.concat(parts, getText("IGUI_MSH_Admin_ListSep"))),
+            "textMuted")
+        F:text("mf", getText("IGUI_MSH_Admin_MigSkipFile", tostring(m.file or "-")), "textMuted")
+    end
+    local fixed = (tonumber(m.restored) or 0) + (tonumber(m.reattached) or 0)
+    if fixed > 0 then
+        F:text("mr", getText("IGUI_MSH_Admin_MigRepaired", fixed), "textMuted")
+    end
 end
 
 -- 非 active 的紀錄；quarantined 可重新綁定或釋出（§10.6 targeted recovery，不做地圖瀏覽與傳送）

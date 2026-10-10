@@ -87,6 +87,15 @@ function MW.releaseKeys(d, redrawLeftMs)
     return keys
 end
 
+-- 〔重新框選〕的標題：剩餘時間，伺服器有給剩餘次數（actions.redrawsLeft，沙盒 RedrawLimit）時一併顯示；
+-- 舊伺服器沒有這欄就只顯示時間。次數用「還能 N 次」式的句子，不寫「N＋複數名詞」
+function MW.redrawTitle(leftMs, redrawsLeft)
+    if MSH.isInt(redrawsLeft) and redrawsLeft > 0 then
+        return getText("IGUI_MSH_Manager_RedrawTimes", MW.clock(leftMs), redrawsLeft)
+    end
+    return getText("IGUI_MSH_Manager_Redraw", MW.clock(leftMs))
+end
+
 -- 倒數 m:ss（秒無條件進位；固定寬度另由版面以 0 量寬）
 function MW.clock(ms)
     local s = math.max(0, math.ceil(ms / 1000))
@@ -438,7 +447,7 @@ end
 function W:clearSelection()
     if MW.overlay and MW.overlay.claimId == self.selectedId then MW.overlay = nil end
     self.selectedId, self.detail, self.detailState, self.detailRid = nil, nil, nil, nil
-    self.redrawDeadline = nil
+    self.redrawDeadline, self.redrawsLeft = nil, nil
     self.showDetail = false
 end
 
@@ -476,6 +485,7 @@ function W:onDetail(id, rid, res)
         self.detail, self.detailState = res, "ready"
         local left = res.actions and res.actions.redrawRemainingMs or 0
         self.redrawDeadline = (MSH.isFinite(left) and left > 0) and getTimestampMs() + left or nil
+        self.redrawsLeft = res.actions and res.actions.redrawsLeft or nil
         self.redrawShown = nil
         if MW.overlay and MW.overlay.claimId == id then MW.setOverlay(res) end
     elseif res.code == "NOT_FOUND" then
@@ -566,7 +576,7 @@ function W:prerender(body)
         self.dirty = true
         return
     end
-    self.btnRedraw:setTitle(getText("IGUI_MSH_Manager_Redraw", MW.clock(left)))
+    self.btnRedraw:setTitle(MW.redrawTitle(left, self.redrawsLeft))
 end
 
 -- ===== 版面 =====
@@ -701,9 +711,9 @@ function W:layoutDetail(dx, y, dw, h)
     end
     local ny = self:addWrapped(B, d.title or "", dx, y, titleW, "text", UIFont.Medium)
     y = math.max(ny, a.canRename and y + ch or ny) + GAP
-    -- 分頁：分享給我的只有概覽；帶 MANAGE 多「成員與分享」；土地規則只給屋主（§10.3 第一點）
+    -- 分頁：分享給我的只有概覽；帶 MANAGE 或 INVITE 多「成員與分享」；土地規則只給屋主（§10.3 第一點）
     local owner = d.actorRole == "owner"
-    local canShare = a.canManageShares == true      -- 伺服器的 ACL（Claims.detail actions；不是 active 時為 false）
+    local canShare = MSH.SharingPage.canAdd(d)
     self.tabs:setItemVisible("share", canShare)
     self.tabs:setItemVisible("land", owner)
     if (self.tab == "share" and not canShare) or (self.tab == "land" and not owner) then self.tab = "overview" end
@@ -808,7 +818,7 @@ function W:layoutOverview(d, cw)
     self.btnShow:setTitle(getText(shown and "IGUI_MSH_Manager_HideInWorld" or "IGUI_MSH_Manager_ShowInWorld"))
     local left = self:redrawLeft()
     if d.actorRole == "owner" and left > 0 and MSH.CreatePanel then
-        local title = getText("IGUI_MSH_Manager_Redraw", MW.clock(left))
+        local title = MW.redrawTitle(left, self.redrawsLeft)
         self.btnRedraw:setTitle(title)
         self.btnRedraw:setWidth(measure((string.gsub(title, "%d", "0"))) + 20)
         self.btnRedraw:setEnabled(idle)

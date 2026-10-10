@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "Gdy najem wygaśnie i schronienie zostanie zawieszone, jego obszar jest zachowany przez tyle dni i nikt inny nie może tam utworzyć schronienia. Odnowienie najmu je przywraca; po tym czasie obszar jest zwalniany.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Czas na ponowne zaznaczenie (minuty)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "Przez tyle minut po utworzeniu można ponownie zaznaczyć obszar; akt nie jest zużywany ani zwracany.\n0 wyłącza ponowne zaznaczanie.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Limit ponownych zaznaczeń na schronienie",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "Ile razy właściciel może ponownie zaznaczyć obszar schronienia w czasie na ponowne zaznaczenie po utworzeniu. Ponowne zaznaczenie nie zużywa aktu.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Unikaj dróg",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "Obszar schronienia nie może obejmować dróg.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Margines od dróg (pola)",

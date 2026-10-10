@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "임대 기간이 끝나 중지된 은신처의 범위를 보존하는 일수입니다. 그동안 다른 사람은 이곳에 은신처를 만들 수 없습니다. 임대를 갱신하면 복구되고, 기간이 지나면 해제됩니다.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "범위 재지정 제한 시간 (분)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "생성 후 이 시간(분) 안에는 범위를 다시 지정할 수 있으며, 증서는 소모되거나 반환되지 않습니다.\n0이면 재지정할 수 없습니다.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "은신처당 범위 재지정 횟수 제한",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "생성 후 범위 재지정 제한 시간 안에 소유자가 범위를 다시 지정할 수 있는 횟수입니다. 증서는 소모되지 않습니다.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "도로 피하기",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "은신처 범위에 도로를 포함할 수 없습니다.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "도로 여유 거리 (타일)",

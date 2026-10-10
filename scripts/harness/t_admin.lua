@@ -50,7 +50,8 @@ return function(T)
     res = T.cmd(alice, "adminSetOptions", { changes = { ClaimGap = 4 } })
     check(res.code == "NOT_ADMIN" and sv("ClaimGap") == 2 and T.sbox.sets == 0, "非管理員改選項：NOT_ADMIN、沒寫入")
     res = T.cmd(boss, "adminOptions", {})
-    check(res.ok and keyCount(res.values) == 80 and res.values.ClaimGap == 2, "管理員拿到 80 個選項的原值")
+    check(res.ok and keyCount(res.values) == 81 and res.values.ClaimGap == 2 and res.values.RedrawLimit == 5,
+        "管理員拿到 81 個選項的原值（含重新框選次數上限 5）")
     check(res.health.blocked == false and type(res.health.hostile) == "boolean" and type(res.settingsWarnings) == "table",
         "附 health 狀態與設定警告")
     check(type(res.resourceApi) == "boolean" and type(res.parkingApi) == "boolean", "附資源點與停車場資料來源狀態")
@@ -61,6 +62,11 @@ return function(T)
     check(T.sbox.sets == 0 and T.sbox.saves == 0 and sv("MaxShares") == 8, "驗證不過：整批不寫、不存檔")
     res = T.cmd(boss, "adminSetOptions", { changes = { Tier1Side = 10, Tier1Area = 200 } })
     check(res.code == "BAD_OPTION" and res.reason == "AREA_OVER_SIDE", "面積大於邊長平方：整批拒絕")
+    res = T.cmd(boss, "adminSetOptions", { changes = { RedrawLimit = 0 } })
+    local lo = res.code == "BAD_OPTION" and res.key == "RedrawLimit"
+    res = T.cmd(boss, "adminSetOptions", { changes = { RedrawLimit = 21 } })
+    check(lo and res.code == "BAD_OPTION" and res.key == "RedrawLimit" and sv("RedrawLimit") == 5 and T.sbox.sets == 0,
+        "重新框選次數上限 0 與 21：BAD_OPTION、不寫入")
     T.sbox.saveOk = false
     res = T.cmd(boss, "adminSetOptions", { changes = { ClaimGap = 4, MaxShares = 3 } })
     check(res.code == "SAVE_FAILED" and sv("ClaimGap") == 2 and sv("MaxShares") == 8, "存檔失敗：SAVE_FAILED、值還原")
@@ -80,9 +86,9 @@ return function(T)
     local allSynced = true
     for _, p in ipairs({ boss, alice, bob }) do
         local s = syncsOf(p)
-        if #s ~= 1 or s[1].ClaimGap ~= 5 or keyCount(s[1]) ~= 80 then allSynced = false end
+        if #s ~= 1 or s[1].ClaimGap ~= 5 or keyCount(s[1]) ~= 81 then allSynced = false end
     end
-    check(allSynced, "每位在線玩家各收到一份完整 80 鍵 sandboxSync")
+    check(allSynced, "每位在線玩家各收到一份完整 81 鍵 sandboxSync")
     check(#lockedAtSend == 3 and lockedAtSend[1] == false and lockedAtSend[3] == false, "sandboxSync 在放鎖之後才送")
     check(countLogs("ADMIN_OPTIONS") == 1, "成功寫一行 ADMIN_OPTIONS audit")
 
@@ -329,37 +335,6 @@ return function(T)
     check(res.health.lastRecovery.claimId == 77 and res.health.lastRecovery.action == "rebind", "lastRecovery 換成最新一次")
     res = T.cmd(boss, "adminClaims", {})
     check(#res.claims == 1 and res.claims[1].claimId == lapsed.claimId, "處理完只剩 lapsed")
-
-    T.section("Admin：遷移中照樣能 recovery，處理完重新核對")
-    MSH = T.boot()
-    local function legacy(x, owner)
-        local hs = SafeHouse.addSafeHouse(x, x, 6, 6, owner)
-        return { rect = { x = x, y = x, w = 6, h = 6 }, owner = owner, title = owner, members = {}, hash = "h" .. x }, hs
-    end
-    local items, lh = {}, {}
-    items[1], lh[1] = legacy(100, "alice")
-    items[2], lh[2] = legacy(200, "bob")
-    items[3], lh[3] = legacy(300, "carol")
-    local out = MSH.Migration.importLegacy(items, T.now)
-    SafeHouse.removeSafeHouse(lh[2])
-    SafeHouse.removeSafeHouse(lh[3])
-    MSH = T.boot({ keepGmd = true, keepFiles = true, keepHouses = true })
-    R = MSH.Registry
-    boss = T.player({ name = "boss", admin = true })
-    local m1, m2, m3 = out.imported[1].claimId, out.imported[2].claimId, out.imported[3].claimId
-    check(R.md.migrationCompleted == false and R.get(m2).quarantineReason == "MIGRATION_MISSING"
-        and R.get(m3).quarantineReason == "MIGRATION_MISSING", "前置：兩筆缺件、整體遷移中")
-    res = T.cmd(boss, "adminSetOverride", { targetUsername = "erin", n = 3 })
-    check(res.code == "MIGRATION_IN_PROGRESS", "遷移中：其他管理員 mutation 照樣擋")
-    res = T.cmd(boss, "adminRelease", { claimId = m1 })
-    check(res.ok and R.tomb(m1) ~= nil and R.md.migrationCompleted == false, "遷移中 adminRelease 放行；還有缺件 → 維持遷移中")
-    res = T.cmd(boss, "adminRecover", { claimId = m2, action = "release" })
-    check(res.ok and R.tomb(m2) ~= nil and R.md.migrationCompleted == false, "遷移中 recover release 放行；還有缺件 → 維持遷移中")
-    res = T.cmd(boss, "adminRecover", { claimId = m3, action = "rebind" })
-    check(res.ok and R.get(m3).lifecycle == "active" and T.houseOf(MSH.marker(m3)) ~= nil, "遷移中 recover rebind：重建")
-    check(R.md.migrationCompleted == true and T.logged("MIGRATION_COMPLETED"), "缺件處理完：重新核對 → migrationCompleted=true")
-    res = T.cmd(boss, "adminSetOverride", { targetUsername = "erin", n = 3 })
-    check(res.ok, "遷移完成：mutation 放行")
 
     T.section("Calibrate：伺服器回應校正")
     MSH = T.boot()

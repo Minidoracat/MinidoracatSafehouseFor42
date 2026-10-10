@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "租約到期而停用的安全屋，範圍保留這麼多天，期間其他人不能在這裡建立；續租就恢復，期滿才釋出。",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "重新框選時限（分鐘）",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "建立後這麼多分鐘內可以重新框選範圍，地契不扣也不退。\n0＝不開放重新框選。",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "每間重新框選次數上限",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "建立後在重新框選時限內，每間最多可以重畫幾次；重畫不扣地契。",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "避開道路",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "安全屋範圍不能包含道路。",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "道路安全邊界（格）",

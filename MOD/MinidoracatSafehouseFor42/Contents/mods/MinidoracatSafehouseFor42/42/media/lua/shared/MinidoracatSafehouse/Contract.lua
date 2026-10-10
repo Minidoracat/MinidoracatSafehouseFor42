@@ -32,9 +32,6 @@ MSH.LIMIT = {
     CACHE_PER_ACTOR = 64,
     CALIBRATE_MAX = 512,           -- 客戶端校正最多帶幾筆
     CALIBRATE_UPSERTS = 4,         -- 一次校正最多替幾間觸發原生廣播（正常客戶端登入時已拿到全部，§6.3）
-    -- 每間在緩衝期內最多重畫幾次：重畫不扣地契、不算名額，每次都多一筆 tombstone 與兩次全服廣播；
-    -- ponytail: 固定上限，要給管理員調再改成沙盒選項
-    REDRAWS_PER_CLAIM = 5,
 }
 
 MSH.LIFECYCLE = {
@@ -47,11 +44,15 @@ MSH.LIFECYCLE = {
 
 MSH.SOURCE = { FREE = "free", DEED = "deed", LEGACY = "legacy" }
 
--- 分享權限位元（§6.5）；其他位元一定要搭配 MEMBER
-MSH.SHARE = { MEMBER = 1, USE = 2, MOVE = 4, BUILD = 8, FARM = 16, MANAGE = 32 }
-MSH.SHARE_ALL = 63
--- 遷移來的成員等同原版成員能做的事（§9 第 4 點）
+-- 分享權限位元（§6.5）；其他位元一定要搭配 MEMBER。
+-- INVITE（使用者 2026-10-11）：只能邀請還不在名單的新人、給自己有的一般位元；不能改、移除既有成員（那是 MANAGE）
+MSH.SHARE = { MEMBER = 1, USE = 2, MOVE = 4, BUILD = 8, FARM = 16, MANAGE = 32, INVITE = 64 }
+MSH.SHARE_ALL = 127
+-- 遷移來的成員等同原版成員能做的事（§9 第 4 點）；沒有邀請、管理
 MSH.SHARE_LEGACY = 1 + 2 + 4 + 8 + 16
+-- 陣營分享能給的位元上限：成員、用電器、搬家具、建造、農耕；不給邀請與管理（主代理 2026-10-11 裁定，使用者可改）。
+-- 原因：陣營名單由領袖決定，陣營給的邀請／管理邀進來的人是永久個人 grant，停止陣營分享後還留著
+MSH.SHARE_FACTION_MAX = 1 + 2 + 4 + 8 + 16
 
 -- 結果碼：伺服器只回這些字串；客戶端照碼顯示「原因＋動作」（M3）。
 MSH.CODE = {
@@ -61,7 +62,7 @@ MSH.CODE = {
     BAD_ARGS = "BAD_ARGS", BAD_REQUEST_ID = "BAD_REQUEST_ID", RATE_LIMITED = "RATE_LIMITED",
     BUSY = "BUSY", NOT_READY = "NOT_READY", DEDICATED_ONLY = "DEDICATED_ONLY",
     IDENTITY_UNVERIFIED = "IDENTITY_UNVERIFIED", NOT_ADMIN = "NOT_ADMIN",
-    HEALTH_BLOCKED = "HEALTH_BLOCKED", MIGRATION_IN_PROGRESS = "MIGRATION_IN_PROGRESS",
+    HEALTH_BLOCKED = "HEALTH_BLOCKED",
     INTERNAL_ERROR = "INTERNAL_ERROR",
     -- claim 解析與權限
     NOT_FOUND = "NOT_FOUND", NOT_OWNER = "NOT_OWNER", STALE_REVISION = "STALE_REVISION",
@@ -134,6 +135,15 @@ end
 -- 權限位元測試（Kahlua 沒有位元運算子）
 function MSH.hasBit(bits, bit)
     return MSH.isInt(bits) and bits >= 0 and math.floor(bits / bit) % 2 == 1
+end
+
+-- bits 只留 mask 也有的位元（位元 AND；Kahlua 沒有位元運算子）
+function MSH.maskBits(bits, mask)
+    local out = 0
+    for _, bit in pairs(MSH.SHARE) do
+        if MSH.hasBit(bits, bit) and MSH.hasBit(mask, bit) then out = out + bit end
+    end
+    return out
 end
 
 -- java.util.List 轉 Lua 陣列（0-based size()/get(i)）

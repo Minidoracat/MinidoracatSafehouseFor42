@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "Когда аренда истекает и убежище приостанавливается, его область сохраняется столько дней, и никто другой не может создать там убежище. Продление аренды восстанавливает убежище; по истечении срока область освобождается.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Срок перевыделения (минуты)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "В течение стольких минут после создания можно заново выделить область; купчая не тратится и не возвращается.\n0 отключает перевыделение.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Лимит перевыделений на убежище",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "Сколько раз владелец может заново выделить область убежища в течение срока перевыделения после создания. Купчая не тратится.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Избегать дорог",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "Область убежища не может включать дороги.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Отступ от дорог (клетки)",

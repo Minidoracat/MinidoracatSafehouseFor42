@@ -244,11 +244,6 @@ function S.isAdmin(player)
     return ok and yes == true
 end
 
--- migration completion manifest 驗證通過前，所有 mutation 回 MIGRATION_IN_PROGRESS（§9 第 8、12 點）
-function S.migrationBlocked()
-    return MSH.Registry.md ~= nil and MSH.Registry.md.migrationCompleted == false
-end
-
 function S.reply(player, command, requestId, result)
     result.command = command
     result.requestId = requestId
@@ -312,8 +307,6 @@ function S.onClientCommand(module, command, player, args)
         result = S.fail(CODE.NOT_READY)
     elseif mutation and MSH.Registry.readOnly then
         result = S.fail(CODE.HEALTH_BLOCKED)
-    elseif mutation and S.migrationBlocked() and not spec.duringMigration then
-        result = S.fail(CODE.MIGRATION_IN_PROGRESS)
     elseif mutation and MSH.Health.blocked() and not spec.whenBlocked then
         result = S.fail(CODE.HEALTH_BLOCKED)
     end

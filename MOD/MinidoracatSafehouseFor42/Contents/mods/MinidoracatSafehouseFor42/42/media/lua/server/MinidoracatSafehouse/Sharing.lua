@@ -157,17 +157,20 @@ local function finish(ctx, rec, old, extra, event, detail)
     MSH.Audit.write(event, { actor = ctx.who, claimId = rec.claimId, detail = detail })
 end
 
--- 指令的目標紀錄：沒有角色 NOT_FOUND；屋主以外要帶 MANAGE（ownerOnly 時只限屋主）→ NOT_OWNER；
+-- 指令的目標紀錄：沒有角色 NOT_FOUND；need 決定屋主以外要什麼位元 → 不符 NOT_OWNER：
+--   "owner"＝只限屋主；"manage"＝MANAGE；"invite"＝MANAGE 或 INVITE（邀請新人，share 再細分）。
 -- 只在 active 操作；expectedRevision 要相符；通過後綁定 actor（Claims.bindActor）。
 -- 回傳 rec, isOwner, actor 的位元 或 nil, code
-local function target(ctx, ownerOnly)
+local function target(ctx, need)
     local a = ctx.args
     local rec = R.get(a.claimId)
     if rec == nil or not R.isLive(rec) or rec.malformed then return nil, CODE.NOT_FOUND end
     local role, bits = MSH.Claims.roleOf(rec, ctx.who)
     if role == nil then return nil, CODE.NOT_FOUND end
     local owner = role == "owner"
-    if not owner and (ownerOnly or not MSH.hasBit(bits, SHARE.MANAGE)) then return nil, CODE.NOT_OWNER end
+    local allowed = owner or (need ~= "owner" and MSH.hasBit(bits, SHARE.MANAGE))
+        or (need == "invite" and MSH.hasBit(bits, SHARE.INVITE))
+    if not allowed then return nil, CODE.NOT_OWNER end
     if rec.lifecycle ~= LC.ACTIVE then return nil, CODE.WRONG_LIFECYCLE end
     if a.expectedRevision ~= rec.revision then return nil, CODE.STALE_REVISION end
     local bad = MSH.Claims.bindActor(ctx)
@@ -181,7 +184,7 @@ local function holdsManage(rec, user)
     return MSH.hasBit(bits, SHARE.MANAGE)
 end
 
--- bits 的每一位 mine 都有（MANAGE 成員只能給自己有的位元）
+-- bits 的每一位 mine 都有（成員只能給自己有的位元）
 local function subsetOf(bits, mine)
     for _, bit in pairs(SHARE) do
         if MSH.hasBit(bits, bit) and not MSH.hasBit(mine, bit) then return false end
@@ -189,23 +192,33 @@ local function subsetOf(bits, mine)
     return true
 end
 
+-- 非屋主能不能把 user 設成 bits。共同：不能給 MANAGE、不能動持有 MANAGE 的人。
+-- MANAGE 成員：位元 ⊆ 自己的位元＋INVITE（MANAGE 含邀請能力，自己沒有 INVITE 位元也能給），可改既有成員。
+-- 只有 INVITE：對象必須沒有任何資格（不是屋主、沒有 grant、也不靠陣營；否則等於替既有成員加權限，
+--   而且陣營撤銷後這個 grant 還留著），位元 ⊆ 自己的位元且不含 INVITE。
+-- 保守規則（2026-10-10 審查 MEDIUM；INVITE 使用者 2026-10-11；陣營成員 2026-10-11 審查 MEDIUM）
+local function memberMayShare(rec, user, bits, mine)
+    if MSH.hasBit(bits, SHARE.MANAGE) or holdsManage(rec, user) then return false end
+    if MSH.hasBit(mine, SHARE.MANAGE) then
+        local cap = MSH.hasBit(mine, SHARE.INVITE) and mine or mine + SHARE.INVITE
+        return subsetOf(bits, cap)
+    end
+    return MSH.Claims.roleOf(rec, user) == nil and not MSH.hasBit(bits, SHARE.INVITE) and subsetOf(bits, mine)
+end
+
 -- ===== 指定玩家 =====
 
--- MANAGE 成員（非屋主）：新位元不能含 MANAGE、必須是自己 roleOf 位元的子集（只拿掉位元的修改也照這條），
--- 不能動持有 MANAGE 的人。保守規則，待使用者裁定（2026-10-10 審查 MEDIUM）
 function Sh.share(ctx)
     local a = ctx.args
-    local rec, owner, mine = target(ctx, false)
+    local rec, owner, mine = target(ctx, "invite")
     if rec == nil then return S.fail(owner) end
     local bits = Sh.normalize(a.bits)
     if bits == nil then return S.fail(CODE.BAD_ARGS) end
     local user = a.targetUsername
     if user == rec.owner or user == ctx.who then return S.fail(CODE.BAD_USER) end
-    if not owner and (MSH.hasBit(bits, SHARE.MANAGE) or not subsetOf(bits, mine) or holdsManage(rec, user)) then
-        return S.fail(CODE.NOT_OWNER)
-    end
-    local old = toSet(N.desiredPlayers(rec))
     local g = MSH.Claims.grantOf(rec, user)
+    if not owner and not memberMayShare(rec, user, bits, mine) then return S.fail(CODE.NOT_OWNER) end
+    local old = toSet(N.desiredPlayers(rec))
     if g == nil then
         if #rec.grants + 1 > MSH.Settings.get().maxShares then return S.fail(CODE.SHARE_FULL) end
         local entry = { user = user, bits = bits }
@@ -221,7 +234,7 @@ function Sh.share(ctx)
 end
 
 function Sh.unshare(ctx)
-    local rec, owner = target(ctx, false)
+    local rec, owner = target(ctx, "manage")
     if rec == nil then return S.fail(owner) end
     local user = ctx.args.targetUsername
     local g, i = MSH.Claims.grantOf(rec, user)
@@ -271,13 +284,14 @@ local function bindFaction(rec, f, bits)
     return nil
 end
 
--- 綁屋主目前所在的陣營＋當下領袖；已有分享（任何狀態）就換掉。超過投影上限照存、不投影
+-- 綁屋主目前所在的陣營＋當下領袖；已有分享（任何狀態）就換掉。超過投影上限照存、不投影。
+-- 位元不能超出 SHARE_FACTION_MAX（不給邀請、管理）→ BAD_ARGS
 function Sh.shareFaction(ctx)
-    local rec, code = target(ctx, true)
+    local rec, code = target(ctx, "owner")
     if rec == nil then return S.fail(code) end
     if not MSH.Settings.get().allowFactionShare then return S.fail(CODE.FACTION_DISABLED) end
     local bits = Sh.normalize(ctx.args.bits)
-    if bits == nil then return S.fail(CODE.BAD_ARGS) end
+    if bits == nil or MSH.maskBits(bits, MSH.SHARE_FACTION_MAX) ~= bits then return S.fail(CODE.BAD_ARGS) end
     local f = Sh.factionOf(ctx.who)
     if f == nil then return S.fail(CODE.NO_FACTION) end
     local old = toSet(N.desiredPlayers(rec))
@@ -288,13 +302,11 @@ function Sh.shareFaction(ctx)
     return S.ok({ claimId = rec.claimId, revision = rec.revision })
 end
 
--- MANAGE 成員可以停止陣營分享，但分享含 MANAGE 時不行（和「不能動持有 MANAGE 的人」一致）
+-- MANAGE 成員也可以停止陣營分享（陣營分享不會帶管理，見 SHARE_FACTION_MAX）
 function Sh.unshareFaction(ctx)
-    local rec, code = target(ctx, false)
+    local rec, code = target(ctx, "manage")
     if rec == nil then return S.fail(code) end
-    local fs = rec.factionShare
-    if type(fs) ~= "table" then return S.fail(CODE.BAD_USER) end
-    if rec.owner ~= ctx.who and MSH.hasBit(fs.bits, SHARE.MANAGE) then return S.fail(CODE.NOT_OWNER) end
+    if type(rec.factionShare) ~= "table" then return S.fail(CODE.BAD_USER) end
     local old = toSet(N.desiredPlayers(rec))
     rec.factionShare = nil
     N.factionRefs[rec.claimId] = nil
@@ -303,9 +315,10 @@ function Sh.unshareFaction(ctx)
     return S.ok({ claimId = rec.claimId, revision = rec.revision })
 end
 
--- 恢復＝重綁目前同名陣營的領袖（屋主要在那個陣營），位元沿用（§6.5；VM H.restoreFactionShare）
+-- 恢復＝重綁目前同名陣營的領袖（屋主要在那個陣營），位元沿用（§6.5；VM H.restoreFactionShare）；
+-- 舊資料裡的邀請／管理在這裡遮掉
 function Sh.resumeFaction(ctx)
-    local rec, code = target(ctx, true)
+    local rec, code = target(ctx, "owner")
     if rec == nil then return S.fail(code) end
     local fs = rec.factionShare
     if type(fs) ~= "table" then return S.fail(CODE.BAD_USER) end
@@ -315,6 +328,7 @@ function Sh.resumeFaction(ctx)
     if not (f:isOwner(ctx.who) or f:isMember(ctx.who)) then return S.fail(CODE.NO_FACTION) end
     local bits = Sh.normalize(fs.bits)
     if bits == nil then return S.fail(CODE.BAD_ARGS) end
+    bits = MSH.maskBits(bits, MSH.SHARE_FACTION_MAX)
     local old = toSet(N.desiredPlayers(rec))
     code = bindFaction(rec, f, bits)
     if code then return S.fail(code) end

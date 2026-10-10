@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "Kira süresi dolup askıya alınan güvenli evin alanı bu kadar gün korunur ve bu sürede başkası orada ev oluşturamaz. Kira yenilenirse ev geri gelir; süre bitince alan serbest kalır.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Yeniden çizme süresi (dakika)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "Oluşturduktan sonraki bu kadar dakika içinde alan yeniden çizilebilir; tapu harcanmaz ve iade edilmez.\n0 yeniden çizmeyi kapatır.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Güvenli ev başına yeniden çizme sınırı",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "Sahibin, oluşturduktan sonraki yeniden çizme süresi içinde bir güvenli evi kaç kez yeniden çizebileceği. Yeniden çizmek tapu harcamaz.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Yollardan kaçın",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "Güvenli ev alanı yol içeremez.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Yol güvenlik payı (kare)",

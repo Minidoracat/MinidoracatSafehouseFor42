@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "Quand une location expire et qu'un abri est suspendu, sa zone est conservée pendant ce nombre de jours et personne d'autre ne peut y créer d'abri. Un renouvellement le rétablit ; après ce délai, la zone est libérée.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Délai pour redessiner (minutes)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "Pendant ce nombre de minutes après la création, le propriétaire peut redessiner la zone ; le titre n'est ni consommé ni rendu.\n0 désactive le redessin.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Limite de redessins par abri",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "Nombre de fois où le propriétaire peut redessiner un abri pendant le délai pour redessiner après sa création. Redessiner ne consomme pas de titre.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Éviter les routes",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "La zone d'un abri ne peut pas inclure de route.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Marge autour des routes (cases)",

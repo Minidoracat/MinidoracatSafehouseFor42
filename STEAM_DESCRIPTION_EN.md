@@ -11,7 +11,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [*] [b]Optional:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap[/url] (keep claims off resource points)
 [*] [b]Optional:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3801482125]Minidoracat Economy[/url] (buy or rent extra safehouse slots with in-game money, if the server sells them)
 [*] Dedicated multiplayer servers only; the server admin must change a few vanilla safehouse settings first (see the full guide)
-[*] [b]Add/remove mid-save:[/b] can be added, but if the save already has safehouses an admin must finish the migration first; read the full guide before removing it: deeds disappear and existing safehouses can no longer be managed
+[*] [b]Add/remove mid-save:[/b] can be added mid-save; safehouses already in the save are taken over automatically when the server starts. Read the full guide before removing it: deeds disappear and existing safehouses can no longer be managed
 [*] [b]Languages:[/b] 繁體中文, 简体中文, English, 日本語, 한국어, Русский, Español, Português, Türkçe, Français, Polski, Deutsch (please report any translation issues)
 [/list]
 
@@ -28,13 +28,13 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [*] [b]Tiered deeds[/b]: the deed tier sets how large your safehouse can be
 [*] [b]Custom area[/b]: mark your own rectangle, and redraw it shortly after claiming
 [*] [b]Avoids roads and resource points[/b]: main roads and buildings such as military, police and medical sites cannot be claimed
-[*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately
+[*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately; friends can also be allowed just to invite others
 [*] [b]Manager window[/b]: see your own and shared safehouses, rename or release them
 [*] [b]Vanilla protection[/b]: non-members cannot enter or take items; zombies can still spawn inside
 [*] [b]Admin panel[/b]: adjust rules, deeds, exclusions and paid slots in game
-[*] [b]Move from Better Safehouse[/b]: admins review and import existing safehouses in one pass
+[*] [b]Take over existing safehouses[/b]: vanilla and Better Safehouse safehouses are taken over automatically at server start, keeping their owners and members
 [/list]
-📖 [b]Server settings, migration and known limits:[/b] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse full guide on GitHub[/url] (Traditional Chinese)
+📖 [b]Server settings, taking over existing safehouses and known limits:[/b] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse full guide on GitHub[/url] (Traditional Chinese)
 
 [h2]🔗 More Minidoracat mods[/h2]
 All my mods are in the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url] — pick what you need.

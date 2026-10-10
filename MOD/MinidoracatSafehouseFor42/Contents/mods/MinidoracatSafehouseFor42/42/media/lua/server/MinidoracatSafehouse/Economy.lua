@@ -379,7 +379,7 @@ end
 
 -- 持全域鎖跑 fn(sends)，放鎖後才送網路。BUSY 回 false（呼叫端下次再來）
 function E.locked(fn)
-    if not S.ready or not MSH.Registry.ready() or S.migrationBlocked() then return false end
+    if not S.ready or not MSH.Registry.ready() then return false end
     local sends = {}
     local res = S.withLock(function()
         fn(sends)
@@ -504,7 +504,6 @@ S.TYPES.reason = function(v) return type(v) == "string" and #v >= 1 and #v <= 25
 
 -- 建立面板閒置時先顯示的伺服器閘門（第一個符合的）
 local function blockedCode(player)
-    if S.migrationBlocked() then return CODE.MIGRATION_IN_PROGRESS end
     if MSH.Registry.readOnly or MSH.Health.blocked() then return CODE.HEALTH_BLOCKED end
     if SafeHouse.hasNotSurvivedEnoughToClaim(player) then return CODE.NOT_SURVIVED end   -- SafeHouse.java:852-859
     return nil

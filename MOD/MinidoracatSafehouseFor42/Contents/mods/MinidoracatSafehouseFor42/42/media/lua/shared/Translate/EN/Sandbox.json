@@ -20,6 +20,8 @@
     "Sandbox_MinidoracatSafehouse_LapseKeepDays_tooltip": "When a rental expires and a safehouse lapses, its area is kept for this many days and no one else can create a safehouse there. Renewing the rental restores it; after that, the area is released.",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes": "Redraw time limit (minutes)",
     "Sandbox_MinidoracatSafehouse_RedrawMinutes_tooltip": "For this many minutes after creation, the owner can redraw the area. No deed is used or returned.\n0 turns redrawing off.",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit": "Redraw limit per safehouse",
+    "Sandbox_MinidoracatSafehouse_RedrawLimit_tooltip": "How many times the owner can redraw a safehouse within the redraw time limit after creating it. Redrawing does not use a deed.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Avoid roads",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "A safehouse area cannot include roads.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Road margin (tiles)",

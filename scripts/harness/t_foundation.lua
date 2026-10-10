@@ -32,11 +32,12 @@ return function(T)
     check(stable and list[1].k == 0 and list[300].k == 2, "sortSafe 穩定、300 筆不遞迴")
     check(MSH.hasBit(5, 4) and not MSH.hasBit(5, 2) and MSH.hasBit(MSH.SHARE_LEGACY, MSH.SHARE.FARM), "權限位元測試")
 
-    T.section("Settings：80 個選項、讀取夾值、面板整批驗證")
+    T.section("Settings：81 個選項、讀取夾值、面板整批驗證")
     local Settings = MSH.Settings
-    check(#Settings.OPTIONS == 80, "沙盒選項 80 個（實際 " .. #Settings.OPTIONS .. "）")
+    check(#Settings.OPTIONS == 81, "沙盒選項 81 個（實際 " .. #Settings.OPTIONS .. "）")
     local cfg, warn = Settings.get()
     check(#warn == 0 and cfg.claimsPerPlayer == 1 and cfg.tiersEnabled == 3, "預設值讀出無警告")
+    check(cfg.redrawLimit == 5, "重新框選次數上限預設 5")
     check(cfg.roadKinds.main and cfg.roadKinds.street and not cfg.roadKinds.gravel, "道路類別預設 main;street")
     check(cfg.resourceCats.military and cfg.resourceCats.prison and not cfg.resourceCats.food, "資源類別預設 8 類")
     check(cfg.tiers[1].side == 24 and cfg.tiers[2].area == 1600 and cfg.tiers[8].side == 64, "各級預設大小")
@@ -208,10 +209,7 @@ return function(T)
     check(res.ok, "blocked：查詢照常")
     T.serverOptions.War = "false"
     T.tick(6)
-    MSH.Registry.md.migrationCompleted = false
-    res = T.cmd(p, "testMut", { n = 3 })
-    check(res.code == "MIGRATION_IN_PROGRESS", "遷移未完成：mutation 拒絕")
-    MSH.Registry.md.migrationCompleted = nil
+    T.advance(MSH.Srv.RATE_WINDOW_MS)   -- 從新的限流視窗開始灌
     local spam = 0
     for i = 1, 30 do
         T.fire("OnClientCommand", MSH.MODULE, "testQuery", p, { protocol = MSH.PROTOCOL })
@@ -302,7 +300,7 @@ return function(T)
         local rr = R4.newRecord({ claimId = id, rect = { x = 19999, y = 19999, w = LIM.HARD_SIDE, h = LIM.HARD_SIDE },
             title = cjk, owner = name, source = MSH.SOURCE.DEED, deedTier = MSH.MAX_TIER,
             createdAt = 1791635924113, nativeCreatedAt = 1791635924113 })
-        rr.redraws = LIM.REDRAWS_PER_CLAIM
+        rr.redraws = MSH.Settings.BY_KEY.RedrawLimit.max   -- 最壞：沙盒上限
         return rr
     end
     for _ = 1, LIM.TOMBSTONE_SOFT do
