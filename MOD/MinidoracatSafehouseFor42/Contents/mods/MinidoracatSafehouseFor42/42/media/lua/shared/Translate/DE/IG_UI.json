@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "Preise pro Stufe",
     "IGUI_MSH_Admin_PlanNote": "Ob eine Stufe verkauft wird, legst du im Tab „Urkunden“ fest.",
     "IGUI_MSH_Admin_PlanProvisional": "Dieser Plan besteht die Prüfungen des Wirtschaftszentrums nicht mehr; prüfe und speichere ihn.",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "Die aktuelle Währung „%1“ ist im Wirtschaftszentrum deaktiviert, daher schlagen Zahlungen der Spieler fehl. Wähle oben eine Währung und drücke „Übernehmen“.",
     "IGUI_MSH_Admin_PlanFix": "Behebe zuerst die markierten Felder.",
     "IGUI_MSH_Admin_PlanSaved": "Stufen gespeichert: %1.",
     "IGUI_MSH_Admin_PlanPartial": "Stufen gespeichert: %1, fehlgeschlagen: %2.",

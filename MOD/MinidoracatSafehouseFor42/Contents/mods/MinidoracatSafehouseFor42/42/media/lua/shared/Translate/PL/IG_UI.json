@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "Ceny poziomów",
     "IGUI_MSH_Admin_PlanNote": "To, czy dany poziom jest w sprzedaży, ustawia się w zakładce Akty.",
     "IGUI_MSH_Admin_PlanProvisional": "Ten plan nie przechodzi już kontroli Centrum Ekonomii; sprawdź go i zapisz.",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "Obecna waluta „%1” jest wyłączona w Centrum Ekonomii, więc płatności graczy się nie powiodą. Wybierz walutę powyżej i naciśnij „Zastosuj zmiany”.",
     "IGUI_MSH_Admin_PlanFix": "Najpierw popraw oznaczone pola.",
     "IGUI_MSH_Admin_PlanSaved": "Zapisane poziomy: %1.",
     "IGUI_MSH_Admin_PlanPartial": "Zapisane poziomy: %1, nieudane: %2.",

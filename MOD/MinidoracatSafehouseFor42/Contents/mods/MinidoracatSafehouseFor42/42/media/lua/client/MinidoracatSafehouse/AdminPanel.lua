@@ -1213,14 +1213,21 @@ function AP.layoutPaid(P, pg)
     local cl = F:label("pl:currencyL", AP.planLabel("currency"))
     cl:setWidth(lw)
     local row = { cl }
-    local E = MSH.SlotsWindow.api()
+    -- 伺服器只回 Economy 啟用中的幣別（Economy.enabledCurrencies）；目前選的不在清單裡＝已停用或已移除，
+    -- 玩家用它付款會被拒（使用者 2026-10-11）
+    local E, listed = MSH.SlotsWindow.api(), false
     for _, cur in ipairs(plans.currencies or {}) do
         local b = F:button("cur:" .. cur, E and E.currencyName and E.currencyName(cur) or cur, P, AP.onCurrency, "chip")
         b.internal = cur
         b:setActive(st.currency == cur)
         row[#row + 1] = b
+        listed = listed or cur == st.currency
     end
     F:row(row)
+    if st.currency ~= nil and not listed then
+        F:text("cur:off", getText("IGUI_MSH_Admin_PlanCurrencyOff",
+            E and E.currencyName and E.currencyName(st.currency) or tostring(st.currency)), "warning")
+    end
     for _, f in ipairs(AP.PLAN_SHARED) do
         local l = F:label("pl:" .. f .. "L", AP.planLabel(f))
         l:setWidth(lw)

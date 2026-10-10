@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "各級價格",
     "IGUI_MSH_Admin_PlanNote": "要不要販售看「地契」頁的開關。",
     "IGUI_MSH_Admin_PlanProvisional": "這份方案已不符合經濟中心的檢查，請檢查後重新儲存。",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "目前的幣別「%1」已在經濟中心停用，玩家付款會失敗。請改選上方的幣別，再按〔套用變更〕。",
     "IGUI_MSH_Admin_PlanFix": "請先修正標示的欄位。",
     "IGUI_MSH_Admin_PlanSaved": "已儲存 %1 個等級。",
     "IGUI_MSH_Admin_PlanPartial": "已儲存 %1 個等級，%2 個失敗。",

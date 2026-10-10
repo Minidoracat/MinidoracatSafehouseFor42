@@ -530,9 +530,26 @@ function E.slots(ctx)
         free = { n = s.free, used = s.used, titles = titles }, tiers = tiers })
 end
 
+-- 付費頁只列 Economy 啟用中的幣別（使用者 2026-10-11）：停用的幣別付款會被拒（currency_disabled，Economy
+-- ECEntitlements.lua:791-792）。讀伺服器 facade MinidoracatEconomy.v1.currencies()：回 { id, enabled, ... } 陣列、
+-- 照 Economy 的排序（ECIntegration.lua:451-454、:547-557，ECConfig.lua:300-326）。讀不到或 Economy 資料還沒載入
+-- （回空表）時退回開服時讀的全部幣別；全部停用時回空表，付費頁照樣顯示目前的幣別已停用。
+function E.enabledCurrencies()
+    local api = E.api()
+    local ok, list = false, nil
+    if api ~= nil and type(api.currencies) == "function" then ok, list = pcall(api.currencies) end
+    if not ok or type(list) ~= "table" or #list == 0 then return E.currencies end
+    local out = {}
+    for _, c in ipairs(list) do
+        if type(c) == "table" and type(c.id) == "string" and c.enabled ~= false then out[#out + 1] = c.id end
+    end
+    return out
+end
+
 function E.adminPlans()
     local out = { economy = E.status, currencies = E.currencies, tiers = {} }
     if E.status ~= "READY" then return S.ok(out) end
+    out.currencies = E.enabledCurrencies()
     for t = 1, MSH.MAX_TIER do
         local res = E.call("getPlan", E.product(t))
         if res.ok ~= true or type(res.plan) ~= "table" then return S.fail(CODE.ECONOMY_UNAVAILABLE) end

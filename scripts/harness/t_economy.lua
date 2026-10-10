@@ -251,6 +251,23 @@ return function(T)
     values.bogus = nil
     res = T.cmd(T.player({ name = "eve" }), "adminSetPlan", { tier = 2, values = values, expectedRevision = 2 })
     check(res.code == "NOT_ADMIN", "非管理員 → NOT_ADMIN")
+    -- 付費頁只列 Economy 啟用中的幣別（使用者 2026-10-11）；停用的付款會被拒（currency_disabled）
+    T.econ.currencyList = { { id = "survivor", enabled = false }, { id = "gold", enabled = true } }
+    local cp = T.cmd(root, "adminPlans", {})
+    check(cp.ok and #cp.currencies == 1 and cp.currencies[1] == "gold", "adminPlans：只回 Economy 啟用中的幣別")
+    T.econ.currencyList = { { id = "gold", enabled = true }, { id = "survivor", enabled = true } }
+    cp = T.cmd(root, "adminPlans", {})
+    check(#cp.currencies == 2 and cp.currencies[1] == "gold" and cp.currencies[2] == "survivor", "照 Economy 的排序")
+    T.econ.currencyList = {}
+    cp = T.cmd(root, "adminPlans", {})
+    check(cp.ok and #cp.currencies == 2, "Economy 資料還沒載入（回空表）：退回開服時的全部幣別")
+    T.econ.currencyList = "error"
+    cp = T.cmd(root, "adminPlans", {})
+    check(cp.ok and #cp.currencies == 2 and #cp.tiers == 8, "currencies 丟錯：退回全部幣別，付費頁照常")
+    T.econ.currencyList = { { id = "survivor", enabled = false }, { id = "gold", enabled = false } }
+    cp = T.cmd(root, "adminPlans", {})
+    check(cp.ok and #cp.currencies == 0 and #cp.tiers == 8, "全部停用：回空清單，方案照回")
+    T.econ.currencyList = nil
     boot({ econ = false })
     root = T.player({ name = "root", admin = true })
     res = T.cmd(root, "adminSetPlan", { tier = 2, values = values, expectedRevision = 2 })

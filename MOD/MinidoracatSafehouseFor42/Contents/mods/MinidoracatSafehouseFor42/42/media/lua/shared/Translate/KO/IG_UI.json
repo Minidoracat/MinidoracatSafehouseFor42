@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "등급별 가격",
     "IGUI_MSH_Admin_PlanNote": "등급별 판매 여부는 증서 탭에서 설정합니다.",
     "IGUI_MSH_Admin_PlanProvisional": "이 요금제가 더 이상 경제 센터 검사를 통과하지 못합니다. 확인 후 저장하세요.",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "현재 통화 '%1'은(는) 경제 센터에서 비활성화되어 플레이어 결제가 실패합니다. 위에서 다른 통화를 고른 뒤 '변경 적용'을 누르세요.",
     "IGUI_MSH_Admin_PlanFix": "표시된 항목을 먼저 수정하세요.",
     "IGUI_MSH_Admin_PlanSaved": "등급 %1개를 저장했습니다.",
     "IGUI_MSH_Admin_PlanPartial": "등급 %1개 저장, %2개 실패.",

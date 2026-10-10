@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "Preços por nível",
     "IGUI_MSH_Admin_PlanNote": "A venda de cada nível é definida na aba Escrituras.",
     "IGUI_MSH_Admin_PlanProvisional": "Este plano não passa mais nas verificações da Central Econômica; revise e salve.",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "A moeda atual \"%1\" está desativada na Central Econômica, então os pagamentos dos jogadores vão falhar. Escolha uma moeda acima e clique em \"Aplicar alterações\".",
     "IGUI_MSH_Admin_PlanFix": "Corrija primeiro os campos marcados.",
     "IGUI_MSH_Admin_PlanSaved": "Níveis salvos: %1.",
     "IGUI_MSH_Admin_PlanPartial": "Níveis salvos: %1, com falha: %2.",

@@ -316,6 +316,14 @@ return function(T)
         "付費頁：只送改了的 2 級，帶 2 級的 revision")
     answer("adminSetPlan", { ok = false, code = "STALE_REVISION" })
     check(lastCmd("adminPlans") ~= nil and P.pages.paid.tierErrors[2] ~= nil, "逐級回錯，結束後重讀方案")
+    check(paid["cur:off#1"] == nil and paid["cur:survivor"].active == true, "目前的幣別在清單裡：chip 選中、沒有停用警告")
+    -- 伺服器只回 Economy 啟用中的幣別；目前的 survivor 被停用：不列它的 chip、顯示警告（使用者 2026-10-11）
+    answer("adminPlans", { economy = "READY", currencies = { "gold" }, tiers = { planRow(1, 4), planRow(2, 8) } })
+    local off = paid["cur:off#1"]
+    check(off ~= nil and off:isVisible() and string.find(off.text, "IGUI_MSH_Admin_PlanCurrencyOff", 1, true) ~= nil
+        and paid["cur:gold"]:isVisible() and not paid["cur:survivor"]:isVisible(), "目前的幣別停用了：不列它的 chip、顯示警告")
+    fw.click(paid["cur:gold"])
+    check(not paid["cur:off#1"]:isVisible() and paid["cur:gold"].active == true, "改選啟用中的幣別：警告消失")
 
     AP.select(P, "players")
     T.advance(1000)

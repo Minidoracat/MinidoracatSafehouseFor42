@@ -835,6 +835,12 @@ function T.economy(opts)
                 e.source = spec
                 return h
             end,
+            -- ECIntegration.lua:451-454：照 Economy 的排序回 { id, enabled, ... }；資料還沒載入時回空表。
+            -- 測試可設 e.currencyList（"error"＝丟錯）
+            currencies = function()
+                if e.currencyList == "error" then error("currencies boom") end
+                return e.currencyList or { { id = "survivor", enabled = true }, { id = "gold", enabled = true } }
+            end,
         },
     }
     return e

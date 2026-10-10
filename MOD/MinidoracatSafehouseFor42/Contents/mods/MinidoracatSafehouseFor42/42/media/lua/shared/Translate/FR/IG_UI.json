@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "Prix par niveau",
     "IGUI_MSH_Admin_PlanNote": "La mise en vente de chaque niveau se règle dans l'onglet Titres.",
     "IGUI_MSH_Admin_PlanProvisional": "Ce plan ne passe plus les vérifications du Centre économique ; vérifiez-le et enregistrez-le.",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "La devise actuelle « %1 » est désactivée dans le Centre économique : les paiements des joueurs échoueront. Choisissez une devise ci-dessus, puis appuyez sur « Appliquer ».",
     "IGUI_MSH_Admin_PlanFix": "Corrigez d'abord les champs signalés.",
     "IGUI_MSH_Admin_PlanSaved": "Niveaux enregistrés : %1.",
     "IGUI_MSH_Admin_PlanPartial": "Niveaux enregistrés : %1, en échec : %2.",

@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "ランク別の価格",
     "IGUI_MSH_Admin_PlanNote": "各ランクを販売するかどうかは「権利書」タブで設定します。",
     "IGUI_MSH_Admin_PlanProvisional": "このプランは経済センターのチェックに合格しなくなりました。確認して保存し直してください。",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "現在の通貨「%1」は経済センターで無効になっているため、プレイヤーの支払いは失敗します。上の通貨から選び直して「変更を適用」を押してください。",
     "IGUI_MSH_Admin_PlanFix": "先にマークされた項目を修正してください。",
     "IGUI_MSH_Admin_PlanSaved": "%1ランク分を保存しました。",
     "IGUI_MSH_Admin_PlanPartial": "%1ランク分を保存し、%2ランク分は失敗しました。",

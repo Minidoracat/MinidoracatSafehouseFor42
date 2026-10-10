@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "Seviye başına fiyatlar",
     "IGUI_MSH_Admin_PlanNote": "Her seviyenin satışta olup olmadığı Tapular sekmesinden ayarlanır.",
     "IGUI_MSH_Admin_PlanProvisional": "Bu plan artık Ekonomi Merkezi kontrollerini geçmiyor; gözden geçirip kaydedin.",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "Geçerli para birimi \"%1\" Ekonomi Merkezi'nde devre dışı, bu yüzden oyuncu ödemeleri başarısız olur. Yukarıdan bir para birimi seçip \"Değişiklikleri uygula\" düğmesine basın.",
     "IGUI_MSH_Admin_PlanFix": "Önce işaretli alanları düzeltin.",
     "IGUI_MSH_Admin_PlanSaved": "%1 seviye kaydedildi.",
     "IGUI_MSH_Admin_PlanPartial": "%1 seviye kaydedildi, %2 başarısız.",

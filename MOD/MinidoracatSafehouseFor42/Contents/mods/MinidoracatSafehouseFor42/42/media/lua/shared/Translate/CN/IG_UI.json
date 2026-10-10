@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "各级价格",
     "IGUI_MSH_Admin_PlanNote": "各级是否出售，在「地契」页设置。",
     "IGUI_MSH_Admin_PlanProvisional": "这份方案已不符合经济中心的检查，请检查后重新保存。",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "当前的货币「%1」已在经济中心停用，玩家付款会失败。请改选上方的货币，再按「应用变更」。",
     "IGUI_MSH_Admin_PlanFix": "请先修正标出的字段。",
     "IGUI_MSH_Admin_PlanSaved": "已保存 %1 个等级。",
     "IGUI_MSH_Admin_PlanPartial": "已保存 %1 个等级，%2 个失败。",

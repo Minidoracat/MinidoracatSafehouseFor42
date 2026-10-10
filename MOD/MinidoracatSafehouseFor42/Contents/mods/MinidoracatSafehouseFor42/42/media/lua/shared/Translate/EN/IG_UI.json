@@ -115,6 +115,7 @@
     "IGUI_MSH_Admin_PlanTiers": "Prices per tier",
     "IGUI_MSH_Admin_PlanNote": "Whether each tier is sold is set on the Deeds tab.",
     "IGUI_MSH_Admin_PlanProvisional": "This plan no longer passes the Economy checks; review and save it.",
+    "IGUI_MSH_Admin_PlanCurrencyOff": "The current currency \"%1\" is disabled in the Economy, so player payments will fail. Pick a currency above, then press Apply changes.",
     "IGUI_MSH_Admin_PlanFix": "Fix the marked fields first.",
     "IGUI_MSH_Admin_PlanSaved": "Tiers saved: %1.",
     "IGUI_MSH_Admin_PlanPartial": "Tiers saved: %1, failed: %2.",
