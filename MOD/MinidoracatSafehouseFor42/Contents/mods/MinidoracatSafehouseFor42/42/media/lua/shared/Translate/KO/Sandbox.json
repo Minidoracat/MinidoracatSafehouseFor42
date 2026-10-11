@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "무료 모드에서 은신처의 최대 면적(타일 수)입니다. 최대 변 길이의 제곱을 넘지 않습니다.",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "다른 은신처와의 간격 (타일)",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "다른 플레이어의 은신처와 최소 몇 타일 떨어져야 하는지 정합니다. 같은 소유자의 은신처는 붙어 있을 수 있지만 겹칠 수는 없습니다.\n자원 지점 검사도 범위 바깥으로 이만큼의 타일을 확인합니다.",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "은신처당 최대 구역 수",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "은신처 하나를 최대 몇 개의 직사각형으로 L자, U자 등의 모양으로 만들 수 있는지 정합니다. 4를 유지하는 것을 권장합니다. 게임에서는 구역마다 별도의 은신처이므로, 늘리면 다음과 같습니다.\n1. 플레이어가 접속할 때 내려받는 은신처 데이터가 늘고, 서버 전체 멤버 명단 용량도 더 빨리 찹니다(구역마다 따로 셉니다). 가득 차면 아무도 은신처를 만들거나 공유할 수 없습니다.\n2. 모양이 복잡하면 범위를 바꿀 때마다 잠깐 끊길 수 있습니다.\n3. 제외된 멤버가 같은 은신처의 다른 구역으로 옮겨질 가능성이 커지고, 게임의 다음 검사(매번 최대 약 20초) 때까지 밖으로 나가지 않습니다.\n줄여도 앞으로의 생성과 범위 재지정에만 적용되며, 이미 만든 은신처는 그대로입니다.",
     "Sandbox_MinidoracatSafehouse_MaxShares": "은신처당 공유 인원",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "은신처 하나를 공유할 수 있는 지정 플레이어의 최대 인원입니다.",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "조직 공유 허용",

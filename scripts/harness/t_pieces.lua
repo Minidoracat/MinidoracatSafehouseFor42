@@ -1,6 +1,6 @@
--- 多塊安全屋的伺服器行為（使用者 2026-10-11 裁定：一間最多 4 塊，每塊一個原生、共用 @MSH:<id>）：
--- 建立與規則、每一塊的在場／佔用／重疊、權限、收斂（缺一塊只補那塊、重複或對不上隔離）、放棄、
--- 撤銷順序、校正、名單容量、重新框選、改名、孤兒接回。
+-- 多塊安全屋的伺服器行為（使用者 2026-10-11 裁定一間可以多塊、每塊一個原生、共用 @MSH:<id>；2026-10-12 塊數上限
+-- 改成沙盒 MaxPieces，預設 4、管理員可調高）：建立與規則、每一塊的在場／佔用／重疊、權限、收斂（缺一塊只補那塊、
+-- 重複或對不上隔離）、放棄、撤銷順序、校正、名單容量、重新框選、改名、孤兒接回、塊數上限調高與調低。
 return function(T)
     local check = T.check
     local D1 = "MinidoracatSafehouse.Deed1"
@@ -54,8 +54,11 @@ return function(T)
     rejects({ r(200, 200, 6, 6), r(204, 204, 4, 4) }, "BAD_SHAPE", "OVERLAP", "塊與塊重疊")
     rejects({ r(200, 200, 6, 2), r(200, 202, 2, 2), r(204, 202, 2, 2), r(200, 204, 6, 2) }, "BAD_SHAPE", "HOLE",
         "圍出洞")
-    rejects({ r(200, 200, 1, 1), r(201, 200, 1, 1), r(202, 200, 1, 1), r(203, 200, 1, 1), r(204, 200, 1, 1) },
-        "BAD_ARGS", nil, "5 塊：協定就擋")
+    local five = { r(200, 200, 1, 1), r(201, 200, 1, 1), r(202, 200, 1, 1), r(203, 200, 1, 1), r(204, 200, 1, 1) }
+    rejects(five, "BAD_SHAPE", "PIECES", "5 塊：超過沙盒 MaxPieces（預設 4）")
+    local nine = {}
+    for i = 1, MSH.LIMIT.MAX_PIECES + 1 do nine[i] = r(199 + i, 200, 1, 1) end
+    rejects(nine, "BAD_ARGS", nil, "超過硬上限的塊數：協定就擋")
     rejects({ r(200, 200, 60, 2), r(260, 200, 40, 2) }, "BAD_ARGS", nil, "外框超過 96：協定就擋")
     rejects({ r(200, 200, 14, 2), r(214, 200, 12, 2) }, "TOO_BIG", nil, "每塊都不大，外框寬 26 超過 1 級邊長 24")
     T.sandbox("Tier1Area", 100)
@@ -295,4 +298,35 @@ return function(T)
     local t2, t3 = R.tomb(2), R.tomb(3)
     check(t2 ~= nil and t2.rects[1].x == 900 and t2.rects[1].created == T.now and t2.bootSeen == 1
         and t3 ~= nil and t3.rects == nil and t3.releasedAt == 5, "舊 tombstone 換成新格式（沒有範圍的只留時間）")
+
+    T.section("沙盒 MaxPieces：調高可以多塊；調低後已建好的照舊，重新框選照新上限")
+    MSH = T.boot({ sandbox = { MaxPieces = 6 } })
+    R = MSH.Registry
+    alice = T.player({ name = "alice", x = 1000.5, y = 1000.5, items = { D1 } })
+    -- 階梯：每階 2 格高、往下每階多 2 格寬，n 階剛好要 n 塊
+    local function stairs(n)
+        local out = {}
+        for i = 0, n - 1 do out[#out + 1] = r(1000, 1000 + i * 2, (i + 1) * 2, 2) end
+        return out
+    end
+    res = T.cmd(alice, "create", { rects = stairs(5), deedType = D1 })
+    local fiveId = res.claimId
+    check(res.ok and #housesOf(MSH.marker(fiveId)) == 5, "MaxPieces 6：五塊建成五個原生")
+    syncs = #T.syncs
+    T.cmd(alice, "calibrate", { houses = {} })
+    check(#T.syncs == syncs + 5, "客戶端少報這間：五塊一起重新廣播（一次校正的上限放得下一整間）")
+    MSH = T.boot({ keepGmd = true, keepFiles = true, keepHouses = true, sandbox = { MaxPieces = 4 } })
+    R = MSH.Registry
+    T.tick(6)
+    rec = R.get(fiveId)
+    check(rec ~= nil and rec.lifecycle == "active" and #rec.rects == 5 and #housesOf(MSH.marker(fiveId)) == 5,
+        "調回 4 後重開：五塊的那間照常 active，不隔離、不拆")
+    alice = T.player({ name = "alice", x = 1000.5, y = 1000.5 })
+    res = T.cmd(alice, "redraw", { claimId = fiveId, rects = stairs(5), expectedRevision = rec.revision })
+    check(res ~= nil and res.code == "BAD_SHAPE" and res.reason == "PIECES" and #housesOf(MSH.marker(fiveId)) == 5,
+        "調回 4 後重新框選五塊：BAD_SHAPE PIECES，舊屋不動")
+    T.advance(2000)
+    res = T.cmd(alice, "redraw", { claimId = fiveId, rects = stairs(4), expectedRevision = rec.revision })
+    check(res ~= nil and res.ok and #housesOf(MSH.marker(res.claimId)) == 4 and #housesOf(MSH.marker(fiveId)) == 0,
+        "（對照）重新框選四塊：照常換成新屋")
 end

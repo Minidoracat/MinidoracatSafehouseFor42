@@ -20,6 +20,9 @@ option MinidoracatSafehouse.FreeMaxArea
 option MinidoracatSafehouse.ClaimGap
 {type = integer, min = 0, max = 16, default = 2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_ClaimGap,}
 
+option MinidoracatSafehouse.MaxPieces
+{type = integer, min = 1, max = 8, default = 4, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_MaxPieces,}
+
 option MinidoracatSafehouse.MaxShares
 {type = integer, min = 0, max = 32, default = 8, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_MaxShares,}
 

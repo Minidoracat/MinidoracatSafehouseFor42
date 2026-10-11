@@ -1,5 +1,6 @@
 -- 多塊範圍的形狀規則（Contract：MSH.Rect.shapeError）與框選工具的形狀（client Shape.lua、Select.lua 的加入／挖掉）。
--- 使用者 2026-10-11 裁定：一間最多 4 塊矩形、塊與塊共用邊、不能圍出洞；同樣塊數時挑被移出的人落點在範圍外的切法。
+-- 使用者 2026-10-11 裁定：塊與塊共用邊、不能圍出洞；同樣塊數時挑被移出的人落點在範圍外的切法。
+-- 2026-10-12：塊數上限是沙盒 MaxPieces（預設 4，管理員可調高到硬上限 LIMIT.MAX_PIECES）。
 return function(T)
     local check = T.check
     local function r(x, y, w, h) return { x = x, y = y, w = w, h = h } end
@@ -12,8 +13,12 @@ return function(T)
     check(Rect.shapeError({ r(0, 0, 2, 2), r(2, 2, 2, 2) }) == "SPLIT", "只碰到角：不算相連")
     check(Rect.shapeError({ r(0, 0, 2, 2), r(5, 0, 2, 2) }) == "SPLIT", "分開兩塊：不算相連")
     check(Rect.shapeError({ r(0, 0, 4, 4), r(3, 3, 4, 4) }) == "OVERLAP", "塊與塊重疊")
-    check(Rect.shapeError({ r(0, 0, 1, 1), r(1, 0, 1, 1), r(2, 0, 1, 1), r(3, 0, 1, 1), r(4, 0, 1, 1) }) == "PIECES",
-        "5 塊：超過上限")
+    local fiveRow = { r(0, 0, 1, 1), r(1, 0, 1, 1), r(2, 0, 1, 1), r(3, 0, 1, 1), r(4, 0, 1, 1) }
+    check(Rect.shapeError(fiveRow, 4) == "PIECES" and Rect.shapeError(fiveRow, 5) == nil, "5 塊：上限 4 擋、上限 5 過")
+    local overHard = {}
+    for i = 1, MSH.LIMIT.MAX_PIECES + 1 do overHard[i] = r(i, 0, 1, 1) end
+    check(Rect.shapeError(fiveRow) == nil and Rect.shapeError(overHard) == "PIECES",
+        "不傳上限（已存在的紀錄）：照硬上限判")
     check(Rect.shapeError({}) == "PIECES" and Rect.shapeError({ r(-1, 0, 2, 2) }) == "PIECES", "0 塊、負座標的塊")
     check(Rect.shapeError({ r(0, 0, 6, 2), r(0, 2, 2, 2), r(4, 2, 2, 2), r(0, 4, 6, 2) }) == "HOLE", "回字形：中間有洞")
     check(Rect.shapeError({ r(0, 0, 2, 6), r(4, 0, 2, 6), r(2, 4, 2, 2) }) == nil, "U 形（開口朝外）：沒有洞")
@@ -87,7 +92,15 @@ return function(T)
     res = Shape.result(sh)
     check(res.err == nil and #res.rects == 4, "四階樓梯：剛好四塊")
     Shape.apply(sh, r(0, 4, 5, 1), true)
-    check(Shape.result(sh).err == "COMPLEX" and Shape.result(sh).rects == nil, "五階樓梯：要五塊，太複雜")
+    check(Shape.result(sh).err == "COMPLEX" and Shape.result(sh).rects == nil, "五階樓梯：要五塊，預設上限 4 太複雜")
+    -- 管理員調高沙盒 MaxPieces：開始框選時照新上限切；已經開始的編輯照開始時的上限
+    T.sandbox("MaxPieces", 6)
+    local five = Shape.new()
+    for k = 0, 4 do Shape.apply(five, r(0, k, k + 1, 1), true) end
+    res = Shape.result(five)
+    check(sh.max == 4 and five.max == 6 and res.err == nil and #res.rects == 5
+        and tiles(res, function(x, y) return x <= y end), "MaxPieces 6：五階樓梯切成剛好鋪滿的五塊")
+    T.sandbox("MaxPieces", 4)
 
     sh = Shape.new()
     Shape.apply(sh, r(0, 0, 20, 20), true)

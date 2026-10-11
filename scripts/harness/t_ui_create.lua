@@ -286,8 +286,8 @@ return function(T)
     check(v.sizeText == "IGUI_MSH_Select_Pending|30,10" and c1[1].r == colors.accent.r and c1[1].a == Sel.PENDING_ALPHA,
         "拉到一半的那塊：每幀寫出大小、用 accent 畫")
     check(onlyPrimary("apply"), "拉到一半：只有〔加入這塊〕是主要按鈕")
-    check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600," .. MSH.LIMIT.MAX_PIECES) == "textMuted",
-        "上限行寫出邊長、面積與塊數上限（2 級 40 × 40、1,600）")
+    check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600,4") == "textMuted",
+        "上限行寫出邊長、面積與塊數上限（2 級 40 × 40、1,600、沙盒預設 4 塊，不是硬上限）")
     p.x, p.y = 59, 19
     check(P.applyPiece(vm) and Sel.bounds(vm.sel) == nil, "〔加入這塊〕：走到的那塊套用進範圍")
     local c2 = frame()

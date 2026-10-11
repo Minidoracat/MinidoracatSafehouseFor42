@@ -109,7 +109,7 @@ end
 
 -- ===== released tombstone：精簡成一個字串，放 md.tombs[claimId] =====
 -- 「bootSeen,releasedAt;x,y,w,h,created;x,y,w,h,created…」（每塊一段），沒有的值寫 -1，一塊約 30 bytes。
--- 最壞（每間、每筆都 4 塊）1,024 筆加上 256 間佔位中的紀錄約 402 KB，放得進 LIMIT.REGISTRY_BYTES（§4.2）；
+-- 最壞（每間、每筆都用滿硬上限 LIMIT.MAX_PIECES 塊）1,024 筆加上 256 間佔位中的紀錄約 620 KB，放得進 LIMIT.REGISTRY_BYTES（§4.2）；
 -- 整筆紀錄當 tombstone 一筆約 400 bytes，放不下。
 -- tombstone 只用來判斷「同一代原生是否重現」（每塊的範圍＋建立時間）與 GC（bootSeen、releasedAt），§6.2。
 local function num(v)

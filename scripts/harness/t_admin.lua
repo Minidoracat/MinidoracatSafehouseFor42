@@ -50,8 +50,8 @@ return function(T)
     res = T.cmd(alice, "adminSetOptions", { changes = { ClaimGap = 4 } })
     check(res.code == "NOT_ADMIN" and sv("ClaimGap") == 2 and T.sbox.sets == 0, "非管理員改選項：NOT_ADMIN、沒寫入")
     res = T.cmd(boss, "adminOptions", {})
-    check(res.ok and keyCount(res.values) == 81 and res.values.ClaimGap == 2 and res.values.RedrawLimit == 5,
-        "管理員拿到 81 個選項的原值（含重新框選次數上限 5）")
+    check(res.ok and keyCount(res.values) == #MSH.Settings.OPTIONS and res.values.ClaimGap == 2 and res.values.RedrawLimit == 5,
+        "管理員拿到每個選項的原值（含重新框選次數上限 5）")
     check(res.health.blocked == false and type(res.health.hostile) == "boolean" and type(res.settingsWarnings) == "table",
         "附 health 狀態與設定警告")
     check(type(res.resourceApi) == "boolean" and type(res.parkingApi) == "boolean", "附資源點與停車場資料來源狀態")
@@ -86,9 +86,9 @@ return function(T)
     local allSynced = true
     for _, p in ipairs({ boss, alice, bob }) do
         local s = syncsOf(p)
-        if #s ~= 1 or s[1].ClaimGap ~= 5 or keyCount(s[1]) ~= 81 then allSynced = false end
+        if #s ~= 1 or s[1].ClaimGap ~= 5 or keyCount(s[1]) ~= #MSH.Settings.OPTIONS then allSynced = false end
     end
-    check(allSynced, "每位在線玩家各收到一份完整 81 鍵 sandboxSync")
+    check(allSynced, "每位在線玩家各收到一份含每個選項的 sandboxSync")
     check(#lockedAtSend == 3 and lockedAtSend[1] == false and lockedAtSend[3] == false, "sandboxSync 在放鎖之後才送")
     check(countLogs("ADMIN_OPTIONS") == 1, "成功寫一行 ADMIN_OPTIONS audit")
 
@@ -371,20 +371,21 @@ return function(T)
     T.section("Calibrate：一次校正的廣播上限")
     MSH = T.boot()
     alice = T.player({ name = "alice" })
-    for i = 1, 6 do mk(MSH, { x = 100 * i, y = 700, w = 5, h = 5 }, "alice") end
-    local dq = mk(MSH, { x = 800, y = 700, w = 5, h = 5 }, "alice", { quarantine = true })
-    SafeHouse.addSafeHouse(900, 700, 5, 5, MSH.marker(dq.claimId))
+    local cap = MSH.LIMIT.CALIBRATE_UPSERTS
+    -- 單塊的屋：上限＋2 間正常的，再加一間重複標記（兩個原生）
+    for i = 1, cap + 2 do mk(MSH, { x = 100 * i, y = 700, w = 5, h = 5 }, "alice") end
+    local dq = mk(MSH, { x = 100 * (cap + 3), y = 700, w = 5, h = 5 }, "alice", { quarantine = true })
+    SafeHouse.addSafeHouse(100 * (cap + 4), 700, 5, 5, MSH.marker(dq.claimId))
     syncsC = #T.syncs
     res = T.cmd(alice, "calibrate", { houses = {} })
-    local cap = MSH.LIMIT.CALIBRATE_UPSERTS
     check(res.ok and #T.syncs - syncsC == cap, "空清單：最多 " .. cap .. " 次廣播（實際 " .. (#T.syncs - syncsC) .. "）")
     T.advance(6000)
     syncsC = #T.syncs
     res = T.cmd(alice, "calibrate", { houses = {} })
-    check(res.ok and #T.syncs - syncsC == cap, "下一次校正：補上剩下的（實際 " .. (#T.syncs - syncsC) .. "）")
+    check(res.ok and #T.syncs - syncsC == 4, "下一次校正：補上剩下的（實際 " .. (#T.syncs - syncsC) .. "）")
     local seen = {}
     for _, s in ipairs(T.syncs) do seen[s.owner] = (seen[s.owner] or 0) + 1 end
     local all = true
     for id = 1, dq.claimId do if (seen[MSH.marker(id)] or 0) == 0 then all = false end end
-    check(all and seen[MSH.marker(dq.claimId)] == 2, "兩次合計涵蓋全部 7 間（重複標記的兩間都廣播）")
+    check(all and seen[MSH.marker(dq.claimId)] == 2, "兩次合計涵蓋全部 " .. dq.claimId .. " 間（重複標記的兩間都廣播）")
 end

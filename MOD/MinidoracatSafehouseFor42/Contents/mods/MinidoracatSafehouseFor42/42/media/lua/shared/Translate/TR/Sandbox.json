@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "Ücretsiz modda bir güvenli evin en büyük alanı, kare cinsinden. En uzun kenarın karesini asla geçmez.",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "Diğer evlere mesafe (kare)",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "Farklı oyuncuların güvenli evleri arasındaki en az kare sayısı. Aynı sahibin evleri bitişik olabilir ama üst üste binemez.\nKaynak noktası kontrolü de alanın bu kadar kare dışına bakar.",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "Ev başına en fazla parça",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "Bir güvenli evin en fazla kaç dikdörtgenden oluşabileceği (L, U gibi şekiller için). 4'te bırakmanız önerilir. Oyunda her parça ayrı bir güvenli evdir, bu yüzden artırmak:\n1. Oyuncuların girişte indirdiği güvenli ev verisini büyütür ve sunucu genelindeki üye listesi kapasitesini daha hızlı tüketir (her parça ayrı sayılır); dolduğunda kimse güvenli ev oluşturamaz veya paylaşamaz.\n2. Karmaşık şekillerde oyuncu alanı her değiştirdiğinde oyunun kısa süre takılmasına yol açabilir.\n3. Çıkarılan bir üyenin aynı evin başka bir parçasına düşme ihtimalini artırır; üye ancak oyunun bir sonraki kontrolünde dışarı çıkarılır (her seferinde en fazla yaklaşık 20 saniye).\nAzaltmak yalnızca yeni evleri ve yeniden çizimleri etkiler; mevcut evler değişmez.",
     "Sandbox_MinidoracatSafehouse_MaxShares": "Ev başına paylaşılan oyuncu",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "Sahibin bir güvenli evi en fazla kaç belirli oyuncuyla paylaşabileceği.",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "Grupla paylaşmaya izin ver",

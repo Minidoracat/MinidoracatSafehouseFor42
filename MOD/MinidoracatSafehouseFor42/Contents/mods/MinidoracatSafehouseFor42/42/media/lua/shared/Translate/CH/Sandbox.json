@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "免費模式下安全屋的最大面積（格數），不會超過最大邊長的平方。",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "與他人間距（格）",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "和其他玩家的安全屋至少要隔幾格；同一位屋主的安全屋可以緊鄰，但不能重疊。\n檢查資源點時也會往外看這麼多格。",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "每間最多塊數",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "一間安全屋最多可以用幾塊矩形拼成 L 形、U 形等形狀，建議維持 4。每一塊在遊戲裡都是一間獨立的安全屋，所以調高會：\n1. 讓玩家登入時下載的安全屋資料變多；全服成員名單的容量也用得更快（每一塊各算一次），用完就不能再建立或分享。\n2. 讓形狀複雜時，玩家每改一次框選範圍都可能短暫卡頓。\n3. 讓被移出的成員較可能落在同一間的另一塊，要等遊戲下一輪檢查（每次最多約 20 秒）才會被傳出去。\n調低只影響之後的建立與重新框選，已建好的安全屋不受影響。",
     "Sandbox_MinidoracatSafehouse_MaxShares": "每間分享人數上限",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "每間安全屋最多可以分享給幾位指定玩家。",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "允許分享給陣營",

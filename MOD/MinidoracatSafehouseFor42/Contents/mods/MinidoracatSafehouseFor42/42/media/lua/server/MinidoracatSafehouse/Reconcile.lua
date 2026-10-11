@@ -128,7 +128,7 @@ local function fixNative(rec, house, now, st)
         if not have[u] then
             house:addPlayer(u)      -- SafeHouse.java:292-297：沒有對稱的廣播，由下面的 service-owner 廣播同步
             dirty = true
-            -- 同一人在這間的每一塊都會被補：一輪只算一次，不然 4 塊的屋一次就算 4 次 re-add
+            -- 同一人在這間的每一塊都會被補：一輪只算一次，不然 N 塊的屋一次就算 N 次 re-add
             local key = rec.claimId .. "|" .. u
             if not st.startup and not st.readd[key] then
                 st.readd[key] = true

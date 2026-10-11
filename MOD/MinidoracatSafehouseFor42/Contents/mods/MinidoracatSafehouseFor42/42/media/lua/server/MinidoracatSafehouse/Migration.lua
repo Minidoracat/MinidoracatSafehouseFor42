@@ -46,7 +46,7 @@ local LC = MSH.LIFECYCLE
 M.BSH_MOD_ID = "BetterSafehouse"   -- Workshop 3634569678 的 42.19/mod.info:2（docs/research/better-safehouse-3634569678-analysis.md:18）
 M.SKIP_REASONS = { "BAD_RECT", "BAD_OWNER", "DUPLICATE_RECT", "DUPLICATE_ID", "OVER_CAP" }
 -- 接管最多用掉的容量比例，其餘留給之後玩家正常建立與分享（從不擋玩家）：
---   registry 一半（256 KiB）：另一半要放 1,024 筆 tombstone（四塊的一筆約 150 bytes，約 150 KiB，§4.2）＋之後的新屋與分享；
+--   registry 一半：另一半要放 1,024 筆 tombstone（用滿硬上限 8 塊的一筆約 270 bytes，約 280 KB，§4.2）＋之後的新屋與分享；
 --     一般舊屋一間約 400 bytes，256 間約 100 KiB，正常伺服器碰不到這條。
 --   原生名單名字 3/4（3,072）：留 1,024 個名字給之後的分享與新屋。
 M.REGISTRY_SHARE = 0.5

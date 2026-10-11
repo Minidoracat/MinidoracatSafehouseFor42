@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "Largest area of a safehouse in free mode, in tiles. It never exceeds the max side squared.",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "Gap to other safehouses (tiles)",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "Minimum number of tiles between safehouses of different players. Safehouses of the same owner can touch but not overlap.\nResource checks also look this many tiles beyond the area.",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "Max pieces per safehouse",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "How many rectangles one safehouse can be made of, for L, U and other shapes. Keeping 4 is recommended. Each piece is a separate safehouse in the game, so raising this:\n1. Makes the safehouse data players download when they join bigger, and uses up the server-wide member list capacity faster (each piece counts separately); once it is full, no one can create or share safehouses.\n2. Can make the game stutter briefly each time a player changes a complex shape while marking the area.\n3. Makes it more likely that a removed member lands in another piece of the same safehouse and is only moved out at the game's next check (up to about 20 seconds each time).\nLowering it only affects new safehouses and redraws; existing safehouses stay as they are.",
     "Sandbox_MinidoracatSafehouse_MaxShares": "Shared players per safehouse",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "How many named players an owner can share one safehouse with.",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "Allow faction sharing",

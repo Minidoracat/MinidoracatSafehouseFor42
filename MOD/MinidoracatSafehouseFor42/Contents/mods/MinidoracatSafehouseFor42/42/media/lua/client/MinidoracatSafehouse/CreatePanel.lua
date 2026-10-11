@@ -605,7 +605,7 @@ local function layoutSelecting(v, y, list)
             or getText("IGUI_MSH_Select_ShapeRaw", res.w, res.h, res.area)
         y = para(v, text, (bad or v.over) and "errorText" or "text", nil, y)
     end
-    local max = MSH.LIMIT.MAX_PIECES
+    local max = s.shape.max
     if v.maxSide ~= nil then
         y = para(v, getText("IGUI_MSH_Select_ShapeLimit", v.maxSide, v.maxArea, max), "textMuted", nil, y)
     else

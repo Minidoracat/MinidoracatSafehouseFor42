@@ -35,7 +35,7 @@ AP.QUERY_DEBOUNCE_MS = 650   -- Economy QUERY_DEBOUNCE_MS
 AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服器 cooldownMs = 500）
 AP.FILTERS = { "all", "owners", "overrides" }
 AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxSide", "FreeMaxArea", "ClaimGap", "MaxShares",
-    "AllowFactionShare", "LapseKeepDays", "RedrawMinutes", "RedrawLimit" }
+    "AllowFactionShare", "LapseKeepDays", "RedrawMinutes", "RedrawLimit", "MaxPieces" }
 AP.CRAFT_LEVELS = { [2] = "Easy", [3] = "Standard", [4] = "Strict" }
 -- Economy 方案 12 欄（entitlements-api.md；ECEntitlementPlans.lua:3-61）與付費頁可改欄位的範圍
 AP.PLAN_FIELDS = { "permanentEnabled", "permanentCurrency", "permanentPrice", "permanentLimit", "rentalEnabled",
@@ -603,6 +603,8 @@ function AP.layoutRules(P, pg)
         end
         AP.formRow(pg, key, lw, ctrls)
     end
+    -- 每間最多塊數調高有代價（使用者 2026-10-12：「寫清楚注意事項」）：注意事項直接寫在最後一列底下，不只放滑鼠提示
+    F:text("piecesHelp", getText("Sandbox_MinidoracatSafehouse_MaxPieces_tooltip"), "textMuted")
 end
 
 -- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定排成「設定｜改成｜原因」表，必要與建議

@@ -76,10 +76,10 @@ function C.checkDeed(v)
     return nil
 end
 
--- 形狀：塊數、不重疊、連成一片、沒有洞（MSH.Rect.shapeError；客戶端框選工具用同一套規則）。
+-- 形狀：塊數（沙盒 MaxPieces）、不重疊、連成一片、沒有洞（MSH.Rect.shapeError；客戶端框選工具用同一套規則）。
 -- 不合規則時記 v.badShape，預檢略過逐格掃地圖的檢查（C.STEPS needsShape）
 function C.checkShape(v)
-    local why = Rect.shapeError(v.rects)
+    local why = Rect.shapeError(v.rects, v.cfg.maxPieces)
     if why then
         v.badShape = true
         return CODE.BAD_SHAPE, { reason = why }

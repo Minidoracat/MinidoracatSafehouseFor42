@@ -18,14 +18,16 @@ MSH.MAX_TIER = 8
 MSH.LIMIT = {
     HARD_SIDE = 96,                -- 任何等級的邊長上限
     HARD_AREA = 9216,              -- 96 × 96
-    MAX_PIECES = 4,                -- 一間最多幾塊矩形（每塊一個原生；使用者 2026-10-11 裁定）
+    -- 協定、紀錄與容量預算接受的塊數上限＝沙盒 MaxPieces 的最大值；一間實際可以幾塊看 MaxPieces（預設 4，
+    -- 使用者 2026-10-12：管理員可調高）。調低後已建好的照樣合法，所以紀錄與收斂只看這個硬上限
+    MAX_PIECES = 8,
     MAX_CLAIMS = 256,              -- 全服 managed／legacy（released 以外）筆數上限
     TOMBSTONE_SOFT = 1024,         -- released tombstone 軟上限
     TOMBSTONE_GC_MS = 30 * 24 * 3600 * 1000,
     -- registry 序列化大小上限（估算值）。客戶端 ModData.request 時整份放進一個封包，連線緩衝固定 1,000,000 bytes
-    -- （UdpConnection.java:40）。256 間每間 4 塊＋1,024 筆 4 塊的 tombstone 最壞約 402 KB，所以取 512 KiB，
+    -- （UdpConnection.java:40）。256 間每間 8 塊＋1,024 筆 8 塊的 tombstone 最壞約 620 KB，所以取 640 KiB，
     -- 讓 MAX_CLAIMS 先擋（SERVER_FULL），不會在 tombstone 還沒到軟上限時就卡在 REGISTRY_FULL
-    REGISTRY_BYTES = 512 * 1024,
+    REGISTRY_BYTES = 640 * 1024,
     NATIVE_NAMES = 4096,           -- 全部 managed 原生名單的名字總數上限
     FACTION_PROJECTION = 64,       -- 陣營分享投影進原生名單的人數上限（M2）
     TITLE_CHARS = 40,
@@ -34,8 +36,9 @@ MSH.LIMIT = {
     REQUEST_ID_MAX = 64,
     CACHE_TTL_MS = 60000,          -- 同 requestId 結果快取（§4.3）
     CACHE_PER_ACTOR = 64,
-    CALIBRATE_MAX = 1024,          -- 客戶端校正最多帶幾筆（MAX_CLAIMS × MAX_PIECES 個原生）
-    CALIBRATE_UPSERTS = 4,         -- 一次校正最多替幾個原生觸發廣播（正常客戶端登入時已拿到全部，§6.3）
+    CALIBRATE_MAX = 2048,          -- 客戶端校正最多帶幾筆（MAX_CLAIMS × MAX_PIECES 個原生）
+    -- 一次校正最多替幾個原生觸發廣播（正常客戶端登入時已拿到全部，§6.3）；同一間整組一起送，所以至少要放得下一整間
+    CALIBRATE_UPSERTS = 8,
 }
 
 MSH.LIFECYCLE = {
@@ -235,7 +238,7 @@ function Rect.expand(r, d)
 end
 
 -- ===== 多塊範圍（使用者 2026-10-11 裁定）=====
--- 一間安全屋＝1–LIMIT.MAX_PIECES 塊矩形，每塊一個原生 SafeHouse，共用 @MSH:<id> 標記。塊與塊不重疊、
+-- 一間安全屋＝1–沙盒 MaxPieces 塊矩形（硬上限 LIMIT.MAX_PIECES），每塊一個原生 SafeHouse，共用 @MSH:<id> 標記。塊與塊不重疊、
 -- 每塊至少和另一塊共用一段邊（只碰到角不算）、中間不能圍出沒圈到的洞（圍住別人走不出去）；
 -- 大小看整間的外框邊長與總面積（Claims.checkSize）。客戶端框選工具與伺服器驗證共用 Rect.shapeError。
 
@@ -351,10 +354,11 @@ local function hasHole(rects)
     return false
 end
 
--- 回傳 nil（合規）或 "PIECES"（塊數不在 1–MAX_PIECES 或有不合法的塊）、"OVERLAP"、"SPLIT"（沒有連成一片）、"HOLE"
-function Rect.shapeError(rects)
+-- 回傳 nil（合規）或 "PIECES"（塊數不在 1–max 或有不合法的塊）、"OVERLAP"、"SPLIT"（沒有連成一片）、"HOLE"。
+-- max：這次允許的塊數（建立與重新框選傳沙盒 MaxPieces）；不傳時用硬上限，給已存在的紀錄用
+function Rect.shapeError(rects, max)
     local n = type(rects) == "table" and #rects or 0
-    if n < 1 or n > MSH.LIMIT.MAX_PIECES then return "PIECES" end
+    if n < 1 or n > (max or MSH.LIMIT.MAX_PIECES) then return "PIECES" end
     for i = 1, n do
         if not Rect.valid(rects[i]) then return "PIECES" end
         for j = 1, i - 1 do

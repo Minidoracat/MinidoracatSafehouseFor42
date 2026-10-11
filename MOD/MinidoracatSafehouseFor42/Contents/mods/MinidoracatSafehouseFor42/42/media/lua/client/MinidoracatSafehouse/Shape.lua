@@ -1,30 +1,34 @@
 -- MinidoracatSafehouse/Shape.lua：框選工具的範圍形狀（使用者 2026-10-11 裁定一間可以多塊）。純函式，不碰畫面與玩家。
--- 玩家拉矩形「加入」或「挖掉」，形狀是這些操作疊出來的格子集合；送給伺服器前切成最少塊數的矩形（≤ LIMIT.MAX_PIECES），
+-- 玩家拉矩形「加入」或「挖掉」，形狀是這些操作疊出來的格子集合；送給伺服器前切成最少塊數的矩形（≤ sh.max，沙盒 MaxPieces），
 --   每塊是一個原生 SafeHouse。
 -- 表示法：縮減過的座標格——xs、ys 是遞增的分界線，inside[j][i]＝[xs[i], xs[i+1]) × [ys[j], ys[j+1]) 在範圍內。
 --   每次操作後去掉外圍的空行列、去掉兩邊格子都一樣的分界線，剩下的線都通過形狀的頂點，格子數只隨轉角數成長，
 --   和範圍多大無關。操作前的狀態留在 history（新操作建新表，舊表不改，所以直接存參照）。
--- 切塊：MAX_PIECES 塊拼得出的形狀，頂點最多 2×MAX_PIECES 種 x、y 座標；縮減後超過就直接判定太複雜。
+-- 切塊：max 塊拼得出的形狀，頂點最多 2×max 種 x、y 座標；縮減後超過就直接判定太複雜。
 --   否則在縮減格上逐步加深搜尋最少塊數（第一個沒蓋到的格子一定是下一塊的左上角），同樣塊數挑
 --   「被移出的人落點在範圍內」的塊最少的切法：原生把人傳到該塊的 (x−1, y−1)（SafeHouse.java:538、840），
 --   落在同一間另一塊就要等下一次越界檢查才出得去。
 -- 連成一片在這裡判（切塊前）；洞照 MSH.Rect.shapeError，和伺服器同一套規則。
 
 require "MinidoracatSafehouse/Contract"
+require "MinidoracatSafehouse/Settings"
 
 local MSH = MinidoracatSafehouse
 local Shape = MSH.Shape or {}
 MSH.Shape = Shape
 
 Shape.HISTORY = 32      -- 可以復原幾步
-Shape.NODES = 20000     -- 每個塊數的搜尋節點上限：超過就用目前最好的切法（形狀太怪時寧可多一塊，不卡住畫面）
+-- 每個塊數的搜尋節點上限：超過就用目前最好的切法（形狀太怪時寧可多一塊，不卡住畫面）。逐一加深到 max 塊，
+-- 所以最壞的搜尋量隨沙盒 MaxPieces 成長：調高後形狀複雜時，改動形狀的那一下可能短暫卡頓（選項提示有寫）
+Shape.NODES = 20000
 Shape.DRAW_MAX = 256    -- 切不出塊時逐列畫原始格子，最多畫幾段
--- 編輯中每軸最多幾條分界線：4 塊拼得出的形狀最多 8 條，超過的早就是「太複雜」；這個上限只防止玩家一直點散開的格子
+-- 編輯中每軸最多幾條分界線：8 塊（硬上限）拼得出的形狀最多 16 條，超過的早就是「太複雜」；這個上限只防止玩家一直點散開的格子
 -- 讓格子（與每一步的 history）無限長大、每次套用越來越慢（2026-10-11 審查）。超過就不套用這一步
 Shape.LINES = 40
 
-function Shape.new()
-    return { xs = {}, ys = {}, inside = {}, history = {} }
+-- max：這次編輯最多切成幾塊；不傳時取開始編輯當下的沙盒 MaxPieces（伺服器確認時再照當時的值檢查一次）
+function Shape.new(max)
+    return { xs = {}, ys = {}, inside = {}, history = {}, max = max or MSH.Settings.get().maxPieces }
 end
 
 function Shape.isEmpty(sh)
@@ -203,7 +207,7 @@ local function connected(sh, total)
     return count == total
 end
 
--- 最少塊數的切法（縮減格上的 { i0, j0, i1, j1 }，含頭含尾）；MAX_PIECES 塊切不出來回 nil
+-- 最少塊數的切法（縮減格上的 { i0, j0, i1, j1 }，含頭含尾）；sh.max 塊切不出來回 nil
 local function partition(sh)
     local inside, nx, ny = sh.inside, #sh.xs - 1, #sh.ys - 1
     local covered = {}
@@ -278,7 +282,7 @@ local function partition(sh)
         return false
     end
 
-    for k = 1, MSH.LIMIT.MAX_PIECES do
+    for k = 1, sh.max do
         nodes = 0
         dfs(k, 1)
         if best ~= nil then return best end
@@ -307,7 +311,7 @@ function Shape.result(sh)
             end
         end
         res = { x = xs[1], y = ys[1], w = xs[#xs] - xs[1], h = ys[#ys] - ys[1], area = area, draw = {} }
-        local limit = MSH.LIMIT.MAX_PIECES * 2
+        local limit = sh.max * 2
         if not connected(sh, cells) then
             res.err = "SPLIT"
         elseif #xs > limit or #ys > limit then
@@ -321,7 +325,7 @@ function Shape.result(sh)
                 for n, p in ipairs(parts) do
                     res.rects[n] = { x = xs[p.i0], y = ys[p.j0], w = xs[p.i1 + 1] - xs[p.i0], h = ys[p.j1 + 1] - ys[p.j0] }
                 end
-                res.err = MSH.Rect.shapeError(res.rects)   -- 只剩 HOLE 會發生
+                res.err = MSH.Rect.shapeError(res.rects, sh.max)   -- 只剩 HOLE 會發生
             end
         end
         local d = res.draw

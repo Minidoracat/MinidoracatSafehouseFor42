@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "Największa powierzchnia schronienia w trybie darmowym, w polach. Nigdy nie przekracza kwadratu maks. boku.",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "Odstęp od innych schronień (pola)",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "Minimalna liczba pól między schronieniami różnych graczy. Schronienia tego samego właściciela mogą się stykać, ale nie nakładać.\nSprawdzanie punktów zasobów też patrzy tyle pól poza obszar.",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "Maks. części na schronienie",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "Z ilu prostokątów może się składać jedno schronienie, np. w kształcie litery L lub U. Zalecane: 4. Każda część jest w grze osobnym schronieniem, więc zwiększenie tej wartości:\n1. Zwiększa dane schronień pobierane przez graczy przy dołączaniu i szybciej zużywa pojemność list członków na serwerze (każda część liczy się osobno); gdy się zapełni, nikt nie może tworzyć ani udostępniać schronień.\n2. Może powodować krótkie przycięcie przy każdej zmianie złożonego kształtu podczas zaznaczania obszaru.\n3. Sprawia, że usunięty członek częściej trafia do innej części tego samego schronienia i zostaje wyrzucony dopiero przy następnym sprawdzeniu przez grę (za każdym razem do około 20 sekund).\nZmniejszenie dotyczy tylko nowych schronień i ponownych zaznaczeń; istniejące schronienia się nie zmieniają.",
     "Sandbox_MinidoracatSafehouse_MaxShares": "Udostępnieni gracze na schronienie",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "Ilu wskazanym graczom właściciel może udostępnić jedno schronienie.",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "Zezwól na udostępnianie frakcji",

@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "無料モードでのセーフハウスの最大面積（マス数）です。最大辺長の2乗を超えることはありません。",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "他人との間隔（マス）",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "他のプレイヤーのセーフハウスと最低何マス離すかです。同じ所有者のセーフハウスは隣接できますが、重ねることはできません。\n資源地点のチェックも範囲の外側をこのマス数まで確認します。",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "1件あたりの最大区画数",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "1件のセーフハウスを最大何個の長方形でL字・U字などに組めるかです。4のままを推奨します。ゲーム内では区画ごとに別のセーフハウスになるため、増やすと次のようになります。\n1. プレイヤーが接続時にダウンロードするセーフハウスのデータが増え、サーバー全体のメンバー名簿の容量も早く減ります（区画ごとに数えます）。上限に達すると、誰も作成や共有ができなくなります。\n2. 形が複雑だと、範囲を変えるたびに一瞬カクつくことがあります。\n3. 外されたメンバーが同じセーフハウスの別の区画に移されやすくなり、ゲームの次の確認（毎回最大約20秒）まで外に出されません。\n減らしても影響するのはこれからの作成と再指定だけで、作成済みのセーフハウスはそのままです。",
     "Sandbox_MinidoracatSafehouse_MaxShares": "1件あたりの共有人数",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "1つのセーフハウスを共有できる指定プレイヤーの最大人数です。",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "派閥への共有を許可",

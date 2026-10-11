@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "Maior área de uma base no modo grátis, em quadrados. Nunca passa do lado máximo ao quadrado.",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "Distância de outras bases (quadrados)",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "Mínimo de quadrados entre bases de jogadores diferentes. Bases do mesmo dono podem encostar, mas não se sobrepor.\nA verificação de pontos de recursos também olha essa quantidade de quadrados fora da área.",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "Máximo de peças por base",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "Quantos retângulos uma base pode ter no máximo, para formas em L, em U etc. Recomenda-se manter 4. Cada peça é uma base separada no jogo, então aumentar este valor:\n1. Aumenta os dados de bases que os jogadores baixam ao entrar e gasta mais rápido a capacidade das listas de membros do servidor (cada peça conta separadamente); quando ela enche, ninguém consegue criar nem compartilhar bases.\n2. Pode causar um breve travamento cada vez que um jogador muda uma forma complexa ao marcar a área.\n3. Torna mais provável que um membro removido caia em outra peça da mesma base e só saia na próxima verificação do jogo (até cerca de 20 segundos a cada vez).\nDiminuir só afeta bases novas e redesenhos; as bases existentes não mudam.",
     "Sandbox_MinidoracatSafehouse_MaxShares": "Jogadores compartilhados por base",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "Com quantos jogadores específicos o dono pode compartilhar uma base.",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "Permitir compartilhar com facção",

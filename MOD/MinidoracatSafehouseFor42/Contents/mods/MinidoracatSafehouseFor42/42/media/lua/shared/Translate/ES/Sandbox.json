@@ -12,6 +12,8 @@
     "Sandbox_MinidoracatSafehouse_FreeMaxArea_tooltip": "Área más grande de un refugio en el modo gratis, en casillas. Nunca supera el lado máximo al cuadrado.",
     "Sandbox_MinidoracatSafehouse_ClaimGap": "Separación de otros refugios (casillas)",
     "Sandbox_MinidoracatSafehouse_ClaimGap_tooltip": "Mínimo de casillas entre refugios de jugadores distintos. Los refugios del mismo dueño pueden tocarse, pero no superponerse.\nLa comprobación de puntos de recursos también mira esa cantidad de casillas fuera del área.",
+    "Sandbox_MinidoracatSafehouse_MaxPieces": "Piezas máximas por refugio",
+    "Sandbox_MinidoracatSafehouse_MaxPieces_tooltip": "Cuántos rectángulos puede tener como máximo un refugio, para formas en L, en U, etc. Se recomienda dejar 4. Cada pieza es un refugio aparte en el juego, así que subir este valor:\n1. Aumenta los datos de refugios que los jugadores descargan al conectarse y gasta antes la capacidad de las listas de miembros del servidor (cada pieza cuenta por separado); cuando se llena, nadie puede crear ni compartir refugios.\n2. Puede causar un breve tirón cada vez que un jugador cambia una forma compleja al marcar el área.\n3. Hace más probable que un miembro retirado caiga en otra pieza del mismo refugio y no salga hasta la siguiente comprobación del juego (hasta unos 20 segundos cada vez).\nBajarlo solo afecta a los refugios nuevos y a los redibujados; los refugios existentes no cambian.",
     "Sandbox_MinidoracatSafehouse_MaxShares": "Jugadores compartidos por refugio",
     "Sandbox_MinidoracatSafehouse_MaxShares_tooltip": "Con cuántos jugadores concretos puede el dueño compartir un refugio.",
     "Sandbox_MinidoracatSafehouse_AllowFactionShare": "Permitir compartir con la facción",
