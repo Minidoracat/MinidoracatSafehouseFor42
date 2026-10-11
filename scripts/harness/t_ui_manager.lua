@@ -216,52 +216,71 @@ return function(T)
         "遷移來的不提地契；不用「取消安全屋」那句")
     check(MW.clock(61000) == "1:01" and MW.clock(1) == "0:01" and MW.clock(-5) == "0:00", "倒數 m:ss、秒無條件進位、不出負數")
 
-    T.section("ManagerWindow：在世界中顯示只畫外框")
+    T.section("在地面顯示範圍：我的與分享給我的，關掉視窗也照畫")
+    local Rg = MSH.Ranges
     local strips = {}
     addAreaHighlightForPlayer = function(pn, x1, y1, x2, y2, z, r, g, b, a)
-        strips[#strips + 1] = { x1 = x1, y1 = y1, x2 = x2, y2 = y2, z = z }
+        strips[#strips + 1] = { x1 = x1, y1 = y1, x2 = x2, y2 = y2, z = z, r = r, g = g }
     end
-    T.player({ name = "alice", z = 1.6 })
-    local function cover()
-        local cells, dup = {}, false
+    T.player({ name = "alice", x = 105, y = 205, z = 1.6 })
+    -- L 形兩塊（我的）＋一塊（分享給我的）＋別人的一塊＋很遠的我的一塊
+    local natives = { SafeHouse.addSafeHouse(100, 200, 4, 10, "@MSH:3"), SafeHouse.addSafeHouse(104, 206, 6, 4, "@MSH:3"),
+        SafeHouse.addSafeHouse(130, 200, 5, 5, "@MSH:4"), SafeHouse.addSafeHouse(150, 200, 5, 5, "@MSH:5"),
+        SafeHouse.addSafeHouse(5000, 5000, 5, 5, "@MSH:6") }
+    local savedClaims = MSH.Client.claims
+    MSH.Client.claims = { mine = { { claimId = 3 }, { claimId = 6 } }, shared = { { claimId = 4 } }, byId = {}, at = 1 }
+    MSH.Client.emit("claims", MSH.Client.claims)
+    local function drawn()
+        strips = {}
+        T.fire("OnPreUIDraw")
+        local cells, dup, colors = {}, false, {}
         for _, s in ipairs(strips) do
             for x = s.x1, s.x2 - 1 do
                 for y = s.y1, s.y2 - 1 do
                     local k = x .. "," .. y
                     if cells[k] then dup = true end
-                    cells[k] = true
+                    cells[k], colors[k] = true, s.g
                 end
             end
         end
-        return cells, dup
+        return cells, dup, colors
     end
-    -- 範圍內：邊上的格都畫到、內部一格都不畫；範圍外：一格都不畫；每格只畫一次
-    local function perimeterOk(x0, y0, w, h)
-        local cells, dup = cover()
-        if dup then return false end
-        local n, inside = 0, 0
-        for _ in pairs(cells) do n = n + 1 end
-        for x = x0, x0 + w - 1 do
-            for y = y0, y0 + h - 1 do
-                local edge = x == x0 or y == y0 or x == x0 + w - 1 or y == y0 + h - 1
-                local drawn = cells[x .. "," .. y] == true
-                if drawn ~= edge then return false end
-                if drawn then inside = inside + 1 end
-            end
+    local cells = drawn()
+    check(next(cells) == nil and not Rg.isOn(), "預設關閉：不畫")
+    Rg.setOn(true)
+    local dup, colors
+    cells, dup, colors = drawn()
+    local L = { { x = 100, y = 200, w = 4, h = 10 }, { x = 104, y = 206, w = 6, h = 4 } }
+    local function edgeOf(rects, x, y)
+        local R = MSH.Rect
+        return R.listContains(rects, x, y) and not (R.listContains(rects, x - 1, y) and R.listContains(rects, x + 1, y)
+            and R.listContains(rects, x, y - 1) and R.listContains(rects, x, y + 1))
+    end
+    local lOk = true
+    for x = 99, 111 do
+        for y = 199, 211 do
+            if edgeOf(L, x, y) ~= (cells[x .. "," .. y] == true) then lOk = false end
         end
-        return inside == n
     end
-    MW.setOverlay({ claimId = 3, rects = { { x = 100, y = 200, w = 10, h = 8 } } })
-    T.fire("OnPreUIDraw")
-    check(#strips == 4 and perimeterOk(100, 200, 10, 8) and strips[1].z == 1, "四條邊、每格只畫一次、不畫內部、用玩家所在樓層")
-    strips = {}
-    MW.setOverlay({ claimId = 4, rects = { { x = 5, y = 5, w = 1, h = 3 } } })
-    T.fire("OnPreUIDraw")
-    check(perimeterOk(5, 5, 1, 3), "一格寬的範圍也不重疊")
-    strips = {}
-    MW.setOverlay(nil)
-    T.fire("OnPreUIDraw")
-    check(#strips == 0, "關掉後不畫")
+    check(lOk and not dup and strips[1].z == 1, "打開：我的 L 形兩塊畫成一個外緣、交界不畫、用玩家所在樓層")
+    check(colors["100,200"] == Rg.COLOR_OWNER.g and colors["130,200"] == Rg.COLOR_MEMBER.g,
+        "自己的與分享給我的用不同顏色")
+    check(cells["150,200"] == nil and cells["5000,5000"] == nil, "別人的不畫；很遠的自己的不畫")
+    local rebuilds, realRebuild = 0, Rg.rebuild
+    Rg.rebuild = function() rebuilds = rebuilds + 1; realRebuild() end
+    drawn()
+    drawn()
+    check(rebuilds == 0, "沒有變動時每幀只畫算好的段、不重算")
+    T.fire("OnSafehousesChanged")
+    drawn()
+    check(rebuilds == 1, "原生清單變了：下一幀重算一次")
+    Rg.rebuild = realRebuild
+    Rg.setOn(false)
+    cells = drawn()
+    check(next(cells) == nil, "關掉後不畫")
+    for _, h in ipairs(natives) do SafeHouse.removeSafeHouse(h) end
+    MSH.Client.claims = savedClaims
+    Rg.dirty = true
     addAreaHighlightForPlayer = nil
 
     T.section("ManagerWindow：管理員按鈕")

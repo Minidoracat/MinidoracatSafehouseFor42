@@ -979,7 +979,7 @@ function AP.layoutDeeds(P, pg)
     if AP.shopApi() then head[#head + 1] = F:button("shop", getText("IGUI_MSH_Admin_ShopAdd"), P, AP.onShop) end
     F:row(head)
     local k = AP.currentTiers(P, pg)
-    local xs = AP.deedColumns()
+    local xs, _, ws = AP.deedColumns()
     local hy = F.y
     for _, c in ipairs(AP.DEED_COLS) do
         local l = F:label("hd:" .. c, getText("IGUI_MSH_Admin_Col_" .. c), "textMuted")
@@ -987,11 +987,11 @@ function AP.layoutDeeds(P, pg)
         l:setY(hy)
     end
     F.y = hy + K.fontH(UIFont.Small) + 4
-    for n = 1, MSH.MAX_TIER do AP.layoutDeedRow(P, pg, n, n <= k, econ, xs) end
+    for n = 1, MSH.MAX_TIER do AP.layoutDeedRow(P, pg, n, n <= k, econ, xs, ws) end
     if not econ then F:text("noEcon", getText("IGUI_MSH_Admin_NoEconomyDeeds"), "textMuted") end
 end
 
-function AP.layoutDeedRow(P, pg, n, on, econ, xs)
+function AP.layoutDeedRow(P, pg, n, on, econ, xs, ws)
     local F = pg.flow
     local p = "Tier" .. n
     local tl = F:label("tn" .. n, getText("IGUI_MSH_Admin_TierN", n), on and "text" or "textDisabled")
@@ -1001,7 +1001,7 @@ function AP.layoutDeedRow(P, pg, n, on, econ, xs)
         Area = AP.numField(P, pg, p .. "Area", AP.deedFieldW("Area")),
         PerPlayer = AP.numField(P, pg, p .. "PerPlayer", AP.deedFieldW("PerPlayer"), nil, true),
         Loot = AP.numField(P, pg, p .. "LootChance", AP.deedFieldW("Loot")),
-        Craft = AP.craftButton(P, pg, n),
+        Craft = AP.craftButton(P, pg, n, ws.Craft),
         Free = AP.boolField(P, pg, p .. "Free", "", AP.onDeedsEdit),
         Buy = AP.boolField(P, pg, p .. "Buy", "", AP.onDeedsEdit),
         Rent = AP.boolField(P, pg, p .. "Rent", "", AP.onDeedsEdit),
@@ -1021,14 +1021,16 @@ function AP.layoutDeedRow(P, pg, n, on, econ, xs)
     end
 end
 
--- 製作難度：點一下換下一個（不開放→寬鬆→標準→嚴格）；滑鼠移過去預覽選中難度的配方（不開放時預覽標準版，§7.7）
-function AP.craftButton(P, pg, n)
+-- 製作難度：點一下換下一個（不開放→寬鬆→標準→嚴格）；滑鼠移過去預覽選中難度的配方（不開放時預覽標準版，§7.7）。
+-- 寬度固定是整欄寬（deedColumns 已量四個難度名稱）：沒給寬度的框架按鈕換字會照新字改寬，點過的那列就和別列不齊
+-- （UI 框架 Controls.lua Button:setTitle → fitWidth；2026-10-11 使用者截圖：2 級變窄）
+function AP.craftButton(P, pg, n, w)
     local key = "Tier" .. n .. "Craft"
     local f = field(pg, key, "enum")
     AP.syncField(P, pg, f)
     local UI, theme = P.UI, P.theme
     local b = pg.flow:get("f:" .. key, function()
-        local btn = UI.Button.new({ x = 0, y = 0, title = "", theme = theme, target = P, onClick = AP.onCraft })
+        local btn = UI.Button.new({ x = 0, y = 0, width = w, title = "", theme = theme, target = P, onClick = AP.onCraft })
         local move, out = btn.onMouseMove, btn.onMouseMoveOutside
         btn.onMouseMove = function(self, dx, dy)
             if move then move(self, dx, dy) end
@@ -1043,7 +1045,7 @@ function AP.craftButton(P, pg, n)
     b.internal, b.field, b.page = n, f, pg
     b:setTitle(getText("Sandbox_MinidoracatSafehouse_CraftLevel_option" .. tostring(f.value)))
     b:setTooltip(getText("Sandbox_MinidoracatSafehouse_" .. key .. "_tooltip"))
-    b:setWidth(math.max(AP.DEED_MIN_W.Craft, K.textW(UIFont.Small, b.title) + 20))
+    b:setWidth(w)
     return b
 end
 

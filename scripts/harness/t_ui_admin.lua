@@ -50,10 +50,14 @@ local function fakeUI()
         local e = cls:new(opts.x, opts.y, opts.width or 60, opts.height or h or 20)
         for k, v in pairs(opts) do if e[k] == nil then e[k] = v end end
         e.enabled = true
+        e._autoWidth = opts.width == nil   -- 同框架：沒給寬度的按鈕換字就照新字改寬（Controls.lua Button:setTitle）
         return e
     end
     local Button = class(Base)
-    function Button:setTitle(t) self.title = t end
+    function Button:setTitle(t)
+        self.title = t
+        if self._autoWidth then self:fitWidth() end
+    end
     function Button:fitWidth() self.width = #tostring(self.title) * 7 + 20 end
     function Button:setActive(v) self.active = v end
     function Button:isEnabled() return self.enabled end
@@ -291,6 +295,9 @@ return function(T)
     check(tips[#tips] == "CraftMinidoracatSafehouseDeed1Standard", "滑鼠移到製作格：預覽選中難度的配方")
     fw.click(craft)
     check(tips[#tips] == "CraftMinidoracatSafehouseDeed1Strict", "換難度後預覽跟著換")
+    local cw = select(3, AP.deedColumns()).Craft
+    check(craft.width == cw and deeds["f:Tier2Craft"].width == cw and deeds["f:Tier8Craft"].width == cw,
+        "換難度後按鈕寬度不變：每一列都是整欄寬（實際 " .. craft.width .. "／" .. cw .. "）")
     craft:onMouseMoveOutside(0, 0)
     check(craft.__toolTip == nil, "滑鼠離開收掉提示框")
     local apply = P.barFlow.pool.apply

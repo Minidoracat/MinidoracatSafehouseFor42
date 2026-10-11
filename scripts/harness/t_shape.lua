@@ -153,11 +153,11 @@ return function(T)
     check(not Shape.apply(sh, r(500, 500, 1, 1), true) and Shape.result(sh).area == area, "被擋下的那一步不改範圍")
     check(Shape.undo(sh) and Shape.result(sh).area == area - 1, "（對照）復原照常")
 
-    T.section("管理視窗：在世界中顯示畫整個形狀的外緣")
-    local MW = MSH.ManagerWindow
-    -- 逐格算出的外緣（範圍內、上下左右有一格在範圍外），和 MW.outline 畫的格子一格一格比
+    T.section("在地面顯示範圍：畫整個形狀的外緣")
+    local Rg = MSH.Ranges
+    -- 逐格算出的外緣（範圍內、上下左右有一格在範圍外），和 Ranges.outline 畫的格子一格一格比
     local function sameOutline(rects)
-        local areas, drawn = MW.outline(rects), {}
+        local areas, drawn = Rg.outline(rects), {}
         for k = 1, #areas, 4 do
             for x = areas[k], areas[k] + areas[k + 2] - 1 do
                 for y = areas[k + 1], areas[k + 1] + areas[k + 3] - 1 do
@@ -182,6 +182,6 @@ return function(T)
     check(sameOutline({ r(0, 0, 2, 6), r(4, 0, 2, 6), r(2, 4, 2, 2) }), "U 形：凹進去的邊也畫")
     check(sameOutline({ r(2, 0, 2, 6), r(0, 2, 2, 2), r(4, 2, 2, 2) }), "十字")
     check(sameOutline({ r(0, 0, 1, 5) }) and sameOutline({ r(0, 0, 2, 2) }), "一格寬、2×2 的方形")
-    local big = MW.outline({ r(1000, 1000, 2000, 2000) })
+    local big = Rg.outline({ r(1000, 1000, 2000, 2000) })
     check(#big == 16 and big[3] == 2000 and big[4] == 1, "接管來的 2000×2000 大屋：只算四條邊，不逐格掃")
 end

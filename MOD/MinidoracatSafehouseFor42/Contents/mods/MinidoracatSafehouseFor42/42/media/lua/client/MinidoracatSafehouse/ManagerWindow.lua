@@ -1,7 +1,7 @@
 -- MinidoracatSafehouse/ManagerWindow.lua：安全屋管理視窗（M3，計畫 §10.3 版面稿、§6.4 manager 投影、§10.5 分享頁入口）。
 -- 兩區「我的安全屋」／「分享給我的」來自 list；右側詳情來自 detail，分頁：概覽、成員與分享（SharingPage.lua）、土地規則。
 -- 狀態只顯示最高優先的一個與下一步，其餘收進〔詳細〕；放棄用 UI.Dialog danger；重新框選帶倒數進建立面板；
---   〔在世界中顯示〕只畫外框；loading／empty／error／stale-revision／result-pending 都有明確畫面。
+--   清單底下有「在地面顯示範圍」開關（Ranges.lua）；loading／empty／error／stale-revision／result-pending 都有明確畫面。
 -- 所有動作只送提案，畫面以伺服器結果與重抓的 list／detail 為準（§10.4 最後一段）。
 -- UI 框架：MSH.Client.ui(MW.CAPS)；不合時退原版 ISPanel／ISButton 最小直角 fallback（AGENTS.md 鐵則「管理視窗不得整個消失」）。
 -- 載入時不碰 ISPanel、框架或 getPlayer（harness T.bootClient 會載入本檔）；ISPanel 子類在第一次開窗時才建。
@@ -109,92 +109,6 @@ function MW.isAdmin()
     return role ~= nil and Capability ~= nil and role:hasCapability(Capability.CanSetupSafehouses) == true
 end
 
--- ===== 在世界中顯示：只畫外緣（§10.3 最後一點）=====
--- addAreaHighlightForPlayer 每幀要重加：FBORenderAreaHighlights.render 丟掉 renderTimeMs 不是本幀 UI 時間的
--- （FBORenderAreaHighlights.java:61-68；LuaManager.java:12515-12521）。OnPreUIDraw 在設好本幀 UI 時間之後觸發
--- （UIManager.java:273-296）。多塊範圍畫整個形狀的外緣，塊與塊的交界不畫（使用者 2026-10-11 裁定多塊）。
--- 開啟時算一次：以每塊的邊與邊 ±1 切座標，每個壓縮格裡每一格「在不在範圍內、上下左右在不在」都一樣，
--- 所以只看壓縮格就知道是不是 1 格寬的外緣；成本只隨塊數、不隨範圍大小（接管來的大屋也一樣快，2026-10-11 審查）。
--- 同一列連續的併成一段、和上一列同起點同寬的往下延伸（方形就是四條邊）；每幀只畫算好的段、不配置。
-MW.overlay = nil
-MW.OVERLAY_COLOR = { r = 1.0, g = 0.85, b = 0.4, a = 0.5 }
-
-local function ascending(a, b) return a < b end
-
--- 各塊拼起來的形狀的外緣：扁平 x, y, w, h, ...
-function MW.outline(rects)
-    local R = MSH.Rect
-    local xs, ys, seenX, seenY = {}, {}, {}, {}
-    local function cut(list, seen, a, b)
-        for v = a - 1, a + 1 do
-            if not seen[v] then seen[v], list[#list + 1] = true, v end
-        end
-        for v = b - 1, b + 1 do
-            if not seen[v] then seen[v], list[#list + 1] = true, v end
-        end
-    end
-    for _, r in ipairs(rects) do
-        cut(xs, seenX, r.x, r.x + r.w)
-        cut(ys, seenY, r.y, r.y + r.h)
-    end
-    MSH.sortSafe(xs, ascending)
-    MSH.sortSafe(ys, ascending)
-    local nx, ny = #xs - 1, #ys - 1
-    local inside = {}
-    for j = 1, ny do
-        local row = {}
-        for i = 1, nx do row[i] = R.listContains(rects, xs[i], ys[j]) end
-        inside[j] = row
-    end
-    local function at(i, j) return i >= 1 and i <= nx and j >= 1 and j <= ny and inside[j][i] end
-    local areas, prev = {}, {}
-    for j = 1, ny do
-        local cur, run = {}, nil
-        for i = 1, nx + 1 do
-            local edge = i <= nx and inside[j][i]
-                and not (at(i - 1, j) and at(i + 1, j) and at(i, j - 1) and at(i, j + 1))
-            if edge then
-                run = run or i
-            elseif run ~= nil then
-                local x0, w, y0, h = xs[run], xs[i] - xs[run], ys[j], ys[j + 1] - ys[j]
-                local k = prev[x0]
-                if k ~= nil and areas[k + 2] == w and areas[k + 1] + areas[k + 3] == y0 then
-                    areas[k + 3] = areas[k + 3] + h
-                else
-                    k = #areas + 1
-                    areas[k], areas[k + 1], areas[k + 2], areas[k + 3] = x0, y0, w, h
-                end
-                cur[x0] = k
-                run = nil
-            end
-        end
-        prev = cur
-    end
-    return areas
-end
-
-function MW.setOverlay(d)
-    local rects = d and d.rects
-    if type(rects) ~= "table" or #rects == 0 then
-        MW.overlay = nil
-        return
-    end
-    MW.overlay = { claimId = d.claimId, areas = MW.outline(rects) }
-end
-
-function MW.drawOverlay()
-    local o = MW.overlay
-    if o == nil then return end
-    local p = getSpecificPlayer(0)
-    if p == nil then return end
-    local z = math.floor(p:getZ())                                          -- IsoMovingObject.java:525
-    local c, a = MW.OVERLAY_COLOR, o.areas
-    for i = 1, #a, 4 do
-        local x, y = a[i], a[i + 1]
-        addAreaHighlightForPlayer(0, x, y, x + a[i + 2], y + a[i + 3], z, c.r, c.g, c.b, c.a)
-    end
-end
-
 -- ===== ISPanel 子類（第一次開窗才建）=====
 local V = nil
 
@@ -280,8 +194,7 @@ function W.new(UI)
     self.win = UI.Window.new(MSH.Client.windowOpts(UI, { x = math.floor((sw - w) / 2), y = math.floor((sh - h) / 2),
         width = w, height = h, title = getText("IGUI_MSH_Manager_Title"), icon = "house", theme = self.theme,
         resizable = true, minWidth = 300, minHeight = 280,
-        onResize = function() self:layout() end,
-        onClose = function() self:onClose() end }))
+        onResize = function() self:layout() end }))
     self:build()
     return self
 end
@@ -377,6 +290,13 @@ function W:build()
     self.list:initialise()
     body:addChild(self.list)
     self.list:setVisible(false)
+    -- 清單底下：在地面顯示範圍（全域開關，關窗照畫；Ranges.lua，使用者 2026-10-11）
+    self.rangesBox = UI.Checkbox.new({ x = 0, y = 0, label = getText("IGUI_MSH_Manager_ShowRanges"),
+        tooltip = getText("IGUI_MSH_Manager_ShowRanges_tooltip"), checked = MSH.Ranges ~= nil and MSH.Ranges.isOn(),
+        theme = self.theme, target = self, onChange = W.onRanges })
+    body:addChild(self.rangesBox)
+    self.rangesBox:setVisible(false)
+    self.rangesChrome = self.rangesBox.width - measure(self.rangesBox.label)   -- 開關本體＋間距
     self.btnCreateEmpty = self:button(body, getText("IGUI_MSH_Manager_Create"), W.onCreate, self, "primary", "plus")
 
     self.btnBack = self:button(body, getText("IGUI_MSH_Manager_Back"), W.onBack, self, nil, "chevronLeft")
@@ -391,17 +311,16 @@ function W:build()
     body:addChild(self.scroll)
     self.lines = self:newLines(self.scroll)
     self.btnDetails = self:button(self.scroll, getText("IGUI_MSH_Manager_Details"), W.onDetails, self, "ghost")
-    self.btnShow = self:button(self.scroll, getText("IGUI_MSH_Manager_ShowInWorld"), W.onShow, self, nil, "locate")
     self.btnRedraw = self:button(self.scroll, "", W.onRedraw, self, nil, nil, 1)     -- 明示寬度：倒數不改寬
     self.btnRelease = self:button(self.scroll, getText("IGUI_MSH_Manager_Release"), W.onRelease, self, "danger")
     self.btnLeave = self:button(self.scroll, getText("IGUI_MSH_Manager_Leave"), W.onLeave, self, "danger")
-    self.overviewWidgets = { self.btnDetails, self.btnShow, self.btnRedraw, self.btnRelease, self.btnLeave }
+    self.overviewWidgets = { self.btnDetails, self.btnRedraw, self.btnRelease, self.btnLeave }
     self.share = MSH.SharingPage.new(self, self.scroll)
 
     self.btnQuery = self:button(body, getText("IGUI_MSH_Manager_QueryResult"), W.onQuery, self, "primary")
     self.btnDismiss = self:button(body, getText("IGUI_MSH_Manager_Dismiss"), W.onDismiss, self)
-    self.hideable = { self.list, self.btnCreateEmpty, self.btnBack, self.btnRename, self.tabs, self.scroll, self.btnQuery,
-        self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnCreate, self.btnAdmin }
+    self.hideable = { self.list, self.rangesBox, self.btnCreateEmpty, self.btnBack, self.btnRename, self.tabs, self.scroll,
+        self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnCreate, self.btnAdmin }
 
     -- 窄版門檻：詳細欄放不下最長的標籤加一個典型值（以目前字型量測，§10.3 Narrow）
     local lw = 0
@@ -499,7 +418,6 @@ function W:autoSelect()
 end
 
 function W:clearSelection()
-    if MW.overlay and MW.overlay.claimId == self.selectedId then MW.overlay = nil end
     self.selectedId, self.detail, self.detailState, self.detailRid = nil, nil, nil, nil
     self.redrawDeadline, self.redrawsLeft = nil, nil
     self.showDetail = false
@@ -541,7 +459,6 @@ function W:onDetail(id, rid, res)
         self.redrawDeadline = (MSH.isFinite(left) and left > 0) and getTimestampMs() + left or nil
         self.redrawsLeft = res.actions and res.actions.redrawsLeft or nil
         self.redrawShown = nil
-        if MW.overlay and MW.overlay.claimId == id then MW.setOverlay(res) end
     elseif res.code == "NOT_FOUND" then
         self:clearSelection()
         MSH.Client.refreshList()
@@ -704,6 +621,16 @@ end
 
 function W:layoutList(x, y, w, h)
     local B, GAP = self.back, MW.GAP
+    -- 底下一列：在地面顯示範圍（全域開關，ESC 選項頁改的也照這裡顯示）；欄窄時截字、滑鼠提示有全文
+    local box = self.rangesBox
+    if MSH.Ranges ~= nil then
+        box:setChecked(MSH.Ranges.isOn(), true)
+        local label = self:fit(getText("IGUI_MSH_Manager_ShowRanges"), w - self.rangesChrome)
+        box:setLabel(label)
+        box:setWidth(self.rangesChrome + measure(label))
+        h = h - box.height - GAP
+        self:place(box, x, y + h + GAP)
+    end
     self.wellX, self.wellY, self.wellW, self.wellH = x, y, w, h
     local rows = MSH.Client.claims[self.area] or {}
     if self.listState == "loading" then
@@ -807,7 +734,7 @@ function W:dateText(ms)
 end
 
 -- 概覽（§10.3 版面稿、§10.3「概覽」點）：角色、位置與面積、等級、canonical createdAt、狀態＋〔詳細〕、
---   〔在世界中顯示〕〔重新框選 · 剩 m:ss〕、危險操作
+--   〔重新框選 · 剩 m:ss〕、危險操作
 function W:layoutOverview(d, cw)
     local L, GAP, ch, fh = self.lines, MW.GAP, self.ch, self.fh
     local a = d.actions or {}
@@ -869,10 +796,8 @@ function W:layoutOverview(d, cw)
     end
     y = y + GAP * 2
 
-    -- 動作：在世界中顯示（切換）、重新框選倒數（固定寬：以 0 取代數字量寬，§10.9）
-    local acts = { self.btnShow }
-    local shown = MW.overlay ~= nil and MW.overlay.claimId == d.claimId
-    self.btnShow:setTitle(getText(shown and "IGUI_MSH_Manager_HideInWorld" or "IGUI_MSH_Manager_ShowInWorld"))
+    -- 動作：重新框選倒數（固定寬：以 0 取代數字量寬，§10.9）
+    local acts = {}
     local left = self:redrawLeft()
     if d.actorRole == "owner" and left > 0 and MSH.CreatePanel then
         local title = MW.redrawTitle(left, self.redrawsLeft)
@@ -882,7 +807,7 @@ function W:layoutOverview(d, cw)
         self.redrawShown = math.ceil(left / 1000)
         acts[#acts + 1] = self.btnRedraw
     end
-    y = self:flow(acts, 0, y, cw) + GAP * 3
+    if #acts > 0 then y = self:flow(acts, 0, y, cw) + GAP * 3 end
 
     -- 危險操作：屋主放棄；成員離開
     local danger = nil
@@ -976,11 +901,8 @@ function W.onDetails(self)
     self:layout()
 end
 
-function W.onShow(self)
-    local d = self.detail
-    if d == nil then return end
-    if MW.overlay and MW.overlay.claimId == d.claimId then MW.setOverlay(nil) else MW.setOverlay(d) end
-    self:layout()
+function W.onRanges(self, checked)
+    if MSH.Ranges ~= nil then MSH.Ranges.setOn(checked) end
 end
 
 -- 重新框選：建立面板 selecting，從這間現在的各塊開始改（標題、等級同舊屋由 CreatePanel 處理，§7.6）
@@ -1057,10 +979,6 @@ function W.onDismiss(self)
     self.msg = nil
     self:reload()
     self:layout()
-end
-
-function W:onClose()
-    MW.overlay = nil
 end
 
 function W:show(opts)
@@ -1167,5 +1085,4 @@ end
 if first then
     MSH.Client.on("claims", "ManagerWindow", function() MSH.ManagerWindow.onClaims() end)
     MSH.Client.on("changed", "ManagerWindow", function(args) MSH.ManagerWindow.onChanged(args) end)
-    Events.OnPreUIDraw.Add(function() MSH.ManagerWindow.drawOverlay() end)
 end
