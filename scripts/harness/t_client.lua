@@ -15,9 +15,9 @@ return function(T)
 
     T.section("Client：結果照 requestId 配對")
     local got = {}
-    C.send("preview", { rect = { x = 1, y = 1, w = 2, h = 2 } }, function(r) got[#got + 1] = "first:" .. tostring(r.code) end)
+    C.send("preview", { rects = { { x = 1, y = 1, w = 2, h = 2 } } }, function(r) got[#got + 1] = "first:" .. tostring(r.code) end)
     local dropped = lastSent()
-    C.send("preview", { rect = { x = 1, y = 1, w = 3, h = 3 } }, function(r) got[#got + 1] = "second:" .. tostring(r.code) end)
+    C.send("preview", { rects = { { x = 1, y = 1, w = 3, h = 3 } } }, function(r) got[#got + 1] = "second:" .. tostring(r.code) end)
     local answered = lastSent()
     check(dropped.args.requestId ~= nil and dropped.args.requestId ~= answered.args.requestId
         and MSH.validRequestId(dropped.args.requestId) and dropped.args.protocol == MSH.PROTOCOL,
@@ -40,7 +40,7 @@ return function(T)
 
     T.section("Client：mutation 結果待定與重送")
     local results = {}
-    local rid = C.send("create", { rect = { x = 1, y = 1, w = 2, h = 2 } }, function(r) results[#results + 1] = r end,
+    local rid = C.send("create", { rects = { { x = 1, y = 1, w = 2, h = 2 } } }, function(r) results[#results + 1] = r end,
         { mutation = true })
     local createSent = lastSent()
     T.advance(10000)
@@ -49,7 +49,7 @@ return function(T)
         "mutation 10 秒沒回覆：通知待定、保留這筆")
     local before = #T.clientSent
     check(C.retry(rid) and #T.clientSent == before + 1 and lastSent().args.requestId == rid
-        and lastSent().args.rect == createSent.args.rect, "重送：同一 requestId、同一份參數")
+        and lastSent().args.rects == createSent.args.rects, "重送：同一 requestId、同一份參數")
     reply(lastSent(), { claimId = 7 })
     check(#results == 2 and results[2].ok == true and results[2].claimId == 7 and not C.isPending(rid),
         "晚到的真結果照樣交回")

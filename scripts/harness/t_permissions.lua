@@ -5,10 +5,10 @@ return function(T)
 
     local function mk(MSH, rect, owner, source, grants)
         local R = MSH.Registry
-        local rec = R.newRecord({ claimId = R.allocId(), rect = rect, title = "t", owner = owner, source = source,
+        local rec = R.newRecord({ claimId = R.allocId(), rects = { rect }, title = "t", owner = owner, source = source,
             deedTier = 1, createdAt = T.now, grants = grants })
-        local house = MSH.Native.build(rec)
-        rec.nativeCreatedAt = house:getDatetimeCreated()
+        local house = MSH.Native.build(rec, {})[1]
+        rec.rects[1].created = house:getDatetimeCreated()
         R.put(rec)
         return rec
     end

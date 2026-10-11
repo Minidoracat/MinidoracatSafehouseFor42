@@ -63,7 +63,7 @@ return function(T)
     local R = MSH.Registry
     check(R.ready() and R.md.nextClaimId == 1 and R.md.bootSeq == 1, "全新 registry、第一次開服 bootSeq=1")
     local id = R.allocId()
-    R.put(R.newRecord({ claimId = id, rect = { x = 100, y = 100, w = 10, h = 10 }, title = "A", owner = "alice",
+    R.put(R.newRecord({ claimId = id, rects = { { x = 100, y = 100, w = 10, h = 10 } }, title = "A", owner = "alice",
         source = MSH.SOURCE.DEED, deedTier = 1, createdAt = T.now }))
     R.md.claims[7] = { claimId = 7, lifecycle = "active" }   -- 缺欄位
     MSH = T.boot({ keepGmd = true, keepFiles = true })
@@ -179,23 +179,26 @@ return function(T)
     T.section("Native：建立、名單、廣播、remove delta")
     MSH = T.boot()
     local N = MSH.Native
-    local rec = { claimId = 5, rect = { x = 200, y = 200, w = 8, h = 6 }, title = "家", owner = "alice",
+    local rec = { claimId = 5, rects = { { x = 200, y = 200, w = 8, h = 6 } }, title = "家", owner = "alice",
         grants = { { user = "bob", bits = 1 }, { user = "eve", bits = 2 } } }
-    local hs = N.build(rec)
+    local built = N.build(rec, {})
+    local hs = built and built[1]
     check(hs ~= nil and hs.owner == "@MSH:5" and hs.title == "家", "以 service-owner 建原生安全屋")
     local names = N.players(hs)
     check(#names == 2 and names[1] == "alice" and names[2] == "bob", "名單＝屋主＋帶 MEMBER 的人（eve 沒有 MEMBER）")
     local idx = N.index()
     check(idx.byClaim[5] ~= nil and #idx.foreign == 0 and idx.count == 1, "索引依標記找到")
-    check(N.matches({ rect = rec.rect, nativeCreatedAt = hs.created }, idx.byClaim[5][1]), "rect＋建立時間指紋相符")
+    check(N.pieceOf({ rects = { { x = 200, y = 200, w = 8, h = 6, created = hs.created } } }, idx.byClaim[5][1]) == 1,
+        "範圍＋建立時間指紋相符：認得是第 1 塊")
     N.broadcast(hs)
     check(#T.syncs == 1 and T.syncs[1].owner == "@MSH:5", "service-owner 廣播")
     T.noLocation = true
-    local h2, code = N.build({ claimId = 6, rect = { x = 300, y = 300, w = 5, h = 5 }, title = "x", owner = "bob", grants = {} })
+    local h2, code = N.build({ claimId = 6, rects = { { x = 300, y = 300, w = 5, h = 5 } }, title = "x", owner = "bob",
+        grants = {} }, {})
     check(h2 == nil and code == MSH.CODE.NATIVE_FAILED and #T.houses == 1, "location 推不出來：不建、不留殘骸")
     T.noLocation = false
     check(N.remove(hs) and #T.houses == 0, "移除後重掃確認")
-    N.sendRemove(5, rec.rect)
+    N.sendRemove(5)
     local rm = T.broadcastsOf("nativeRemove")
     check(#rm == 1 and rm[1].claimId == 5 and rm[1].seq == 1 and rm[1].bootId == N.bootId, "remove delta 廣播帶 bootId 與 seq")
 
@@ -290,10 +293,10 @@ return function(T)
     local R2, L = MSH.Registry, MSH.Lifecycle
     local function mk(rect, owner)
         local rid = R2.allocId()
-        local rr = R2.newRecord({ claimId = rid, rect = rect, title = "t", owner = owner, source = MSH.SOURCE.DEED,
+        local rr = R2.newRecord({ claimId = rid, rects = { rect }, title = "t", owner = owner, source = MSH.SOURCE.DEED,
             deedTier = 1, createdAt = T.now })
-        local house = MSH.Native.build(rr)
-        rr.nativeCreatedAt = house:getDatetimeCreated()
+        local house = MSH.Native.build(rr, {})[1]
+        rr.rects[1].created = house:getDatetimeCreated()
         R2.put(rr)
         return rr, house
     end
@@ -315,9 +318,10 @@ return function(T)
     MSH.Native.remove(house3)
     local gen, rev3 = R2.md.generation, rec3.revision
     T.advance(1000)
-    local rebuilt = L.rebuild(rec3)
-    check(rebuilt ~= nil and rec3.nativeCreatedAt == rebuilt.created and rec3.revision == rev3 and R2.md.generation > gen,
-        "重建：新的建立時間、generation 增加、revision 不變")
+    local okBuilt = L.rebuild(rec3)
+    local rebuilt = T.houseOf(MSH.marker(rec3.claimId))
+    check(okBuilt == true and rebuilt ~= nil and rec3.rects[1].created == rebuilt.created and rec3.revision == rev3
+        and R2.md.generation > gen, "重建：新的建立時間、generation 增加、revision 不變")
     MSH.Native.remove(rebuilt)
     SafeHouse.addSafeHouse(92, 92, 3, 3, "stranger")
     local none, why3 = L.rebuild(rec3)
@@ -333,9 +337,15 @@ return function(T)
     local function worst()
         local id = R4.allocId()
         local name = ("p" .. id .. string.rep("x", LIM.USERNAME_CHARS)):sub(1, LIM.USERNAME_CHARS)
-        local rr = R4.newRecord({ claimId = id, rect = { x = 19999, y = 19999, w = LIM.HARD_SIDE, h = LIM.HARD_SIDE },
+        -- 最壞：每間都是 MAX_PIECES 塊、每塊都有指紋
+        local pieces = {}
+        for i = 1, LIM.MAX_PIECES do
+            pieces[i] = { x = 19999, y = 19999 + (i - 1) * LIM.HARD_SIDE, w = LIM.HARD_SIDE, h = LIM.HARD_SIDE,
+                created = 1791635924113 }
+        end
+        local rr = R4.newRecord({ claimId = id, rects = pieces,
             title = cjk, owner = name, source = MSH.SOURCE.DEED, deedTier = MSH.MAX_TIER,
-            createdAt = 1791635924113, nativeCreatedAt = 1791635924113 })
+            createdAt = 1791635924113 })
         rr.redraws = MSH.Settings.BY_KEY.RedrawLimit.max   -- 最壞：沙盒上限
         return rr
     end

@@ -27,12 +27,12 @@ return function(T)
     local function mk(MSH, rect, owner, opts)
         opts = opts or {}
         local R = MSH.Registry
-        local rec = R.newRecord({ claimId = R.allocId(), rect = rect, title = "t", owner = owner, source = MSH.SOURCE.DEED,
+        local rec = R.newRecord({ claimId = R.allocId(), rects = { rect }, title = "t", owner = owner, source = MSH.SOURCE.DEED,
             deedTier = 1, createdAt = T.now, lifecycle = opts.lifecycle })
         local house = nil
         if not opts.noNative then
-            house = MSH.Native.build(rec)
-            rec.nativeCreatedAt = house:getDatetimeCreated()
+            house = MSH.Native.build(rec, {})[1]
+            rec.rects[1].created = house:getDatetimeCreated()
         end
         R.put(rec)
         if opts.quarantine then R.markQuarantined(rec, "TEST") end
@@ -250,14 +250,14 @@ return function(T)
     check(#T.broadcastsOf("nativeRemove") == removes0 + 1, "recover release DUPLICATE：送一次 remove delta")
     -- recovered：有 marker native、無 owner、沒有指紋
     local q3, h3 = mk(MSH, { x = 600, y = 300, w = 5, h = 5 }, nil, { quarantine = true })
-    q3.nativeCreatedAt, q3.recovered, q3.candidates = nil, true, { "oldmember" }
+    q3.rects[1].created, q3.recovered, q3.candidates = nil, true, { "oldmember" }
     h3:addPlayer("oldmember")
     res = T.cmd(boss, "adminRecover", { claimId = q3.claimId, action = "rebind" })
     check(res.code == "BAD_USER" and q3.lifecycle == "quarantined", "owner 不明又沒給 targetUsername：BAD_USER")
     local syncs0 = #T.syncs
     T.advance(1000)
     res = T.cmd(boss, "adminRecover", { claimId = q3.claimId, action = "rebind", targetUsername = "gina" })
-    check(res.ok and q3.lifecycle == "active" and q3.owner == "gina" and q3.nativeCreatedAt == h3.created,
+    check(res.ok and q3.lifecycle == "active" and q3.owner == "gina" and q3.rects[1].created == h3.created,
         "rebind：轉 active、採用原生的建立時間當指紋")
     check(h3.players:contains("gina") and not h3.players:contains("oldmember"), "rebind：原生名單修成紀錄應有的人")
     check(q3.recovered == nil and q3.candidates == nil and q3.quarantineReason == nil, "rebind：清掉 recovered 標記")
@@ -265,14 +265,14 @@ return function(T)
     local q4 = mk(MSH, { x = 700, y = 300, w = 5, h = 5 }, "hank", { quarantine = true, noNative = true })
     SafeHouse.addSafeHouse(710, 300, 5, 5, MSH.marker(q4.claimId))
     res = T.cmd(boss, "adminRecover", { claimId = q4.claimId, action = "rebind" })
-    check(res.code == "WRONG_LIFECYCLE" and q4.lifecycle == "quarantined", "rebind：同標記原生 rect 不同 → 留在 quarantined")
+    check(res.code == "WRONG_LIFECYCLE" and q4.lifecycle == "quarantined", "rebind：同標記原生範圍對不上任何一塊 → 留在 quarantined")
     res = T.cmd(boss, "adminRecover", { claimId = q4.claimId, action = "release" })
     check(res.ok and markerCount(q4.claimId) == 0 and MSH.Registry.tomb(q4.claimId) ~= nil,
-        "recover release MISMATCH：rect 不同的原生也移除")
+        "recover release MISMATCH：範圍不同的原生也移除")
     local q5 = mk(MSH, { x = 800, y = 300, w = 5, h = 5 }, "hank", { quarantine = true, noNative = true })
     res = T.cmd(boss, "adminRecover", { claimId = q5.claimId, action = "rebind" })
     local h5 = T.houseOf(MSH.marker(q5.claimId))
-    check(res.ok and q5.lifecycle == "active" and h5 ~= nil and q5.nativeCreatedAt == h5.created and q5.owner == "hank",
+    check(res.ok and q5.lifecycle == "active" and h5 ~= nil and q5.rects[1].created == h5.created and q5.owner == "hank",
         "rebind：沒有原生 → 照紀錄重建")
 
     T.section("Admin：malformed、recovered 與 adminClaims")
@@ -281,7 +281,7 @@ return function(T)
     local good = mk(MSH, { x = 100, y = 500, w = 5, h = 5 }, "alice")
     local lapsed = mk(MSH, { x = 200, y = 500, w = 5, h = 5 }, "alice", { lifecycle = "lapsed", noNative = true })
     local badId = R.allocId()
-    R.md.claims[badId] = { claimId = badId, lifecycle = "active", owner = "ivy" }   -- 缺 rect
+    R.md.claims[badId] = { claimId = badId, lifecycle = "active", owner = "ivy" }   -- 缺範圍
     SafeHouse.addSafeHouse(900, 500, 5, 5, MSH.marker(badId))
     SafeHouse.addSafeHouse(1000, 500, 5, 5, MSH.marker(77)):addPlayer("dave")      -- 有標記沒紀錄
     -- Economy FAILED：手放的 lapsed 紀錄不被 Economy 恢復（沒裝＝ABSENT 會全部恢復，§1.3）
@@ -299,9 +299,9 @@ return function(T)
     for _, row in ipairs(res.claims or {}) do rows[row.claimId] = row end
     check(res.ok and rows[good.claimId] == nil and #res.claims == 3, "adminClaims：只列不是 active 的")
     check(rows[badId] and rows[badId].lifecycle == "quarantined" and rows[badId].quarantineReason == "MALFORMED"
-        and rows[badId].rect == nil and rows[badId].owner == "ivy", "adminClaims：malformed（沒有 rect）")
-    check(rows[77] and rows[77].quarantineReason == "RECOVERED" and rows[77].owner == nil and rows[77].rect.x == 1000
-        and rows[77].candidates[1] == "dave", "adminClaims：recovered 附 rect 與候選")
+        and rows[badId].rects == nil and rows[badId].owner == "ivy", "adminClaims：malformed（沒有範圍）")
+    check(rows[77] and rows[77].quarantineReason == "RECOVERED" and rows[77].owner == nil and #rows[77].rects == 1
+        and rows[77].rects[1].x == 1000 and rows[77].candidates[1] == "dave", "adminClaims：recovered 附範圍與候選")
     check(rows[lapsed.claimId] and rows[lapsed.claimId].lifecycle == "lapsed", "adminClaims：lapsed")
     res = T.cmd(boss, "adminRecover", { claimId = badId, action = "rebind", targetUsername = "ivy" })
     check(res.code == "WRONG_LIFECYCLE" and res.reason == "MALFORMED", "malformed 不能 rebind")

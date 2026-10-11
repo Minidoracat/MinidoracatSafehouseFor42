@@ -2,8 +2,9 @@
 -- 道路＝地面層地板圖塊（只看 getFloor，路緣、標線等覆蓋圖掛在 attachedAnimSprite、不看：CellLoader.java:256-264）；
 -- 自家車道放寬（使用者 2026-10-10 裁定 driveway、parkingsrc）：住宅外框＋roadMargin＋2 格內只有主要道路與 MiniMap 停車場算路。
 -- 資源點＝MiniMap `MinidoracatMiniMapResourceAPI.buildingsIn`；MiniMap 缺席或版本不符＝不擋、設定隱藏（§8.2）。
--- 成本（§12.4）：每格只讀一次；道路違規時照樣掃完（和通過時一樣多），違規格合併成矩形回給客戶端標紅（使用者 2026-10-11
--- 裁定預檢標紅）；配置只隨請求（住宅數、停車區數、道路矩形數）成長，不逐格建表。
+-- 成本（§12.4）：每塊範圍（含邊界）每格讀一次，相鄰塊的邊界帶會重疊多讀幾格；道路違規時照樣掃完（和通過時一樣多），
+-- 違規格合併成矩形回給客戶端標紅（使用者 2026-10-11 裁定預檢標紅）；配置只隨請求（住宅數、停車區數、道路矩形數）
+-- 成長，不逐格建表。範圍是一間的各塊（rects，使用者 2026-10-11 裁定多塊）。
 -- 回傳一律 nil（通過）或 code, detail：ROAD { x, y, kind, areas }（第一格與它的類別；areas＝全部違規格的矩形，
 -- 扁平 x, y, w, h, ...）、NOT_LOADED { x, y }、RESOURCE { cat, x, y, w, h }、RESOURCE_PENDING、RESOURCE_ERROR。
 
@@ -54,22 +55,24 @@ local function hasBedroom(building)
     return false
 end
 
--- 範圍碰到的住宅（任一房叫 bedroom 的 BuildingDef）外框往外 d 格
-local function nearZones(rect, d)
-    local list = ArrayList.new()   -- 原版用例 ISWidgetCraftLogicInputControl.lua:16
-    -- IsoMetaGrid.java:430-441（void，結果放進 list；所有樓層、不必載入 chunk，§2.8）
-    getWorld():getMetaGrid():getRoomsIntersecting(rect.x, rect.y, rect.w, rect.h, list)
+-- 範圍碰到的住宅（任一房叫 bedroom 的 BuildingDef）外框往外 d 格；每塊各查一次，同一棟只記一次
+local function nearZones(rects, d)
     local seen, zones = {}, {}
-    for i = 0, list:size() - 1 do
-        local b = list:get(i):getBuilding()               -- RoomDef.java:207-209
-        if b ~= nil and not seen[b] then
-            seen[b] = true
-            if hasBedroom(b) then
-                -- BuildingDef.java:186-209
-                local x, y = b:getX(), b:getY()
-                local n = #zones
-                zones[n + 1], zones[n + 2] = x - d, y - d
-                zones[n + 3], zones[n + 4] = x + b:getW() + d, y + b:getH() + d
+    for _, rect in ipairs(rects) do
+        local list = ArrayList.new()   -- 原版用例 ISWidgetCraftLogicInputControl.lua:16
+        -- IsoMetaGrid.java:430-441（void，結果放進 list；所有樓層、不必載入 chunk，§2.8）
+        getWorld():getMetaGrid():getRoomsIntersecting(rect.x, rect.y, rect.w, rect.h, list)
+        for i = 0, list:size() - 1 do
+            local b = list:get(i):getBuilding()           -- RoomDef.java:207-209
+            if b ~= nil and not seen[b] then
+                seen[b] = true
+                if hasBedroom(b) then
+                    -- BuildingDef.java:186-209
+                    local x, y = b:getX(), b:getY()
+                    local n = #zones
+                    zones[n + 1], zones[n + 2] = x - d, y - d
+                    zones[n + 3], zones[n + 4] = x + b:getW() + d, y + b:getH() + d
+                end
             end
         end
     end
@@ -129,46 +132,49 @@ local function addRun(st, x0, x1, y)
     st.cur[x0] = i
 end
 
-function E.roads(rect, cfg)
+function E.roads(rects, cfg)
     if not cfg.avoidRoads then return nil end
     local kinds = cfg.roadKinds
-    local scan = Rect.expand(rect, cfg.roadMargin)
     local cell = getCell()
-    local xEnd = scan.x + scan.w
     local near, lots   -- 第一次遇到非主要道路的勾選類別才查（每次 roads 最多一次）
     local hit, st      -- 第一個違規格（回傳的 detail）與合併矩形的狀態
-    for y = scan.y, scan.y + scan.h - 1 do
-        local run = nil   -- 這一列進行中的違規段起點
-        for x = scan.x, xEnd - 1 do
-            -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路
-            local sq = cell:getGridSquare(x, y, 0)
-            if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
-            local floor = sq and sq:getFloor()            -- IsoGridSquare.java:4652（solidfloor 物件）
-            local sprite = floor and floor:getSprite()    -- IsoObject.java:1999
-            local kind = sprite and E.classify(sprite:getName())   -- IsoSprite.java:1980
-            if kind and not kinds[kind] then kind = nil end
-            if kind and kind ~= "main" then
-                if near == nil then
-                    near = nearZones(rect, cfg.roadMargin + 2)
-                    lots = #near > 0 and parkingLots(scan) or {}
+    for _, rect in ipairs(rects) do
+        local scan = Rect.expand(rect, cfg.roadMargin)
+        local xEnd = scan.x + scan.w
+        if st ~= nil then st.prev, st.cur = {}, {} end   -- 換一塊：上一塊最後一列的段不往下接
+        for y = scan.y, scan.y + scan.h - 1 do
+            local run = nil   -- 這一列進行中的違規段起點
+            for x = scan.x, xEnd - 1 do
+                -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路
+                local sq = cell:getGridSquare(x, y, 0)
+                if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
+                local floor = sq and sq:getFloor()        -- IsoGridSquare.java:4652（solidfloor 物件）
+                local sprite = floor and floor:getSprite()   -- IsoObject.java:1999
+                local kind = sprite and E.classify(sprite:getName())   -- IsoSprite.java:1980
+                if kind and not kinds[kind] then kind = nil end
+                if kind and kind ~= "main" then
+                    if near == nil then
+                        near = nearZones(rects, cfg.roadMargin + 2)
+                        lots = #near > 0 and parkingLots(Rect.expand(Rect.bounds(rects), cfg.roadMargin)) or {}
+                    end
+                    if inAny(near, x, y) and not inAny(lots, x, y) then kind = nil end
                 end
-                if inAny(near, x, y) and not inAny(lots, x, y) then kind = nil end
-            end
-            if kind then
-                if hit == nil then
-                    st = { areas = {}, prev = {}, cur = {} }
-                    hit = { x = x, y = y, kind = kind, areas = st.areas }
+                if kind then
+                    if hit == nil then
+                        st = { areas = {}, prev = {}, cur = {} }
+                        hit = { x = x, y = y, kind = kind, areas = st.areas }
+                    end
+                    run = run or x
+                elseif run ~= nil then
+                    addRun(st, run, x, y)
+                    run = nil
                 end
-                run = run or x
-            elseif run ~= nil then
-                addRun(st, run, x, y)
-                run = nil
             end
-        end
-        if run ~= nil then addRun(st, run, xEnd, y) end
-        if st ~= nil then
-            if st.full then return CODE.ROAD, hit end
-            st.prev, st.cur = st.cur, {}
+            if run ~= nil then addRun(st, run, xEnd, y) end
+            if st ~= nil then
+                if st.full then return CODE.ROAD, hit end
+                st.prev, st.cur = st.cur, {}
+            end
         end
     end
     if hit ~= nil then return CODE.ROAD, hit end
@@ -201,17 +207,21 @@ local function queryResources(R, rect, cfg)
     return nil
 end
 
-function E.resources(rect, cfg)
+-- 每塊各查一次（含 claimGap 邊界），第一個資源點就停
+function E.resources(rects, cfg)
     if not cfg.avoidResources then return nil end
     local R = resourceApi()
     if R == nil then return nil end
-    local ok, code, detail = pcall(queryResources, R, rect, cfg)
-    if not ok then
-        MSH.Audit.throttled("EXCL|resource", 60000, "INTERNAL_ERROR",
-            { code = CODE.RESOURCE_ERROR, detail = tostring(code) }, getTimestampMs())
-        return CODE.RESOURCE_ERROR
+    for _, rect in ipairs(rects) do
+        local ok, code, detail = pcall(queryResources, R, rect, cfg)
+        if not ok then
+            MSH.Audit.throttled("EXCL|resource", 60000, "INTERNAL_ERROR",
+                { code = CODE.RESOURCE_ERROR, detail = tostring(code) }, getTimestampMs())
+            return CODE.RESOURCE_ERROR
+        end
+        if code ~= nil then return code, detail end
     end
-    return code, detail
+    return nil
 end
 
 function E.status()

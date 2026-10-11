@@ -251,11 +251,11 @@ return function(T)
         end
         return inside == n
     end
-    MW.setOverlay({ claimId = 3, rect = { x = 100, y = 200, w = 10, h = 8 } })
+    MW.setOverlay({ claimId = 3, rects = { { x = 100, y = 200, w = 10, h = 8 } } })
     T.fire("OnPreUIDraw")
     check(#strips == 4 and perimeterOk(100, 200, 10, 8) and strips[1].z == 1, "四條邊、每格只畫一次、不畫內部、用玩家所在樓層")
     strips = {}
-    MW.setOverlay({ claimId = 4, rect = { x = 5, y = 5, w = 1, h = 3 } })
+    MW.setOverlay({ claimId = 4, rects = { { x = 5, y = 5, w = 1, h = 3 } } })
     T.fire("OnPreUIDraw")
     check(perimeterOk(5, 5, 1, 3), "一格寬的範圍也不重疊")
     strips = {}

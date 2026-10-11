@@ -78,16 +78,16 @@ P.WRAPS = {
 
 -- ===== 判定 =====
 
--- 含 (x, y) 的 managed claim（active；legacy 匯入的也是 active）。範圍互不重疊（§7.3），第一筆就是，所以不必排序：
--- 直接走 R.md.claims（同 R.list 的篩選：整數 id、table、非 malformed），每個包裝到的動作都會走這裡，不配置、不排序
--- （照 Admin.lua、Sharing.lua 的直接走訪）。
+-- 含 (x, y) 的 managed claim（active；legacy 匯入的也是 active），看每一塊。範圍互不重疊（§7.3），第一筆就是，
+-- 所以不必排序：直接走 R.md.claims（同 R.list 的篩選：整數 id、table、非 malformed），每個包裝到的動作都會走這裡，
+-- 不配置、不排序（照 Admin.lua、Sharing.lua 的直接走訪）。
 function P.claimAt(x, y)
     local md = MSH.Registry.md
     if md == nil then return nil end
     local ACTIVE = MSH.LIFECYCLE.ACTIVE
     for id, rec in pairs(md.claims) do
         if MSH.isInt(id) and type(rec) == "table" and not rec.malformed and rec.lifecycle == ACTIVE
-            and MSH.Rect.containsPoint(rec.rect, x, y) then
+            and MSH.Rect.listContains(rec.rects, x, y) then
             return rec
         end
     end

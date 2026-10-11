@@ -3,7 +3,8 @@
 -- 位元的唯一來源是 Claims.roleOf；原生名單應有的人是 Native.desiredPlayers。Reconcile 也用 desiredPlayers 收斂，
 --   兩邊同一個判定，所以不會一邊加、一邊移。
 -- 撤銷（移除、停止分享、陣營暫停、離開、陣營少了人）用 Native.revoke（kickUserFromSafehouse：人在屋內立即傳出，§4.4），
---   只撤銷不再有任何資格的人；新增用 addPlayer＋放鎖後廣播。原生不在（lapsed、等收斂重建）就只改紀錄。
+--   只撤銷不再有任何資格的人；新增用 addPlayer＋放鎖後廣播。一間的每一塊（每個原生）都照同一份名單改；
+--   原生不在（lapsed、等收斂重建）就只改紀錄。
 --   陣營少了人沒有事件：Sh.last 記上次套用的名單，同步時比對出要撤銷的人（Reconcile 可能已先安靜移除，撤銷補上傳出）。
 -- 陣營有效性照 VM（Native.faction）；失效 → 持久化 SUSPENDED＋reason（GONE／LEADER_CHANGED／OWNER_LEFT）。
 --   全服關閉 AllowFactionShare 只停止投影（成員照樣撤銷）、不寫 SUSPENDED，重新開啟就恢復，和 VM 相同。
@@ -79,11 +80,11 @@ function Sh.factionOf(user)
     return nil
 end
 
--- 全部 managed 原生名單的名字數（同 Claims.checkCapacity 的算法，§4.2）
+-- 全部 managed 原生名單的名字數（同 Claims.checkCapacity 的算法：每塊各一份，§4.2）
 local function rosterNames()
     local n = 0
     for _, r in ipairs(R.list()) do
-        if R.isLive(r) then n = n + #N.desiredPlayers(r) end
+        if R.isLive(r) then n = n + N.nameCount(r) end
     end
     return n
 end
@@ -128,23 +129,32 @@ function Sh.apply(rec, old, defer, idx)
         changed = true
     end
     if rec.lifecycle ~= LC.ACTIVE then return affected, changed end
-    local e = MSH.Lifecycle.findNative(rec, idx or N.index())
-    if e == nil then return affected, changed end
-    local house = e.house
-    local have = toSet(N.players(house))
-    local added = false
-    for _, u in ipairs(after) do
-        if not have[u] then
-            house:addPlayer(u)      -- SafeHouse.java:292-297
-            added = true
+    local houses = {}
+    for _, e in ipairs(MSH.Lifecycle.findNatives(rec, idx or N.index()) or {}) do
+        if e then houses[#houses + 1] = e.house end
+    end
+    for _, house in ipairs(houses) do
+        local have = toSet(N.players(house))
+        local added = false
+        for _, u in ipairs(after) do
+            if not have[u] then
+                house:addPlayer(u)  -- SafeHouse.java:292-297
+                added = true
+            end
+        end
+        -- 鎖內先把要撤銷的人從每一塊移除（SafeHouse.java:299-304）：放鎖後逐塊 revoke 時，被傳出一塊的人
+        -- 若落在同一間的另一塊，那塊也已經不收他，下一次越界檢查就再傳出（不會留在屋裡）
+        for _, u in ipairs(gone) do house:removePlayer(u) end
+        if added and #gone == 0 then defer(function() N.broadcast(house) end) end
+    end
+    -- ponytail: 每撤銷一人、每一塊就一次 SafehouseSync（kick 是唯一會傳出屋內玩家的 API），陣營暫停最多（64＋maxShares）×塊數次
+    if #houses > 0 then
+        for _, u in ipairs(gone) do
+            defer(function()
+                for _, house in ipairs(houses) do N.revoke(house, u) end
+            end)
         end
     end
-    for _, u in ipairs(gone) do
-        house:removePlayer(u)       -- 鎖內先改名單（SafeHouse.java:299-304）；放鎖後 revoke 廣播並傳出屋內的人
-        defer(function() N.revoke(house, u) end)
-    end
-    -- ponytail: 每撤銷一人就一次 SafehouseSync（kick 是唯一會傳出屋內玩家的 API），陣營暫停最多 64＋maxShares 次
-    if added and #gone == 0 then defer(function() N.broadcast(house) end) end
     return affected, changed
 end
 
@@ -223,7 +233,8 @@ function Sh.share(ctx)
         if #rec.grants + 1 > MSH.Settings.get().maxShares then return S.fail(CODE.SHARE_FULL) end
         local entry = { user = user, bits = bits }
         if R.estimateBytes(entry) > LIMIT.REGISTRY_BYTES then return S.fail(CODE.REGISTRY_FULL) end
-        if not old[user] and rosterNames() + 1 > LIMIT.NATIVE_NAMES then return S.fail(CODE.ROSTER_FULL) end
+        -- 新名字在這間的每一塊各佔一個
+        if not old[user] and rosterNames() + #rec.rects > LIMIT.NATIVE_NAMES then return S.fail(CODE.ROSTER_FULL) end
         rec.grants[#rec.grants + 1] = entry
     else
         g.bits = bits

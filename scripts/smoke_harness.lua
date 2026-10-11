@@ -27,6 +27,8 @@ local SCENARIOS = {
     "t_foundation",
     "t_exclusions",
     "t_claims",
+    "t_pieces",
+    "t_shape",
     "t_reconcile",
     "t_migration",
     "t_admin",

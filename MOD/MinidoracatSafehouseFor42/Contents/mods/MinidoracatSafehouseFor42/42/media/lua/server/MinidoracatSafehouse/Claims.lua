@@ -30,12 +30,12 @@ local N = MSH.Native
 local S = MSH.Srv
 
 -- ===== 驗證管線 =====
--- v（一次驗證的上下文）：player, who, now, cfg, rect, deedType, title, idx（原生索引）, roster（可站在範圍內的人）；
--- 重新框選另有 old（被取代的紀錄）與 skipId。checkDeed 填 source、tier、item；checkTitle 填 cleanTitle。
--- 每個 check 回 nil（通過）或 code, detail。
+-- v（一次驗證的上下文）：player, who, now, cfg, rects（範圍的各塊）, deedType, title, idx（原生索引）,
+-- roster（可站在範圍內的人）；重新框選另有 old（被取代的紀錄）與 skipId。checkDeed 填 source、tier、item；
+-- checkTitle 填 cleanTitle。每個 check 回 nil（通過）或 code, detail。
 
-function C.newCheck(ctx, cfg, rect, deedType, title)
-    return { player = ctx.player, who = ctx.who, now = ctx.now, cfg = cfg, rect = rect, deedType = deedType,
+function C.newCheck(ctx, cfg, rects, deedType, title)
+    return { player = ctx.player, who = ctx.who, now = ctx.now, cfg = cfg, rects = rects, deedType = deedType,
         title = title, idx = N.index(), roster = { [ctx.who] = true } }
 end
 
@@ -53,9 +53,9 @@ function C.checkIdentity(v)
     return nil
 end
 
--- 人在現場：(floor(x), floor(y)) 在提案範圍內，任何 Z（§7.2）；IsoMovingObject.java:491、508
+-- 人在現場：(floor(x), floor(y)) 在提案範圍的任一塊內，任何 Z（§7.2）；IsoMovingObject.java:491、508
 function C.checkOnSite(v)
-    if not Rect.containsPoint(v.rect, v.player:getX(), v.player:getY()) then return CODE.NOT_ON_SITE end
+    if not Rect.listContains(v.rects, v.player:getX(), v.player:getY()) then return CODE.NOT_ON_SITE end
     return nil
 end
 
@@ -76,20 +76,35 @@ function C.checkDeed(v)
     return nil
 end
 
+-- 形狀：塊數、不重疊、連成一片、沒有洞（MSH.Rect.shapeError；客戶端框選工具用同一套規則）。
+-- 不合規則時記 v.badShape，預檢略過逐格掃地圖的檢查（C.STEPS needsShape）
+function C.checkShape(v)
+    local why = Rect.shapeError(v.rects)
+    if why then
+        v.badShape = true
+        return CODE.BAD_SHAPE, { reason = why }
+    end
+    return nil
+end
+
+-- 大小看整間：外框邊長與各塊面積總和（使用者 2026-10-11 裁定：多塊不會比方形拿到更多地）
 function C.checkSize(v)
     local maxSide, maxArea = MSH.Settings.sizeLimit(v.cfg, v.source, v.tier)
-    local r = v.rect
-    if r.w > maxSide or r.h > maxSide or r.w * r.h > maxArea then
+    local b = Rect.bounds(v.rects)
+    if b.w > maxSide or b.h > maxSide or Rect.listArea(v.rects) > maxArea then
         return CODE.TOO_BIG, { maxSide = maxSide, maxArea = maxArea }
     end
     return nil
 end
 
--- 原生封包以 onlineId first-match 找房（§2.1）：不能和任何既有原生（含 foreign）同號。SafeHouse.java:577-579
+-- 原生封包以 onlineId first-match 找房（§2.1）：每塊都不能和任何既有原生（含 foreign）同號。SafeHouse.java:577-579
+-- 同一間的塊互不重疊，左上角不同，彼此不會撞號
 function C.checkOnlineId(v)
-    local oid = SafeHouse.getOnlineID(v.rect.x, v.rect.y)
-    for _, e in ipairs(v.idx.all) do
-        if e.onlineId == oid and (v.skipId == nil or e.claimId ~= v.skipId) then return CODE.ONLINE_ID_COLLISION end
+    for _, p in ipairs(v.rects) do
+        local oid = SafeHouse.getOnlineID(p.x, p.y)
+        for _, e in ipairs(v.idx.all) do
+            if e.onlineId == oid and (v.skipId == nil or e.claimId ~= v.skipId) then return CODE.ONLINE_ID_COLLISION end
+        end
     end
     return nil
 end
@@ -159,13 +174,23 @@ function C.checkTitle(v)
     return nil
 end
 
--- 重疊：全部原生（含 foreign）＋全部佔位紀錄（含 lapsed、quarantined），半開 AABB；
+-- 重疊：每塊對全部原生（含 foreign）＋全部佔位紀錄的每一塊（含 lapsed、quarantined），半開 AABB；
 -- 同一屋主只禁止重疊、不套間距，其他人與 foreign 套 claimGap。不呼叫原生 SafeHouse.intersects（§7.3）。
+-- detail 是對方那一塊的範圍（客戶端標紅）
 function C.checkOverlap(v)
     local gap, close = v.cfg.claimGap, nil
     local function hit(rect, owner)
-        if Rect.overlaps(v.rect, rect, 0) then return true end
-        if close == nil and owner ~= v.who and gap > 0 and Rect.overlaps(v.rect, rect, gap) then close = rect end
+        for _, p in ipairs(v.rects) do
+            if Rect.overlaps(p, rect, 0) then return true end
+        end
+        if close == nil and owner ~= v.who and gap > 0 then
+            for _, p in ipairs(v.rects) do
+                if Rect.overlaps(p, rect, gap) then
+                    close = rect
+                    break
+                end
+            end
+        end
         return false
     end
     for _, e in ipairs(v.idx.all) do
@@ -175,20 +200,22 @@ function C.checkOverlap(v)
         end
     end
     for _, rec in ipairs(R.list()) do
-        if R.isLive(rec) and rec.claimId ~= v.skipId and hit(rec.rect, rec.owner) then
-            return CODE.OVERLAP, Rect.copy(rec.rect)
+        if R.isLive(rec) and rec.claimId ~= v.skipId then
+            for _, r in ipairs(rec.rects) do
+                if hit(r, rec.owner) then return CODE.OVERLAP, Rect.copy(r) end
+            end
         end
     end
     if close then return CODE.TOO_CLOSE, Rect.copy(close) end
     return nil
 end
 
--- 在線的其他人站在範圍內（任何 Z、含車內）就拒絕；回覆不帶名字（§7.3）。LuaManager.java:4457
+-- 在線的其他人站在範圍的任一塊內（任何 Z、含車內）就拒絕；回覆不帶名字（§7.3）。LuaManager.java:4457
 function C.checkOccupancy(v)
     local list = getOnlinePlayers()
     for i = 0, list:size() - 1 do
         local p = list:get(i)
-        if p ~= v.player and not v.roster[p:getUsername()] and Rect.containsPoint(v.rect, p:getX(), p:getY()) then
+        if p ~= v.player and not v.roster[p:getUsername()] and Rect.listContains(v.rects, p:getX(), p:getY()) then
             return CODE.OCCUPIED
         end
     end
@@ -198,12 +225,12 @@ end
 -- 道路與資源點由 Exclusions 判定（§8）；模組不在就不擋
 function C.checkRoads(v)
     if MSH.Exclusions == nil then return nil end
-    return MSH.Exclusions.roads(v.rect, v.cfg)
+    return MSH.Exclusions.roads(v.rects, v.cfg)
 end
 
 function C.checkResources(v)
     if MSH.Exclusions == nil then return nil end
-    return MSH.Exclusions.resources(v.rect, v.cfg)
+    return MSH.Exclusions.resources(v.rects, v.cfg)
 end
 
 -- 已重畫次數；手改壞的值當 0
@@ -214,7 +241,7 @@ end
 -- 新紀錄（交易與容量估算共用）；重畫的新紀錄帶 redraws＝舊的＋1（每間上限沙盒 RedrawLimit）
 function C.draft(v, claimId)
     local old = v.old
-    local f = { claimId = claimId, rect = v.rect, title = v.cleanTitle, deedTier = v.tier, owner = v.who,
+    local f = { claimId = claimId, rects = v.rects, title = v.cleanTitle, deedTier = v.tier, owner = v.who,
         source = v.source, createdAt = v.now }
     if old then
         f.createdAt = old.createdAt   -- 緩衝期不因重畫延長（§7.6）
@@ -230,31 +257,34 @@ function C.draft(v, claimId)
     return rec
 end
 
--- registry 序列化大小與全部原生名單名字數（§4.2）
+-- registry 序列化大小與全部原生名單名字數（§4.2；每塊的原生各放一份名單，Native.nameCount）
 function C.checkCapacity(v)
     local rec = C.draft(v, R.md.nextClaimId)
     if R.estimateBytes(rec) > LIMIT.REGISTRY_BYTES then return CODE.REGISTRY_FULL end
-    local names = #N.desiredPlayers(rec)
+    local names = N.nameCount(rec)
     for _, r in ipairs(R.list()) do
-        if R.isLive(r) and r.claimId ~= v.skipId then names = names + #N.desiredPlayers(r) end
+        if R.isLive(r) and r.claimId ~= v.skipId then names = names + N.nameCount(r) end
     end
     if names > LIMIT.NATIVE_NAMES then return CODE.ROSTER_FULL end
     return nil
 end
 
--- 建立的檢查順序；name 是預檢回報的分組（同組只報第一個失敗）；needsTier：等級未知時預檢略過
+-- 建立的檢查順序；name 是預檢回報的分組（同組只報第一個失敗）；needsTier：等級未知時預檢略過；
+-- needsShape：形狀不合規則時略過（逐格掃地圖的道路與資源點：重疊的塊會讓同一片地掃好幾次，
+-- 不合規則的預檢不能拿來放大伺服器的工作量，2026-10-11 審查）
 C.STEPS = {
     { name = "identity", fn = C.checkIdentity },
     { name = "onsite", fn = C.checkOnSite },
     { name = "deed", fn = C.checkDeed },
+    { name = "size", fn = C.checkShape },
     { name = "size", fn = C.checkSize, needsTier = true },
     { name = "overlap", fn = C.checkOnlineId },
     { name = "quota", fn = C.checkQuota, needsTier = true },
     { name = "title", fn = C.checkTitle },
     { name = "overlap", fn = C.checkOverlap },
     { name = "occupancy", fn = C.checkOccupancy },
-    { name = "roads", fn = C.checkRoads },
-    { name = "resources", fn = C.checkResources },
+    { name = "roads", fn = C.checkRoads, needsShape = true },
+    { name = "resources", fn = C.checkResources, needsShape = true },
     { name = "quota", fn = C.checkCapacity, needsTier = true },
 }
 
@@ -262,7 +292,7 @@ C.STEPS = {
 function C.validate(v, collect)
     local byName = {}
     for _, s in ipairs(C.STEPS) do
-        if not (s.needsTier and v.tier == nil) then
+        if not (s.needsTier and v.tier == nil) and not (s.needsShape and v.badShape) then
             local code, detail = s.fn(v)
             if collect == nil then
                 if code then return code, detail end
@@ -285,11 +315,11 @@ end
 
 -- ===== 交易（§7.4）=====
 
--- 原生 → 地契 → 紀錄；st 記錄做到哪一步，給反序回滾用
+-- 原生（每塊一個）→ 地契 → 紀錄；st 記錄做到哪一步，給反序回滾用
 local function createBody(v, rec, st)
-    local house, code = N.build(rec)
-    if house == nil then return code end
-    st.house = house
+    st.houses = {}
+    local houses, code = N.build(rec, st.houses)
+    if houses == nil then return code end
     local item = v.item
     if item ~= nil then
         -- Remove 會清掉 item.container，所以先記容器（ItemContainer.java:2036-2068；void、miss 靜默）
@@ -299,7 +329,7 @@ local function createBody(v, rec, st)
         c:Remove(item)
         if c:contains(item) or item:getContainer() ~= nil then return CODE.DEED_REMOVE_FAILED end   -- :634
     end
-    rec.nativeCreatedAt = house:getDatetimeCreated()
+    for i, h in ipairs(houses) do rec.rects[i].created = h:getDatetimeCreated() end
     R.put(rec)
     st.put = true
     return nil
@@ -315,10 +345,12 @@ function C.rollback(rec, st, item)
             MSH.Audit.write("ROLLBACK_ITEM_FAILED", { actor = rec.owner, claimId = rec.claimId })
         end
     end
-    if st.house ~= nil and not N.remove(st.house) then
-        -- 留下沒有紀錄的標記原生：sweep 不會收它，要等下次開服 Reconcile startup 才轉 quarantined(recovered)（§6.2），
-        -- 在那之前不受管
-        MSH.Audit.write("ROLLBACK_NATIVE_FAILED", { actor = rec.owner, claimId = rec.claimId })
+    for _, h in ipairs(st.houses or {}) do
+        if not N.remove(h) then
+            -- 留下沒有紀錄的標記原生：sweep 不會收它，要等下次開服 Reconcile startup 才轉 quarantined(recovered)（§6.2），
+            -- 在那之前不受管
+            MSH.Audit.write("ROLLBACK_NATIVE_FAILED", { actor = rec.owner, claimId = rec.claimId })
+        end
     end
 end
 
@@ -339,20 +371,22 @@ function C.commitCreate(ctx, v)
         end
         return S.fail(code)
     end
-    local c, house = st.container, st.house
+    local c, houses = st.container, st.houses
     if item ~= nil then
         -- 伺服器改背包要自己同步（LuaManager.java:12418；原版伺服器用例 ISBuildUtil.lua:148-152）
         ctx.defer(function() sendRemoveItemFromContainer(c, item) end)
     end
-    ctx.defer(function() N.broadcast(house) end)
-    MSH.Audit.write("CREATE", { actor = ctx.who, claimId = id, code = rec.source, detail = N.rectKey(rec.rect) })
-    return S.ok({ claimId = id, revision = rec.revision, rect = Rect.copy(rec.rect), title = rec.title,
+    ctx.defer(function()
+        for _, h in ipairs(houses) do N.broadcast(h) end
+    end)
+    MSH.Audit.write("CREATE", { actor = ctx.who, claimId = id, code = rec.source, detail = Rect.listKey(rec.rects) })
+    return S.ok({ claimId = id, revision = rec.revision, rects = Rect.copyList(rec.rects), title = rec.title,
         deedTier = rec.deedTier })
 end
 
 function C.create(ctx)
     local a = ctx.args
-    local v = C.newCheck(ctx, MSH.Settings.get(), a.rect, a.deedType, a.title)
+    local v = C.newCheck(ctx, MSH.Settings.get(), a.rects, a.deedType, a.title)
     local code, detail = C.validate(v)
     if code then return S.fail(code, detail) end
     local bound, why = MSH.Identity.bindForClaim(ctx.player, ctx.now)
@@ -424,16 +458,17 @@ function C.redrawTarget(ctx, cfg)
     return rec
 end
 
--- 新原生 → 放棄舊屋（送出先收在 sends）→ 新紀錄
+-- 新原生（每塊一個）→ 放棄舊屋（送出先收在 sends）→ 新紀錄
 local function redrawBody(ctx, old, rec, st)
-    local house, code = N.build(rec)
-    if house == nil then return code end
-    st.house = house
+    st.houses = {}
+    local houses, code = N.build(rec, st.houses)
+    if houses == nil then return code end
+    st.releasing = true
     local ok, why = MSH.Lifecycle.release(old, "REDRAWN", ctx.args.requestId, ctx.now,
         function(fn) st.sends[#st.sends + 1] = fn end)
     if not ok then return why end
     st.released = true
-    rec.nativeCreatedAt = house:getDatetimeCreated()
+    for i, h in ipairs(houses) do rec.rects[i].created = h:getDatetimeCreated() end
     R.put(rec)
     st.put = true
     return nil
@@ -442,10 +477,26 @@ end
 -- 舊屋已寫成 released（搬到 tombstone）之後才丟錯：寫回 active 並重建原生（§7.6「照 §7.4 反序把舊 claim 建回來」）
 local function restoreOld(ctx, old)
     R.unrelease(old)
-    local house, why = MSH.Lifecycle.rebuild(old, nil, ctx.defer)
-    if house == nil then
+    local ok, why = MSH.Lifecycle.rebuild(old, nil, ctx.defer)
+    if not ok then
         MSH.Audit.write("REDRAW_RESTORE_FAILED", { actor = ctx.who, claimId = old.claimId, code = why })
     end
+end
+
+-- 拆舊屋拆到一半失敗（Lifecycle.release 已把它轉 quarantined，前面的塊已經拆掉）：新屋拆掉之後只補回舊屋缺的塊、
+-- 回 active。同一塊重複或對不上（DUPLICATE／MISMATCH）、補不回來就照樣 quarantined，交給管理員（2026-10-11 審查）
+local function restorePartial(ctx, old)
+    if old.lifecycle ~= LC.QUARANTINED or old.quarantineReason ~= "RELEASE_REMOVE_FAILED" then return end
+    local L, idx = MSH.Lifecycle, N.index()
+    local entries = L.findNatives(old, idx)
+    if entries == nil then return end
+    local ok, why = L.rebuild(old, idx, ctx.defer, entries)
+    if not ok then
+        MSH.Audit.write("REDRAW_RESTORE_FAILED", { actor = ctx.who, claimId = old.claimId, code = why })
+        return
+    end
+    old.lifecycle, old.quarantineReason, old.operation = LC.ACTIVE, nil, nil
+    R.touch(old)
 end
 
 function C.commitRedraw(ctx, v, old)
@@ -455,10 +506,10 @@ function C.commitRedraw(ctx, v, old)
     local ok, code = pcall(redrawBody, ctx, old, rec, st)
     if not ok or code ~= nil then
         if st.put then R.unput(id) end
-        if st.house ~= nil and not N.remove(st.house) then
-            MSH.Audit.write("ROLLBACK_NATIVE_FAILED", { actor = ctx.who, claimId = id })
+        for _, h in ipairs(st.houses or {}) do
+            if not N.remove(h) then MSH.Audit.write("ROLLBACK_NATIVE_FAILED", { actor = ctx.who, claimId = id }) end
         end
-        if st.released then restoreOld(ctx, old) end
+        if st.released then restoreOld(ctx, old) elseif st.releasing then restorePartial(ctx, old) end
         if not ok then
             MSH.log("redraw rolled back: " .. tostring(code))
             MSH.Audit.write("REDRAW_ROLLBACK", { actor = ctx.who, claimId = old.claimId, detail = tostring(code) })
@@ -467,10 +518,13 @@ function C.commitRedraw(ctx, v, old)
         return S.fail(code)
     end
     for _, fn in ipairs(st.sends) do ctx.defer(fn) end
-    local house = st.house
-    ctx.defer(function() N.broadcast(house) end)
-    MSH.Audit.write("REDRAW", { actor = ctx.who, claimId = id, detail = "from " .. tostring(old.claimId) })
-    return S.ok({ claimId = id, revision = rec.revision, rect = Rect.copy(rec.rect), title = rec.title,
+    local houses = st.houses
+    ctx.defer(function()
+        for _, h in ipairs(houses) do N.broadcast(h) end
+    end)
+    MSH.Audit.write("REDRAW", { actor = ctx.who, claimId = id,
+        detail = "from " .. tostring(old.claimId) .. " " .. Rect.listKey(rec.rects) })
+    return S.ok({ claimId = id, revision = rec.revision, rects = Rect.copyList(rec.rects), title = rec.title,
         deedTier = rec.deedTier, replaced = old.claimId })
 end
 
@@ -478,7 +532,7 @@ function C.redraw(ctx)
     local cfg = MSH.Settings.get()
     local old, code = C.redrawTarget(ctx, cfg)
     if old == nil then return S.fail(code) end
-    local v = C.newCheck(ctx, cfg, ctx.args.rect)
+    local v = C.newCheck(ctx, cfg, ctx.args.rects)
     C.useOld(v, old)
     local detail
     code, detail = C.validate(v)
@@ -493,12 +547,14 @@ function C.rename(ctx)
     if title == nil then return S.fail(CODE.BAD_TITLE) end
     rec.title = title
     R.touch(rec)
-    -- 原生不在（等收斂重建）就只改紀錄，重建時會帶新標題
-    local e = MSH.Lifecycle.findNative(rec, N.index())
-    if e ~= nil then
-        e.house:setTitle(title)                                           -- SafeHouse.java:731
-        local house = e.house
-        ctx.defer(function() N.broadcast(house) end)
+    -- 每一塊的原生都改；不在的塊（等收斂重建）重建時會帶新標題
+    local entries = MSH.Lifecycle.findNatives(rec, N.index())
+    for _, e in ipairs(entries or {}) do
+        if e then
+            e.house:setTitle(title)                                       -- SafeHouse.java:731
+            local house = e.house
+            ctx.defer(function() N.broadcast(house) end)
+        end
     end
     MSH.Audit.write("RENAME", { actor = ctx.who, claimId = rec.claimId })
     return S.ok({ claimId = rec.claimId, revision = rec.revision, title = title })
@@ -508,7 +564,7 @@ end
 function C.preview(ctx)
     local a = ctx.args
     local cfg = MSH.Settings.get()
-    local v = C.newCheck(ctx, cfg, a.rect, a.deedType, nil)
+    local v = C.newCheck(ctx, cfg, a.rects, a.deedType, nil)
     if a.claimId ~= nil then
         local old, code = C.redrawTarget(ctx, cfg)
         if old == nil then return S.fail(code) end
@@ -614,7 +670,7 @@ function C.detail(ctx)
     local cfg = MSH.Settings.get()
     local faction = factionView(rec)
     return S.ok({
-        claimId = rec.claimId, revision = rec.revision, title = rec.title, rect = Rect.copy(rec.rect),
+        claimId = rec.claimId, revision = rec.revision, title = rec.title, rects = Rect.copyList(rec.rects),
         deedTier = rec.deedTier, source = rec.source, createdAt = rec.createdAt, lifecycle = rec.lifecycle,
         actorRole = role, bits = bits, roster = roster, healthSummary = C.healthSummary(rec),
         grants = grants, factionShare = faction,
@@ -637,15 +693,15 @@ end
 
 -- ===== 指令登記 =====
 
-S.define("create", { kind = "mutation", fields = { rect = "rect", deedType = "deedType?", title = "title?" },
+S.define("create", { kind = "mutation", fields = { rects = "rects", deedType = "deedType?", title = "title?" },
     run = function(ctx) return MSH.Claims.create(ctx) end })
--- 預檢不持鎖、會掃地圖：每人 500 ms 一次（審查 CRITICAL；rect 邊長已由 S.TYPES.rect 限在 HARD_SIDE）
+-- 預檢不持鎖、會掃地圖：每人 500 ms 一次（審查 CRITICAL；外框與每塊邊長已由 S.TYPES.rects 限在 HARD_SIDE）
 S.define("preview", { kind = "query", cooldownMs = 500,
-    fields = { rect = "rect", deedType = "deedType?", claimId = "claimId?" },
+    fields = { rects = "rects", deedType = "deedType?", claimId = "claimId?" },
     run = function(ctx) return MSH.Claims.preview(ctx) end })
 S.define("release", { kind = "mutation", whenBlocked = true, fields = { claimId = "claimId", expectedRevision = "revision" },
     run = function(ctx) return MSH.Claims.release(ctx) end })
-S.define("redraw", { kind = "mutation", fields = { claimId = "claimId", rect = "rect", expectedRevision = "revision" },
+S.define("redraw", { kind = "mutation", fields = { claimId = "claimId", rects = "rects", expectedRevision = "revision" },
     run = function(ctx) return MSH.Claims.redraw(ctx) end })
 S.define("rename", { kind = "mutation", fields = { claimId = "claimId", title = "title", expectedRevision = "revision" },
     run = function(ctx) return MSH.Claims.rename(ctx) end })

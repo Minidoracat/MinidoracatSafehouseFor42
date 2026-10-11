@@ -109,20 +109,77 @@ function MW.isAdmin()
     return role ~= nil and Capability ~= nil and role:hasCapability(Capability.CanSetupSafehouses) == true
 end
 
--- ===== 在世界中顯示：只畫外框（§10.3 最後一點）=====
+-- ===== 在世界中顯示：只畫外緣（§10.3 最後一點）=====
 -- addAreaHighlightForPlayer 每幀要重加：FBORenderAreaHighlights.render 丟掉 renderTimeMs 不是本幀 UI 時間的
 -- （FBORenderAreaHighlights.java:61-68；LuaManager.java:12515-12521）。OnPreUIDraw 在設好本幀 UI 時間之後觸發
--- （UIManager.java:273-296）。四條 1 格寬的邊、不掃任何格子，所以範圍沒變時零重掃；本函式不配置。
+-- （UIManager.java:273-296）。多塊範圍畫整個形狀的外緣，塊與塊的交界不畫（使用者 2026-10-11 裁定多塊）。
+-- 開啟時算一次：以每塊的邊與邊 ±1 切座標，每個壓縮格裡每一格「在不在範圍內、上下左右在不在」都一樣，
+-- 所以只看壓縮格就知道是不是 1 格寬的外緣；成本只隨塊數、不隨範圍大小（接管來的大屋也一樣快，2026-10-11 審查）。
+-- 同一列連續的併成一段、和上一列同起點同寬的往下延伸（方形就是四條邊）；每幀只畫算好的段、不配置。
 MW.overlay = nil
 MW.OVERLAY_COLOR = { r = 1.0, g = 0.85, b = 0.4, a = 0.5 }
 
+local function ascending(a, b) return a < b end
+
+-- 各塊拼起來的形狀的外緣：扁平 x, y, w, h, ...
+function MW.outline(rects)
+    local R = MSH.Rect
+    local xs, ys, seenX, seenY = {}, {}, {}, {}
+    local function cut(list, seen, a, b)
+        for v = a - 1, a + 1 do
+            if not seen[v] then seen[v], list[#list + 1] = true, v end
+        end
+        for v = b - 1, b + 1 do
+            if not seen[v] then seen[v], list[#list + 1] = true, v end
+        end
+    end
+    for _, r in ipairs(rects) do
+        cut(xs, seenX, r.x, r.x + r.w)
+        cut(ys, seenY, r.y, r.y + r.h)
+    end
+    MSH.sortSafe(xs, ascending)
+    MSH.sortSafe(ys, ascending)
+    local nx, ny = #xs - 1, #ys - 1
+    local inside = {}
+    for j = 1, ny do
+        local row = {}
+        for i = 1, nx do row[i] = R.listContains(rects, xs[i], ys[j]) end
+        inside[j] = row
+    end
+    local function at(i, j) return i >= 1 and i <= nx and j >= 1 and j <= ny and inside[j][i] end
+    local areas, prev = {}, {}
+    for j = 1, ny do
+        local cur, run = {}, nil
+        for i = 1, nx + 1 do
+            local edge = i <= nx and inside[j][i]
+                and not (at(i - 1, j) and at(i + 1, j) and at(i, j - 1) and at(i, j + 1))
+            if edge then
+                run = run or i
+            elseif run ~= nil then
+                local x0, w, y0, h = xs[run], xs[i] - xs[run], ys[j], ys[j + 1] - ys[j]
+                local k = prev[x0]
+                if k ~= nil and areas[k + 2] == w and areas[k + 1] + areas[k + 3] == y0 then
+                    areas[k + 3] = areas[k + 3] + h
+                else
+                    k = #areas + 1
+                    areas[k], areas[k + 1], areas[k + 2], areas[k + 3] = x0, y0, w, h
+                end
+                cur[x0] = k
+                run = nil
+            end
+        end
+        prev = cur
+    end
+    return areas
+end
+
 function MW.setOverlay(d)
-    local r = d and d.rect
-    if type(r) ~= "table" then
+    local rects = d and d.rects
+    if type(rects) ~= "table" or #rects == 0 then
         MW.overlay = nil
         return
     end
-    MW.overlay = { claimId = d.claimId, x0 = r.x, y0 = r.y, x1 = r.x + r.w, y1 = r.y + r.h }
+    MW.overlay = { claimId = d.claimId, areas = MW.outline(rects) }
 end
 
 function MW.drawOverlay()
@@ -131,13 +188,10 @@ function MW.drawOverlay()
     local p = getSpecificPlayer(0)
     if p == nil then return end
     local z = math.floor(p:getZ())                                          -- IsoMovingObject.java:525
-    local c = MW.OVERLAY_COLOR
-    local x0, y0, x1, y1 = o.x0, o.y0, o.x1, o.y1
-    addAreaHighlightForPlayer(0, x0, y0, x1, y0 + 1, z, c.r, c.g, c.b, c.a)
-    if y1 - y0 > 1 then addAreaHighlightForPlayer(0, x0, y1 - 1, x1, y1, z, c.r, c.g, c.b, c.a) end
-    if y1 - y0 > 2 then
-        addAreaHighlightForPlayer(0, x0, y0 + 1, x0 + 1, y1 - 1, z, c.r, c.g, c.b, c.a)
-        if x1 - x0 > 1 then addAreaHighlightForPlayer(0, x1 - 1, y0 + 1, x1, y1 - 1, z, c.r, c.g, c.b, c.a) end
+    local c, a = MW.OVERLAY_COLOR, o.areas
+    for i = 1, #a, 4 do
+        local x, y = a[i], a[i + 1]
+        addAreaHighlightForPlayer(0, x, y, x + a[i + 2], y + a[i + 3], z, c.r, c.g, c.b, c.a)
     end
 end
 
@@ -353,7 +407,7 @@ function W:build()
     local lw = 0
     for _, k in ipairs(LABELS) do lw = math.max(lw, measure(getText("IGUI_MSH_Manager_Label_" .. k))) end
     self.labelW = lw
-    self.needW = lw + MW.GAP * 2 + measure(getText("IGUI_MSH_Manager_RectValue", "00000", "00000", "00", "00", "0000"))
+    self.needW = lw + MW.GAP * 2 + measure(getText("IGUI_MSH_Manager_ShapeValue", "00000", "00000", "00", "00", "0000", "4"))
         + 12 + MW.PAD
     self.ready = true
 end
@@ -768,9 +822,12 @@ function W:layoutOverview(d, cw)
         local o = type(d.roster) == "table" and d.roster[1] or nil
         if o and o.role == "owner" then y = self:infoRow(L, "Owner", o.user or "", y, vx, vw) end
     end
-    local r = d.rect
-    if type(r) == "table" then
-        y = self:infoRow(L, "Location", getText("IGUI_MSH_Manager_RectValue", r.x, r.y, r.w, r.h, r.w * r.h), y, vx, vw)
+    local rects = d.rects
+    if type(rects) == "table" and #rects > 0 then
+        local b, area = MSH.Rect.bounds(rects), MSH.Rect.listArea(rects)
+        local text = #rects > 1 and getText("IGUI_MSH_Manager_ShapeValue", b.x, b.y, b.w, b.h, area, #rects)
+            or getText("IGUI_MSH_Manager_RectValue", b.x, b.y, b.w, b.h, area)
+        y = self:infoRow(L, "Location", text, y, vx, vw)
     end
     if d.source == SRC.DEED then
         y = self:infoRow(L, "Source", getText("IGUI_MSH_Manager_SourceDeed", d.deedTier or "-"), y, vx, vw)
@@ -926,12 +983,12 @@ function W.onShow(self)
     self:layout()
 end
 
--- 重新框選：建立面板 selecting（標題、等級同舊屋由 CreatePanel 處理，§7.6）
+-- 重新框選：建立面板 selecting，從這間現在的各塊開始改（標題、等級同舊屋由 CreatePanel 處理，§7.6）
 function W.onRedraw(self)
     local d = self.detail
     if d == nil or MSH.CreatePanel == nil then return end
     MSH.CreatePanel.open({ mode = "redraw", claimId = d.claimId, revision = d.revision, tier = d.deedTier,
-        source = d.source })
+        source = d.source, rects = d.rects })
 end
 
 function W.onRename(self)

@@ -3,12 +3,12 @@
 -- 週期：wall-clock 每 SWEEP_MS 掃一次；hostile mode 每 tick 掃（§4.2）；每 tick 只比原生清單長度的 sentinel，
 --   變小（有房子被偽造 release 或引擎刪掉）就立刻掃（§4.2 per-tick sentinel）。
 -- 收斂只用 addPlayer／removePlayer／setTitle／setOwner，永不對真實玩家 kickUserFromSafehouse、不傳送人；
---   每個有變動的 active claim 每輪最多一次 service-owner 廣播；廣播、remove delta、admin alert 都排進 sends，
---   放鎖之後才送（§6.2 最後一段）。
+--   一間有幾塊就有幾個原生（共用標記，使用者 2026-10-11 裁定多塊），每個有變動的原生每輪最多一次 service-owner
+--   廣播；廣播、remove delta、admin alert 都排進 sends，放鎖之後才送（§6.2 最後一段）。
 -- blocked mode（§5）：不重建消失的原生、不把 missing 轉 released、不刪紀錄；名單／標題／owner 收斂、
 --   releasing 收尾。恢復後下一輪收斂一次補做重建。lapsed 期滿釋出歸 Economy.lua（只在 READY 時，§1.3 第 61 行）。
 -- released 紀錄只剩 md.tombs 的精簡 tombstone（Registry）；收斂與 GC 都看 R.tomb／R.tombList。
--- malformed 紀錄（沒有合法 rect）收斂一律略過，只給管理員 targeted recovery。
+-- malformed 紀錄（沒有合法範圍）收斂一律略過，只給管理員 targeted recovery。
 -- 可觀測性（§12.4）：Rc.health() 給上次成功 sweep 時間、待修復數、目前最久的 drift 持續時間、干擾數。
 -- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/iso/areas/SafeHouse.java（下稱 SafeHouse.java）。
 
@@ -128,33 +128,49 @@ local function fixNative(rec, house, now, st)
         if not have[u] then
             house:addPlayer(u)      -- SafeHouse.java:292-297：沒有對稱的廣播，由下面的 service-owner 廣播同步
             dirty = true
-            if not st.startup then countReadd(rec.claimId, u, now, st) end
+            -- 同一人在這間的每一塊都會被補：一輪只算一次，不然 4 塊的屋一次就算 4 次 re-add
+            local key = rec.claimId .. "|" .. u
+            if not st.startup and not st.readd[key] then
+                st.readd[key] = true
+                countReadd(rec.claimId, u, now, st)
+            end
         end
     end
     return dirty
 end
 
--- owner drift：同 rect＋同建立時間指紋的原生，owner 卻不是標記（例：owner packet，§2.2）→ 換回標記。
--- 先做這步再建索引，換回來的原生在本輪就照一般路徑收斂名單。
+-- owner drift：同範圍＋同建立時間指紋的原生，owner 卻不是標記（例：owner packet，§2.2）→ 換回標記。
+-- 只看標記原生比塊數少的紀錄（常態每塊都在，不必每輪逐塊讀建立時間）。先做這步再建索引，
+-- 換回來的原生在本輪就照一般路徑收斂名單。
 -- 只有 active 排廣播：lapsed／releasing 的原生本輪就會被移除，廣播只會讓客戶端把它加回去（只送 remove delta）。
 local function fixOwners(idx, now, st)
     local N = MSH.Native
     local fixed = false
     eachRecord(function(id, rec)
         local lc = rec.lifecycle
-        if (lc == LC.ACTIVE or lc == LC.LAPSED or lc == LC.RELEASING) and idx.byClaim[id] == nil then
-            for _, e in ipairs(idx.byRect[N.rectKey(rec.rect)] or {}) do
-                if e.claimId ~= id and N.matches(rec, e) then
-                    -- setOwner 也把新 owner 從 players 移除（SafeHouse.java:660-663）
-                    e.house:setOwner(MSH.marker(id))
-                    if lc == LC.ACTIVE then
-                        st.changed[id] = e.house
-                        st.drift[id] = true
+        local list = idx.byClaim[id] or {}
+        if (lc == LC.ACTIVE or lc == LC.LAPSED or lc == LC.RELEASING) and #list < #rec.rects then
+            local have = {}
+            for _, e in ipairs(list) do
+                local i = N.pieceOf(rec, e)
+                if i then have[i] = true end
+            end
+            for i, p in ipairs(rec.rects) do
+                if not have[i] then
+                    for _, e in ipairs(idx.byRect[N.rectKey(p)] or {}) do
+                        if e.claimId ~= id and N.pieceOf(rec, e) == i then
+                            -- setOwner 也把新 owner 從 players 移除（SafeHouse.java:660-663）
+                            e.house:setOwner(MSH.marker(id))
+                            if lc == LC.ACTIVE then
+                                st.changed[id .. ":" .. i] = e.house
+                                st.drift[id] = true
+                            end
+                            fixed = true
+                            MSH.Audit.throttled("OWNER_DRIFT|" .. id, 60000, "OWNER_DRIFT",
+                                { actor = e.owner, claimId = id, code = "RESTORED" }, now)
+                            break
+                        end
                     end
-                    fixed = true
-                    MSH.Audit.throttled("OWNER_DRIFT|" .. id, 60000, "OWNER_DRIFT",
-                        { actor = e.owner, claimId = id, code = "RESTORED" }, now)
-                    break
                 end
             end
         end
@@ -162,36 +178,44 @@ local function fixOwners(idx, now, st)
     return fixed
 end
 
-local function sendRemove(st, id, rect)
-    local r = MSH.Rect.copy(rect)
-    st.sends[#st.sends + 1] = function() MSH.Native.sendRemove(id, r) end
+local function sendRemove(st, id)
+    st.sends[#st.sends + 1] = function() MSH.Native.sendRemove(id) end
 end
 
 -- releasing／lapsed：只移除原生、收尾，不重建
 local function convergeInactive(id, rec, idx, now, st)
     local N, R, L = MSH.Native, MSH.Registry, MSH.Lifecycle
-    local lc = rec.lifecycle
-    local e, why = L.findNative(rec, idx)
-    if e ~= nil then
-        if not N.remove(e.house) then
-            R.markQuarantined(rec, "RELEASE_REMOVE_FAILED")
-            return
-        end
-        st.removed = true
-        sendRemove(st, id, rec.rect)
-        if lc == LC.RELEASING then R.markReleased(rec, "RELEASE_RECOVERED", now) end
-    elseif why == "MISSING" then
-        if lc == LC.RELEASING then R.markReleased(rec, "RELEASE_RECOVERED", now) end
-    else
+    local entries, why = L.findNatives(rec, idx)
+    if entries == nil then
         R.markQuarantined(rec, "RELEASE_" .. why)
+        return
     end
+    local any = false
+    for _, e in ipairs(entries) do
+        if e then
+            if not N.remove(e.house) then
+                R.markQuarantined(rec, "RELEASE_REMOVE_FAILED")
+                return
+            end
+            any = true
+        end
+    end
+    if any then
+        st.removed = true
+        sendRemove(st, id)
+    end
+    if rec.lifecycle == LC.RELEASING then R.markReleased(rec, "RELEASE_RECOVERED", now) end
 end
 
--- 同一代原生：rect 與建立時間（getDatetimeCreated，SafeHouse.java:681-683，存檔保存）都和 tombstone 相同。
+-- 同一代原生：範圍與建立時間（getDatetimeCreated，SafeHouse.java:681-683，存檔保存）都和 tombstone 的某一塊相同。
 -- tombstone 沒有建立時間就不算（寧可留著 alert，不刪可能不是我們建的原生）。
 local function sameGeneration(t, e)
-    return t.rect ~= nil and t.nativeCreatedAt ~= nil and MSH.Rect.equals(t.rect, e.rect)
-        and e.house:getDatetimeCreated() == t.nativeCreatedAt
+    for _, p in ipairs(t.rects or {}) do
+        if p.created ~= nil and MSH.Rect.equals(p, e.rect) and e.house:getDatetimeCreated() == p.created then
+            return true
+        end
+    end
+    return false
 end
 
 -- released（tombstone）：同一代原生重現（例：release 中途 crash 後的舊存檔）→ 移除＋remove delta；
@@ -206,7 +230,7 @@ local function convergeTombs(idx, now, st)
                 if sameGeneration(t, e) then
                     if N.remove(e.house) then
                         st.removed = true
-                        sendRemove(st, id, e.rect)
+                        sendRemove(st, id)
                     end
                 elseif MSH.Audit.throttled("RELEASED_NATIVE|" .. id, 3600000, "RELEASED_NATIVE",
                     { claimId = id, code = "FOREIGN_FINGERPRINT" }, now) then
@@ -219,32 +243,34 @@ end
 
 local function convergeActive(id, rec, idx, now, st)
     local R, L = MSH.Registry, MSH.Lifecycle
-    local e, why = L.findNative(rec, idx)
-    if e ~= nil then
-        setFlag(id, "missing", nil)
-        if fixNative(rec, e.house, now, st) then
-            st.changed[id] = e.house
+    local entries, why = L.findNatives(rec, idx)
+    if entries == nil then
+        R.markQuarantined(rec, why)   -- DUPLICATE（同一塊兩個原生）或 MISMATCH：不猜（§6.2）
+        return
+    end
+    for i, e in ipairs(entries) do
+        if e and fixNative(rec, e.house, now, st) then
+            st.changed[id .. ":" .. i] = e.house
             st.drift[id] = true
         end
+    end
+    if why == nil then
+        setFlag(id, "missing", nil)
         return
     end
-    if why ~= "MISSING" then
-        R.markQuarantined(rec, why)   -- DUPLICATE（兩個同標記原生）或 MISMATCH：不猜（§6.2）
-        return
-    end
-    st.drift[id] = true               -- 原生不在：重建成功的話下一輪看到乾淨的原生才算收斂
+    st.drift[id] = true               -- 有塊不在：補好的話下一輪看到乾淨的原生才算收斂
     if st.blocked then
         setFlag(id, "missing", true)  -- 「修復已暫停」：保留紀錄、不重建、不轉 released
         return
     end
-    local conflict = L.rebuildConflict(rec, idx)
+    local conflict = L.rebuildConflict(rec, idx, entries)
     if conflict then
         R.markQuarantined(rec, "REBUILD_" .. conflict)
         st.drift[id] = nil            -- 轉 quarantined：算在待修復數，不算 drift
         return
     end
-    local house, code = L.rebuild(rec, idx, function(fn) st.sends[#st.sends + 1] = fn end)
-    if house == nil then
+    local ok, code = L.rebuild(rec, idx, function(fn) st.sends[#st.sends + 1] = fn end, entries)
+    if not ok then
         setFlag(id, "missing", true)
         MSH.Audit.throttled("REBUILD_FAILED|" .. id, 60000, "REBUILD_FAILED", { claimId = id, code = code }, now)
         return
@@ -253,18 +279,29 @@ local function convergeActive(id, rec, idx, now, st)
 end
 
 -- 有標記、沒有紀錄也沒有 tombstone 的原生（registry 晚一步落盤，§6.2 recovery matrix 第 2 列）：
--- 建 quarantined(RECOVERED)，owner 不猜（players 順序沒有所有權語意），名單只當候選；nextClaimId 抬過它。
--- 有 tombstone 的由 convergeTombs 處理（released 不復活）。
+-- 建 quarantined(RECOVERED)，同標記的原生是同一間的各塊；owner 不猜（players 順序沒有所有權語意），名單只當候選；
+-- nextClaimId 抬過它。塊數超過上限或有塊重疊（同一塊重複）才標 RECOVERED_DUPLICATE；超過上限的沒有合法範圍，
+-- 標 malformed，只能由管理員放棄。有 tombstone 的由 convergeTombs 處理（released 不復活）。
 local function recoverOrphans(idx, now)
     local N, R = MSH.Native, MSH.Registry
     for id, list in pairs(idx.byClaim) do
         if R.md.claims[id] == nil and R.md.tombs[id] == nil then
             local e = list[1]
-            -- getTitle：SafeHouse.java:727-729；getDatetimeCreated：:681-683（存檔有保存，load 後不變）
-            local rec = R.newRecord({ claimId = id, lifecycle = LC.QUARANTINED, rect = e.rect,
-                title = e.house:getTitle(), owner = nil, source = MSH.SOURCE.DEED, deedTier = 1,
-                nativeCreatedAt = e.house:getDatetimeCreated(), createdAt = now })
-            rec.quarantineReason = #list > 1 and "RECOVERED_DUPLICATE" or "RECOVERED"
+            local rects = nil
+            if #list <= MSH.LIMIT.MAX_PIECES then
+                rects = {}
+                -- getDatetimeCreated：SafeHouse.java:681-683（存檔有保存，load 後不變）
+                for i, x in ipairs(list) do
+                    rects[i] = { x = x.rect.x, y = x.rect.y, w = x.rect.w, h = x.rect.h,
+                        created = x.house:getDatetimeCreated() }
+                end
+            end
+            -- getTitle：SafeHouse.java:727-729
+            local rec = R.newRecord({ claimId = id, lifecycle = LC.QUARANTINED, rects = rects or {},
+                title = e.house:getTitle(), owner = nil, source = MSH.SOURCE.DEED, deedTier = 1, createdAt = now })
+            if rects == nil then rec.rects, rec.malformed = nil, true end
+            local dup = rects == nil or MSH.Rect.shapeError(rects) == "OVERLAP"
+            rec.quarantineReason = dup and "RECOVERED_DUPLICATE" or "RECOVERED"
             rec.candidates = N.players(e.house)
             R.put(rec)
             R.raiseNextId(id)
@@ -291,10 +328,11 @@ local function pass(now, st)
 end
 
 local function newState(startup)
-    return { startup = startup, blocked = MSH.Health.blocked(), changed = {}, sends = {}, removed = false, drift = {} }
+    return { startup = startup, blocked = MSH.Health.blocked(), changed = {}, sends = {}, removed = false, drift = {},
+        readd = {} }
 end
 
--- 放鎖之後：每個變動的 active claim 一次 service-owner 廣播，再送重建廣播、remove delta、admin alert
+-- 放鎖之後：每個變動的原生一次 service-owner 廣播，再送重建廣播、remove delta、admin alert
 local function flush(st)
     for _, house in pairs(st.changed) do MSH.Native.broadcast(house) end
     for _, fn in ipairs(st.sends) do

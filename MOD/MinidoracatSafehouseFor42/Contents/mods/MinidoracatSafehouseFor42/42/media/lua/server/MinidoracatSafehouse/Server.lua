@@ -91,6 +91,21 @@ S.TYPES = {
         return type(v) == "table" and exactKeys(v, RECT_KEYS) and MSH.Rect.valid(v)
             and v.w <= MSH.LIMIT.HARD_SIDE and v.h <= MSH.LIMIT.HARD_SIDE
     end,
+    -- 多塊範圍：1–MAX_PIECES 塊、連續的整數鍵，每塊照 rect，外框也不超過 96（形狀規則由 Claims.checkShape 判）
+    rects = function(v)
+        if type(v) ~= "table" then return false end
+        local n = 0
+        for k in pairs(v) do
+            n = n + 1
+            if not MSH.isInt(k) or k < 1 or k > MSH.LIMIT.MAX_PIECES then return false end
+        end
+        if n < 1 or n ~= #v then return false end
+        for i = 1, n do
+            if not S.TYPES.rect(v[i]) then return false end
+        end
+        local b = MSH.Rect.bounds(v)
+        return b.w <= MSH.LIMIT.HARD_SIDE and b.h <= MSH.LIMIT.HARD_SIDE
+    end,
     deedType = function(v) return MSH.tierOfDeed(v) ~= nil end,
     title = function(v) return type(v) == "string" and #v <= 120 and not MSH.hasControl(v) end,
     username = function(v) return MSH.validUsername(v) end,

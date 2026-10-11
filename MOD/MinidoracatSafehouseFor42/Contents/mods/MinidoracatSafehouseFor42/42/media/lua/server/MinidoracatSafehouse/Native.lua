@@ -1,5 +1,6 @@
 -- MinidoracatSafehouse/Native.lua：原生 SafeHouse 的轉接層（計畫 §2.1、§2.3、§4.4、§6.3）。
--- 原生安全屋是保護用的原件；owner 固定 @MSH:<claimId>，真實玩家都放 players。
+-- 原生安全屋是保護用的原件；owner 固定 @MSH:<claimId>，真實玩家都放 players。一間有幾塊範圍就有幾個原生，
+-- 共用同一個標記與名單（使用者 2026-10-11 裁定多塊）。
 -- 不呼叫 SafeHouse.intersects（逐格 getOrCreateGridSquare，SafeHouse.java:805-815）；重疊一律用矩形比對。
 
 if isClient() then return end
@@ -140,17 +141,22 @@ function N.desiredPlayers(rec)
     return out
 end
 
--- 原生物件是否就是這筆紀錄建出來的：rect 相同、建立時間相同（nativeCreatedAt 是能拿到最好的指紋，§4.2）
-function N.matches(rec, e)
-    if not Rect.valid(rec.rect) or not Rect.equals(rec.rect, e.rect) then return false end
-    if rec.nativeCreatedAt == nil then return true end
-    return e.house:getDatetimeCreated() == rec.nativeCreatedAt
+-- 這間佔掉的原生名單名字數：每塊的原生各放一份名單，登入時 MetaDataPacket 整份送（§4.2）；malformed 沒有塊
+function N.nameCount(rec)
+    return #N.desiredPlayers(rec) * #(rec.rects or {})
 end
 
--- 依紀錄建立原生安全屋。addSafeHouse 本身不驗重疊（SafeHouse.java:68-85）；呼叫前由呼叫端驗完。
+-- 原生是這筆紀錄的第幾塊：範圍相同、建立時間相同（每塊的 created 是能拿到最好的指紋，§4.2）；對不上回 nil
+function N.pieceOf(rec, e)
+    for i, p in ipairs(rec.rects or {}) do
+        if Rect.equals(p, e.rect) and (p.created == nil or e.house:getDatetimeCreated() == p.created) then return i end
+    end
+    return nil
+end
+
+-- 依紀錄建一塊原生安全屋。addSafeHouse 本身不驗重疊（SafeHouse.java:68-85）；呼叫前由呼叫端驗完。
 -- 回傳 house 或 nil, 結果碼
-function N.build(rec)
-    local r = rec.rect
+function N.buildPiece(rec, r)
     local ok, house = pcall(function()
         return SafeHouse.addSafeHouse(r.x, r.y, r.w, r.h, MSH.marker(rec.claimId))
     end)
@@ -164,9 +170,34 @@ function N.build(rec)
         SafeHouse.removeSafeHouse(house)
         return nil, MSH.CODE.NATIVE_FAILED
     end
-    house:setTitle(rec.title)
-    for _, u in ipairs(N.desiredPlayers(rec)) do house:addPlayer(u) end
+    -- 名單與標題設失敗也拆掉，不留沒人管的標記原生
+    local set, err = pcall(function()
+        house:setTitle(rec.title)
+        for _, u in ipairs(N.desiredPlayers(rec)) do house:addPlayer(u) end
+    end)
+    if not set then
+        MSH.log("native setup failed for claim " .. tostring(rec.claimId) .. ": " .. tostring(err))
+        SafeHouse.removeSafeHouse(house)
+        return nil, MSH.CODE.NATIVE_FAILED
+    end
     return house
+end
+
+-- 整間的每一塊都建，建好的依序放進呼叫端給的 houses（和 rec.rects 同序；中途丟錯時呼叫端照它回滾）。
+-- 有一塊建不起來就把這次建好的移除、清空 houses、回 nil, 結果碼
+function N.build(rec, houses)
+    for i, r in ipairs(rec.rects) do
+        local house, code = N.buildPiece(rec, r)
+        if house == nil then
+            for j = #houses, 1, -1 do
+                N.remove(houses[j])
+                houses[j] = nil
+            end
+            return nil, code
+        end
+        houses[i] = house
+    end
+    return houses
 end
 
 -- removeSafeHouse 是 void、不回報（SafeHouse.java:306-320）：移除後重掃確認真的不在了
@@ -213,13 +244,10 @@ function N.revoke(house, username)
     return ok
 end
 
--- 原生沒有伺服器 Lua 可用的 remove 廣播（§2.3）：送自訂 remove delta 給全部客戶端（sendServerCommand 不帶玩家＝廣播）
--- rect 可以是 nil（malformed 紀錄）：客戶端只照 owner 標記移除，rect 只是資訊
-function N.sendRemove(claimId, rect)
+-- 原生沒有伺服器 Lua 可用的 remove 廣播（§2.3）：送自訂 remove delta 給全部客戶端（sendServerCommand 不帶玩家＝廣播）。
+-- 客戶端照 owner 標記移除這間的全部塊（Mirror.lua）
+function N.sendRemove(claimId)
     if not MSH.Srv.netUp then return end   -- 同 broadcast：開服前沒有客戶端，登入時的清單已經不含它
     N.seq = N.seq + 1
-    rect = rect or {}
-    sendServerCommand(MSH.MODULE, "nativeRemove", {
-        claimId = claimId, x = rect.x, y = rect.y, w = rect.w, h = rect.h, bootId = N.bootId, seq = N.seq,
-    })
+    sendServerCommand(MSH.MODULE, "nativeRemove", { claimId = claimId, bootId = N.bootId, seq = N.seq })
 end

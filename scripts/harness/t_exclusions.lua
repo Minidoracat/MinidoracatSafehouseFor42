@@ -34,7 +34,7 @@ return function(T)
     local rect = { x = 100, y = 100, w = 10, h = 10 }
     local function roads()
         T.squareReads = 0
-        return E.roads(rect, cfg)
+        return E.roads({ rect }, cfg)
     end
     local function sameAreas(a, want)
         if type(a) ~= "table" or #a ~= #want then return false end
@@ -244,36 +244,36 @@ return function(T)
         }
     end
     buildings = { { x = 104, y = 104, w = 3, h = 3, cats = { police = true } } }
-    check(E.resources(rect, cfg) == nil and not E.status().resourceApi, "MiniMap 缺席：不擋、status 回 false")
+    check(E.resources({ rect }, cfg) == nil and not E.status().resourceApi, "MiniMap 缺席：不擋、status 回 false")
     MinidoracatMiniMapResourceAPI = resourceApi(0)
-    check(E.resources(rect, cfg) == nil and not E.status().resourceApi, "版本 0：不擋")
+    check(E.resources({ rect }, cfg) == nil and not E.status().resourceApi, "版本 0：不擋")
     MinidoracatMiniMapResourceAPI = { resourceApiVersion = 1, buildingsIn = resourceApi(1).buildingsIn }
-    check(E.resources(rect, cfg) == nil, "缺 prepare：守衛不過、不擋")
+    check(E.resources({ rect }, cfg) == nil, "缺 prepare：守衛不過、不擋")
     MinidoracatMiniMapResourceAPI = resourceApi(1)
     check(E.status().resourceApi and not E.status().parkingApi, "status：v1 有資源點、沒有停車場")
-    code, d = E.resources(rect, cfg)
+    code, d = E.resources({ rect }, cfg)
     check(code == C.RESOURCE and d.cat == "police" and d.x == 104 and d.w == 3 and q.ver == "minimap",
         "小地圖資源：命中勾選類別→RESOURCE｛cat, x, y, w, h｝")
     check(q.x == 98 and q.y == 98 and q.w == 14 and q.h == 14, "查詢範圍＝rect 往外 claimGap（2）")
     cfg.avoidResources = false
     q = nil
-    check(E.resources(rect, cfg) == nil and q == nil, "AvoidResources 關：不查")
+    check(E.resources({ rect }, cfg) == nil and q == nil, "AvoidResources 關：不查")
     cfg.avoidResources = true
     buildings = { { x = 104, y = 104, w = 3, h = 3, cats = { food = true, school = true } } }
-    check(E.resources(rect, cfg) == nil, "沒勾的類別不擋")
+    check(E.resources({ rect }, cfg) == nil, "沒勾的類別不擋")
     buildings = { { x = 111, y = 100, w = 4, h = 4, cats = { medical = true } } }
-    code, d = E.resources(rect, cfg)
+    code, d = E.resources({ rect }, cfg)
     check(code == C.RESOURCE and d.cat == "medical", "間距內（中間隔 1 格、claimGap 2）的建築擋")
     buildings = { { x = 112, y = 100, w = 4, h = 4, cats = { medical = true } } }
-    check(E.resources(rect, cfg) == nil, "隔滿 claimGap 格的建築不擋")
+    check(E.resources({ rect }, cfg) == nil, "隔滿 claimGap 格的建築不擋")
     cfg.resourceRule = MSH.Settings.RULE.ROOMS
     MinidoracatMiniMapResourceAPI = resourceApi(1, "pending")
-    check(E.resources(rect, cfg) == C.RESOURCE_PENDING and q.ver == "rooms", "房間資料還沒掃完→RESOURCE_PENDING")
+    check(E.resources({ rect }, cfg) == C.RESOURCE_PENDING and q.ver == "rooms", "房間資料還沒掃完→RESOURCE_PENDING")
     MinidoracatMiniMapResourceAPI = resourceApi(1, "badversion")
-    check(E.resources(rect, cfg) == C.RESOURCE_ERROR, "其他失敗原因→RESOURCE_ERROR")
+    check(E.resources({ rect }, cfg) == C.RESOURCE_ERROR, "其他失敗原因→RESOURCE_ERROR")
     MinidoracatMiniMapResourceAPI = resourceApi(1, "throw")
     T.advance(60000)   -- 跳出上一筆 RESOURCE_ERROR 的 audit 節流窗
-    check(E.resources(rect, cfg) == C.RESOURCE_ERROR and T.logged("boom"), "丟錯→RESOURCE_ERROR、寫 audit")
+    check(E.resources({ rect }, cfg) == C.RESOURCE_ERROR and T.logged("boom"), "丟錯→RESOURCE_ERROR、寫 audit")
 
     T.section("Exclusions：房間資料模式開服先 prepare")
     local prepared = {}

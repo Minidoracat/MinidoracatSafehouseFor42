@@ -9,7 +9,7 @@ MSH.MOD_ID = "MinidoracatSafehouseFor42"
 MSH.MODULE = "MinidoracatSafehouse"   -- sendClientCommand／sendServerCommand 的 module
 MSH.PROTOCOL = 1                      -- 指令協定版本；不相同就拒絕（§6.1 第 1 點）
 MSH.TAG = "MinidoracatSafehouse"      -- Global ModData：公開的 canonical registry（§4.2）
-MSH.SCHEMA = 1                        -- registry schemaVersion
+MSH.SCHEMA = 2                        -- registry schemaVersion（2：一間多塊，紀錄的 rect 改成 rects）
 MSH.LOG_PREFIX = "[MinidoracatSafehouseFor42] "
 MSH.SERVICE_PREFIX = "@MSH:"          -- managed 原生安全屋的 owner：@MSH:<claimId>（§4.2）
 MSH.DEED_PREFIX = "MinidoracatSafehouse.Deed"
@@ -18,10 +18,14 @@ MSH.MAX_TIER = 8
 MSH.LIMIT = {
     HARD_SIDE = 96,                -- 任何等級的邊長上限
     HARD_AREA = 9216,              -- 96 × 96
+    MAX_PIECES = 4,                -- 一間最多幾塊矩形（每塊一個原生；使用者 2026-10-11 裁定）
     MAX_CLAIMS = 256,              -- 全服 managed／legacy（released 以外）筆數上限
     TOMBSTONE_SOFT = 1024,         -- released tombstone 軟上限
     TOMBSTONE_GC_MS = 30 * 24 * 3600 * 1000,
-    REGISTRY_BYTES = 256 * 1024,   -- registry 序列化大小上限（估算值）
+    -- registry 序列化大小上限（估算值）。客戶端 ModData.request 時整份放進一個封包，連線緩衝固定 1,000,000 bytes
+    -- （UdpConnection.java:40）。256 間每間 4 塊＋1,024 筆 4 塊的 tombstone 最壞約 402 KB，所以取 512 KiB，
+    -- 讓 MAX_CLAIMS 先擋（SERVER_FULL），不會在 tombstone 還沒到軟上限時就卡在 REGISTRY_FULL
+    REGISTRY_BYTES = 512 * 1024,
     NATIVE_NAMES = 4096,           -- 全部 managed 原生名單的名字總數上限
     FACTION_PROJECTION = 64,       -- 陣營分享投影進原生名單的人數上限（M2）
     TITLE_CHARS = 40,
@@ -30,8 +34,8 @@ MSH.LIMIT = {
     REQUEST_ID_MAX = 64,
     CACHE_TTL_MS = 60000,          -- 同 requestId 結果快取（§4.3）
     CACHE_PER_ACTOR = 64,
-    CALIBRATE_MAX = 512,           -- 客戶端校正最多帶幾筆
-    CALIBRATE_UPSERTS = 4,         -- 一次校正最多替幾間觸發原生廣播（正常客戶端登入時已拿到全部，§6.3）
+    CALIBRATE_MAX = 1024,          -- 客戶端校正最多帶幾筆（MAX_CLAIMS × MAX_PIECES 個原生）
+    CALIBRATE_UPSERTS = 4,         -- 一次校正最多替幾個原生觸發廣播（正常客戶端登入時已拿到全部，§6.3）
 }
 
 MSH.LIFECYCLE = {
@@ -71,7 +75,7 @@ MSH.CODE = {
     DEAD = "DEAD", NOT_SURVIVED = "NOT_SURVIVED", NOT_ON_SITE = "NOT_ON_SITE",
     BIND_REFUSED = "BIND_REFUSED", NO_DEED = "NO_DEED", BAD_DEED = "BAD_DEED",
     TIER_DISABLED = "TIER_DISABLED", KIND_CLOSED = "KIND_CLOSED", TOO_BIG = "TOO_BIG",
-    BAD_RECT = "BAD_RECT", ONLINE_ID_COLLISION = "ONLINE_ID_COLLISION",
+    BAD_RECT = "BAD_RECT", BAD_SHAPE = "BAD_SHAPE", ONLINE_ID_COLLISION = "ONLINE_ID_COLLISION",
     QUOTA_FULL = "QUOTA_FULL", TIER_FULL = "TIER_FULL", SERVER_FULL = "SERVER_FULL",
     REGISTRY_FULL = "REGISTRY_FULL", ROSTER_FULL = "ROSTER_FULL", BAD_TITLE = "BAD_TITLE",
     OVERLAP = "OVERLAP", TOO_CLOSE = "TOO_CLOSE", OCCUPIED = "OCCUPIED",
@@ -228,6 +232,148 @@ end
 
 function Rect.expand(r, d)
     return { x = r.x - d, y = r.y - d, w = r.w + d * 2, h = r.h + d * 2 }
+end
+
+-- ===== 多塊範圍（使用者 2026-10-11 裁定）=====
+-- 一間安全屋＝1–LIMIT.MAX_PIECES 塊矩形，每塊一個原生 SafeHouse，共用 @MSH:<id> 標記。塊與塊不重疊、
+-- 每塊至少和另一塊共用一段邊（只碰到角不算）、中間不能圍出沒圈到的洞（圍住別人走不出去）；
+-- 大小看整間的外框邊長與總面積（Claims.checkSize）。客戶端框選工具與伺服器驗證共用 Rect.shapeError。
+
+function Rect.copyList(rects)
+    local out = {}
+    for i, r in ipairs(rects) do out[i] = Rect.copy(r) end
+    return out
+end
+
+-- 外框（rects 至少一塊）
+function Rect.bounds(rects)
+    local f = rects[1]
+    local x0, y0, x1, y1 = f.x, f.y, f.x + f.w, f.y + f.h
+    for i = 2, #rects do
+        local r = rects[i]
+        x0, y0 = math.min(x0, r.x), math.min(y0, r.y)
+        x1, y1 = math.max(x1, r.x + r.w), math.max(y1, r.y + r.h)
+    end
+    return { x = x0, y = y0, w = x1 - x0, h = y1 - y0 }
+end
+
+function Rect.listArea(rects)
+    local n = 0
+    for _, r in ipairs(rects) do n = n + r.w * r.h end
+    return n
+end
+
+function Rect.listContains(rects, x, y)
+    for _, r in ipairs(rects) do
+        if Rect.containsPoint(r, x, y) then return true end
+    end
+    return false
+end
+
+-- "x,y,w,h;x,y,w,h"（audit 與 log）
+function Rect.listKey(rects)
+    local parts = {}
+    for i, r in ipairs(rects) do parts[i] = r.x .. "," .. r.y .. "," .. r.w .. "," .. r.h end
+    return table.concat(parts, ";")
+end
+
+-- 兩塊共用一段長度 ≥ 1 的邊（只碰到角不算相連）
+function Rect.touches(a, b)
+    if a.x + a.w == b.x or b.x + b.w == a.x then
+        return math.max(a.y, b.y) < math.min(a.y + a.h, b.y + b.h)
+    end
+    if a.y + a.h == b.y or b.y + b.h == a.y then
+        return math.max(a.x, b.x) < math.min(a.x + a.w, b.x + b.w)
+    end
+    return false
+end
+
+local DX, DY = { 1, -1, 0, 0 }, { 0, 0, 1, -1 }
+
+local function ascending(a, b) return a < b end
+
+local function addCoord(list, seen, v)
+    if not seen[v] then
+        seen[v] = true
+        list[#list + 1] = v
+    end
+end
+
+-- 座標壓縮：每塊的邊加上外框外一格切出的格子（每格是一段半開區間）；inside[j][i]＝第 (i, j) 格在範圍內
+local function compress(rects)
+    local b = Rect.bounds(rects)
+    local xs, ys, sx, sy = {}, {}, {}, {}
+    addCoord(xs, sx, b.x - 1)
+    addCoord(xs, sx, b.x + b.w + 1)
+    addCoord(ys, sy, b.y - 1)
+    addCoord(ys, sy, b.y + b.h + 1)
+    for _, r in ipairs(rects) do
+        addCoord(xs, sx, r.x)
+        addCoord(xs, sx, r.x + r.w)
+        addCoord(ys, sy, r.y)
+        addCoord(ys, sy, r.y + r.h)
+    end
+    MSH.sortSafe(xs, ascending)
+    MSH.sortSafe(ys, ascending)
+    local inside = {}
+    for j = 1, #ys - 1 do
+        local row = {}
+        for i = 1, #xs - 1 do row[i] = Rect.listContains(rects, xs[i], ys[j]) end
+        inside[j] = row
+    end
+    return xs, ys, inside
+end
+
+-- 洞：從外框外一格（一定在範圍外）沿上下左右走空格，走不到的空格就是被範圍圍住的
+local function hasHole(rects)
+    local xs, ys, inside = compress(rects)
+    local nx, ny = #xs - 1, #ys - 1
+    local seen, stack = { [1] = true }, { 1 }
+    while #stack > 0 do
+        local k = table.remove(stack)
+        local i, j = (k - 1) % nx + 1, math.floor((k - 1) / nx) + 1
+        for d = 1, 4 do
+            local ni, nj = i + DX[d], j + DY[d]
+            if ni >= 1 and ni <= nx and nj >= 1 and nj <= ny and not inside[nj][ni] then
+                local nk = (nj - 1) * nx + ni
+                if not seen[nk] then
+                    seen[nk] = true
+                    stack[#stack + 1] = nk
+                end
+            end
+        end
+    end
+    for j = 1, ny do
+        for i = 1, nx do
+            if not inside[j][i] and not seen[(j - 1) * nx + i] then return true end
+        end
+    end
+    return false
+end
+
+-- 回傳 nil（合規）或 "PIECES"（塊數不在 1–MAX_PIECES 或有不合法的塊）、"OVERLAP"、"SPLIT"（沒有連成一片）、"HOLE"
+function Rect.shapeError(rects)
+    local n = type(rects) == "table" and #rects or 0
+    if n < 1 or n > MSH.LIMIT.MAX_PIECES then return "PIECES" end
+    for i = 1, n do
+        if not Rect.valid(rects[i]) then return "PIECES" end
+        for j = 1, i - 1 do
+            if Rect.overlaps(rects[i], rects[j], 0) then return "OVERLAP" end
+        end
+    end
+    local seen, stack, count = { true }, { 1 }, 1
+    while #stack > 0 do
+        local i = table.remove(stack)
+        for j = 1, n do
+            if not seen[j] and Rect.touches(rects[i], rects[j]) then
+                seen[j], count = true, count + 1
+                stack[#stack + 1] = j
+            end
+        end
+    end
+    if count < n then return "SPLIT" end
+    if n > 1 and hasHole(rects) then return "HOLE" end
+    return nil
 end
 
 -- ===== 輸入驗證 =====

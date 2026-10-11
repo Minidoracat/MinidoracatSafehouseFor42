@@ -7,10 +7,10 @@ return function(T)
     local function mk(MSH, x, owner, grants)
         local R = MSH.Registry
         local id = R.allocId()
-        local rec = R.newRecord({ claimId = id, rect = { x = x, y = x, w = 5, h = 5 }, title = "t" .. id, owner = owner,
+        local rec = R.newRecord({ claimId = id, rects = { { x = x, y = x, w = 5, h = 5 } }, title = "t" .. id, owner = owner,
             source = MSH.SOURCE.DEED, deedTier = 1, grants = grants or {}, createdAt = T.now })
-        local hs = MSH.Native.build(rec)
-        rec.nativeCreatedAt = hs:getDatetimeCreated()
+        local hs = MSH.Native.build(rec, {})[1]
+        rec.rects[1].created = hs:getDatetimeCreated()
         R.put(rec)
         return rec, hs
     end
@@ -69,18 +69,18 @@ return function(T)
     local r3, hs3 = mk(MSH, 300, "alice")                         -- active＋MISSING＋重疊 → quarantined
     N.remove(hs3)
     SafeHouse.addSafeHouse(302, 302, 3, 3, "stranger")
-    local r4 = mk(MSH, 400, "alice")                              -- 兩個同標記原生 → quarantined
-    SafeHouse.addSafeHouse(410, 410, 3, 3, MSH.marker(r4.claimId))
+    local r4 = mk(MSH, 400, "alice")                              -- 同一塊兩個同標記原生 → quarantined
+    SafeHouse.addSafeHouse(400, 400, 5, 5, MSH.marker(r4.claimId))
     local r5, hs5 = mk(MSH, 500, "alice")                         -- 標記原生指紋不合 → quarantined
     N.remove(hs5)
     local r6 = mk(MSH, 600, "alice")                              -- releasing＋相符原生 → 移除＋released
-    R.markReleasing(r6, "op6", r6.nativeCreatedAt)
+    R.markReleasing(r6, "op6")
     local r7, hs7 = mk(MSH, 700, "alice")                         -- releasing＋MISSING → released
     N.remove(hs7)
-    R.markReleasing(r7, "op7", r7.nativeCreatedAt)
+    R.markReleasing(r7, "op7")
     local r8, hs8 = mk(MSH, 800, "alice")                         -- releasing＋指紋不合 → quarantined
     N.remove(hs8)
-    R.markReleasing(r8, "op8", r8.nativeCreatedAt)
+    R.markReleasing(r8, "op8")
     local r9 = mk(MSH, 900, "alice")                              -- lapsed＋原生還在 → 移除
     r9.lifecycle, r9.lapsedAt = "lapsed", T.now
     local r10 = mk(MSH, 1000, "alice")                            -- released＋相符原生重現 → 移除
@@ -99,8 +99,8 @@ return function(T)
     orphan:setTitle("Lost")
     orphan:addPlayer("dave")
     orphan:addPlayer("erin")
-    SafeHouse.addSafeHouse(1400, 1400, 5, 5, "@MSH:60")                  -- 沒有紀錄的同標記兩間
-    SafeHouse.addSafeHouse(1500, 1500, 5, 5, "@MSH:60")
+    SafeHouse.addSafeHouse(1400, 1400, 5, 5, "@MSH:60")                  -- 沒有紀錄、同一塊有兩間同標記
+    SafeHouse.addSafeHouse(1400, 1400, 5, 5, "@MSH:60")
     local foreign = SafeHouse.addSafeHouse(1600, 1600, 5, 5, "stranger2")
     foreign:addPlayer("x")
     foreign:setTitle("F")
@@ -123,7 +123,7 @@ return function(T)
     check(syncsOf(hs1) == 0 and countLogs("ROSTER_REMOVED") == 0 and Rc.claimFlags[r1.claimId] == nil,
         "load 殘留不算 drift：不廣播、不寫 audit、不設旗標")
     local new2 = T.houseOf(MSH.marker(r2.claimId))
-    check(lc(r2) == "active" and new2 ~= nil and R.get(r2.claimId).nativeCreatedAt == new2.created, "active＋MISSING：重建")
+    check(lc(r2) == "active" and new2 ~= nil and R.get(r2.claimId).rects[1].created == new2.created, "active＋MISSING：重建")
     check(R.get(r2.claimId).revision == rev2 and syncsOf(new2) == 0,
         "重建不加 revision；開服首輪還沒有連線、不廣播（玩家登入時 MetaDataPacket 會送整份清單）")
     check(lc(r3) == "quarantined" and reason(r3) == "REBUILD_OVERLAP" and T.houseOf(MSH.marker(r3.claimId)) == nil,
@@ -150,11 +150,11 @@ return function(T)
         "quarantined：完全不碰")
     local rec50 = R.get(50)
     check(rec50 ~= nil and rec50.lifecycle == "quarantined" and rec50.quarantineReason == "RECOVERED"
-        and rec50.owner == nil and rec50.title == "Lost" and rec50.rect.w == 6 and rec50.source == "deed"
-        and rec50.deedTier == 1, "有標記沒紀錄：quarantined(RECOVERED)、owner 不猜、rect／title 取自原生")
+        and rec50.owner == nil and rec50.title == "Lost" and #rec50.rects == 1 and rec50.rects[1].w == 6
+        and rec50.source == "deed" and rec50.deedTier == 1, "有標記沒紀錄：quarantined(RECOVERED)、owner 不猜、範圍／title 取自原生")
     check(#rec50.candidates == 2 and rec50.candidates[1] == "dave" and rec50.candidates[2] == "erin",
         "原生名單只當候選（不含標記）")
-    check(R.get(60) ~= nil and R.get(60).quarantineReason == "RECOVERED_DUPLICATE", "沒紀錄的同標記兩間：quarantined")
+    check(R.get(60) ~= nil and R.get(60).quarantineReason == "RECOVERED_DUPLICATE", "沒紀錄、同一塊兩間同標記：quarantined")
     check(R.md.nextClaimId == 61, "nextClaimId 高水位抬到標記 id 之後（實際 " .. tostring(R.md.nextClaimId) .. "）")
     check(foreign.owner == "stranger2" and foreign.title == "F" and foreign.players:contains("x")
         and syncsOf(foreign) == 0, "foreign 原生：不改、不廣播")
@@ -359,7 +359,7 @@ return function(T)
     T.section("malformed 紀錄：收斂略過、整輪照常成功")
     MSH = T.boot()
     local m1, mh1 = mk(MSH, 100, "alice")
-    MSH.Registry.md.claims[99] = { claimId = 99, lifecycle = "active" }   -- 缺 rect 的壞紀錄
+    MSH.Registry.md.claims[99] = { claimId = 99, lifecycle = "active" }   -- 缺範圍的壞紀錄
     SafeHouse.addSafeHouse(500, 500, 5, 5, "@MSH:99")
     MSH = T.boot(RESTART)
     R, Rc = MSH.Registry, MSH.Reconcile
@@ -368,11 +368,11 @@ return function(T)
         and T.houseOf("@MSH:99") ~= nil and Rc.lastSuccessAt == T.now, "開服：壞紀錄轉 malformed、標記原生不動、首輪成功")
     check(Rc.health().pendingRepair == 1, "malformed 計入待修復")
     SafeHouse.removeSafeHouse(T.houseOf("@MSH:99"))
-    bad.lifecycle = "releasing"     -- 模擬 forceRelease 中途的狀態（rect 仍是 nil）
+    bad.lifecycle = "releasing"     -- 模擬 forceRelease 中途的狀態（rects 仍是 nil）
     mh1:setTitle("x")
     T.advance(1000)
     check(Rc.sweep(T.now) and Rc.lastSuccessAt == T.now and mh1.title == R.get(m1.claimId).title
-        and countLogs("INTERNAL_ERROR") == 0, "沒有 rect 的紀錄不讓整輪失敗，其他 claim 照常收斂")
+        and countLogs("INTERNAL_ERROR") == 0, "沒有範圍的紀錄不讓整輪失敗，其他 claim 照常收斂")
     check(R.get(99) == bad and bad.lifecycle == "releasing", "malformed 紀錄收斂不碰（留給管理員 recovery）")
 
     T.section("tombstone GC")
@@ -400,9 +400,9 @@ return function(T)
     T.serverOptions.War = "true"
     MSH.Health.evaluate(T.now)
     local before = R.tombstoneCount()
-    -- tombstone 格式：x,y,w,h,nativeCreatedAt,bootSeen,releasedAt（Registry）
+    -- tombstone 格式：bootSeen,releasedAt;x,y,w,h,created（每塊一段，Registry）
     local function seedTomb(id, x, bootSeen, releasedAt)
-        R.md.tombs[id] = table.concat({ x, 10, 1, 1, -1, bootSeen, releasedAt }, ",")
+        R.md.tombs[id] = bootSeen .. "," .. releasedAt .. ";" .. table.concat({ x, 10, 1, 1, -1 }, ",")
     end
     for i = 1, 3 do seedTomb(R.allocId(), 3000 + i * 10, 0, 0) end
     MSH.Reconcile.gc(T.now)

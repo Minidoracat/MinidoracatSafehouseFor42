@@ -157,7 +157,7 @@ function A.refreshNames()
         if MSH.isInt(id) and type(rec) == "table" and R.isLive(rec) and type(rec.owner) == "string" then
             want[rec.owner] = true
             used[rec.owner] = (used[rec.owner] or 0) + 1
-            if MSH.Rect.valid(rec.rect) then
+            if rec.rects ~= nil then
                 local list = owned[rec.owner] or {}
                 owned[rec.owner] = list
                 local row = { claimId = rec.claimId, title = rec.title, revision = rec.revision, lifecycle = rec.lifecycle,
@@ -266,39 +266,52 @@ local function fixRoster(house, rec)
     for _, u in ipairs(desired) do house:addPlayer(u) end
 end
 
--- rebind：quarantined → active。有同標記且 rect 相同的原生 → 採用它的建立時間當指紋並修名單；
--- rect 不同或重複 → 留在 quarantined；沒有原生 → 照紀錄重建（重建失敗就還原 owner、不轉 active）。
--- malformed（沒有合法 rect）沒有東西可以對或重建，只能 release。
+-- rebind：quarantined → active。同標記的每個原生都要對得上紀錄的某一塊（範圍相同；採用它的建立時間當指紋並修名單），
+-- 對不上或同一塊有兩個 → 留在 quarantined；缺的塊照紀錄補建（補建失敗就還原 owner、不轉 active）。
+-- malformed（沒有合法範圍）沒有東西可以對或重建，只能 release。
 local function rebind(ctx, rec)
     local N, R = MSH.Native, MSH.Registry
-    if not MSH.Rect.valid(rec.rect) then
+    if rec.rects == nil then
         return S.fail(CODE.WRONG_LIFECYCLE, { claimId = rec.claimId, reason = "MALFORMED" })
     end
     local owner = ctx.args.targetUsername or rec.owner
     if owner == nil then return S.fail(CODE.BAD_USER, { claimId = rec.claimId }) end
     local idx = N.index()
-    local list = idx.byClaim[rec.claimId]
-    local entry = nil
-    if list ~= nil and #list > 0 then
-        if #list > 1 or not MSH.Rect.equals(list[1].rect, rec.rect) then
+    local entries, missing = {}, false
+    for i = 1, #rec.rects do entries[i] = false end
+    for _, e in ipairs(idx.byClaim[rec.claimId] or {}) do
+        local hit = nil
+        for i, p in ipairs(rec.rects) do
+            if MSH.Rect.equals(p, e.rect) then
+                hit = i
+                break
+            end
+        end
+        if hit == nil or entries[hit] then
             return S.fail(CODE.WRONG_LIFECYCLE, { claimId = rec.claimId, reason = "NATIVE_MISMATCH" })
         end
-        entry = list[1]
+        entries[hit] = e
+    end
+    for i = 1, #entries do
+        if not entries[i] then missing = true end
     end
     local oldOwner = rec.owner
     rec.owner = owner
-    if entry == nil then
-        local house, why = MSH.Lifecycle.rebuild(rec, idx, ctx.defer)
-        if house == nil then
+    if missing then
+        local ok, why = MSH.Lifecycle.rebuild(rec, idx, ctx.defer, entries)
+        if not ok then
             rec.owner = oldOwner
             local code = why == CODE.NATIVE_FAILED and CODE.NATIVE_FAILED or CODE.WRONG_LIFECYCLE
             return S.fail(code, { claimId = rec.claimId, reason = why })
         end
-    else
-        local house = entry.house
-        rec.nativeCreatedAt = house:getDatetimeCreated()   -- SafeHouse.java:681
-        fixRoster(house, rec)
-        ctx.defer(function() N.broadcast(house) end)
+    end
+    for i, e in ipairs(entries) do
+        if e then
+            local house = e.house
+            rec.rects[i].created = house:getDatetimeCreated()   -- SafeHouse.java:681
+            fixRoster(house, rec)
+            ctx.defer(function() N.broadcast(house) end)
+        end
     end
     rec.lifecycle = LC.ACTIVE
     rec.quarantineReason, rec.recovered, rec.candidates = nil, nil, nil
@@ -336,7 +349,7 @@ S.define("adminClaims", { kind = "query", admin = true, fields = {}, run = funct
     for _, rec in ipairs(MSH.Registry.listAll()) do
         if rec.lifecycle ~= LC.ACTIVE then
             rows[#rows + 1] = { claimId = rec.claimId, lifecycle = rec.lifecycle, quarantineReason = rec.quarantineReason,
-                owner = rec.owner, rect = MSH.Rect.valid(rec.rect) and MSH.Rect.copy(rec.rect) or nil,
+                owner = rec.owner, rects = rec.rects and MSH.Rect.copyList(rec.rects) or nil,
                 candidates = rec.candidates }
         end
     end

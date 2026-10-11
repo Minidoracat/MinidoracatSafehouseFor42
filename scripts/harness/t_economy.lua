@@ -21,9 +21,9 @@ return function(T)
     end
     local function rect(x, y, w, h) return { x = x, y = y, w = w, h = h } end
     local function seed(owner, r, tier)
-        local rec = R.newRecord({ claimId = R.allocId(), rect = r, title = owner .. r.x, owner = owner,
+        local rec = R.newRecord({ claimId = R.allocId(), rects = { r }, title = owner .. r.x, owner = owner,
             source = MSH.SOURCE.DEED, deedTier = tier or 1, createdAt = T.now })
-        rec.nativeCreatedAt = MSH.Native.build(rec):getDatetimeCreated()
+        rec.rects[1].created = MSH.Native.build(rec, {})[1]:getDatetimeCreated()
         R.put(rec)
         T.advance(1000)
         return rec
@@ -38,7 +38,7 @@ return function(T)
     end
     local function create(p, x, y)
         p.x, p.y = x + 5, y + 5
-        return T.cmd(p, "create", { rect = rect(x, y, 10, 10), deedType = D1 })
+        return T.cmd(p, "create", { rects = { rect(x, y, 10, 10) }, deedType = D1 })
     end
     local function validate(user, product, kind, projected)
         return T.econ.products[product].validatePurchase(user, product, kind, 1, projected)

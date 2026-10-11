@@ -33,13 +33,36 @@ local function validGrants(g)
     return true
 end
 
--- schema 1 的單筆檢查；不合格的整筆轉 quarantined（不當 foreign、不當 released，§4.2）
+-- 範圍的每一塊 { x, y, w, h, created }：created 是那塊原生的 getDatetimeCreated（指紋，§4.2；沒有就是 nil）
+local function validPieces(rects)
+    if type(rects) ~= "table" then return false end
+    local n = #rects
+    if n < 1 or n > MSH.LIMIT.MAX_PIECES then return false end
+    for i = 1, n do
+        local p = rects[i]
+        if not Rect.valid(p) or (p.created ~= nil and not MSH.isFinite(p.created)) then return false end
+    end
+    return true
+end
+
+function R.copyPieces(rects)
+    local out = {}
+    for i, p in ipairs(rects) do out[i] = { x = p.x, y = p.y, w = p.w, h = p.h, created = p.created } end
+    return out
+end
+
+-- schema 2 的單筆檢查；不合格的整筆轉 quarantined（不當 foreign、不當 released，§4.2）。
+-- malformed（沒有合法範圍）的 quarantined 本身合格：不然每次開機都會被再包一層 raw
 function R.validRecord(id, rec)
     if type(rec) ~= "table" then return false end
     if not MSH.isInt(id) or id < 1 or rec.claimId ~= id then return false end
     if not MSH.isInt(rec.revision) or rec.revision < 0 then return false end
     if not VALID_LIFECYCLE[rec.lifecycle] then return false end
-    if not Rect.valid(rec.rect) then return false end
+    if rec.malformed then
+        if rec.lifecycle ~= LC.QUARANTINED or rec.rects ~= nil then return false end
+    elseif not validPieces(rec.rects) then
+        return false
+    end
     if type(rec.title) ~= "string" then return false end
     if not MSH.isInt(rec.deedTier) or rec.deedTier < 1 or rec.deedTier > MSH.MAX_TIER then return false end
     if not VALID_SOURCE[rec.source] then return false end
@@ -51,34 +74,32 @@ function R.validRecord(id, rec)
     if not validGrants(rec.grants) then return false end
     if rec.factionShare ~= nil and type(rec.factionShare) ~= "table" then return false end
     if rec.operation ~= nil and type(rec.operation) ~= "table" then return false end
-    if rec.nativeCreatedAt ~= nil and not MSH.isFinite(rec.nativeCreatedAt) then return false end
     if not MSH.isInt(rec.bootSeen) then return false end
     if not MSH.isFinite(rec.createdAt) then return false end
     return true
 end
 
 -- 不合格的紀錄：原內容整份搬到 raw（不猜、不刪），本體換成欄位齊全的 quarantined，讓其他模組照常運作；
--- 沒有合法 rect 的標 malformed，不佔範圍、不進 R.list()，只在 R.listAll() 給管理員 targeted recovery（§4.2）
+-- 沒有合法範圍的標 malformed，不佔範圍、不進 R.list()，只在 R.listAll() 給管理員 targeted recovery（§4.2）
 local function quarantineMalformed(md, id, rec)
     if not MSH.isInt(id) or id < 1 then
         MSH.Audit.write("QUARANTINE", { claimId = id, code = "MALFORMED_KEY" })
         return
     end
     local raw = type(rec) == "table" and rec or { value = tostring(rec) }
-    local rect = type(rec) == "table" and Rect.valid(rec.rect) and Rect.copy(rec.rect) or nil
+    local rects = type(rec) == "table" and validPieces(rec.rects) and R.copyPieces(rec.rects) or nil
     md.claims[id] = {
         claimId = id,
         revision = (type(rec) == "table" and MSH.isInt(rec.revision) and rec.revision >= 0) and rec.revision or 0,
         lifecycle = LC.QUARANTINED,
         quarantineReason = "MALFORMED",
-        malformed = rect == nil or nil,
-        rect = rect,
+        malformed = rects == nil or nil,
+        rects = rects,
         title = "",
         deedTier = 1,
         owner = type(raw.owner) == "string" and raw.owner or nil,
         source = MSH.SOURCE.DEED,
         grants = {},
-        nativeCreatedAt = MSH.isFinite(raw.nativeCreatedAt) and raw.nativeCreatedAt or nil,
         bootSeen = md.bootSeq,
         createdAt = MSH.isFinite(raw.createdAt) and raw.createdAt or 0,
         raw = raw,
@@ -87,32 +108,75 @@ local function quarantineMalformed(md, id, rec)
 end
 
 -- ===== released tombstone：精簡成一個字串，放 md.tombs[claimId] =====
--- 「x,y,w,h,nativeCreatedAt,bootSeen,releasedAt」，沒有的值寫 -1。一筆約 60 bytes：軟上限 1,024 筆加上 256 間
--- 佔位中的紀錄才放得進 256 KiB（§4.2）；整筆紀錄當 tombstone 一筆約 400 bytes，放不下。
--- tombstone 只用來判斷「同一代原生是否重現」（rect＋建立時間）與 GC（bootSeen、releasedAt），§6.2。
+-- 「bootSeen,releasedAt;x,y,w,h,created;x,y,w,h,created…」（每塊一段），沒有的值寫 -1，一塊約 30 bytes。
+-- 最壞（每間、每筆都 4 塊）1,024 筆加上 256 間佔位中的紀錄約 402 KB，放得進 LIMIT.REGISTRY_BYTES（§4.2）；
+-- 整筆紀錄當 tombstone 一筆約 400 bytes，放不下。
+-- tombstone 只用來判斷「同一代原生是否重現」（每塊的範圍＋建立時間）與 GC（bootSeen、releasedAt），§6.2。
 local function num(v)
     if MSH.isFinite(v) then return tostring(v) end
     return "-1"
 end
 
-local function encodeTomb(rect, nativeCreatedAt, bootSeen, releasedAt)
-    local r = rect or {}
-    return table.concat({ num(r.x), num(r.y), num(r.w), num(r.h), num(nativeCreatedAt), num(bootSeen), num(releasedAt) }, ",")
+local function encodeTomb(rects, bootSeen, releasedAt)
+    local parts = { num(bootSeen) .. "," .. num(releasedAt) }
+    for _, p in ipairs(rects or {}) do
+        parts[#parts + 1] = table.concat({ num(p.x), num(p.y), num(p.w), num(p.h), num(p.created) }, ",")
+    end
+    return table.concat(parts, ";")
 end
 
 local function decodeTomb(id, s)
     if type(s) ~= "string" then return nil end
-    local f = {}
-    for part in string.gmatch(s, "[^,]+") do f[#f + 1] = tonumber(part) end
-    if #f ~= 7 then return nil end
-    local rect = { x = f[1], y = f[2], w = f[3], h = f[4] }
+    local head, rects = nil, {}
+    for part in string.gmatch(s, "[^;]+") do
+        local f = {}
+        for v in string.gmatch(part, "[^,]+") do f[#f + 1] = tonumber(v) end
+        if head == nil then
+            if #f ~= 2 then return nil end
+            head = f
+        else
+            local p = #f == 5 and { x = f[1], y = f[2], w = f[3], h = f[4], created = f[5] >= 0 and f[5] or nil } or nil
+            if p == nil or not Rect.valid(p) then return nil end
+            rects[#rects + 1] = p
+        end
+    end
+    if head == nil then return nil end
     return {
         claimId = id,
-        rect = Rect.valid(rect) and rect or nil,
-        nativeCreatedAt = f[5] >= 0 and f[5] or nil,
-        bootSeen = f[6] >= 0 and f[6] or nil,
-        releasedAt = f[7] >= 0 and f[7] or nil,
+        rects = #rects > 0 and rects or nil,
+        bootSeen = head[1] >= 0 and head[1] or nil,
+        releasedAt = head[2] >= 0 and head[2] or nil,
     }
+end
+
+-- schema 1 → 2（一間多塊）：紀錄的 rect＋nativeCreatedAt 變成 rects 的第一塊，releasing 的 operation 同樣換；
+-- 舊 tombstone「x,y,w,h,nativeCreatedAt,bootSeen,releasedAt」換成新格式（沒有範圍的只留 bootSeen,releasedAt）。
+-- 換不了的（欄位壞掉）照舊交給後面的檢查：紀錄轉 quarantined、tombstone 丟掉並記 audit
+local function upgradeFrom1(md)
+    for _, rec in pairs(md.claims) do
+        if type(rec) == "table" and rec.rects == nil and type(rec.rect) == "table" then
+            local r = rec.rect
+            rec.rects = { { x = r.x, y = r.y, w = r.w, h = r.h, created = rec.nativeCreatedAt } }
+            rec.rect, rec.nativeCreatedAt = nil, nil
+            local op = rec.operation
+            if type(op) == "table" and type(op.rect) == "table" then
+                local o = op.rect
+                op.rects = { { x = o.x, y = o.y, w = o.w, h = o.h, created = op.nativeCreatedAt } }
+                op.rect, op.nativeCreatedAt = nil, nil
+            end
+        end
+    end
+    for id, s in pairs(md.tombs or {}) do
+        if type(s) == "string" and not string.find(s, ";", 1, true) then
+            local f = {}
+            for part in string.gmatch(s, "[^,]+") do f[#f + 1] = part end
+            if #f == 7 then
+                local head = f[6] .. "," .. f[7]
+                md.tombs[id] = f[1] == "-1" and head or (head .. ";" .. table.concat({ f[1], f[2], f[3], f[4], f[5] }, ","))
+            end
+        end
+    end
+    MSH.log("registry upgraded from schema 1")
 end
 
 -- OnInitGlobalModData：載入或建立 registry。不在這裡判 native 缺漏（native 還沒載入，§6 啟動時序）。
@@ -138,6 +202,8 @@ function R.init()
         MSH.log("registry is read-only (schema " .. tostring(md.schemaVersion) .. ")")
         return
     end
+    if md.schemaVersion == 1 then upgradeFrom1(md) end
+    md.schemaVersion = MSH.SCHEMA
     md.protocolVersion = MSH.PROTOCOL
     md.tombs = md.tombs or {}
     local maxId, bad, released, badTombs = 0, {}, {}, {}
@@ -152,7 +218,7 @@ function R.init()
     -- 舊格式的 released 整筆紀錄 → 精簡 tombstone
     for _, id in ipairs(released) do
         local rec = md.claims[id]
-        md.tombs[id] = encodeTomb(rec.rect, rec.nativeCreatedAt, rec.bootSeen, rec.releasedAt)
+        md.tombs[id] = encodeTomb(type(rec.rects) == "table" and rec.rects or nil, rec.bootSeen, rec.releasedAt)
         md.claims[id] = nil
     end
     for _, id in ipairs(bad) do quarantineMalformed(md, id, md.claims[id]) end
@@ -222,14 +288,13 @@ function R.newRecord(f)
         claimId = f.claimId,
         revision = 1,
         lifecycle = f.lifecycle or LC.ACTIVE,
-        rect = Rect.copy(f.rect),
+        rects = R.copyPieces(f.rects),
         title = f.title or "",
         deedTier = f.deedTier or 1,
         owner = f.owner,
         source = f.source,
         grants = f.grants or {},
         factionShare = f.factionShare,
-        nativeCreatedAt = f.nativeCreatedAt,
         operation = nil,
         bootSeen = R.md.bootSeq,
         createdAt = f.createdAt,
@@ -304,11 +369,10 @@ function R.byOwner(owner)
     return out
 end
 
--- 生命週期轉移（放棄與收斂共用；都寫 audit）
-function R.markReleasing(rec, opId, nativeCreatedAt)
+-- 生命週期轉移（放棄與收斂共用；都寫 audit）。operation 記下要移除的每一塊（範圍＋指紋），中途當機時對得上
+function R.markReleasing(rec, opId)
     rec.lifecycle = LC.RELEASING
-    local rect = Rect.valid(rec.rect) and Rect.copy(rec.rect) or nil
-    rec.operation = { opId = opId, revision = rec.revision, rect = rect, nativeCreatedAt = nativeCreatedAt }
+    rec.operation = { opId = opId, revision = rec.revision, rects = rec.rects and R.copyPieces(rec.rects) or nil }
     R.touch(rec)
 end
 
@@ -319,7 +383,7 @@ function R.markReleased(rec, reason, now)
     rec.releaseReason = reason
     rec.operation = nil
     rec.revision = rec.revision + 1
-    R.md.tombs[rec.claimId] = encodeTomb(rec.rect, rec.nativeCreatedAt, R.md.bootSeq, now)
+    R.md.tombs[rec.claimId] = encodeTomb(rec.rects, R.md.bootSeq, now)
     R.md.claims[rec.claimId] = nil
     R.bumpGeneration()
     MSH.Audit.write("RELEASED", { actor = rec.owner, claimId = rec.claimId, code = reason })

@@ -1,9 +1,11 @@
 -- MinidoracatSafehouse/CreatePanel.lua：建立面板（計畫 §10.4 狀態表、§7.2 框選、§7.6 重新框選、§1.1 第 3、11 點）。
 -- 入口：MSH.CreatePanel.open(opts)；地契物品右鍵「使用地契」（OnFillInventoryObjectContextMenu）；管理視窗「建立安全屋」。
---   opts = { deedType?, mode = "create" | "redraw", claimId?, revision?, tier?, source?, playerNum? }
---   （source：重新框選時舊屋的來源，決定顯示的大小上限；playerNum：開窗的玩家，分割畫面次玩家不能建）
+--   opts = { deedType?, mode = "create" | "redraw", claimId?, revision?, tier?, source?, rects?, playerNum? }
+--   （source：重新框選時舊屋的來源，決定顯示的大小上限；rects：重新框選時從舊屋的各塊開始改；
+--    playerNum：開窗的玩家，分割畫面次玩家不能建）
 -- 狀態機（不碰畫面，scripts/harness/t_ui_create.lua 直接測）：
---   idle → selecting → preview → confirm → submitting → 成功（開管理視窗）／失敗（回 preview 顯示原因）／
+--   idle → selecting（一塊一塊加入或挖掉，Select.lua／Shape.lua）→ preview → confirm → submitting → 成功（開管理視窗）／
+--   失敗（回 preview 顯示原因）；preview／confirm 的〔修改範圍〕回 selecting、範圍保留；
 --   result-pending（10 秒沒結果；〔查詢結果〕＝同一 requestId 重送，伺服器回快取的原結果；快取過期改抓 list，
 --   已有新屋就當成功，**過期不解讀為失敗**）；selecting／preview／confirm 時死亡或離線 → idle。
 -- 畫面全部照伺服器結果：預檢與 enable／disable 都來自 server structured result code（§10.4 最後一段）；
@@ -81,9 +83,10 @@ function P.newModel(opts, playerNum)
     opts = opts or {}
     local m = { phase = P.IDLE, playerNum = playerNum or 0, mode = opts.mode == "redraw" and "redraw" or "create" }
     if m.mode == "redraw" then
-        -- 等級沿用舊屋、不經過背包（§7.6）
+        -- 等級沿用舊屋、不經過背包（§7.6）；範圍從舊屋的各塊開始
         m.claimId, m.revision, m.tier = opts.claimId, opts.revision, opts.tier
         m.source = opts.source == SRC.FREE and SRC.FREE or SRC.DEED
+        if type(opts.rects) == "table" and #opts.rects > 0 then m.initRects = MSH.Rect.copyList(opts.rects) end
     else
         P.pickDeed(m, opts.deedType)
     end
@@ -155,7 +158,7 @@ function P.startSelect(m, tool)
     if m.phase ~= P.IDLE or P.gate(m) ~= nil then return false end
     m.tool = tool == Sel.WALK and Sel.WALK or Sel.DRAG
     P.lastTool = m.tool   -- 下次預設上次用的（§7.2）
-    m.sel = Sel.new(m.tool, m.playerNum)
+    m.sel = Sel.new(m.tool, m.playerNum, m.initRects)
     m.phase, m.notice = P.SELECTING, nil
     changed(m)
     return true
@@ -204,7 +207,7 @@ end
 -- 回 idle（取消、死亡、離線）；notice＝要在 idle 顯示的原因碼
 function P.toIdle(m, notice)
     if m.sel ~= nil then Sel.stop(m.sel) end
-    m.phase, m.sel, m.rect, m.notice = P.IDLE, nil, nil, notice
+    m.phase, m.sel, m.rects, m.notice = P.IDLE, nil, nil, notice
     clearPreview(m)
     changed(m)
 end
@@ -223,38 +226,71 @@ function P.pump(m, now)
     if not (m.previewWant and m.phase == P.PREVIEW and now >= m.previewAt) then return end
     m.previewWant = false
     P.lastPreviewAt = now
-    local args = { rect = MSH.Rect.copy(m.rect) }
+    local args = { rects = MSH.Rect.copyList(m.rects) }
     if m.mode == "redraw" then args.claimId = m.claimId else args.deedType = m.deedType end
     m.previewRid = MSH.Client.send("preview", args, function(res) P.onPreview(m, res) end)
 end
 
--- 〔完成〕：有範圍才進 preview
+-- 〔完成〕：走位／手把還沒按〔加入這塊〕的那一塊也算進去；形狀合規則（Shape.result 沒有 err）才進 preview
 function P.finish(m, now)
     if m.phase ~= P.SELECTING or m.sel == nil then return false end
     Sel.update(m.sel, player())
-    local rect = Sel.rect(m.sel)
-    if rect == nil then return false end
+    Sel.commit(m.sel)
+    local res = Sel.result(m.sel)
+    if res.err ~= nil then
+        changed(m)
+        return false
+    end
     Sel.stop(m.sel)
-    m.rect, m.phase = rect, P.PREVIEW
+    m.rects, m.phase = MSH.Rect.copyList(res.rects), P.PREVIEW
     P.schedulePreview(m, now)
     changed(m)
     return true
 end
 
--- 〔重新框選〕：清掉範圍回 selecting（同一種選法）
-function P.reselect(m)
-    if m.phase ~= P.SELECTING and m.phase ~= P.PREVIEW and m.phase ~= P.CONFIRM then return false end
-    if m.sel == nil then m.sel = Sel.new(m.tool, m.playerNum) end
-    Sel.reset(m.sel)
-    m.phase, m.rect = P.SELECTING, nil
+-- 〔修改範圍〕：回 selecting 接著改（範圍、模式、復原紀錄都保留）
+function P.edit(m)
+    if m.phase ~= P.PREVIEW and m.phase ~= P.CONFIRM then return false end
+    if m.sel == nil then m.sel = Sel.new(m.tool, m.playerNum, m.rects) end
+    m.phase, m.rects = P.SELECTING, nil
     clearPreview(m)
     changed(m)
     return true
 end
 
+-- selecting 的編輯按鈕：模式（加入／挖掉）、〔加入這塊〕（走位、手把）、〔復原〕、〔清除〕
+function P.setCut(m, cut)
+    if m.phase ~= P.SELECTING or m.sel == nil then return false end
+    Sel.setCut(m.sel, cut)
+    changed(m)
+    return m.sel.cut == (cut == true)
+end
+
+function P.applyPiece(m)
+    if m.phase ~= P.SELECTING or m.sel == nil then return false end
+    Sel.update(m.sel, player())
+    local ok = Sel.commit(m.sel)
+    changed(m)
+    return ok
+end
+
+function P.undo(m)
+    if m.phase ~= P.SELECTING or m.sel == nil then return false end
+    local ok = Sel.undo(m.sel)
+    changed(m)
+    return ok
+end
+
+function P.clear(m)
+    if m.phase ~= P.SELECTING or m.sel == nil then return false end
+    local ok = Sel.clear(m.sel)
+    changed(m)
+    return ok
+end
+
 -- 〔重新預檢〕：同一個範圍再問一次（冷卻照排程）
 function P.recheck(m, now)
-    if m.phase ~= P.PREVIEW or m.rect == nil or m.previewWant or (m.previewRid ~= nil and m.checks == nil) then
+    if m.phase ~= P.PREVIEW or m.rects == nil or m.previewWant or (m.previewRid ~= nil and m.checks == nil) then
         return false
     end
     P.schedulePreview(m, now)
@@ -310,7 +346,7 @@ function P.submit(m, titleText)
     -- 送出當下已知的「我的安全屋」：快取過期後用來認出新屋（清單沒抓過就不能認，只能說無法確認）
     m.known, m.knownValid = {}, MSH.Client.claims.at ~= nil
     for _, row in ipairs(MSH.Client.claims.mine) do m.known[row.claimId] = true end
-    local command, args = "create", { rect = MSH.Rect.copy(m.rect) }
+    local command, args = "create", { rects = MSH.Rect.copyList(m.rects) }
     if m.mode == "redraw" then
         command, args.claimId, args.expectedRevision = "redraw", m.claimId, m.revision
     else
@@ -386,13 +422,13 @@ function P.queryResult(m)
     return true
 end
 
--- 每 tick：selecting／preview／confirm 死亡或離線 → idle；走位終點跟著玩家；到時間的預檢送出
+-- 每 tick：selecting／preview／confirm 死亡或離線 → idle；拖曳放開、走位終點跟著玩家；到時間的預檢送出
 function P.update(m, now)
     local p = player()
     if m.phase == P.SELECTING or m.phase == P.PREVIEW or m.phase == P.CONFIRM then
         if p == nil then return P.toIdle(m, "OFFLINE") end
         if p:isDead() then return P.toIdle(m, CODE.DEAD) end
-        if m.sel ~= nil then Sel.update(m.sel, p) end
+        if m.phase == P.SELECTING and m.sel ~= nil and Sel.update(m.sel, p) then changed(m) end
     elseif m.phase == P.IDLE then
         local dead = p == nil or p:isDead()
         if dead ~= m.dead then
@@ -483,9 +519,11 @@ local function row(v, list, y)
     return y + h + GAP
 end
 
+-- 預檢之後的範圍行：外框、面積、塊數與左上角
 local function areaLine(v, y)
-    local r = v.m.rect
-    return para(v, getText("IGUI_MSH_Create_Area", tostring(r.w), tostring(r.h), tostring(r.x), tostring(r.y)), "text", nil, y)
+    local rects = v.m.rects
+    local b = MSH.Rect.bounds(rects)
+    return para(v, getText("IGUI_MSH_Create_Area", b.w, b.h, MSH.Rect.listArea(rects), #rects, b.x, b.y), "text", nil, y)
 end
 
 function P.defaultTool()
@@ -547,22 +585,54 @@ local function layoutIdle(v, y, list)
     return y
 end
 
+-- 框選中：說明、目前範圍（外框、面積、塊數；不合規則或超過上限時用錯誤色）與上限、形狀的問題、
+-- 拉到一半那塊的大小（render 每幀畫）、模式（加入／挖掉）、編輯按鈕
 local function layoutSelecting(v, y, list)
     local m, b, s = v.m, v.btn, v.m.sel
     local joy = s.tool == Sel.DRAG and Sel.usingJoypad(s)
-    v.corner, v.joy = s.ax ~= nil, joy
+    local pending = s.ax ~= nil
+    v.corner, v.joy = pending, joy
     local hint = "IGUI_MSH_Select_DragHint"
     if s.tool == Sel.WALK then hint = "IGUI_MSH_Select_WalkHint" elseif joy then hint = "IGUI_MSH_Select_DragHintJoypad" end
     y = para(v, getText(hint), "textMuted", nil, y)
     if m.mode == "redraw" then y = para(v, getText("IGUI_MSH_Create_RedrawHint"), "textMuted", nil, y) end
-    v.sizeY, v.sizeW = y, nil   -- 即時 w×h＝面積／上限：render 畫這一行（範圍變了才重組字串）
-    y = y + v.lineH + 4
-    if s.ax == nil then
-        if s.tool == Sel.WALK or joy then list[#list + 1] = b.mark end
-    else
-        list[#list + 1] = b.done
-        list[#list + 1] = b.redo
+    local res = Sel.result(s)
+    local bad = res.err ~= nil and res.err ~= "EMPTY"
+    v.over = res.err ~= "EMPTY" and v.maxSide ~= nil
+        and (res.w > v.maxSide or res.h > v.maxSide or res.area > v.maxArea)
+    if res.err ~= "EMPTY" then
+        local text = res.rects ~= nil and getText("IGUI_MSH_Select_Shape", res.w, res.h, res.area, #res.rects)
+            or getText("IGUI_MSH_Select_ShapeRaw", res.w, res.h, res.area)
+        y = para(v, text, (bad or v.over) and "errorText" or "text", nil, y)
     end
+    local max = MSH.LIMIT.MAX_PIECES
+    if v.maxSide ~= nil then
+        y = para(v, getText("IGUI_MSH_Select_ShapeLimit", v.maxSide, v.maxArea, max), "textMuted", nil, y)
+    else
+        y = para(v, getText("IGUI_MSH_Select_PieceLimit", max), "textMuted", nil, y)
+    end
+    if bad then y = para(v, getText("IGUI_MSH_Select_Err_" .. res.err, max), "errorText", "warning", y) end
+    v.sizeY, v.sizeW, v.sizeH, v.sizeText = y, nil, nil, nil
+    y = y + v.lineH + 4
+    b.add:setActive(not s.cut)
+    b.cut:setActive(s.cut)
+    b.cut:setEnabled(not Sel.isEmpty(s))
+    y = row(v, { b.add, b.cut }, y)
+    if s.tool == Sel.WALK or joy then
+        if pending then
+            b.apply:setTitle(getText(s.cut and "IGUI_MSH_Select_ApplyCut" or "IGUI_MSH_Select_ApplyAdd"))
+            b.apply:fitWidth()
+            list[#list + 1] = b.apply
+        else
+            list[#list + 1] = b.mark
+        end
+    end
+    b.done:setEnabled(res.err == nil or pending)
+    b.undo:setEnabled(Sel.canUndo(s))
+    b.clear:setEnabled(not Sel.isEmpty(s))
+    list[#list + 1] = b.done
+    list[#list + 1] = b.undo
+    list[#list + 1] = b.clear
     list[#list + 1] = b.cancel
     return y
 end
@@ -599,7 +669,7 @@ local function layoutPreview(v, y, list)
     list[#list + 1] = b.create
     if m.checks ~= nil then list[#list + 1] = b.recheck end
     if pay and MSH.SlotsWindow ~= nil then list[#list + 1] = b.pay end
-    list[#list + 1] = b.redo
+    list[#list + 1] = b.edit
     list[#list + 1] = b.cancel
     return y
 end
@@ -678,32 +748,29 @@ function V.layout(v)
     if Focus ~= nil and Focus.invalidate ~= nil then Focus.invalidate(v.win) end
 end
 
--- 即時大小行：w × h ＝ 面積，加上邊長與面積上限（只有邊長超過時也看得出原因）；回是否超過上限（範圍變了才重組字串）
-local function sizeLine(v)
+-- 拉到一半那塊的大小（每幀；變了才重組字串）
+local function pendingLine(v)
     local _, _, w, h = Sel.bounds(v.m.sel)
-    if w == nil then w, h = 0, 0 end
-    local over = v.maxSide ~= nil and (w > v.maxSide or h > v.maxSide or w * h > v.maxArea)
     if w ~= v.sizeW or h ~= v.sizeH then
         v.sizeW, v.sizeH = w, h
-        if v.maxArea ~= nil then
-            v.sizeText = getText("IGUI_MSH_Select_SizeLimit", tostring(w), tostring(h), tostring(w * h),
-                tostring(v.maxSide), tostring(v.maxArea))
-        else
-            v.sizeText = getText("IGUI_MSH_Select_SizeNoLimit", tostring(w), tostring(h), tostring(w * h))
-        end
-        v.sizeTok = over and "errorText" or "text"
+        v.sizeText = w ~= nil and getText("IGUI_MSH_Select_Pending", w, h) or nil
     end
-    return over
 end
 
-P.RANGE_ALPHA, P.MARK_ALPHA = 0.5, 0.9
+P.MARK_ALPHA = 0.9
 
--- 預檢之後（preview、confirm、送出中）：照樣畫提案範圍，沒過的項目帶的格子用錯誤色、更不透明地疊在上面。
--- addAreaHighlightForPlayer(playerIndex, x1, y1, x2, y2, z, r, g, b, a)：x2／y2 不含（LuaManager.java:12519）
+-- 預檢之後（preview、confirm、送出中）：照樣畫提案的各塊（輪流的不透明度，同 Select.draw），沒過的項目帶的格子
+-- 用錯誤色、更不透明地疊在上面。addAreaHighlightForPlayer(playerIndex, x1, y1, x2, y2, z, r, g, b, a)：x2／y2 不含
+-- （LuaManager.java:12519）。每幀跑：不用 ipairs、不配置
 local function drawProposal(v, m, p)
-    local r, z = m.rect, math.floor(p:getZ())   -- IsoMovingObject.java:525
+    local rects, z = m.rects, math.floor(p:getZ())   -- IsoMovingObject.java:525
     local c = m.rangeBad and v.colors.errorText or v.colors.accent
-    addAreaHighlightForPlayer(m.playerNum, r.x, r.y, r.x + r.w, r.y + r.h, z, c.r, c.g, c.b, P.RANGE_ALPHA)
+    local alphas = Sel.PIECE_ALPHA
+    for i = 1, #rects do
+        local r = rects[i]
+        addAreaHighlightForPlayer(m.playerNum, r.x, r.y, r.x + r.w, r.y + r.h, z, c.r, c.g, c.b,
+            alphas[(i - 1) % #alphas + 1])
+    end
     local mk = m.marks
     if mk == nil then return end
     local e = v.colors.errorText
@@ -713,22 +780,23 @@ local function drawProposal(v, m, p)
     end
 end
 
--- 每個 UI 幀（Body:prerender）：重加範圍高亮（§2.8 只畫一層）；框選中另有走位終點與即時大小
+-- 每個 UI 幀（Body:prerender）：重加範圍高亮（§2.8 只畫一層）；框選中另有拖曳放開的套用、走位終點與那塊的大小
 function V.frame(v)
     local m = v.m
     local p = player()
     if p == nil then return end
     local phase = m.phase
     if phase == P.PREVIEW or phase == P.CONFIRM or phase == P.SUBMITTING then
-        if m.rect ~= nil then drawProposal(v, m, p) end
+        if m.rects ~= nil then drawProposal(v, m, p) end
         return
     end
     if phase ~= P.SELECTING or m.sel == nil then return end
     local s = m.sel
-    Sel.update(s, p)
-    if (s.ax ~= nil) ~= v.corner or (s.tool == Sel.DRAG and Sel.usingJoypad(s)) ~= v.joy then V.layout(v) end
-    local c = sizeLine(v) and v.colors.errorText or v.colors.accent
-    Sel.draw(s, p, c.r, c.g, c.b, P.RANGE_ALPHA)
+    if Sel.update(s, p) or (s.ax ~= nil) ~= v.corner or (s.tool == Sel.DRAG and Sel.usingJoypad(s)) ~= v.joy then
+        V.layout(v)
+    end
+    pendingLine(v)
+    Sel.draw(s, p, v.colors.accent, v.colors.errorText, v.over)
 end
 
 function V.draw(el, v)
@@ -741,7 +809,7 @@ function V.draw(el, v)
         el:drawText(l.text, l.x, l.y, c.r, c.g, c.b, c.a or 1, FONT)
     end
     if v.sizeY ~= nil and v.sizeText ~= nil and v.m.phase == P.SELECTING then
-        local c = colors[v.sizeTok] or colors.text
+        local c = colors.text
         el:drawText(v.sizeText, PAD, v.sizeY, c.r, c.g, c.b, c.a or 1, FONT)
     end
 end
@@ -803,7 +871,12 @@ local function buildButtons(v, m, UI, theme)
             if m.sel ~= nil and Sel.mark(m.sel, player()) then V.layout(v) end
         end, "primary"),
         done = button("IGUI_MSH_Select_Done", function() P.finish(m, now()) end, "primary"),
-        redo = button("IGUI_MSH_Select_Redo", function() P.reselect(m) end),
+        edit = button("IGUI_MSH_Select_Edit", function() P.edit(m) end),
+        add = button("IGUI_MSH_Select_Add", function() P.setCut(m, false) end, "chip"),
+        cut = button("IGUI_MSH_Select_Cut", function() P.setCut(m, true) end, "chip"),
+        apply = button("IGUI_MSH_Select_ApplyAdd", function() P.applyPiece(m) end, "primary"),
+        undo = button("IGUI_MSH_Select_Undo", function() P.undo(m) end),
+        clear = button("IGUI_MSH_Select_Clear", function() P.clear(m) end),
         cancel = button("UI_Cancel", function() P.back(m) end),
         create = button("IGUI_MSH_Create_CreateBtn", function() P.toConfirm(m) end, "primary"),
         recheck = button("IGUI_MSH_Create_Recheck", function() P.recheck(m, now()) end),

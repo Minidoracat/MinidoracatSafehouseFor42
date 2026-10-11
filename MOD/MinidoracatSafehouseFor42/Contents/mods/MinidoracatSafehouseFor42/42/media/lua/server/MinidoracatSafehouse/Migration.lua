@@ -46,7 +46,7 @@ local LC = MSH.LIFECYCLE
 M.BSH_MOD_ID = "BetterSafehouse"   -- Workshop 3634569678 的 42.19/mod.info:2（docs/research/better-safehouse-3634569678-analysis.md:18）
 M.SKIP_REASONS = { "BAD_RECT", "BAD_OWNER", "DUPLICATE_RECT", "DUPLICATE_ID", "OVER_CAP" }
 -- 接管最多用掉的容量比例，其餘留給之後玩家正常建立與分享（從不擋玩家）：
---   registry 一半（128 KiB）：另一半要放 1,024 筆 tombstone（一筆約 60 bytes，約 64 KiB，§4.2）＋之後的新屋與分享；
+--   registry 一半（256 KiB）：另一半要放 1,024 筆 tombstone（四塊的一筆約 150 bytes，約 150 KiB，§4.2）＋之後的新屋與分享；
 --     一般舊屋一間約 400 bytes，256 間約 100 KiB，正常伺服器碰不到這條。
 --   原生名單名字 3/4（3,072）：留 1,024 個名字給之後的分享與新屋。
 M.REGISTRY_SHARE = 0.5
@@ -135,9 +135,11 @@ local function legacyGrants(members)
     return out
 end
 
+-- 接管的原生一律是一塊（原版只有矩形）；指紋是它的建立時間
 local function legacyRecord(id, rect, owner, title, members, house, now)
-    return MSH.Registry.newRecord({ claimId = id, rect = rect, title = title, owner = owner, source = MSH.SOURCE.LEGACY,
-        deedTier = 1, grants = legacyGrants(members), createdAt = now, nativeCreatedAt = house:getDatetimeCreated() })
+    local piece = { x = rect.x, y = rect.y, w = rect.w, h = rect.h, created = house:getDatetimeCreated() }
+    return MSH.Registry.newRecord({ claimId = id, rects = { piece }, title = title, owner = owner,
+        source = MSH.SOURCE.LEGACY, deedTier = 1, grants = legacyGrants(members), createdAt = now })
 end
 
 -- 標題照建立時的規則（MSH.cleanTitle：去頭尾空白、1–40 字、不含控制字元與 []）；不合格的先去掉那些字元、截 40 字，
@@ -214,15 +216,15 @@ local function restore(idx, imports, now)
     return #todo
 end
 
--- registry 已存、原生沒存：legacy 紀錄沒有標記原生，同範圍恰好一間屋主相同、建立時間相同（N.matches）的 foreign → 重新接上
+-- registry 已存、原生沒存：legacy 紀錄沒有標記原生，同範圍恰好一間屋主相同、建立時間相同（N.pieceOf）的 foreign → 重新接上
 local function reattach(idx)
     local N = MSH.Native
     local n = 0
     for _, rec in ipairs(MSH.Registry.list()) do
         if rec.source == MSH.SOURCE.LEGACY and rec.lifecycle == LC.ACTIVE and idx.byClaim[rec.claimId] == nil then
             local hits = {}
-            for _, e in ipairs(idx.byRect[N.rectKey(rec.rect)] or {}) do
-                if e.claimId == nil and e.owner == rec.owner and N.matches(rec, e) then hits[#hits + 1] = e end
+            for _, e in ipairs(idx.byRect[N.rectKey(rec.rects[1])] or {}) do
+                if e.claimId == nil and e.owner == rec.owner and N.pieceOf(rec, e) ~= nil then hits[#hits + 1] = e end
             end
             if #hits == 1 then
                 mark(hits[1].house, rec.claimId, rec.owner)
@@ -272,7 +274,7 @@ local function adoptOne(c, gen, now, budget)
     local members = cleanMembers(owner, N.players(house))
     local rec = legacyRecord(R.md.nextClaimId, e.rect, owner, title, members, house, now)
     -- 和 Claims.checkCapacity 同一套：registry 估算大小（含這筆）、全部原生名單名字數
-    local names = #N.desiredPlayers(rec)
+    local names = N.nameCount(rec)
     if R.estimateBytes(rec) > budget.bytes or budget.names + names > budget.maxNames then return "cap" end
     local id = R.allocId()
     rec.claimId = id
@@ -309,7 +311,7 @@ local function adopt(st, now)
     local budget = { bytes = math.floor(MSH.LIMIT.REGISTRY_BYTES * M.REGISTRY_SHARE),
         maxNames = math.floor(MSH.LIMIT.NATIVE_NAMES * M.NAMES_SHARE), names = 0 }
     for _, r in ipairs(R.list()) do
-        if R.isLive(r) then budget.names = budget.names + #N.desiredPlayers(r) end
+        if R.isLive(r) then budget.names = budget.names + N.nameCount(r) end
     end
     local done, full = 0, false
     local res = MSH.Srv.withLock(function()

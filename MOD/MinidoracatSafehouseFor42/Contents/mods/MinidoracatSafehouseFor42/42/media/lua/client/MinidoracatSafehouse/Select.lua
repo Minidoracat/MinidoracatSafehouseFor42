@@ -1,15 +1,18 @@
--- MinidoracatSafehouse/Select.lua：建立面板的兩種框選工具（計畫 §7.2）。只產生提案矩形，伺服器不看玩家怎麼選。
+-- MinidoracatSafehouse/Select.lua：建立面板的兩種框選工具（計畫 §7.2）與多塊範圍的編輯（使用者 2026-10-11 裁定）。
+-- 只產生提案範圍，伺服器不看玩家怎麼選。每拉好一塊矩形就照目前的模式「加入」或「挖掉」，疊出的形狀與切塊在 Shape.lua；
+--   〔復原〕退回上一步、〔清除〕清空（也能復原）。挖掉只在範圍不是空的時候有意義。
 --   拖曳（drag）：照原版動物區工具 media/lua/client/ISUI/Animal/ISAddDesignationAnimalZoneUI.lua——
 --     pickSquare 以 screenToIsoX/Y 取格（:296-302）、addAreaHighlightForPlayer 畫框（:271）、
---     手把以十字鍵逐格移動游標，〔設第一角〕後改移動終點（:355-398；onClick ADD :332-349）。
+--     手把以十字鍵逐格移動游標，〔設第一角〕後改移動終點（:355-398；onClick ADD :332-349），再按〔加入這塊〕。
+--     滑鼠放開就照模式套用這一塊；點一下（沒拖）＝一格。
 --     滑鼠不照原版用視窗的 onMouseDownOutside（:47-75）：子元件接走點擊後，引擎改呼叫父視窗的 onMouseDownOutside
 --     （UIElement.java:1094-1110），按面板上的〔完成〕會變成在按鈕底下的地面重拉一個 1×1（2026-10-11 使用者實機）。
 --     改由 Events.OnMouseDown 開始（UIManager.java:715-719：只有沒被任何 UI 接走的點擊才觸發），拖曳中每幀讀
---     isMouseButtonDown(0)（LuaManager.java:8027-8031）更新終點、放開就停。
+--     isMouseButtonDown(0)（LuaManager.java:8027-8031）更新終點、放開就套用。
 --   走位（walk）：照原版管理員安全區工具 media/lua/client/ISUI/AdminPanel/ISAddSafeZoneUI.lua——
---     起點＝按〔設第一角〕時玩家所在格（:176）、終點＝玩家目前位置（:84）、每幀畫範圍（:107）。
+--     起點＝按〔設第一角〕時玩家所在格（:176）、終點＝玩家目前位置（:84）、每幀畫範圍（:107），走到對角按〔加入這塊〕。
 -- 預覽每個 UI 幀重加、只畫一層（§2.8）：由建立面板的 prerender 呼叫 Sel.draw。
--- 每幀路徑（update／bounds／draw）不配置 table 或 closure。
+-- 每幀路徑（update／bounds／draw）不配置 table 或 closure（形狀結果在 Shape.result 快取到下一次改動）。
 -- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/Lua/LuaManager.java
 --   screenToIsoX/Y :3795、:3806；getMouseX/Y :8014、:8046；isMouseButtonDown :8030；wasMouseActiveMoreRecentlyThanJoypad :6421；
 --   addAreaHighlightForPlayer(playerIndex, x1, y1, x2, y2, z, r, g, b, a)（x2/y2 不含）:12519。
@@ -17,17 +20,28 @@
 if not isClient() then return end
 
 require "MinidoracatSafehouse/Contract"
+require "MinidoracatSafehouse/Shape"
 
 local MSH = MinidoracatSafehouse
 local S = MSH.Select or {}
 MSH.Select = S
+local Shape = MSH.Shape
 
 S.DRAG = "drag"
 S.WALK = "walk"
 
--- s = { tool, playerNum, ax, ay（第一角）, bx, by（終點）, cx, cy（手把游標）, dragging }
-function S.new(tool, playerNum)
-    return { tool = tool == S.WALK and S.WALK or S.DRAG, playerNum = playerNum or 0, dragging = false }
+-- 各塊輪流用的不透明度：相鄰的塊看得出分界；拉到一半的那塊另外疊一層
+S.PIECE_ALPHA = { 0.5, 0.3, 0.42, 0.22 }
+S.RAW_ALPHA = 0.4
+S.PENDING_ALPHA = 0.6
+
+-- s = { tool, playerNum, ax, ay（第一角）, bx, by（終點）, cx, cy（手把游標）, dragging, cut（挖掉模式）, shape }
+-- rects：重新框選時從現有範圍開始
+function S.new(tool, playerNum, rects)
+    local s = { tool = tool == S.WALK and S.WALK or S.DRAG, playerNum = playerNum or 0, dragging = false, cut = false,
+        shape = Shape.new() }
+    if rects ~= nil then Shape.load(s.shape, rects) end
+    return s
 end
 
 -- 玩家所在格（IsoMovingObject getX/getY/getZ；Claims.checkOnSite 用同一個 floor）
@@ -50,8 +64,56 @@ local function setWorldMenu(disabled)
     if ISWorldObjectContextMenu then ISWorldObjectContextMenu.disableWorldMenu = disabled end
 end
 
+function S.result(s)
+    return Shape.result(s.shape)
+end
+
+function S.isEmpty(s)
+    return Shape.isEmpty(s.shape)
+end
+
+function S.canUndo(s)
+    return s.ax ~= nil or Shape.canUndo(s.shape)
+end
+
+-- 模式：true＝挖掉。範圍是空的時候只能加入
+function S.setCut(s, cut)
+    s.cut = cut == true and not Shape.isEmpty(s.shape)
+end
+
+-- 把拉好的一塊照模式加入或挖掉；回 true＝形狀變了。手把游標留在這塊的終點，接著拉下一塊
+function S.commit(s)
+    if s.ax == nil then return false end
+    local rect = MSH.Rect.fromCorners(s.ax, s.ay, s.bx, s.by)
+    if s.tool == S.DRAG and s.cx ~= nil then s.cx, s.cy = s.bx, s.by end
+    s.ax, s.ay, s.bx, s.by, s.dragging = nil, nil, nil, nil, false
+    if s.cut and Shape.isEmpty(s.shape) then return false end
+    local applied = Shape.apply(s.shape, rect, not s.cut)   -- 形狀已經太亂（分界線超過上限）時不套用
+    if Shape.isEmpty(s.shape) then s.cut = false end
+    return applied
+end
+
+-- 〔復原〕：先取消拉到一半的那塊，再退回上一步
+function S.undo(s)
+    if s.ax ~= nil then
+        s.ax, s.ay, s.bx, s.by, s.dragging = nil, nil, nil, nil, false
+        return true
+    end
+    local ok = Shape.undo(s.shape)
+    if Shape.isEmpty(s.shape) then s.cut = false end
+    return ok
+end
+
+-- 〔清除〕：清空範圍（可以復原）
+function S.clear(s)
+    s.ax, s.ay, s.bx, s.by, s.dragging = nil, nil, nil, nil, false
+    local ok = Shape.clear(s.shape)
+    s.cut = false
+    return ok
+end
+
 -- ===== 拖曳：滑鼠（只有 0 號玩家有滑鼠，原版每個 handler 第一行 :48、:63、:72）=====
--- 地面上的點擊（Events.OnMouseDown）：按下的格子是第一角，放開後再按一次＝重新拉一個範圍
+-- 地面上的點擊（Events.OnMouseDown）：按下的格子是這一塊的第一角
 function S.mouseDown(s, player)
     if s.tool ~= S.DRAG or s.playerNum ~= 0 or player == nil then return false end
     local _, _, z = cellOf(player)
@@ -83,37 +145,29 @@ function S.mark(s, player)
     return true
 end
 
--- 每幀：拖曳中按著左鍵＝終點跟著游標、放開＝停（游標經過任何視窗都照算）；走位的終點跟著玩家（ISAddSafeZoneUI :84）
+-- 每幀：拖曳中按著左鍵＝終點跟著游標、放開＝照模式套用這一塊（游標經過任何視窗都照算）；
+-- 走位的終點跟著玩家（ISAddSafeZoneUI :84）。回 true＝形狀變了
 function S.update(s, player)
-    if player == nil then return end
+    if player == nil then return false end
     if s.dragging then
         if isMouseButtonDown(0) then
             local _, _, z = cellOf(player)
             s.bx, s.by = S.pick(s, getMouseX(), getMouseY(), z)
         else
-            s.dragging = false
+            return S.commit(s)
         end
     elseif s.tool == S.WALK and s.ax ~= nil then
         s.bx, s.by = cellOf(player)
     end
+    return false
 end
 
--- 兩角（inclusive）→ x, y, w, h；還沒有第一角回 nil。換算同 MSH.Rect.fromCorners，但不配置 table（每幀用）
+-- 拉到一半的那塊（兩角 inclusive）→ x, y, w, h；沒有回 nil。換算同 MSH.Rect.fromCorners，但不配置 table（每幀用）
 function S.bounds(s)
     if s.ax == nil then return nil end
     local x0, x1 = math.min(s.ax, s.bx), math.max(s.ax, s.bx)
     local y0, y1 = math.min(s.ay, s.by), math.max(s.ay, s.by)
     return x0, y0, x1 - x0 + 1, y1 - y0 + 1
-end
-
-function S.rect(s)
-    if s.ax == nil then return nil end
-    return MSH.Rect.fromCorners(s.ax, s.ay, s.bx, s.by)
-end
-
--- 重新框選：清掉兩角，留著手把游標
-function S.reset(s)
-    s.ax, s.ay, s.bx, s.by, s.dragging = nil, nil, nil, nil, false
 end
 
 -- 離開框選（完成、取消、關窗、死亡）：還原世界選單
@@ -122,13 +176,23 @@ function S.stop(s)
     setWorldMenu(false)
 end
 
--- 每個 UI 幀重加一次（只畫一層）；有範圍畫範圍，沒有就畫游標格（:304-320）
-function S.draw(s, player, r, g, b, a)
+-- 每個 UI 幀重加一次（只畫一層）：範圍的各塊（輪流的不透明度；形狀不合規則或 over＝超過大小上限時用 bad 色）、
+-- 拉到一半的那塊（加入用 ok 色、挖掉用 bad 色），沒在拉時畫游標格（:304-320）
+function S.draw(s, player, ok, bad, over)
     if player == nil then return end
     local px, py, z = cellOf(player)
+    local res = Shape.result(s.shape)
+    local c = (over or (res.err ~= nil and res.err ~= "EMPTY")) and bad or ok
+    local d, alphas = res.draw, S.PIECE_ALPHA
+    for k = 1, #d, 4 do
+        local a = S.RAW_ALPHA
+        if res.rects ~= nil then a = alphas[((k - 1) / 4) % #alphas + 1] end
+        addAreaHighlightForPlayer(s.playerNum, d[k], d[k + 1], d[k] + d[k + 2], d[k + 1] + d[k + 3], z, c.r, c.g, c.b, a)
+    end
     local x, y, w, h = S.bounds(s)
     if x ~= nil then
-        addAreaHighlightForPlayer(s.playerNum, x, y, x + w, y + h, z, r, g, b, a)
+        local pc = s.cut and bad or ok
+        addAreaHighlightForPlayer(s.playerNum, x, y, x + w, y + h, z, pc.r, pc.g, pc.b, S.PENDING_ALPHA)
         return
     end
     local cx, cy = px, py
@@ -139,5 +203,6 @@ function S.draw(s, player, r, g, b, a)
             cx, cy = S.pick(s, getMouseX(), getMouseY(), z)
         end
     end
-    addAreaHighlightForPlayer(s.playerNum, cx, cy, cx + 1, cy + 1, z, r, g, b, 1)
+    local cc = s.cut and bad or ok
+    addAreaHighlightForPlayer(s.playerNum, cx, cy, cx + 1, cy + 1, z, cc.r, cc.g, cc.b, 1)
 end

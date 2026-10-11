@@ -64,7 +64,7 @@ return function(T)
     local function perRect()
         local out = {}
         for _, rec in ipairs(R.list()) do
-            local k = MSH.Native.rectKey(rec.rect)
+            local k = MSH.Native.rectKey(rec.rects[1])
             out[k] = (out[k] or 0) + 1
         end
         return out
@@ -96,7 +96,8 @@ return function(T)
         and st.skipped.DUPLICATE_ID == 2, "接管 3、略過依原因計數（實際 " .. tostring(st.adopted) .. "）")
     check(owned(100, "alice") and owned(200, "bob") and owned(300, "carol"), "屋主、legacy、active，原屋主在原生名單")
     local ra = R.get(MSH.claimIdOf(houseAt(100).owner))
-    check(ra.title == "A" and #ra.grants == 2 and ra.grants[1].bits == MSH.SHARE_LEGACY and ra.nativeCreatedAt == houseAt(100).created
+    check(ra.title == "A" and #ra.grants == 2 and ra.grants[1].bits == MSH.SHARE_LEGACY and #ra.rects == 1
+        and ra.rects[1].created == houseAt(100).created
         and houseAt(100).players:contains("bob") and houseAt(100).players:contains("carol"), "標題、成員（SHARE_LEGACY）、原生指紋照舊")
     check(houseAt(500).owner == "x.y" and houseAt(700).owner == "dan" and houseAt(800).owner == "fay" and #R.list() == 3,
         "有問題的留原版、不建紀錄")
@@ -117,7 +118,7 @@ return function(T)
     check(Mg.status().state == "done" and noRepair() and #R.list() == 3 and houseAt(900).owner == "zed" and mutate().ok,
         "沒有修補、不再接管")
     local p = T.player({ name = "alice", x = 1005, y = 1005 })
-    check(T.cmd(p, "create", { rect = { x = 1000, y = 1000, w = 10, h = 10 } }).code == "QUOTA_FULL",
+    check(T.cmd(p, "create", { rects = { { x = 1000, y = 1000, w = 10, h = 10 } } }).code == "QUOTA_FULL",
         "legacy grandfather：屋主已超過名額 1，不能再新建")
 
     T.section("已有紀錄或沒有原生的伺服器永遠不進入")
@@ -126,9 +127,9 @@ return function(T)
     native(50, "zed", "Z", {})
     again()
     check(Mg.status().state == "none" and houseAt(50).owner == "zed", "之後才出現的 foreign：照樣不接管")
-    local rec = R.newRecord({ claimId = R.allocId(), rect = { x = 70, y = 70, w = 4, h = 4 }, title = "t", owner = "eve",
+    local rec = R.newRecord({ claimId = R.allocId(), rects = { { x = 70, y = 70, w = 4, h = 4 } }, title = "t", owner = "eve",
         source = MSH.SOURCE.DEED, deedTier = 1, createdAt = T.now })
-    rec.nativeCreatedAt = MSH.Native.build(rec):getDatetimeCreated()
+    rec.rects[1].created = MSH.Native.build(rec, {})[1]:getDatetimeCreated()
     R.put(rec)
     R.md.migration = nil   -- 還沒有遷移狀態、但已有紀錄的 registry
     again()
@@ -263,7 +264,8 @@ return function(T)
         return n
     end
     local function create(name, x)
-        local res = T.cmd(T.player({ name = name, x = x + 5, y = x + 5 }), "create", { rect = { x = x, y = x, w = 10, h = 10 } })
+        local res = T.cmd(T.player({ name = name, x = x + 5, y = x + 5 }), "create",
+            { rects = { { x = x, y = x, w = 10, h = 10 } } })
         return res and res.ok and res.claimId or nil
     end
 
@@ -302,6 +304,8 @@ return function(T)
         native(x, owner, "Big" .. x, members)
     end
     boot({ beforeStart = function()
+        -- 預算固定 128 KiB（10 間大屋放不下），不隨 LIMIT.REGISTRY_BYTES 調整
+        MinidoracatSafehouse.Migration.REGISTRY_SHARE = 128 * 1024 / MinidoracatSafehouse.LIMIT.REGISTRY_BYTES
         for i = 1, 10 do big(i * 100, "own" .. i) end
     end })
     st = Mg.status()

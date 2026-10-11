@@ -70,10 +70,13 @@ return function(T)
     T.section("建立面板：走位框選與預檢")
     check(walkRect(m, 14.2, 12.9) and m.phase == P.PREVIEW, "走到對角後〔完成〕進入 preview")
     local pv = lastSent()
-    check(pv.command == "preview" and pv.args.rect.x == 10 and pv.args.rect.y == 10 and pv.args.rect.w == 5
-        and pv.args.rect.h == 3 and pv.args.deedType == "MinidoracatSafehouse.Deed2", "預檢送出提案矩形與地契")
+    check(pv.command == "preview" and #pv.args.rects == 1 and pv.args.rects[1].x == 10 and pv.args.rects[1].y == 10
+        and pv.args.rects[1].w == 5 and pv.args.rects[1].h == 3 and pv.args.deedType == "MinidoracatSafehouse.Deed2",
+        "預檢送出提案範圍（一塊）與地契")
     local before = #sentOf("preview")
-    check(P.reselect(m) and m.phase == P.SELECTING and m.sel.ax == nil, "〔重新框選〕清掉範圍")
+    local kept = P.edit(m) and m.phase == P.SELECTING and Sel.result(m.sel).rects
+    check(kept and #kept == 1 and kept[1].w == 5 and kept[1].h == 3, "〔修改範圍〕回框選、範圍保留")
+    check(P.clear(m) and Sel.isEmpty(m.sel) and m.phase == P.SELECTING, "〔清除〕清空範圍")
     p.x, p.y = 10, 10
     walkRect(m, 15, 15)
     check(#sentOf("preview") == before, "500 ms 冷卻內不送第二次預檢（伺服器會直接丟掉）")
@@ -95,7 +98,7 @@ return function(T)
     check(P.submit(m, "  Home  ") and m.phase == P.SUBMITTING, "送出 → submitting")
     local cr = lastSent()
     check(cr.command == "create" and cr.args.title == "Home" and cr.args.deedType == "MinidoracatSafehouse.Deed2"
-        and cr.args.rect.w == 6 and MSH.Client.isPending(cr.args.requestId), "create 帶 mutation requestId、名稱與地契")
+        and cr.args.rects[1].w == 6 and MSH.Client.isPending(cr.args.requestId), "create 帶 mutation requestId、名稱與地契")
     T.advance(10000)
     T.tick(6)
     check(m.phase == P.PENDING, "10 秒沒結果 → result-pending")
@@ -255,25 +258,38 @@ return function(T)
         addAreaHighlightForPlayer = real
         return grown, n
     end
+    -- 面板上的一行字（layout 重建的 v.lines）：回 token
+    local function lineTok(text)
+        for _, l in ipairs(v.lines) do
+            if l.text == text then return l.token end
+        end
+        return nil
+    end
     p.x, p.y = 10, 10
     P.startSelect(vm, Sel.WALK)
     Sel.mark(vm.sel, p)
     p.x, p.y = 39, 19
     local c1 = frame()
-    check(v.sizeText == "IGUI_MSH_Select_SizeLimit|30,10,300,40,1600" and v.sizeTok == "text" and c1[1].r == colors.accent.r,
-        "大小行寫出邊長與面積上限（2 級 40 × 40、1,600）")
+    check(v.sizeText == "IGUI_MSH_Select_Pending|30,10" and c1[1].r == colors.accent.r and c1[1].a == Sel.PENDING_ALPHA,
+        "拉到一半的那塊：每幀寫出大小、用 accent 畫")
+    check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600," .. MSH.LIMIT.MAX_PIECES) == "textMuted",
+        "上限行寫出邊長、面積與塊數上限（2 級 40 × 40、1,600）")
     p.x, p.y = 59, 19
+    check(P.applyPiece(vm) and Sel.bounds(vm.sel) == nil, "〔加入這塊〕：走到的那塊套用進範圍")
     local c2 = frame()
-    check(v.sizeText == "IGUI_MSH_Select_SizeLimit|50,10,500,40,1600" and v.sizeTok == "errorText"
-        and c2[1].r == colors.errorText.r, "只有邊長超過：字與範圍都變錯誤色，上限寫得出原因")
+    check(lineTok("IGUI_MSH_Select_Shape|50,10,500,1") == "errorText" and c2[1].r == colors.errorText.r
+        and c2[1].a == Sel.PIECE_ALPHA[1], "只有邊長超過：範圍行與範圍都變錯誤色，上限行寫得出原因")
     local gs, ns = grownKB()
-    check(ns == 201 and gs < 1, "框選畫面每幀不配置（200 幀增加 " .. string.format("%.2f", gs) .. " KB）")
+    check(ns == 201 * #c2 and gs < 1, "框選畫面每幀不配置（200 幀增加 " .. string.format("%.2f", gs) .. " KB）")
+    check(P.undo(vm) and Sel.isEmpty(vm.sel), "〔復原〕退回上一步：範圍又是空的")
+    p.x, p.y = 10, 10
+    Sel.mark(vm.sel, p)
     p.x, p.y = 17, 17
     frame()
     P.finish(vm, T.now)
     T.tick(7)
     local pvs = lastSent()
-    check(pvs.command == "preview" and pvs.args.rect.w == 8, "完成後送預檢")
+    check(pvs.command == "preview" and pvs.args.rects[1].w == 8, "完成後送預檢（走位還沒套用的那塊也算進去）")
     local c3 = frame()
     check(#c3 == 1 and c3[1].x1 == 10 and c3[1].x2 == 18 and c3[1].y2 == 18 and c3[1].r == colors.accent.r,
         "等預檢時照樣每幀畫範圍（accent）")
@@ -284,11 +300,11 @@ return function(T)
         { name = "quota", ok = false, code = "QUOTA_FULL", tier = 2 },
         { name = "identity", ok = true } } })
     local c4 = frame()
-    check(#c4 == 5 and c4[1].r == colors.accent.r and c4[1].a == P.RANGE_ALPHA, "預檢沒過：範圍仍是 accent")
+    check(#c4 == 5 and c4[1].r == colors.accent.r and c4[1].a == Sel.PIECE_ALPHA[1], "預檢沒過：範圍仍是 accent")
     check(#c4 == 5 and c4[2].x1 == 12 and c4[2].y1 == 13 and c4[2].x2 == 13 and c4[2].y2 == 14
         and c4[3].x1 == 15 and c4[3].y1 == 11 and c4[3].x2 == 17 and c4[3].y2 == 18
         and c4[4].x1 == 5 and c4[4].x2 == 25 and c4[4].y2 == 35 and c4[5].x1 == 19 and c4[5].x2 == 23
-        and c4[2].r == colors.errorText.r and c4[5].r == colors.errorText.r and c4[2].a > P.RANGE_ALPHA,
+        and c4[2].r == colors.errorText.r and c4[5].r == colors.errorText.r and c4[2].a > Sel.PIECE_ALPHA[1],
         "沒過的項目：每塊道路格、資源點整棟、相鄰範圍用錯誤色、更不透明標出；沒座標的不畫")
     local c5 = frame()
     check(#c5 == 5, "每幀重加同一組（只畫一層）")
@@ -325,13 +341,10 @@ return function(T)
     reply(lastSent(), { pass = false, checks = {
         { name = "size", ok = false, code = "TOO_BIG", maxSide = 40, maxArea = 1600 },
         { name = "roads", ok = false, code = "ROAD", areas = { 12, 13, 1, 1 } } } })
-    check(anyError(frame()), "（對照）重新框選前地上有紅色")
-    P.reselect(vm)
-    check(not anyError(frame()), "重新框選：地上不留上一輪的問題格與紅色範圍")
-    p.x, p.y = 10, 10
-    Sel.mark(vm.sel, p)
-    p.x, p.y = 17, 17
-    frame()
+    check(anyError(frame()), "（對照）修改範圍前地上有紅色")
+    local keptV = P.edit(vm) and Sel.result(vm.sel).rects
+    check(keptV and #keptV == 1 and keptV[1].w == 8 and vm.phase == P.SELECTING, "〔修改範圍〕回框選、範圍保留")
+    check(not anyError(frame()), "修改範圍：地上不留上一輪的問題格與紅色範圍")
     P.finish(vm, T.now)
     T.tick(7)
     reply(lastSent(), { pass = false, checks = { { name = "roads", ok = false, code = "ROAD", areas = { 12, 13, 1, 1 } } } })
@@ -353,14 +366,15 @@ return function(T)
     T.fire("OnMouseDown", 100, 100)   -- 地面上的點擊：沒有視窗接走才會觸發（UIManager.java:715-719）
     mouse.x, mouse.y = 199, 189
     T.tick(1)
-    local r1 = Sel.rect(vm.sel)
+    local x1, y1, w1, h1 = Sel.bounds(vm.sel)
     mouse.down = false
     T.tick(1)
     mouse.x, mouse.y = 500, 500
     T.tick(1)
-    local r2 = Sel.rect(vm.sel)
-    check(r1 ~= nil and r1.x == 10 and r1.y == 10 and r1.w == 10 and r1.h == 9 and r2.w == 10 and r2.h == 9,
-        "按著拖曳：終點跟著游標；放開後再移動滑鼠，範圍不變")
+    local r2 = Sel.result(vm.sel).rects
+    check(x1 == 10 and y1 == 10 and w1 == 10 and h1 == 9 and Sel.bounds(vm.sel) == nil
+        and r2 and #r2 == 1 and r2[1].x == 10 and r2[1].w == 10 and r2[1].h == 9,
+        "按著拖曳：終點跟著游標；放開就套用這一塊，之後再移動滑鼠，範圍不變")
     -- 引擎：視窗裡的按鈕接走點擊後，改呼叫父視窗的 onMouseDownOutside（座標在視窗內，UIElement.java:1094-1110）；
     -- 那一下不觸發 OnMouseDown（UIManager.java:715-719）
     mouse.x, mouse.y, mouse.down = 900, 40, true
@@ -368,7 +382,8 @@ return function(T)
     T.tick(1)
     mouse.down = false
     v.btn.done.onClick()
-    check(vm.phase == P.PREVIEW and vm.rect.x == 10 and vm.rect.y == 10 and vm.rect.w == 10 and vm.rect.h == 9,
+    check(vm.phase == P.PREVIEW and #vm.rects == 1 and vm.rects[1].x == 10 and vm.rects[1].y == 10
+        and vm.rects[1].w == 10 and vm.rects[1].h == 9,
         "按〔完成〕：用拖好的範圍（不會變成按鈕底下的 1×1）")
     P.back(vm)
     P.close(vm)

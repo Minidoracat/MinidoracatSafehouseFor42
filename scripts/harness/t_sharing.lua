@@ -14,10 +14,10 @@ return function(T)
     -- 直接放一筆 active 紀錄＋原生（不經建立指令）
     local function seed(owner, r)
         local id = R.allocId()
-        local rec = R.newRecord({ claimId = id, rect = r, title = "t", owner = owner, source = MSH.SOURCE.DEED,
+        local rec = R.newRecord({ claimId = id, rects = { r }, title = "t", owner = owner, source = MSH.SOURCE.DEED,
             deedTier = 1, createdAt = T.now })
-        local hs = MSH.Native.build(rec)
-        rec.nativeCreatedAt = hs:getDatetimeCreated()
+        local hs = MSH.Native.build(rec, {})[1]
+        rec.rects[1].created = hs:getDatetimeCreated()
         R.put(rec)
         return rec, hs
     end
@@ -399,7 +399,7 @@ return function(T)
     local legacy = seed("leo", rect(300, 300, 5, 5))
     legacy.source = MSH.SOURCE.LEGACY
     check(R.binding("leo") == nil, "前提：legacy 屋主沒綁定")
-    res = T.cmd(leo, "preview", { rect = rect(300, 300, 5, 5), claimId = legacy.claimId })
+    res = T.cmd(leo, "preview", { rects = { rect(300, 300, 5, 5) }, claimId = legacy.claimId })
     check(res ~= nil and R.binding("leo") == nil, "preview 帶 claimId（查詢，經過 Claims.owned）不綁定")
     res = T.cmd(leo, "release", { claimId = legacy.claimId, expectedRevision = legacy.revision })
     b = R.binding("leo")
