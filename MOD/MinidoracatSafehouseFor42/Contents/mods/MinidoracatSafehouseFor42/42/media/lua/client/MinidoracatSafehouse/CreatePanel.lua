@@ -407,6 +407,12 @@ function P.onTick()
     if P.model ~= nil then P.update(P.model, getTimestampMs()) end
 end
 
+-- 地面上的左鍵（沒被任何視窗接走才會觸發，UIManager.java:715-719）：框選中就從這格開始拉
+function P.onWorldMouseDown()
+    local m = P.model
+    if m ~= nil and m.phase == P.SELECTING and m.sel ~= nil then Sel.mouseDown(m.sel, player()) end
+end
+
 -- ===== 畫面 =====
 
 local V = {}
@@ -762,23 +768,8 @@ local function escape(m)
     return true
 end
 
--- 視窗的滑鼠與手把：世界上的拖曳收在視窗的 outside 事件（UIElement.java:1001-1035、1262-1280；
--- UIManager.java:673-697 對不在滑鼠下的頂層元件呼叫 outside），原本的拖曳視窗處理照常
+-- 視窗的手把與按鍵；滑鼠拖曳不經視窗（Select.lua 檔頭：Events.OnMouseDown＋每幀讀按鍵狀態）
 local function hookInput(v, win, m)
-    win.onMouseDownOutside = function()
-        if m.phase == P.SELECTING and m.sel ~= nil then Sel.mouseDown(m.sel, player()) end
-    end
-    local baseMove, baseUp = win.onMouseMoveOutside, win.onMouseUpOutside
-    win.onMouseMoveOutside = function(self, dx, dy)
-        local r = baseMove(self, dx, dy)
-        if m.phase == P.SELECTING and m.sel ~= nil then Sel.mouseMove(m.sel, player()) end
-        return r
-    end
-    win.onMouseUpOutside = function(self, x, y)
-        local r = baseUp(self, x, y)
-        if m.sel ~= nil then Sel.mouseUp(m.sel) end
-        return r
-    end
     local function dir(name, dx, dy)
         local base = win["onJoypadDir" .. name]
         win["onJoypadDir" .. name] = function(self, data)
@@ -971,6 +962,7 @@ end
 
 if first then
     Events.OnTick.Add(function() MSH.CreatePanel.onTick() end)
+    Events.OnMouseDown.Add(function() MSH.CreatePanel.onWorldMouseDown() end)
     Events.OnFillInventoryObjectContextMenu.Add(function(playerNum, context, items)
         MSH.CreatePanel.onInventoryMenu(playerNum, context, items)
     end)

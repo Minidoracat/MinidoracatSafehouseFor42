@@ -181,7 +181,8 @@ return function(T)
 
     T.section("建立面板：畫面（假框架）—不透明視窗、即時大小、預檢後的範圍與問題格")
     local G = { "MinidoracatUI", "ISPanel", "getCore", "getTextManager", "UIFont", "getJoypadData", "getText",
-        "addAreaHighlightForPlayer" }
+        "addAreaHighlightForPlayer", "getMouseX", "getMouseY", "isMouseButtonDown", "screenToIsoX", "screenToIsoY",
+        "wasMouseActiveMoreRecentlyThanJoypad" }
     local savedG = {}
     for _, k in ipairs(G) do savedG[k] = _G[k] end
     local function class(base)
@@ -196,7 +197,7 @@ return function(T)
         return setmetatable({ x = x or 0, y = y or 0, width = w or 60, height = h or 20, visible = true }, self)
     end
     for _, k in ipairs({ "initialise", "addChild", "bringToTop", "drawText", "setTooltip", "setStyle", "setActive",
-        "fitWidth", "setInvalid", "removeFromUIManager", "addToUIManager", "onMouseMoveOutside", "onMouseUpOutside",
+        "fitWidth", "setInvalid", "removeFromUIManager", "addToUIManager",
         "onJoypadDirUp", "onJoypadDirDown", "onJoypadDirLeft", "onJoypadDirRight", "onFocusShoulder" }) do
         Base[k] = function() end
     end
@@ -336,6 +337,40 @@ return function(T)
     reply(lastSent(), { pass = false, checks = { { name = "roads", ok = false, code = "ROAD", areas = { 12, 13, 1, 1 } } } })
     P.back(vm)
     check(vm.phase == P.IDLE and #frame() == 0, "取消回 idle：地上什麼都不畫")
+
+    T.section("建立面板：滑鼠拖曳；按面板上的按鈕不改到框好的範圍")
+    -- 假滑鼠：螢幕座標 ÷ 10 = 格子；isMouseButtonDown 讀 mouse.down
+    local mouse = { x = 0, y = 0, down = false }
+    getMouseX = function() return mouse.x end
+    getMouseY = function() return mouse.y end
+    isMouseButtonDown = function(b) return b == 0 and mouse.down end
+    screenToIsoX = function(_, sx) return sx / 10 end
+    screenToIsoY = function(_, _, sy) return sy / 10 end
+    wasMouseActiveMoreRecentlyThanJoypad = function() return true end
+    p.x, p.y = 15.5, 15.5
+    check(P.startSelect(vm, Sel.DRAG), "選拖曳開始框選")
+    mouse.x, mouse.y, mouse.down = 100, 100, true
+    T.fire("OnMouseDown", 100, 100)   -- 地面上的點擊：沒有視窗接走才會觸發（UIManager.java:715-719）
+    mouse.x, mouse.y = 199, 189
+    T.tick(1)
+    local r1 = Sel.rect(vm.sel)
+    mouse.down = false
+    T.tick(1)
+    mouse.x, mouse.y = 500, 500
+    T.tick(1)
+    local r2 = Sel.rect(vm.sel)
+    check(r1 ~= nil and r1.x == 10 and r1.y == 10 and r1.w == 10 and r1.h == 9 and r2.w == 10 and r2.h == 9,
+        "按著拖曳：終點跟著游標；放開後再移動滑鼠，範圍不變")
+    -- 引擎：視窗裡的按鈕接走點擊後，改呼叫父視窗的 onMouseDownOutside（座標在視窗內，UIElement.java:1094-1110）；
+    -- 那一下不觸發 OnMouseDown（UIManager.java:715-719）
+    mouse.x, mouse.y, mouse.down = 900, 40, true
+    if v.win.onMouseDownOutside then v.win.onMouseDownOutside(v.win, 30, 40) end
+    T.tick(1)
+    mouse.down = false
+    v.btn.done.onClick()
+    check(vm.phase == P.PREVIEW and vm.rect.x == 10 and vm.rect.y == 10 and vm.rect.w == 10 and vm.rect.h == 9,
+        "按〔完成〕：用拖好的範圍（不會變成按鈕底下的 1×1）")
+    P.back(vm)
     P.close(vm)
     MSH.Client._theme = nil
     for _, k in ipairs(G) do _G[k] = savedG[k] end
