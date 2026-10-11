@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Resource categories to avoid",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Separate with semicolons. Category names are the same as in the minimap: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nEmpty = military;police;gunstore;medical;pharmacy;fire;gas;prison (military, police, gun stores, medical, pharmacies, fire stations, gas stations, prisons).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Enabled deed tiers",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "How many deed tiers are enabled, counting from tier 1. Deeds of disabled tiers cannot be used, do not drop and cannot be crafted.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "How many deed tiers are enabled, counting from tier 1. Deeds of disabled tiers cannot be used, do not drop and cannot be crafted. Deeds players already hold are kept and work again if the tier is enabled again. Safehouses already built stay protected; rented slots can still be renewed in the Slots window, but no new ones can be bought.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Tier 1 max side (tiles)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Longest side of a safehouse created with a tier 1 deed, in tiles.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Tier 1 max area (tiles)",

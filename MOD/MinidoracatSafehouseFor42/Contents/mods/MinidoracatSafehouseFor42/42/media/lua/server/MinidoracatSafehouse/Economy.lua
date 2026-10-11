@@ -516,13 +516,17 @@ function E.slots(ctx)
     for _, rec in ipairs(MSH.Registry.byOwner(ctx.who)) do
         if s.ids[rec.claimId] then titles[#titles + 1] = rec.title end
     end
+    -- 關閉的等級（TiersEnabled 調低、改成免費建立）還有付費屋時照樣列出：validatePurchase 放行續租，名額視窗是玩家
+    -- 唯一能續租、開關自動續租的地方，不列出來租約就只能到期（2026-10-12 使用者問移除等級的影響時查到）。
+    -- 這種等級 offer 不帶價格，畫面上沒有買斷／租用新名額的按鈕
     local tiers = {}
     for t = 1, MSH.MAX_TIER do
-        if E.tierEnabled(cfg, t) then
+        local enabled, paid = E.tierEnabled(cfg, t), #(by[t] or {})
+        if enabled or paid > 0 then
             local tc = cfg.tiers[t]
             local o = E.offer(ctx.who, t, cfg)
-            tiers[#tiers + 1] = { tier = t, enabled = true, free = tc.free, buy = tc.buy, rent = tc.rent,
-                perPlayer = tc.perPlayer, usable = o.usable, paid = #(by[t] or {}), grace = o.grace,
+            tiers[#tiers + 1] = { tier = t, enabled = enabled, free = tc.free, buy = tc.buy, rent = tc.rent,
+                perPlayer = tc.perPlayer, usable = o.usable, paid = paid, grace = o.grace,
                 buyPrice = o.buy, rentPrice = o.rent }
         end
     end

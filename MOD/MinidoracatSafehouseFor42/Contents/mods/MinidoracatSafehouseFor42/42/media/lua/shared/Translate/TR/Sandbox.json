@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Kaçınılacak kaynak kategorileri",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Noktalı virgülle ayırın; kategori adları mini haritadakiyle aynıdır: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nBoş = military;police;gunstore;medical;pharmacy;fire;gas;prison (askeri, polis, silah dükkanı, tıbbi, eczane, itfaiye, benzinlik, hapishane).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Etkin tapu seviyesi sayısı",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "1. seviyeden başlayarak kaç tapu seviyesinin etkin olduğu. Etkin olmayan seviyelerin tapuları kullanılamaz, ganimet olarak çıkmaz ve üretilemez.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "1. seviyeden başlayarak kaç tapu seviyesinin etkin olduğu. Etkin olmayan seviyelerin tapuları kullanılamaz, ganimet olarak çıkmaz ve üretilemez. Oyuncuların elindeki tapular kaybolmaz; seviye yeniden etkinleştirilirse tekrar kullanılabilir. Kurulmuş güvenli evler korunmaya devam eder; kiralanan haklar Haklar penceresinden yenilenebilir, ancak yenisi satın alınamaz.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Seviye 1: en uzun kenar (kare)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Seviye 1 tapuyla oluşturulan güvenli evin en uzun kenarı, kare cinsinden.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Seviye 1: en büyük alan (kare)",

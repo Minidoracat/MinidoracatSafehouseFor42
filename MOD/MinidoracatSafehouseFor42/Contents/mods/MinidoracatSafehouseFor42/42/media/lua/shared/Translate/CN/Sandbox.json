@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "避开的资源类别",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "用分号分隔，类别名称同小地图：military、police、gunstore、medical、pharmacy、fire、books、school、grocery、gas、tools、outdoor、prison、storage、electronics、church、farm、industry、retail、food。\n留空＝military;police;gunstore;medical;pharmacy;fire;gas;prison（军事、警察、枪店、医疗、药店、消防、加油站、监狱）。",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "启用的地契等级数",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "从 1 级算起，启用前几种地契等级。未启用等级的地契不能使用、不会掉落，也不能制作。",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "从 1 级算起，启用前几种地契等级。未启用等级的地契不能使用、不会掉落，也不能制作。玩家手上的地契不会消失，加回这一级就能再用；已经建好的安全屋照常保护，租用的名额可以在名额窗口续租，但不能再买新的。",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "1 级最大边长（格）",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "1 级地契可建立的安全屋最大边长（格）。",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "1 级最大面积（格）",

@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "피할 자원 분류",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "세미콜론으로 구분하며, 분류 이름은 미니맵과 같습니다: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\n비워 두면 military;police;gunstore;medical;pharmacy;fire;gas;prison(군사, 경찰, 총포상, 의료, 약국, 소방, 주유소, 교도소)입니다.",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "사용할 증서 등급 수",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "1등급부터 몇 개의 증서 등급을 사용할지 정합니다. 사용하지 않는 등급의 증서는 쓸 수 없고, 드롭되지 않으며, 제작할 수도 없습니다.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "1등급부터 몇 개의 증서 등급을 사용할지 정합니다. 사용하지 않는 등급의 증서는 쓸 수 없고, 드롭되지 않으며, 제작할 수도 없습니다. 플레이어가 가진 증서는 사라지지 않으며 등급을 다시 켜면 다시 쓸 수 있습니다. 이미 만든 은신처는 계속 보호되고, 대여 중인 슬롯은 슬롯 창에서 갱신할 수 있지만 새로 살 수는 없습니다.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "1등급 최대 변 길이 (타일)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "1등급 증서로 만들 수 있는 은신처의 최대 변 길이(타일)입니다.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "1등급 최대 면적 (타일)",

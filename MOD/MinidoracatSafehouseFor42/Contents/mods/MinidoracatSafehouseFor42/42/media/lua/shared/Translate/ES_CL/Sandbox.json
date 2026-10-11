@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Categorías de recursos a evitar",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Separa con punto y coma; los nombres de categoría son los del minimapa: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nVacío = military;police;gunstore;medical;pharmacy;fire;gas;prison (militar, policía, armerías, médico, farmacias, bomberos, gasolineras, prisiones).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Niveles de escritura activos",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Cuántos niveles de escritura están activos, empezando por el nivel 1. Las escrituras de niveles inactivos no se pueden usar, no aparecen como botín ni se pueden fabricar.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Cuántos niveles de escritura están activos, empezando por el nivel 1. Las escrituras de niveles inactivos no se pueden usar, no aparecen como botín ni se pueden fabricar. Las escrituras que los jugadores ya tienen se conservan y vuelven a servir si se reactiva el nivel. Los refugios ya creados siguen protegidos; las plazas alquiladas se pueden seguir renovando en la ventana Plazas, pero no se pueden comprar nuevas.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Nivel 1: lado máximo (casillas)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Lado más largo de un refugio creado con una escritura de nivel 1, en casillas.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Nivel 1: área máxima (casillas)",

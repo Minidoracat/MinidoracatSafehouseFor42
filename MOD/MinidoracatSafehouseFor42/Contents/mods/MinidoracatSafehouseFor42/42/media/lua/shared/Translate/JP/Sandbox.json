@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "避ける資源カテゴリー",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "セミコロン区切りで、カテゴリー名はミニマップと同じです：military、police、gunstore、medical、pharmacy、fire、books、school、grocery、gas、tools、outdoor、prison、storage、electronics、church、farm、industry、retail、food。\n空欄＝military;police;gunstore;medical;pharmacy;fire;gas;prison（軍事、警察、銃砲店、医療、薬局、消防、ガソリンスタンド、刑務所）。",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "有効な権利書ランク数",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "ランク1から数えて、いくつの権利書ランクを有効にするかです。無効なランクの権利書は使用できず、ドロップも作成もされません。",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "ランク1から数えて、いくつの権利書ランクを有効にするかです。無効なランクの権利書は使用できず、ドロップも作成もされません。プレイヤーが持っている権利書は消えず、ランクを戻せば再び使えます。作成済みのセーフハウスは引き続き保護され、レンタル中の枠は「枠」ウィンドウで更新できますが、新しく購入することはできません。",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "ランク1の最大辺長（マス）",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "ランク1の権利書で作成できるセーフハウスの最大辺長（マス）です。",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "ランク1の最大面積（マス）",

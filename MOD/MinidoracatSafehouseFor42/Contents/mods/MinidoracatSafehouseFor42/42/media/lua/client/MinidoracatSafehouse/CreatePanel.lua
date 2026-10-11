@@ -101,7 +101,7 @@ function P.chooseTier(m, tier)
     return m.tier == tier
 end
 
--- 伺服器 slots 回的這一級（只列啟用的等級）
+-- 伺服器 slots 回的這一級（啟用的等級，加上關閉但還有付費屋的等級；後者 gate 先回 TIER_DISABLED）
 function P.tierSlots(m)
     local s = m.slots
     if type(s) ~= "table" or type(s.tiers) ~= "table" then return nil end

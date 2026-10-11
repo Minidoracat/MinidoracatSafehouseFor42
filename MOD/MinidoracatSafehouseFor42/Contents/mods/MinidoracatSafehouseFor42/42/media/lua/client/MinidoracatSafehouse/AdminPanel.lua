@@ -1157,11 +1157,8 @@ function AP.categories()
             end
         end
     end
-    -- 沒有 MiniMap：只列預設的 8 類，名稱用本 MOD 自己的譯文（和 MiniMap 的類別名一致）
     if #out == 0 then
-        for k in string.gmatch(Settings.DEFAULT_RESOURCE_CATS, "[^;]+") do
-            out[#out + 1] = { key = k, label = getText("IGUI_MSH_Admin_Res_" .. k) }
-        end
+        for k in string.gmatch(Settings.DEFAULT_RESOURCE_CATS, "[^;]+") do out[#out + 1] = { key = k, label = k } end
     end
     return out
 end
@@ -1181,9 +1178,10 @@ function AP.layoutExclusions(P, pg)
         or "IGUI_MSH_Admin_ParkingNone"), "textMuted")
     F.y = F.y + K.GAP
     F:text("h:res", getText("IGUI_MSH_Admin_ResourcesHead"), "text", UIFont.Medium)
-    -- 沒有 MiniMap 照樣列出來可以先設好（使用者 2026-10-12：「所有沙盒設定，管理面板都要有」），只是現在不阻擋
+    -- 沒有 MiniMap：這組設定藏起來，只寫要裝小地圖 MOD 才有這個功能（使用者 2026-10-12：「可以判斷隱藏，或者顯示
+    -- 要裝小地圖MOD才有這功能」）
     if not (P.options and P.options.resourceApi) then
-        F:text("noMiniMap", getText("IGUI_MSH_Admin_NoMiniMap"), "warning")
+        return F:text("noMiniMap", getText("IGUI_MSH_Admin_NoMiniMap"), "textMuted")
     end
     AP.formRow(pg, "AvoidResources", lw, { AP.boolField(P, pg, "AvoidResources") })
     AP.formRow(pg, "ResourceRule", lw, AP.enumField(P, pg, "ResourceRule", {

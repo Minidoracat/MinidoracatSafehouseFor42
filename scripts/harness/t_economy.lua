@@ -131,15 +131,21 @@ return function(T)
     ok, why = validate("alice", "tier4", "rental", { permanent = 0, rental = 2 })
     check(ok == false and why == "TIER_DISABLED", "停用等級：不能多買")
 
-    T.section("slots：免費位、各啟用等級的名額與價格")
+    T.section("slots：免費位、各啟用等級的名額與價格；關閉的等級有付費屋才列出")
     T.advance(1000)
     local sl = T.cmd(alice, "slots", {})
-    local row1, row2 = sl.tiers[1], sl.tiers[2]
+    local row1, row2, row4 = sl.tiers[1], sl.tiers[2], sl.tiers[4]
     check(sl.ok and sl.economy == "READY" and sl.blocked == nil and sl.free.n == 1 and sl.free.used == 1
-        and #sl.free.titles == 1 and sl.free.titles[1] == a1.title and #sl.tiers == 3, "slots：免費位與只列 3 個啟用等級")
-    check(row1.tier == 1 and row1.paid == 2 and row1.usable == 2 and row1.grace == 0 and row1.buy == true
-        and row1.rent == false and row1.buyPrice.amount == 1200 and row1.rentPrice == nil, "tier1：付費 2、可用 2、只有買斷價")
+        and #sl.free.titles == 1 and sl.free.titles[1] == a1.title and #sl.tiers == 4,
+        "slots：免費位、3 個啟用等級，加上 alice 還有付費屋的關閉等級（5–8 級不列）")
+    check(row1.tier == 1 and row1.enabled == true and row1.paid == 2 and row1.usable == 2 and row1.grace == 0
+        and row1.buy == true and row1.rent == false and row1.buyPrice.amount == 1200 and row1.rentPrice == nil,
+        "tier1：付費 2、可用 2、只有買斷價")
     check(row2.paid == 1 and row2.usable == 1 and row2.buyPrice == nil and row2.rentPrice == nil, "tier2：販售關著沒有價格")
+    check(row4.tier == 4 and row4.enabled == false and row4.paid == 1 and row4.buyPrice == nil and row4.rentPrice == nil,
+        "關閉的 4 級：列出來讓玩家續租既有付費屋，沒有價格（不能買新的）")
+    local cara = T.player({ name = "cara" })
+    check(#T.cmd(cara, "slots", {}).tiers == 3, "沒有關閉等級付費屋的玩家：只列 3 個啟用等級")
 
     T.section("停用：只有寬限結束造成的超額，停該級最新一間")
     T.econSet("alice", 1, 0, { lease("L1", 1, "active"), lease("L2", 1, "grace", T.now + HOUR) })

@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Catégories de ressources à éviter",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Séparez par des points-virgules ; les noms de catégories sont ceux de la minicarte : military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nVide = military;police;gunstore;medical;pharmacy;fire;gas;prison (militaire, police, armureries, médical, pharmacies, pompiers, stations-service, prisons).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Niveaux de titre activés",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Nombre de niveaux de titre activés, à partir du niveau 1. Les titres des niveaux désactivés ne peuvent pas être utilisés, n'apparaissent pas comme butin et ne peuvent pas être fabriqués.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Nombre de niveaux de titre activés, à partir du niveau 1. Les titres des niveaux désactivés ne peuvent pas être utilisés, n'apparaissent pas comme butin et ne peuvent pas être fabriqués. Les titres déjà détenus par les joueurs sont conservés et resservent si le niveau est réactivé. Les abris déjà créés restent protégés ; les places louées peuvent encore être renouvelées dans la fenêtre « Places », mais aucune nouvelle ne peut être achetée.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Niveau 1 : côté max. (cases)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Plus grand côté d'un abri créé avec un titre de niveau 1, en cases.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Niveau 1 : surface max. (cases)",

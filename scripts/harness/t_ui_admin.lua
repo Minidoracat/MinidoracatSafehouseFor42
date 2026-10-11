@@ -388,7 +388,8 @@ return function(T)
     local slotsData = { economy = "READY", free = { n = 1, used = 1, titles = { "home" } }, tiers = {
         { tier = 1, enabled = true, free = true, buy = false, rent = false, usable = 0, paid = 0 },
         { tier = 2, enabled = true, free = false, buy = true, rent = true, usable = 1, paid = 1,
-            buyPrice = { amount = 3600, currency = "survivor" }, rentPrice = { amount = 300, currency = "survivor", days = 30 } } } }
+            buyPrice = { amount = 3600, currency = "survivor" }, rentPrice = { amount = 300, currency = "survivor", days = 30 } },
+        { tier = 4, enabled = false, free = true, buy = false, rent = true, usable = 1, paid = 1 } } }
     local function countCmd(command)
         local c = 0
         for _, s in ipairs(T.clientSent) do if s.command == command then c = c + 1 end end
@@ -397,6 +398,8 @@ return function(T)
     answer("slots", slotsData)
     local sp = w.flow.pool
     check(sp.buy1 == nil and sp.buy2 ~= nil and sp.rent2 ~= nil, "販售關閉的等級不顯示買斷／租用鈕")
+    check(sp["off4#1"] ~= nil and sp["off4#1"]:isVisible() and sp.rent4 == nil and sp.x4 ~= nil and sp.x4:isVisible(),
+        "關閉但還有付費屋的等級：寫明只能續租、沒有租用新名額的鈕、可以展開租約")
     check(lastCall("requestState") ~= nil and lastCall("requestState")[2] == "tier2", "只對預選（展開）的那一級讀 Economy 狀態")
     fw.click(sp.buy2)
     fw.dialog.onResult(true)
@@ -599,28 +602,39 @@ return function(T)
     check(rl:getText() == "2" and not rl.invalid and PR.values.RedrawLimit == 2, "存檔成功：欄位改回伺服器值 2、清掉錯誤")
     AP.instance = nil
 
-    T.section("AdminPanel：每個沙盒選項都能在面板上改")
-    -- 使用者 2026-10-12：「所有沙盒設定，管理面板都要有」。啟用 8 級、伺服器沒有小地圖（資源點設定照樣列出）
+    T.section("AdminPanel：每個沙盒選項都能在面板上改（沒有小地圖時資源點那組除外）")
+    -- 使用者 2026-10-12：「所有沙盒設定，管理面板都要有」；沒有小地圖時「可以判斷隱藏，或者顯示要裝小地圖MOD才有這功能」
     local all = {}
     for k, v in pairs(values) do all[k] = v end
     all.TiersEnabled = 8
-    local PA = AP.open({ tab = "rules" })
-    answer("adminOptions", { values = all, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
-    local missing = {}
-    for _, o in ipairs(MSH.Settings.OPTIONS) do
-        local found = false
-        for _, id in ipairs({ "rules", "deeds", "exclusions" }) do
-            local pg = PA.pages[id]
-            local f = pg.fields[o.key]
-            -- 〔套用變更〕收的就是這些欄位（AP.onApply：這一輪排到、元件看得見）
-            if f ~= nil and f.gen == pg.flow.gen and (f.el == nil or f.el:isVisible()) then found = true end
+    local function missingKeys(P0)
+        local out = {}
+        for _, o in ipairs(MSH.Settings.OPTIONS) do
+            local found = false
+            for _, id in ipairs({ "rules", "deeds", "exclusions" }) do
+                local pg = P0.pages[id]
+                local f = pg.fields[o.key]
+                -- 〔套用變更〕收的就是這些欄位（AP.onApply：這一輪排到、元件看得見）
+                if f ~= nil and f.gen == pg.flow.gen and (f.el == nil or f.el:isVisible()) then found = true end
+            end
+            if not found then out[#out + 1] = o.key end
         end
-        if not found then missing[#missing + 1] = o.key end
+        return out
     end
-    check(#missing == 0, "每個選項都有排出來的欄位（缺：" .. table.concat(missing, ",") .. "）")
-    local ex = PA.pages.exclusions.flow.pool
-    check(ex["noMiniMap#1"] ~= nil and ex["noMiniMap#1"]:isVisible() and ex["f:AvoidResources"]:isVisible(),
-        "沒有小地圖：資源點設定照樣列出，上面寫明現在不阻擋")
+    local PA = AP.open({ tab = "rules" })
+    answer("adminOptions", { values = all, health = {}, settingsWarnings = {}, resourceApi = true, parkingApi = false })
+    local missing = missingKeys(PA)
+    check(#missing == 0, "有小地圖、啟用 8 級：每個選項都有排出來的欄位（缺：" .. table.concat(missing, ",") .. "）")
+    AP.instance = nil
+    local PN = AP.open({ tab = "exclusions" })
+    answer("adminOptions", { values = all, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
+    missing = missingKeys(PN)
+    local RES = { AvoidResources = true, ResourceRule = true, ResourceCats = true }
+    local onlyRes = #missing == 3
+    for _, k in ipairs(missing) do if not RES[k] then onlyRes = false end end
+    local ex = PN.pages.exclusions.flow.pool
+    check(onlyRes and ex["noMiniMap#1"] ~= nil and ex["noMiniMap#1"]:isVisible(),
+        "沒有小地圖：只藏資源點那三項，寫明要裝小地圖 MOD 才有這個功能（藏起來的：" .. table.concat(missing, ",") .. "）")
     AP.instance = nil
 
     T.section("AdminPanel：付費頁只列啟用的等級，收起的等級不讀")

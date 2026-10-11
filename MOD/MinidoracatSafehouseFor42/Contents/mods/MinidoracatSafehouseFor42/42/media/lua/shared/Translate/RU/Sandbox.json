@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Избегаемые категории ресурсов",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Через точку с запятой; названия категорий как в миникарте: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nПусто = military;police;gunstore;medical;pharmacy;fire;gas;prison (армия, полиция, оружейные, медицина, аптеки, пожарные, заправки, тюрьмы).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Включённые уровни купчих",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Сколько уровней купчих включено, начиная с 1-го. Купчие отключённых уровней нельзя использовать, они не выпадают и не создаются.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Сколько уровней купчих включено, начиная с 1-го. Купчие отключённых уровней нельзя использовать, они не выпадают и не создаются. Купчие, которые уже есть у игроков, сохраняются и снова работают, если уровень включить обратно. Уже созданные убежища остаются под защитой; арендованные места можно продлевать в окне «Места», но купить новые нельзя.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Уровень 1: макс. сторона (клетки)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Наибольшая длина стороны убежища по купчей уровня 1, в клетках.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Уровень 1: макс. площадь (клетки)",

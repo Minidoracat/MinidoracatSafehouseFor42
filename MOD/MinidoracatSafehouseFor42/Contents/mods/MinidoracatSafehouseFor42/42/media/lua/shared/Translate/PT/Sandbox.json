@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Categorias de recursos a evitar",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Separe com ponto e vírgula; os nomes das categorias são os do minimapa: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nVazio = military;police;gunstore;medical;pharmacy;fire;gas;prison (militar, polícia, lojas de armas, médico, farmácias, bombeiros, postos de combustível, prisões).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Níveis de escritura ativos",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Quantos níveis de escritura ficam ativos, a partir do nível 1. Escrituras de níveis inativos não podem ser usadas, não aparecem como saque e não podem ser fabricadas.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Quantos níveis de escritura ficam ativos, a partir do nível 1. Escrituras de níveis inativos não podem ser usadas, não aparecem como saque e não podem ser fabricadas. As escrituras que os jogadores já têm são mantidas e voltam a funcionar se o nível for reativado. As bases já criadas continuam protegidas; as vagas alugadas ainda podem ser renovadas na janela Vagas, mas não é possível comprar novas.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Nível 1: lado máximo (quadrados)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Maior lado de uma base criada com uma escritura de nível 1, em quadrados.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Nível 1: área máxima (quadrados)",

@@ -409,11 +409,13 @@ function SW.layout(w)
     F:finish()
 end
 
--- 一級：「N 級 · 名額 usable／使用 paid」、限制說明、〔買斷〕〔租用〕（該種販售關閉就不顯示）、〔租約〕展開
+-- 一級：「N 級 · 名額 usable／使用 paid」、限制說明、〔買斷〕〔租用〕（該種販售關閉就不顯示）、〔租約〕展開。
+-- 關閉的等級只在還有付費屋時列出（伺服器 E.slots）：沒有價格、不能買新的，只能展開租約續租
 function SW.layoutTier(w, F, t, E, blocker)
     local n = t.tier
     F.y = F.y + K.GAP
     F:text("t" .. n, getText("IGUI_MSH_Slots_Tier", n, t.usable or 0, t.paid or 0), "text", UIFont.Medium)
+    if t.enabled == false then F:text("off" .. n, getText("IGUI_MSH_Slots_Reason_TIER_DISABLED"), "warning") end
     if (t.grace or 0) > 0 then F:text("g" .. n, getText("IGUI_MSH_Slots_Grace", t.grace), "warning") end
     if not t.free then F:text("nf" .. n, getText("IGUI_MSH_Slots_NoFree"), "textMuted") end
     if (t.perPlayer or 0) > 0 then F:text("pp" .. n, getText("IGUI_MSH_Slots_PerPlayer", t.perPlayer), "textMuted") end

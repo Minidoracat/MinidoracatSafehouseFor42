@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Unikane kategorie zasobów",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Oddzielaj średnikami; nazwy kategorii jak na minimapie: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nPuste = military;police;gunstore;medical;pharmacy;fire;gas;prison (wojsko, policja, sklepy z bronią, medyczne, apteki, straż pożarna, stacje paliw, więzienia).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Włączone poziomy aktów",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Ile poziomów aktów jest włączonych, licząc od poziomu 1. Aktów z wyłączonych poziomów nie można używać, nie wypadają i nie da się ich wytworzyć.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Ile poziomów aktów jest włączonych, licząc od poziomu 1. Aktów z wyłączonych poziomów nie można używać, nie wypadają i nie da się ich wytworzyć. Akty, które gracze już mają, zostają i znów działają po ponownym włączeniu poziomu. Zbudowane schronienia są nadal chronione; wynajęte miejsca można dalej odnawiać w oknie „Miejsca”, ale nie można kupić nowych.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Poziom 1: maks. bok (pola)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Najdłuższy bok schronienia utworzonego aktem poziomu 1, w polach.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Poziom 1: maks. powierzchnia (pola)",

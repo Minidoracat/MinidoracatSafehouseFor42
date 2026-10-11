@@ -43,7 +43,7 @@
     "Sandbox_MinidoracatSafehouse_ResourceCats": "Zu meidende Ressourcenkategorien",
     "Sandbox_MinidoracatSafehouse_ResourceCats_tooltip": "Mit Semikolons trennen; die Kategorienamen sind dieselben wie in der Minikarte: military, police, gunstore, medical, pharmacy, fire, books, school, grocery, gas, tools, outdoor, prison, storage, electronics, church, farm, industry, retail, food.\nLeer = military;police;gunstore;medical;pharmacy;fire;gas;prison (Militär, Polizei, Waffenläden, Medizin, Apotheken, Feuerwehr, Tankstellen, Gefängnisse).",
     "Sandbox_MinidoracatSafehouse_TiersEnabled": "Aktive Urkundenstufen",
-    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Wie viele Urkundenstufen aktiv sind, ab Stufe 1 gezählt. Urkunden inaktiver Stufen sind nicht nutzbar, erscheinen nicht als Beute und können nicht hergestellt werden.",
+    "Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip": "Wie viele Urkundenstufen aktiv sind, ab Stufe 1 gezählt. Urkunden inaktiver Stufen sind nicht nutzbar, erscheinen nicht als Beute und können nicht hergestellt werden. Urkunden, die Spieler schon besitzen, bleiben erhalten und funktionieren wieder, sobald die Stufe wieder aktiv ist. Bereits gebaute Safehouses bleiben geschützt; gemietete Plätze lassen sich im Fenster „Plätze“ weiter verlängern, neue können nicht gekauft werden.",
     "Sandbox_MinidoracatSafehouse_Tier1Side": "Stufe 1: max. Seite (Kacheln)",
     "Sandbox_MinidoracatSafehouse_Tier1Side_tooltip": "Längste Seite eines Safehouses, das mit einer Urkunde der Stufe 1 erstellt wird, in Kacheln.",
     "Sandbox_MinidoracatSafehouse_Tier1Area": "Stufe 1: max. Fläche (Kacheln)",
