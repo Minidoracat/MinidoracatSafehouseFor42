@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "戰爭中原版會刪屋",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "非成員能走進安全屋",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "非成員能拿走屋裡的東西",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "火會燒毀安全屋",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "別人在屋外放火就能燒掉安全屋",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "屋主在線時安全屋沒有保護",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 是關掉反作弊，誰都能刪別人的屋",
     "IGUI_MSH_Admin_Need_SandboxVars": "讀不到本 MOD 的沙盒設定：伺服器的沙盒設定檔（伺服器名稱_SandboxVars.lua）可能壞了，請檢查後重開伺服器。",

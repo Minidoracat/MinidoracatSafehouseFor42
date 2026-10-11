@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "Oyun savaşlarda güvenli evleri siler",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "Üye olmayanlar girebilir",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "Üye olmayanlar eşya alabilir",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Yangın güvenli evleri yakabilir",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Başkaları güvenli evleri dışarıdan yakabilir",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "Sahibi çevrimiçiyken koruma yok",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 hile korumasını kapatır, herkes güvenli ev silebilir",
     "IGUI_MSH_Admin_Need_SandboxVars": "Bu modun sandbox ayarları okunamıyor: sunucunun sandbox dosyası (<sunucu adı>_SandboxVars.lua) bozuk olabilir. Dosyayı kontrol edip sunucuyu yeniden başlatın.",

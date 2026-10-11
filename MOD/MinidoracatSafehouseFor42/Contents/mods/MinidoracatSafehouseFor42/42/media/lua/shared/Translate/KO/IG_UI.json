@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "전쟁 중 게임이 은신처를 삭제함",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "비구성원이 들어올 수 있음",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "비구성원이 물건을 가져갈 수 있음",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "불이 은신처를 태울 수 있음",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "다른 사람이 밖에서 불을 질러 은신처를 태울 수 있음",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "소유자가 접속 중이면 보호되지 않음",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4는 부정 행위 방지를 꺼서 누구나 은신처를 삭제할 수 있음",
     "IGUI_MSH_Admin_Need_SandboxVars": "이 모드의 샌드박스 설정을 읽을 수 없습니다: 서버의 샌드박스 설정 파일(서버 이름_SandboxVars.lua)이 손상되었을 수 있습니다. 확인한 뒤 서버를 재시작하세요.",

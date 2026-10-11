@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "Игра удаляет убежища во время войн",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "Посторонние могут войти",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "Посторонние могут забирать вещи",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Огонь может сжечь убежище",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Другие могут сжечь убежище снаружи",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "Нет защиты, пока владелец в сети",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 отключает античит, и любой может удалять убежища",
     "IGUI_MSH_Admin_Need_SandboxVars": "Не удаётся прочитать настройки песочницы этого мода: файл песочницы сервера (<имя сервера>_SandboxVars.lua) может быть повреждён. Проверьте его и перезапустите сервер.",

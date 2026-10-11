@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "O jogo apaga bases durante guerras",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "Não membros podem entrar",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "Não membros podem pegar itens",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "O fogo pode queimar bases",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Outros podem queimar bases de fora",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "Sem proteção enquanto o dono está online",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 desativa o anti-cheat e qualquer um pode apagar bases",
     "IGUI_MSH_Admin_Need_SandboxVars": "Não foi possível ler as configurações de sandbox deste mod: o arquivo de sandbox do servidor (<nome do servidor>_SandboxVars.lua) pode estar corrompido. Verifique-o e reinicie o servidor.",

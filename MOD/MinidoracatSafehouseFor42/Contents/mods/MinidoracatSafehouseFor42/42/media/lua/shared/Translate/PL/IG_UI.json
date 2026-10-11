@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "Gra usuwa schronienia podczas wojen",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "Osoby spoza członków mogą wejść",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "Osoby spoza członków mogą zabierać przedmioty",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Ogień może spalić schronienia",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Inni mogą spalić schronienia z zewnątrz",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "Brak ochrony, gdy właściciel jest online",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 wyłącza ochronę antycheatową, każdy może usuwać schronienia",
     "IGUI_MSH_Admin_Need_SandboxVars": "Nie można odczytać ustawień sandbox tego moda: plik sandbox serwera (<nazwa serwera>_SandboxVars.lua) może być uszkodzony. Sprawdź go i zrestartuj serwer.",

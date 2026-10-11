@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "戦争中にゲームがセーフハウスを削除する",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "メンバー以外が入れる",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "メンバー以外がアイテムを持ち出せる",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "火事でセーフハウスが焼ける",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "他人が外から火をつけてセーフハウスを焼ける",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "所有者がオンラインの間は保護されない",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 はチート対策をオフにし、誰でもセーフハウスを削除できる",
     "IGUI_MSH_Admin_Need_SandboxVars": "このMODのサンドボックス設定を読み込めません：サーバーのサンドボックス設定ファイル（サーバー名_SandboxVars.lua）が壊れている可能性があります。確認してからサーバーを再起動してください。",

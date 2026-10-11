@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "El juego borra refugios durante las guerras",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "Los no miembros pueden entrar",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "Los no miembros pueden llevarse objetos",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "El fuego puede quemar refugios",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Otros pueden quemar refugios desde fuera",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "Sin protección mientras el propietario está conectado",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 desactiva el antitrampas y cualquiera puede borrar refugios",
     "IGUI_MSH_Admin_Need_SandboxVars": "No se pueden leer los ajustes de sandbox de este mod: el archivo de sandbox del servidor (<nombre del servidor>_SandboxVars.lua) puede estar dañado. Revísalo y reinicia el servidor.",

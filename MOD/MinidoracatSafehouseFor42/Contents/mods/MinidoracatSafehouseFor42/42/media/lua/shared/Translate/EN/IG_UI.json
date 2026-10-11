@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "The game deletes safehouses during wars",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "Non-members can walk in",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "Non-members can take items",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Fire can burn safehouses",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Others can burn safehouses down from outside",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "No protection while the owner is online",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 turns anti-cheat off, so anyone can delete safehouses",
     "IGUI_MSH_Admin_Need_SandboxVars": "This mod's sandbox settings can't be read: the server's sandbox file (<server name>_SandboxVars.lua) may be broken. Check it and restart the server.",

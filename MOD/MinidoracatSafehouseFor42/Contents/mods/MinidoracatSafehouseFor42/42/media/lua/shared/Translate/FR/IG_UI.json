@@ -36,7 +36,7 @@
     "IGUI_MSH_Admin_Need_War": "Le jeu supprime des abris pendant les guerres",
     "IGUI_MSH_Admin_Need_SafehouseAllowTrepass": "Les non-membres peuvent entrer",
     "IGUI_MSH_Admin_Need_SafehouseAllowLoot": "Les non-membres peuvent prendre des objets",
-    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "Le feu peut brûler les abris",
+    "IGUI_MSH_Admin_Need_SafehouseAllowFire": "D'autres peuvent brûler les abris depuis l'extérieur",
     "IGUI_MSH_Admin_Need_DisableSafehouseWhenOwnerConnected": "Aucune protection quand le propriétaire est en ligne",
     "IGUI_MSH_Admin_Need_AntiCheatSafeHouse": "4 désactive l'anti-triche : n'importe qui peut supprimer des abris",
     "IGUI_MSH_Admin_Need_SandboxVars": "Impossible de lire les réglages bac à sable de ce mod : le fichier bac à sable du serveur (<nom du serveur>_SandboxVars.lua) est peut-être endommagé. Vérifiez-le et redémarrez le serveur.",
