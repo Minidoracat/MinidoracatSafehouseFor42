@@ -1,4 +1,4 @@
-[h1]🏠 Minidoracat Safehouse for B42[/h1]
+[h1]🏠 Minidoracat Safehouse[/h1]
 [h3]By Minidoracat[/h3]
 
 [hr][/hr]

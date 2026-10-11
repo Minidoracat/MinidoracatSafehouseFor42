@@ -1,28 +1,42 @@
 version=1
 title=[B42] Safehouse by Minidoracat
-description=[h1]🏠 Minidoracat Safehouse for B42[/h1]
+description=[h1]🏠 Minidoracat Safehouse[/h1]
 description=[h3]By Minidoracat[/h3]
 description=
 description=[hr][/hr]
 description=
-description=A planned safehouse system with tiered deeds, custom claim areas, faction member management, and exclusion of roads and resource points.
-description=[b]🚧 In development:[/b] only the MOD project foundation exists at this time. No in-game safehouse features have been implemented yet.
+description=A safehouse system for multiplayer servers: use a deed to claim the area you choose, then share it with friends or your faction, one permission at a time.
 description=
 description=[h2]📦 Requirements[/h2]
 description=[list]
 description=[*] [b]Required:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3789836701]Minidoracat UI Library[/url]
-description=[*] Build 42.20.4+; singleplayer and multiplayer both supported
+description=[*] [b]Optional:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap[/url] (keep claims off resource points)
+description=[*] [b]Optional:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3801482125]Minidoracat Economy[/url] (buy or rent extra safehouse slots with in-game money, if the server sells them)
+description=[*] Dedicated multiplayer servers only; the server admin must change a few vanilla safehouse settings first (see the full guide)
+description=[*] [b]Add/remove mid-save:[/b] can be added mid-save; safehouses already in the save are taken over automatically when the server starts. Read the full guide before removing it: deeds disappear and existing safehouses can no longer be managed
+description=[*] [b]Languages:[/b] 繁體中文, 简体中文, English, 日本語, 한국어, Русский, Español, Português, Türkçe, Français, Polski, Deutsch (please report any translation issues)
 description=[/list]
 description=
-description=[h2]🧰 Planned features[/h2]
+description=[h2]🚀 Quick start[/h2]
+description=[olist]
+description=[*] Find or craft a safehouse deed (the server may also allow free claims)
+description=[*] Right-click the deed, or open Safehouse Manager from the family toolbar, and choose to create a safehouse
+description=[*] Drag with the mouse or walk to two corners to mark the area, then confirm while standing inside it
+description=[*] Share the safehouse with friends or your faction from the manager window
+description=[/olist]
+description=
+description=[h2]✨ Features[/h2]
 description=[list]
-description=[*] [b]Tiered deeds[/b]: Limit safehouse size according to deed tier
-description=[*] [b]Custom safehouse areas[/b]: Let players select a valid safehouse area
-description=[*] [b]Area protection[/b]: Exclude roads and resource points
-description=[*] [b]Faction management[/b]: Manage faction safehouses and automatically add members of the same faction
-description=[*] [b]Deed access and rent[/b]: Planned free or paid deeds, plus daily or monthly rent
-description=[*] [b]Optional integrations[/b]: Planned integration with the MiniMap and Economy systems
+description=[*] [b]Tiered deeds[/b]: the deed tier sets how large your safehouse can be
+description=[*] [b]Custom area[/b]: mark your own rectangle with the size limit shown as you go and road tiles in the way marked red; redraw it shortly after claiming
+description=[*] [b]Avoids roads and resource points[/b]: main roads and buildings such as military, police and medical sites cannot be claimed
+description=[*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately; friends can also be allowed just to invite others
+description=[*] [b]Manager window[/b]: see your own and shared safehouses, rename or release them
+description=[*] [b]Vanilla protection[/b]: non-members cannot enter or take items; zombies can still spawn inside
+description=[*] [b]Admin panel[/b]: adjust rules, deeds, exclusions and paid slots in game
+description=[*] [b]Take over existing safehouses[/b]: vanilla and Better Safehouse safehouses are taken over automatically at server start, keeping their owners and members
 description=[/list]
+description=📖 [b]Server settings, taking over existing safehouses and known limits:[/b] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse full guide on GitHub[/url] (Traditional Chinese)
 description=
 description=[h2]🔗 More Minidoracat mods[/h2]
 description=All my mods are in the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url] — pick what you need.

@@ -1,4 +1,4 @@
-# Minidoracat Safehouse for B42
+# Minidoracat Safehouse
 
 多人專用伺服器的安全屋系統：用地契自訂安全屋範圍，自動避開道路與資源點，分享給玩家或陣營並逐項授權。
 
