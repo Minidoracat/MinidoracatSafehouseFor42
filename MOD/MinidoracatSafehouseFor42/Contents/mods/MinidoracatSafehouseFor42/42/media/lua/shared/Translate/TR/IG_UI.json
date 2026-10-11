@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Kaynak noktaları",
     "IGUI_MSH_Create_AllPassed": "Tüm kontroller geçti. Oluştururken sunucu tekrar kontrol eder.",
     "IGUI_MSH_Create_CreateBtn": "Güvenli ev oluştur",
+    "IGUI_MSH_Create_RedrawBtn": "Bu alanı kullan",
     "IGUI_MSH_Create_Recheck": "Tekrar kontrol et",
     "IGUI_MSH_Create_Pay": "Hak al",
     "IGUI_MSH_Create_PriceBuy": "1 hak satın al: %1 %2",

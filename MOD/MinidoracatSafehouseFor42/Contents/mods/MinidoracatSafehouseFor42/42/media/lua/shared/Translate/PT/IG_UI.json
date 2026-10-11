@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Pontos de recursos",
     "IGUI_MSH_Create_AllPassed": "Tudo certo. O servidor verifica de novo quando você criar.",
     "IGUI_MSH_Create_CreateBtn": "Criar base",
+    "IGUI_MSH_Create_RedrawBtn": "Usar esta área",
     "IGUI_MSH_Create_Recheck": "Verificar de novo",
     "IGUI_MSH_Create_Pay": "Obter uma vaga",
     "IGUI_MSH_Create_PriceBuy": "Comprar 1 vaga: %1 %2",

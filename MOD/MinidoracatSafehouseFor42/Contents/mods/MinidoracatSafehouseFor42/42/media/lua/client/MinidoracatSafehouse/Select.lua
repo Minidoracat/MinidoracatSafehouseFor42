@@ -30,8 +30,9 @@ local Shape = MSH.Shape
 S.DRAG = "drag"
 S.WALK = "walk"
 
--- 各塊輪流用的不透明度：相鄰的塊看得出分界；拉到一半的那塊另外疊一層
-S.PIECE_ALPHA = { 0.5, 0.3, 0.42, 0.22 }
+-- 各塊輪流用的不透明度：相鄰的塊看得出分界；拉到一半的那塊另外疊一層。最淡的不低於 0.3：原本第 4 塊是 0.22，
+-- 鋪在深色草地上幾乎看不出來，重新框選的預檢看起來像沒有填色（sh-pieces2-1011b 的 p2-redraw-preview 逐格比對）
+S.PIECE_ALPHA = { 0.5, 0.3, 0.43, 0.37 }
 S.RAW_ALPHA = 0.4
 S.PENDING_ALPHA = 0.6
 

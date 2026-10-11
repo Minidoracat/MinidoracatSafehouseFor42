@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Points de ressources",
     "IGUI_MSH_Create_AllPassed": "Toutes les vérifications sont réussies. Le serveur vérifie de nouveau à la création.",
     "IGUI_MSH_Create_CreateBtn": "Créer l'abri",
+    "IGUI_MSH_Create_RedrawBtn": "Utiliser cette zone",
     "IGUI_MSH_Create_Recheck": "Revérifier",
     "IGUI_MSH_Create_Pay": "Obtenir une place",
     "IGUI_MSH_Create_PriceBuy": "Acheter 1 place : %1 %2",

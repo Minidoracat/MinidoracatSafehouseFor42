@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "資源點",
     "IGUI_MSH_Create_AllPassed": "預檢全部通過。建立時伺服器會再檢查一次。",
     "IGUI_MSH_Create_CreateBtn": "建立安全屋",
+    "IGUI_MSH_Create_RedrawBtn": "改用這個範圍",
     "IGUI_MSH_Create_Recheck": "重新預檢",
     "IGUI_MSH_Create_Pay": "前往付費",
     "IGUI_MSH_Create_PriceBuy": "買斷 1 間：%1 %2",

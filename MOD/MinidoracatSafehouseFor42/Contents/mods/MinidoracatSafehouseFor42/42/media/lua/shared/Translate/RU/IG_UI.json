@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Ресурсные точки",
     "IGUI_MSH_Create_AllPassed": "Все проверки пройдены. При создании сервер проверит всё ещё раз.",
     "IGUI_MSH_Create_CreateBtn": "Создать убежище",
+    "IGUI_MSH_Create_RedrawBtn": "Выбрать эту область",
     "IGUI_MSH_Create_Recheck": "Проверить снова",
     "IGUI_MSH_Create_Pay": "Получить место",
     "IGUI_MSH_Create_PriceBuy": "Купить 1 место: %1 %2",

@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Ressourcenpunkte",
     "IGUI_MSH_Create_AllPassed": "Alle Prüfungen bestanden. Der Server prüft beim Erstellen erneut.",
     "IGUI_MSH_Create_CreateBtn": "Safehouse erstellen",
+    "IGUI_MSH_Create_RedrawBtn": "Diesen Bereich nutzen",
     "IGUI_MSH_Create_Recheck": "Erneut prüfen",
     "IGUI_MSH_Create_Pay": "Platz holen",
     "IGUI_MSH_Create_PriceBuy": "1 Platz kaufen: %1 %2",

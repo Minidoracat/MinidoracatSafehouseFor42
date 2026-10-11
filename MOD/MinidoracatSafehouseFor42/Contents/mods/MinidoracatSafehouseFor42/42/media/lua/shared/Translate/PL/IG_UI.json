@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Punkty zasobów",
     "IGUI_MSH_Create_AllPassed": "Wszystkie kontrole zaliczone. Serwer sprawdzi ponownie przy tworzeniu.",
     "IGUI_MSH_Create_CreateBtn": "Utwórz schronienie",
+    "IGUI_MSH_Create_RedrawBtn": "Użyj tego obszaru",
     "IGUI_MSH_Create_Recheck": "Sprawdź ponownie",
     "IGUI_MSH_Create_Pay": "Zdobądź miejsce",
     "IGUI_MSH_Create_PriceBuy": "Kup 1 miejsce: %1 %2",

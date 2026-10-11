@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "자원 지점",
     "IGUI_MSH_Create_AllPassed": "모든 검사를 통과했습니다. 만들 때 서버가 다시 검사합니다.",
     "IGUI_MSH_Create_CreateBtn": "은신처 만들기",
+    "IGUI_MSH_Create_RedrawBtn": "이 범위 사용",
     "IGUI_MSH_Create_Recheck": "다시 검사",
     "IGUI_MSH_Create_Pay": "슬롯 얻기",
     "IGUI_MSH_Create_PriceBuy": "슬롯 1개 구매: %1 %2",

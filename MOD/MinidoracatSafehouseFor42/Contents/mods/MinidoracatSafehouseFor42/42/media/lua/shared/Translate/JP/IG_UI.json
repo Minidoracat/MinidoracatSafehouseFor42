@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "資源地点",
     "IGUI_MSH_Create_AllPassed": "すべてのチェックに合格しました。作成時にサーバーがもう一度確認します。",
     "IGUI_MSH_Create_CreateBtn": "セーフハウスを作成",
+    "IGUI_MSH_Create_RedrawBtn": "この範囲を使用",
     "IGUI_MSH_Create_Recheck": "再チェック",
     "IGUI_MSH_Create_Pay": "枠を入手",
     "IGUI_MSH_Create_PriceBuy": "1枠買い取り：%1 %2",

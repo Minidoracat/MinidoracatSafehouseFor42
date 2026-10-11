@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Resource points",
     "IGUI_MSH_Create_AllPassed": "All checks passed. The server checks again when you create it.",
     "IGUI_MSH_Create_CreateBtn": "Create safehouse",
+    "IGUI_MSH_Create_RedrawBtn": "Use this area",
     "IGUI_MSH_Create_Recheck": "Check again",
     "IGUI_MSH_Create_Pay": "Get a slot",
     "IGUI_MSH_Create_PriceBuy": "Buy 1 slot: %1 %2",

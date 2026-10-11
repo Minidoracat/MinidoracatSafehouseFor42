@@ -618,15 +618,22 @@ local function layoutSelecting(v, y, list)
     b.cut:setActive(s.cut)
     b.cut:setEnabled(not Sel.isEmpty(s))
     y = row(v, { b.add, b.cut }, y)
+    -- 一次只有一顆主要按鈕（走位與手把原本〔設第一角〕或〔加入這塊〕和〔完成〕同時是黃色）：拉到一半或範圍還空著時
+    -- 是〔設第一角〕／〔加入這塊〕，其餘是〔完成〕；滑鼠拖曳沒有這兩顆，一律〔完成〕
+    local step = nil
     if s.tool == Sel.WALK or joy then
         if pending then
             b.apply:setTitle(getText(s.cut and "IGUI_MSH_Select_ApplyCut" or "IGUI_MSH_Select_ApplyAdd"))
             b.apply:fitWidth()
-            list[#list + 1] = b.apply
+            step = b.apply
         else
-            list[#list + 1] = b.mark
+            step = b.mark
         end
+        list[#list + 1] = step
     end
+    local stepFirst = step ~= nil and (pending or Sel.isEmpty(s))
+    if step ~= nil then step:setStyle(stepFirst and "primary" or "normal") end
+    b.done:setStyle(stepFirst and "normal" or "primary")
     b.done:setEnabled(res.err == nil or pending)
     b.undo:setEnabled(Sel.canUndo(s))
     b.clear:setEnabled(not Sel.isEmpty(s))
@@ -878,7 +885,9 @@ local function buildButtons(v, m, UI, theme)
         undo = button("IGUI_MSH_Select_Undo", function() P.undo(m) end),
         clear = button("IGUI_MSH_Select_Clear", function() P.clear(m) end),
         cancel = button("UI_Cancel", function() P.back(m) end),
-        create = button("IGUI_MSH_Create_CreateBtn", function() P.toConfirm(m) end, "primary"),
+        -- 重新框選的預檢頁不是「建立安全屋」（2026-10-12 實機截圖）；確認頁另有〔改用新範圍〕
+        create = button(m.mode == "redraw" and "IGUI_MSH_Create_RedrawBtn" or "IGUI_MSH_Create_CreateBtn",
+            function() P.toConfirm(m) end, "primary"),
         recheck = button("IGUI_MSH_Create_Recheck", function() P.recheck(m, now()) end),
         pay = button("IGUI_MSH_Create_Pay", function()
             local ok, err = pcall(MSH.SlotsWindow.open, { tier = m.tier })

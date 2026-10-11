@@ -232,6 +232,7 @@
     "IGUI_MSH_Create_Check_resources": "Puntos de recursos",
     "IGUI_MSH_Create_AllPassed": "Todo correcto. El servidor vuelve a comprobarlo al crearlo.",
     "IGUI_MSH_Create_CreateBtn": "Crear refugio",
+    "IGUI_MSH_Create_RedrawBtn": "Usar esta área",
     "IGUI_MSH_Create_Recheck": "Volver a comprobar",
     "IGUI_MSH_Create_Pay": "Conseguir plaza",
     "IGUI_MSH_Create_PriceBuy": "Comprar 1 plaza: %1 %2",

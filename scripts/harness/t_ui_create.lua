@@ -199,7 +199,7 @@ return function(T)
     function Base:new(x, y, w, h)
         return setmetatable({ x = x or 0, y = y or 0, width = w or 60, height = h or 20, visible = true }, self)
     end
-    for _, k in ipairs({ "initialise", "addChild", "bringToTop", "drawText", "setTooltip", "setStyle", "setActive",
+    for _, k in ipairs({ "initialise", "addChild", "bringToTop", "drawText", "setTooltip", "setActive",
         "fitWidth", "setInvalid", "removeFromUIManager", "addToUIManager",
         "onJoypadDirUp", "onJoypadDirDown", "onJoypadDirLeft", "onJoypadDirRight", "onFocusShoulder" }) do
         Base[k] = function() end
@@ -212,6 +212,7 @@ return function(T)
     function Base:setHeight(n) self.height = n end
     function Base:setEnabled(b) self.enabled = b end
     function Base:setTitle(t) self.title = t end
+    function Base:setStyle(s) self.style = s end
     function Base:getText() return "" end
     function Base:contentTop() return 24 end
     function Base:close() self.visible = false end
@@ -265,13 +266,26 @@ return function(T)
         end
         return nil
     end
+    -- 看得到的主要按鈕（黃色）一次只有一顆，而且是這顆
+    local function onlyPrimary(name)
+        local found = nil
+        for k, b in pairs(v.btn) do
+            if b.visible and b.style == "primary" then
+                if found ~= nil then return false end
+                found = k
+            end
+        end
+        return found == name
+    end
     p.x, p.y = 10, 10
     P.startSelect(vm, Sel.WALK)
+    check(onlyPrimary("mark"), "走位、範圍還空著：只有〔設第一角〕是主要按鈕")
     Sel.mark(vm.sel, p)
     p.x, p.y = 39, 19
     local c1 = frame()
     check(v.sizeText == "IGUI_MSH_Select_Pending|30,10" and c1[1].r == colors.accent.r and c1[1].a == Sel.PENDING_ALPHA,
         "拉到一半的那塊：每幀寫出大小、用 accent 畫")
+    check(onlyPrimary("apply"), "拉到一半：只有〔加入這塊〕是主要按鈕")
     check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600," .. MSH.LIMIT.MAX_PIECES) == "textMuted",
         "上限行寫出邊長、面積與塊數上限（2 級 40 × 40、1,600）")
     p.x, p.y = 59, 19
@@ -279,6 +293,7 @@ return function(T)
     local c2 = frame()
     check(lineTok("IGUI_MSH_Select_Shape|50,10,500,1") == "errorText" and c2[1].r == colors.errorText.r
         and c2[1].a == Sel.PIECE_ALPHA[1], "只有邊長超過：範圍行與範圍都變錯誤色，上限行寫得出原因")
+    check(onlyPrimary("done"), "範圍有東西、沒有拉到一半：只有〔完成〕是主要按鈕")
     local gs, ns = grownKB()
     check(ns == 201 * #c2 and gs < 1, "框選畫面每幀不配置（200 幀增加 " .. string.format("%.2f", gs) .. " KB）")
     check(P.undo(vm) and Sel.isEmpty(vm.sel), "〔復原〕退回上一步：範圍又是空的")
