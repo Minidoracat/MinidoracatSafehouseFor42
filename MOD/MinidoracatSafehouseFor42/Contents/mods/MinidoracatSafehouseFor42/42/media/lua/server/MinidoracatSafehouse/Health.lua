@@ -22,7 +22,8 @@ H.BLOCKERS = {
     { option = "SafehouseAllowLoot", want = "false" },
     { option = "SafehouseAllowFire", want = "false" },
     { option = "DisableSafehouseWhenOwnerConnected", want = "false" },
-    { option = "AntiCheatSafeHouse", anyOf = { ["1"] = true, ["2"] = true, ["3"] = true } }, -- 4＝關閉閘門（§2.2）
+    -- 4＝關閉閘門（§2.2）；一鍵套用改成 3（只記 log，不踢誠實玩家，§5）
+    { option = "AntiCheatSafeHouse", anyOf = { ["1"] = true, ["2"] = true, ["3"] = true }, fix = "3" },
 }
 
 H.state = H.state or { blocked = false, blockers = {}, warnings = {}, settingsWarnings = {}, key = "" }
@@ -49,8 +50,6 @@ local function warningsList()
     for token in string.gmatch(chat, "[^,]+") do
         if MSH.trim(token) == "sh" then w[#w + 1] = "ChatStreams" end
     end
-    if optionValue("SafehousePreventsLootRespawn") == "true" then w[#w + 1] = "SafehousePreventsLootRespawn" end
-    if optionValue("SledgehammerOnlyInSafehouse") == "true" then w[#w + 1] = "SledgehammerOnlyInSafehouse" end
     return w
 end
 
@@ -83,6 +82,19 @@ function H.evaluate(now)
         if st.blocked and not old.blocked then MSH.Audit.alertAdmins("HEALTH_BLOCKED", table.concat(blockers, ",")) end
     end
     return st
+end
+
+-- 管理員面板逐項說明用：不符的選項目前的值（伺服器設定以外的 blocker 沒有值），與必要設定要改成的值
+function H.detail()
+    local st, values, fixes, failing = H.state, {}, {}, {}
+    for _, list in ipairs({ st.blockers, st.warnings }) do
+        for _, k in ipairs(list) do values[k] = optionValue(k) end
+    end
+    for _, k in ipairs(st.blockers) do failing[k] = true end
+    for _, b in ipairs(H.BLOCKERS) do
+        if failing[b.option] then fixes[#fixes + 1] = { option = b.option, value = b.fix or b.want } end
+    end
+    return values, fixes
 end
 
 function H.blocked()

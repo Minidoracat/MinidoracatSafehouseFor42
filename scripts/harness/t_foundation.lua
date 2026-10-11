@@ -112,6 +112,41 @@ return function(T)
     H.evaluate(T.now)
     check(not H.blocked() and #H.state.warnings == 2, "AllowCoop、SaveWorldEveryMinutes=0 只是警告")
     check(T.logged("HEALTH_BLOCKED"), "進 blocked 寫 audit")
+    T.serverOptions.PlayerSafehouse = "true"
+    T.serverOptions.AntiCheatSafeHouse = "4"
+    H.evaluate(T.now)
+    local values, fixes = H.detail()
+    check(values.PlayerSafehouse == "true" and values.AntiCheatSafeHouse == "4" and values.SaveWorldEveryMinutes == "0"
+        and values.War == nil, "detail：只回不符選項的目前值（必要與建議都有）")
+    check(#fixes == 2 and fixes[1].option == "PlayerSafehouse" and fixes[1].value == "false"
+        and fixes[2].option == "AntiCheatSafeHouse" and fixes[2].value == "3", "detail：必要設定要改成的值（反作弊 1–3 都行，改成 3）")
+
+    -- 管理員面板逐項顯示 IGUI_MSH_Admin_Need_<項目>／Suggest_<項目>；缺譯文會直接秀出鍵名（verify 只比各語言鍵集合一致）
+    for _, b in ipairs(H.BLOCKERS) do
+        T.serverOptions[b.option] = b.anyOf and "4" or (b.want == "0" and "24" or "true")
+    end
+    T.serverOptions.SafehouseAllowRespawn = "true"
+    T.serverOptions.ChatStreams = "s,sh"
+    local sb = SandboxVars.MinidoracatSafehouse
+    SandboxVars.MinidoracatSafehouse = nil
+    MSH.Registry.readOnly, MSH.Registry.privateUnreadable = true, true
+    H.evaluate(T.now)
+    SandboxVars.MinidoracatSafehouse = sb
+    local missing = {}
+    for _, lang in ipairs({ "CH", "EN" }) do
+        local fh = io.open(T.MEDIA .. "/shared/Translate/" .. lang .. "/IG_UI.json", "r")
+        local text = fh and fh:read("a") or ""
+        if fh then fh:close() end
+        for kind, list in pairs({ Need = H.state.blockers, Suggest = H.state.warnings }) do
+            for _, k in ipairs(list) do
+                if not string.find(text, '"IGUI_MSH_Admin_' .. kind .. "_" .. k .. '"', 1, true) then
+                    missing[#missing + 1] = lang .. ":" .. kind .. "_" .. k
+                end
+            end
+        end
+    end
+    check(#H.state.blockers == #H.BLOCKERS + 3 and #H.state.warnings == 4 and #missing == 0,
+        "每個必要設定與建議都有逐項說明（缺 " .. table.concat(missing, ",") .. "）")
 
     T.section("Identity：principal、綁定、改名證據、身分異常")
     MSH = T.boot()

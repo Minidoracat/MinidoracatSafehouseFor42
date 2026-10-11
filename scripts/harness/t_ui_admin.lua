@@ -576,6 +576,57 @@ return function(T)
     check(rl:getText() == "2" and not rl.invalid and PR.values.RedrawLimit == 2, "存檔成功：欄位改回伺服器值 2、清掉錯誤")
     AP.instance = nil
 
+    T.section("AdminPanel：伺服器狀態逐項說明與〔套用必要設定〕")
+    local cmds, lines = AP.fixCommands({ { option = "PlayerSafehouse", value = "false" },
+        { option = 'War" /kick boss', value = "false" }, { option = "AntiCheatSafeHouse", value = "3" } })
+    check(#cmds == 3 and cmds[1] == '/changeoption PlayerSafehouse "false"' and cmds[2] == '/changeoption AntiCheatSafeHouse "3"'
+        and cmds[3] == "/reloadoptions" and #lines == 2, "只送英數的選項與值，最後重新載入設定讓所有玩家生效")
+    check(#AP.fixCommands(nil) == 0 and #AP.fixCommands({}) == 0, "沒有要改的：一個指令都不送（也不重新載入）")
+    local commands, savedSend = {}, SendCommandToServer
+    SendCommandToServer = function(c) commands[#commands + 1] = c end
+    local function blockedOptions()
+        return { values = values, settingsWarnings = {}, resourceApi = false, parkingApi = false,
+            health = { blocked = true, blockers = { "PlayerSafehouse", "SandboxVars" }, warnings = { "AllowCoop" },
+                values = { PlayerSafehouse = "true", AllowCoop = "true" }, fixes = { { option = "PlayerSafehouse", value = "false" } } } }
+    end
+    local PF = AP.open({ tab = "rules" })
+    answer("adminOptions", blockedOptions())
+    local pool = PF.pages.rules.flow.pool
+    check(pool["hb1#1"] ~= nil and pool["hb1#1"].text == "IGUI_MSH_Admin_Need_PlayerSafehouse"
+        and pool["hb2#1"].text == "IGUI_MSH_Admin_Need_SandboxVars" and pool["hw1#1"].text == "IGUI_MSH_Admin_Suggest_AllowCoop",
+        "每個不符項目各一段說明（必要、建議分開）")
+    check(pool.hfix == nil and pool["hn#1"].text == "IGUI_MSH_Admin_FixNoPerm", "帳號不能改伺服器設定：沒有按鈕，只請伺服器主改")
+    boss.canOptions = true
+    AP.layoutPage(PF, "rules")
+    check(pool.hfix ~= nil and pool.hfix:isVisible() and pool["hn#1"].text == "IGUI_MSH_Admin_FixHow", "能改：有〔套用必要設定〕")
+    pool["f:MaxShares"]:setText("7")
+    fw.click(pool.hfix)
+    fw.dialog.onResult(false)
+    check(#commands == 0, "確認框按取消：不送")
+    fw.click(pool.hfix)
+    fw.dialog.onResult(true)
+    check(#commands == 2 and commands[1] == '/changeoption PlayerSafehouse "false"' and commands[2] == "/reloadoptions"
+        and pool.hfix.enabled == false, "確認後送原版指令，等結果時按鈕停用")
+    local nOpt, nPlans = countCmd("adminOptions"), countCmd("adminPlans")
+    T.advance(AP.FIX_WAIT_MS - 1)
+    AP.onTick()
+    check(countCmd("adminOptions") == nOpt, "等滿 FIX_WAIT_MS 才重抓")
+    T.advance(1)
+    AP.onTick()
+    check(countCmd("adminOptions") == nOpt + 1 and countCmd("adminPlans") == nPlans, "時間到只重抓狀態")
+    answer("adminOptions", blockedOptions())
+    check(PF.message == "IGUI_MSH_Admin_FixLater" and pool.hfix.enabled == true, "還沒改好：說還沒生效、可以再按")
+    fw.click(pool.hfix)
+    fw.dialog.onResult(true)
+    T.advance(AP.FIX_WAIT_MS)
+    AP.onTick()
+    answer("adminOptions", { values = values, settingsWarnings = {}, resourceApi = false, parkingApi = false,
+        health = { blocked = false, blockers = {}, warnings = {}, values = {}, fixes = {} } })
+    check(PF.message == "IGUI_MSH_Admin_FixDone" and not pool.hfix:isVisible() and pool["hb#1"].text == "IGUI_MSH_Admin_Healthy",
+        "改好：說已套用、改顯示檢查通過")
+    check(pool["f:MaxShares"]:getText() == "7", "只重抓狀態：還沒套用的規則編輯留著")
+    SendCommandToServer, boss.canOptions, AP.instance = savedSend, nil, nil
+
     MinidoracatEconomy = nil
     local w2 = SW.open({})
     slotsData.economy = "ABSENT"

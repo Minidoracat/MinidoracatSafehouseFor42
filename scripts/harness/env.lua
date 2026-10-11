@@ -178,7 +178,7 @@ function isValidUserName(user)
     return string.sub(string.lower(trimmed), 1, 5) ~= "admin"
 end
 
-Capability = { CanSetupSafehouses = "CanSetupSafehouses" }
+Capability = { CanSetupSafehouses = "CanSetupSafehouses", ChangeAndReloadServerOptions = "ChangeAndReloadServerOptions" }
 
 -- ===== 沙盒（SandboxOptions.java:572-582 set、279-285 toLua、683-685 saveServerLuaFile）=====
 T.sbox = { values = {}, saveOk = true, saves = 0, sets = 0 }
@@ -316,9 +316,12 @@ function T.player(o)
     function p:getHoursSurvived() return self.hours end
     function p:getInventory() return self.inv end
     function p:isAsleep() return self.asleep end
+    -- 管理員有安全屋權限；canOptions＝也能改伺服器設定（原版 /changeoption 要的權限）
     function p:getRole()
-        local admin = self.admin
-        return { hasCapability = function(_, cap) return admin and cap == Capability.CanSetupSafehouses end }
+        local admin, canOptions = self.admin, self.canOptions
+        return { hasCapability = function(_, cap)
+            return admin and (cap == Capability.CanSetupSafehouses or (canOptions and cap == Capability.ChangeAndReloadServerOptions))
+        end }
     end
     if not o.offline then T.online[#T.online + 1] = p end
     T.outbox[p.name] = T.outbox[p.name] or {}

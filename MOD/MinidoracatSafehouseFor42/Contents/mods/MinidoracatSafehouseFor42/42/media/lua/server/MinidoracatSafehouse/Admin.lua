@@ -75,12 +75,14 @@ local function exclusionStatus()
     return st.resourceApi == true, st.parkingApi == true
 end
 
--- health detail（§12.4）：收斂健康度（Reconcile.health，有就併入）、被節流壓下的 audit 數、最後一次 recovery
+-- health detail（§12.4）：收斂健康度（Reconcile.health，有就併入）、被節流壓下的 audit 數、最後一次 recovery、
+--   不符選項目前的值與必要設定要改成的值（Health.detail；面板逐項說明與〔套用必要設定〕）
 S.define("adminOptions", { kind = "query", admin = true, fields = {}, run = function()
     local H = MSH.Health
     local resourceApi, parkingApi = exclusionStatus()
+    local values, fixes = H.detail()
     local health = { blocked = H.blocked(), blockers = H.state.blockers, warnings = H.state.warnings, hostile = H.isHostile(),
-        suppressed = MSH.Audit.suppressed, lastRecovery = A.lastRecovery }
+        values = values, fixes = fixes, suppressed = MSH.Audit.suppressed, lastRecovery = A.lastRecovery }
     local Rc = MSH.Reconcile
     if Rc and Rc.health then
         for k, v in pairs(Rc.health()) do health[k] = v end

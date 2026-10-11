@@ -6,10 +6,13 @@
 --   輸入停 650 ms 才送、一次只有一筆在路上、兩次送出至少隔 650 ms（伺服器 500 ms 內重送就丟、不回覆：Server.lua coolingDown）、
 --   回覆的 (query, filter, page) 不是目前要的就丟掉，頁碼採用伺服器夾過的值。
 -- 只在 Capability.CanSetupSafehouses 時開（客戶端只是體驗，伺服器每個 admin 指令都再檢查，契約「客戶端模組」）。
+-- 伺服器狀態逐項說明不符的伺服器設定；〔套用必要設定〕＝管理員自己按、確認後送原版 /changeoption＋/reloadoptions
+--   （MOD 不暗改伺服器設定，§5；要 Capability.ChangeAndReloadServerOptions）。視窗可拉右下角改大小。
 -- 原版：ISCraftRecipeTooltip.activateToolTipFor／deactivateToolTipFor（client/Entity/ISUI/CraftRecipe/
 --   ISCraftRecipeTooltip.lua:214、258）、ISWidgetTitleHeader 沒傳 player 的繞法（計畫 §7.7「預覽」，
 --   deeds-ui-sp/E2EScenario.lua:30-43 實測）、getScriptManager():getCraftRecipe（同情境 :154）、
---   getPlayer():getRole():hasCapability(Capability.CanSetupSafehouses)（契約「客戶端模組」）。
+--   getPlayer():getRole():hasCapability(Capability.CanSetupSafehouses)（契約「客戶端模組」）、
+--   SendCommandToServer（LuaManager.java:9025-9030；原版 ISServerOptions.lua:184、220 同用法）。
 -- 他 MOD：MinidoracatEconomy.v1.Client.openAdminShop（Economy ECClient.lua:1339-1364，rev 4、CAPABILITIES.shopAdd）、
 --   MinidoracatMiniMapResourceAPI.categories()（MiniMap docs/addon-api.md:863）。
 
@@ -267,8 +270,10 @@ function AP.build(UI)
     local theme = MSH.Client.theme(UI)
     local x, y, W, H = K.center(AP.panelWidth(), AP.PANEL_H)
     local P = { UI = UI, theme = theme, pages = {}, pager = AP.pager(), current = "rules", tips = {} }
+    -- 可拉右下角改大小（使用者 2026-10-11）：寬不小於開窗時的寬（地契表格要這麼寬），高到 AP.MIN_H
     P.win = UI.Window.new(MSH.Client.windowOpts(UI, { x = x, y = y, width = W, height = H,
-        title = getText("IGUI_MSH_Admin_Title"), theme = theme, onClose = function() AP.hideTips(P) end }))
+        title = getText("IGUI_MSH_Admin_Title"), theme = theme, resizable = true, minWidth = W, minHeight = AP.MIN_H,
+        onResize = function() AP.resize(P) end, onClose = function() AP.hideTips(P) end }))
     local top = P.win:contentTop()
     local items = {}
     for i, id in ipairs(AP.TABS) do items[i] = { id = id, label = getText("IGUI_MSH_Admin_Tab_" .. id) } end
@@ -277,6 +282,7 @@ function AP.build(UI)
     P.win:addChild(P.tabs)
     local barH = 2 * K.fontH(UIFont.Small) + 44
     local bodyY = P.tabs:getY() + P.tabs:getHeight() + 4
+    P.barH, P.bodyY = barH, bodyY
     for _, id in ipairs(AP.TABS) do
         local sp = UI.ScrollPanel.new({ x = 0, y = bodyY, width = W, height = H - bodyY - barH, theme = theme })
         P.win:addChild(sp)
@@ -289,6 +295,19 @@ function AP.build(UI)
     P.barFlow = K.flow(P.bar, UI, theme)
     P.win:addToUIManager()
     return P
+end
+
+-- 拉動右下角：分頁列、各頁捲動區、底列跟著視窗；只重排目前這頁，其他頁切過去時（AP.select）才重排
+function AP.resize(P)
+    local W, H = P.win.width, P.win.height
+    P.tabs:setWidth(W - 2 * K.PAD)
+    for _, pg in pairs(P.pages) do
+        pg.sp:setWidth(W)
+        pg.sp:setHeight(H - P.bodyY - P.barH)
+    end
+    P.bar:setY(H - P.barH)
+    P.bar:setWidth(W)
+    AP.layoutPage(P, P.current)
 end
 
 function AP.visible(P) return P ~= nil and P.win:isVisible() end
@@ -586,23 +605,35 @@ function AP.layoutRules(P, pg)
     end
 end
 
--- 伺服器狀態（health detail）、遷移狀態、targeted recovery
+-- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定逐項寫選項名、白話名稱、目前的值、
+--   要改成什麼、為什麼（使用者 2026-10-11：只列選項名看不懂）；必要設定有〔套用必要設定〕
 function AP.layoutStatus(P, pg)
     local F = pg.flow
     local h = P.options and P.options.health or {}
+    local values = type(h.values) == "table" and h.values or {}
     F:text("h:health", getText("IGUI_MSH_Admin_HealthHead"), "text", UIFont.Medium)
-    local sep = getText("IGUI_MSH_Admin_ListSep")
     if h.blocked then
-        F:text("hb", getText("IGUI_MSH_Admin_Blocked", table.concat(h.blockers or {}, sep)), "warning")
+        F:text("hb", getText("IGUI_MSH_Admin_NeedHead"), "warning")
+        for i, k in ipairs(h.blockers or {}) do
+            F:text("hb" .. i, getText("IGUI_MSH_Admin_Need_" .. k, tostring(values[k] or "-")), "text")
+        end
+        F:text("hy", getText("IGUI_MSH_Admin_NeedWhy"), "textMuted")
+        AP.layoutFix(P, F, h)
     else
         F:text("hb", getText("IGUI_MSH_Admin_Healthy"), "text")
     end
     if type(h.warnings) == "table" and #h.warnings > 0 then
-        F:text("hw", getText("IGUI_MSH_Admin_Warnings", table.concat(h.warnings, sep)), "warning")
+        F:text("hw", getText("IGUI_MSH_Admin_SuggestHead"), "warning")
+        for i, k in ipairs(h.warnings) do
+            F:text("hw" .. i, getText("IGUI_MSH_Admin_Suggest_" .. k, tostring(values[k] or "-")), "text")
+        end
     end
     local sw = P.options and P.options.settingsWarnings
     if type(sw) == "table" and #sw > 0 then
-        F:text("hs", getText("IGUI_MSH_Admin_SettingsWarnings", table.concat(sw, sep)), "warning")
+        local names = {}
+        for i, k in ipairs(sw) do names[i] = AP.optionLabel(k) end
+        F:text("hs", getText("IGUI_MSH_Admin_SettingsWarnings", table.concat(names, getText("IGUI_MSH_Admin_ListSep"))),
+            "warning")
     end
     if h.hostile then F:text("hh", getText("IGUI_MSH_Admin_Hostile"), "warning") end
     F:text("hr", getText("IGUI_MSH_Admin_Reconcile", AP.timeText(h.lastSuccessAt), h.pendingRepair or 0,
@@ -617,6 +648,66 @@ function AP.layoutStatus(P, pg)
     end
     AP.layoutMigration(P, pg)
     AP.layoutRecovery(P, pg)
+end
+
+-- 〔套用必要設定〕：帳號能改伺服器設定才有按鈕，否則只寫請伺服器主改（沙盒、資料檔那幾項不是伺服器設定，沒有按鈕）
+function AP.layoutFix(P, F, h)
+    if #AP.fixCommands(h.fixes) == 0 then return end
+    if not AP.canChangeOptions() then return F:text("hn", getText("IGUI_MSH_Admin_FixNoPerm"), "textMuted") end
+    local b = F:button("hfix", getText("IGUI_MSH_Admin_Fix"), P, AP.onFix, "primary")
+    b:setEnabled(not P.fixBusy)
+    F:row({ b })
+    F:text("hn", getText("IGUI_MSH_Admin_FixHow", getText("IGUI_AdminPanel_SeeServerOptions"),
+        getText("IGUI_PlayerStats_Change"), getText("IGUI_PlayerStats_ReloadOptions")), "textMuted")
+end
+
+-- 走原版伺服器設定畫面同一條路（ISServerOptions.lua:184 /changeoption、:220 /reloadoptions）：引擎檢查帳號的
+--   ChangeAndReloadServerOptions 並寫 admin log（ChangeOptionCommand.java:26-51）；/reloadoptions 重讀設定檔再送給所有玩家
+--   （ReloadOptionsCommand.java、GameServer.sendOptionsToClients）。選項名與值只收英數，引號拆不壞指令
+function AP.fixCommands(fixes)
+    local cmds, lines = {}, {}
+    for _, f in ipairs(type(fixes) == "table" and fixes or {}) do
+        local k, v = tostring(f.option), tostring(f.value)
+        if string.match(k, "^%w+$") and string.match(v, "^%w+$") then
+            cmds[#cmds + 1] = "/changeoption " .. k .. " \"" .. v .. "\""
+            lines[#lines + 1] = k .. " = " .. v
+        end
+    end
+    if #cmds > 0 then cmds[#cmds + 1] = "/reloadoptions" end
+    return cmds, lines
+end
+
+-- 原版伺服器設定畫面同一個權限（ISServerOptions.lua:32、119）
+function AP.canChangeOptions()
+    local p = getPlayer()
+    local role = p and p:getRole()
+    return role ~= nil and role:hasCapability(Capability.ChangeAndReloadServerOptions) == true
+end
+
+function AP.onFix(P)
+    local cmds, lines = AP.fixCommands(P.options and P.options.health and P.options.health.fixes)
+    if #cmds == 0 or P.fixBusy then return end
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_Fix"), theme = P.theme,
+        text = getText("IGUI_MSH_Admin_FixText", table.concat(lines, "\n")),
+        confirmText = getText("IGUI_MSH_Admin_Fix"), cancelText = getText("UI_Cancel"),
+        onResult = function(ok)
+            if not ok or P.fixBusy then return end
+            for _, c in ipairs(cmds) do SendCommandToServer(c) end
+            P.fixBusy, P.fixDue = true, getTimestampMs() + AP.FIX_WAIT_MS
+            AP.say(P, getText("IGUI_MSH_Admin_FixSent"), "textMuted")
+            AP.layoutPage(P, "rules")
+        end }))
+end
+
+-- 送出 AP.FIX_WAIT_MS 後只重抓狀態（欄位不重設：還沒套用的規則編輯留著），看必要設定是不是都改好了
+function AP.checkFix(P)
+    MSH.Client.send("adminOptions", {}, function(res)
+        P.fixBusy = nil
+        if res.ok then P.options = res end
+        local done = res.ok and #AP.fixCommands(res.health and res.health.fixes) == 0
+        AP.say(P, getText(done and "IGUI_MSH_Admin_FixDone" or "IGUI_MSH_Admin_FixLater"), done and "text" or "warning")
+        AP.layoutPage(P, "rules")
+    end)
 end
 
 -- 遷移（自動接管原版安全屋，§9）：狀態、等待原因、已接管與依原因略過的筆數、這次開服的當機修復
@@ -740,7 +831,9 @@ AP.DEED_FIELD_KEY = { Side = "Side", Area = "Area", PerPlayer = "PerPlayer", Loo
 -- TextField 文字區兩側內距（Controls.lua FIELD_PAD 6＋TEXTBOX_INSET 2，各兩側）再留 4 格餘裕：placeholder 寬＋這個＝不截字
 AP.FIELD_CHROME = 20
 AP.TOGGLE_W = 48   -- 開關 36＋標籤間距 8＋餘裕（Controls.lua TOGGLE_WIDTH／LABEL_GAP；標籤是空字串）
-AP.PANEL_W, AP.PANEL_H = 780, 620
+-- 預設高 800：1080p 下付費頁與規則頁不用捲（使用者 2026-10-11 620 時付費頁要捲）；K.center 夾到螢幕高，可再拉大小
+AP.PANEL_W, AP.PANEL_H, AP.MIN_H = 780, 800, 400
+AP.FIX_WAIT_MS = 3000   -- 〔套用必要設定〕送出後多久重抓狀態（伺服器 Health 每 500 ms 重讀設定）
 AP.SCROLL_GUTTER = 12   -- ScrollPanel 右側固定保留的捲軸槽（ScrollPanel:contentWidth）
 
 -- 整數上限的位數（不用 tostring：1e9 會印成科學記號）
@@ -1160,9 +1253,13 @@ function AP.onRelease(P, b)
         end }))
 end
 
--- 每 tick：玩家頁才送分頁請求（debounce、一次一筆、送出間隔都在 pagerPump）
+-- 每 tick：〔套用必要設定〕到時間就重抓狀態；玩家頁才送分頁請求（debounce、一次一筆、送出間隔都在 pagerPump）
 function AP.onTick()
     local P = AP.instance
+    if P ~= nil and P.fixDue ~= nil and getTimestampMs() >= P.fixDue then
+        P.fixDue = nil
+        AP.checkFix(P)
+    end
     if not AP.visible(P) or P.current ~= "players" then return end
     local args, key = AP.pagerPump(P.pager, getTimestampMs())
     if args == nil then return end
