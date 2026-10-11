@@ -22,9 +22,11 @@ H.BLOCKERS = {
     { option = "SafehouseAllowLoot", want = "false" },
     { option = "SafehouseAllowFire", want = "false" },
     { option = "DisableSafehouseWhenOwnerConnected", want = "false" },
-    -- 4＝關閉閘門（§2.2）；一鍵套用改成 3（只記 log，不踢誠實玩家，§5）
+    -- 4＝關閉閘門（§2.2）；〔修正伺服器設定〕改成 3（只記 log，不踢誠實玩家，§5）
     { option = "AntiCheatSafeHouse", anyOf = { ["1"] = true, ["2"] = true, ["3"] = true }, fix = "3" },
 }
+-- 建議項目要改成的值（管理員面板「改成」欄）。ChatStreams 要拿掉的是 sh，面板用譯文寫
+H.SUGGEST_WANT = { SafehouseAllowRespawn = "false", AllowCoop = "false", SaveWorldEveryMinutes = "10-15" }
 
 H.state = H.state or { blocked = false, blockers = {}, warnings = {}, settingsWarnings = {}, key = "" }
 H.hostile = H.hostile or { active = false, since = nil, names = {} }
@@ -84,17 +86,12 @@ function H.evaluate(now)
     return st
 end
 
--- 管理員面板逐項說明用：不符的選項目前的值（伺服器設定以外的 blocker 沒有值），與必要設定要改成的值
-function H.detail()
-    local st, values, fixes, failing = H.state, {}, {}, {}
-    for _, list in ipairs({ st.blockers, st.warnings }) do
-        for _, k in ipairs(list) do values[k] = optionValue(k) end
-    end
-    for _, k in ipairs(st.blockers) do failing[k] = true end
-    for _, b in ipairs(H.BLOCKERS) do
-        if failing[b.option] then fixes[#fixes + 1] = { option = b.option, value = b.fix or b.want } end
-    end
-    return values, fixes
+-- 管理員面板「改成」欄與〔修正伺服器設定〕：每個伺服器設定要改成的值（必要的取 fix 或 want，建議的取 SUGGEST_WANT）
+function H.wants()
+    local out = {}
+    for _, b in ipairs(H.BLOCKERS) do out[b.option] = b.fix or b.want end
+    for k, v in pairs(H.SUGGEST_WANT) do out[k] = v end
+    return out
 end
 
 function H.blocked()

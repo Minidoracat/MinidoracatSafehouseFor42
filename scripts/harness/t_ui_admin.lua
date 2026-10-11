@@ -576,36 +576,45 @@ return function(T)
     check(rl:getText() == "2" and not rl.invalid and PR.values.RedrawLimit == 2, "存檔成功：欄位改回伺服器值 2、清掉錯誤")
     AP.instance = nil
 
-    T.section("AdminPanel：伺服器狀態逐項說明與〔套用必要設定〕")
-    local cmds, lines = AP.fixCommands({ { option = "PlayerSafehouse", value = "false" },
-        { option = 'War" /kick boss', value = "false" }, { option = "AntiCheatSafeHouse", value = "3" } })
+    T.section("AdminPanel：伺服器狀態表與〔修正伺服器設定〕")
+    local W = { PlayerSafehouse = "false", AntiCheatSafeHouse = "3", AllowCoop = "false", ['War" /kick boss'] = "false" }
+    local cmds, lines = AP.fixCommands({ blockers = { "PlayerSafehouse", "SandboxVars", 'War" /kick boss', "AntiCheatSafeHouse" },
+        warnings = { "AllowCoop" }, wants = W })
     check(#cmds == 3 and cmds[1] == '/changeoption PlayerSafehouse "false"' and cmds[2] == '/changeoption AntiCheatSafeHouse "3"'
-        and cmds[3] == "/reloadoptions" and #lines == 2, "只送英數的選項與值，最後重新載入設定讓所有玩家生效")
-    check(#AP.fixCommands(nil) == 0 and #AP.fixCommands({}) == 0, "沒有要改的：一個指令都不送（也不重新載入）")
+        and cmds[3] == "/reloadoptions" and #lines == 2,
+        "只改不符的必要設定（沒有值的、建議的不送）、只送英數，最後重新載入設定讓所有玩家生效")
+    check(#AP.fixCommands(nil) == 0 and #AP.fixCommands({ blockers = { "SandboxVars" }, wants = W }) == 0,
+        "沒有要改的伺服器設定：一個指令都不送（也不重新載入）")
     local commands, savedSend = {}, SendCommandToServer
     SendCommandToServer = function(c) commands[#commands + 1] = c end
     local function blockedOptions()
         return { values = values, settingsWarnings = {}, resourceApi = false, parkingApi = false,
-            health = { blocked = true, blockers = { "PlayerSafehouse", "SandboxVars" }, warnings = { "AllowCoop" },
-                values = { PlayerSafehouse = "true", AllowCoop = "true" }, fixes = { { option = "PlayerSafehouse", value = "false" } } } }
+            health = { blocked = true, blockers = { "PlayerSafehouse", "SandboxVars", "AntiCheatSafeHouse" },
+                warnings = { "ChatStreams", "SaveWorldEveryMinutes" },
+                wants = { PlayerSafehouse = "false", AntiCheatSafeHouse = "3", SaveWorldEveryMinutes = "10-15" } } }
     end
     local PF = AP.open({ tab = "rules" })
     answer("adminOptions", blockedOptions())
     local pool = PF.pages.rules.flow.pool
-    check(pool["hb1#1"] ~= nil and pool["hb1#1"].text == "IGUI_MSH_Admin_Need_PlayerSafehouse"
-        and pool["hb2#1"].text == "IGUI_MSH_Admin_Need_SandboxVars" and pool["hw1#1"].text == "IGUI_MSH_Admin_Suggest_AllowCoop",
-        "每個不符項目各一段說明（必要、建議分開）")
+    check(pool.hb1n.text == "PlayerSafehouse" and pool.hb1w.text == "false" and pool.hb1r1.text == "IGUI_MSH_Admin_Need_PlayerSafehouse"
+        and pool.hb2n.text == "AntiCheatSafeHouse" and pool.hb2w.text == "3" and pool["hx1#1"].text == "IGUI_MSH_Admin_Need_SandboxVars",
+        "必要設定一項一列（設定、改成、原因）；沒有值可改的寫成段落")
+    check(pool.hw1n.text == "ChatStreams" and pool.hw1w.text == "IGUI_MSH_Admin_DropSh" and pool.hw2w.text == "10-15"
+        and pool.hbh1:isVisible() and pool.hwh1 == nil, "建議也排成表格；表頭只在第一張表")
+    check(pool.hb1w.x == pool.hw1w.x and pool.hb1r1.x == pool.hw2r1.x and pool.hw2n.x + pool.hw2n.width < pool.hw2w.x
+        and pool.hw1w.x + pool.hw1w.width < pool.hb1r1.x, "兩張表共用欄位：「改成」「原因」上下對齊，照兩張表最寬的字排、不重疊")
     check(pool.hfix == nil and pool["hn#1"].text == "IGUI_MSH_Admin_FixNoPerm", "帳號不能改伺服器設定：沒有按鈕，只請伺服器主改")
     boss.canOptions = true
     AP.layoutPage(PF, "rules")
-    check(pool.hfix ~= nil and pool.hfix:isVisible() and pool["hn#1"].text == "IGUI_MSH_Admin_FixHow", "能改：有〔套用必要設定〕")
+    check(pool.hfix ~= nil and pool.hfix:isVisible() and pool["hn#1"].text == "IGUI_MSH_Admin_FixHow", "能改：有〔修正伺服器設定〕")
     pool["f:MaxShares"]:setText("7")
     fw.click(pool.hfix)
     fw.dialog.onResult(false)
     check(#commands == 0, "確認框按取消：不送")
     fw.click(pool.hfix)
     fw.dialog.onResult(true)
-    check(#commands == 2 and commands[1] == '/changeoption PlayerSafehouse "false"' and commands[2] == "/reloadoptions"
+    check(#commands == 3 and commands[1] == '/changeoption PlayerSafehouse "false"'
+        and commands[2] == '/changeoption AntiCheatSafeHouse "3"' and commands[3] == "/reloadoptions"
         and pool.hfix.enabled == false, "確認後送原版指令，等結果時按鈕停用")
     local nOpt, nPlans = countCmd("adminOptions"), countCmd("adminPlans")
     T.advance(AP.FIX_WAIT_MS - 1)
@@ -621,9 +630,9 @@ return function(T)
     T.advance(AP.FIX_WAIT_MS)
     AP.onTick()
     answer("adminOptions", { values = values, settingsWarnings = {}, resourceApi = false, parkingApi = false,
-        health = { blocked = false, blockers = {}, warnings = {}, values = {}, fixes = {} } })
+        health = { blocked = false, blockers = {}, warnings = {}, wants = {} } })
     check(PF.message == "IGUI_MSH_Admin_FixDone" and not pool.hfix:isVisible() and pool["hb#1"].text == "IGUI_MSH_Admin_Healthy",
-        "改好：說已套用、改顯示檢查通過")
+        "改好：說已修正、改顯示檢查通過")
     check(pool["f:MaxShares"]:getText() == "7", "只重抓狀態：還沒套用的規則編輯留著")
     SendCommandToServer, boss.canOptions, AP.instance = savedSend, nil, nil
 

@@ -6,8 +6,8 @@
 --   輸入停 650 ms 才送、一次只有一筆在路上、兩次送出至少隔 650 ms（伺服器 500 ms 內重送就丟、不回覆：Server.lua coolingDown）、
 --   回覆的 (query, filter, page) 不是目前要的就丟掉，頁碼採用伺服器夾過的值。
 -- 只在 Capability.CanSetupSafehouses 時開（客戶端只是體驗，伺服器每個 admin 指令都再檢查，契約「客戶端模組」）。
--- 伺服器狀態逐項說明不符的伺服器設定；〔套用必要設定〕＝管理員自己按、確認後送原版 /changeoption＋/reloadoptions
---   （MOD 不暗改伺服器設定，§5；要 Capability.ChangeAndReloadServerOptions）。視窗可拉右下角改大小。
+-- 伺服器狀態把不符的伺服器設定排成「設定｜改成｜原因」表；〔修正伺服器設定〕＝管理員自己按、確認後送原版
+--   /changeoption＋/reloadoptions（MOD 不暗改伺服器設定，§5；要 Capability.ChangeAndReloadServerOptions）。視窗可拉右下角改大小。
 -- 原版：ISCraftRecipeTooltip.activateToolTipFor／deactivateToolTipFor（client/Entity/ISUI/CraftRecipe/
 --   ISCraftRecipeTooltip.lua:214、258）、ISWidgetTitleHeader 沒傳 player 的繞法（計畫 §7.7「預覽」，
 --   deeds-ui-sp/E2EScenario.lua:30-43 實測）、getScriptManager():getCraftRecipe（同情境 :154）、
@@ -605,29 +605,34 @@ function AP.layoutRules(P, pg)
     end
 end
 
--- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定逐項寫選項名、白話名稱、目前的值、
---   要改成什麼、為什麼（使用者 2026-10-11：只列選項名看不懂）；必要設定有〔套用必要設定〕
+-- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定排成「設定｜改成｜原因」表，必要與建議
+--   兩組共用欄位、組間留兩倍間距（使用者 2026-10-11：只列選項名看不懂、逐句說明又太複雜）；必要設定有〔修正伺服器設定〕
 function AP.layoutStatus(P, pg)
     local F = pg.flow
     local h = P.options and P.options.health or {}
-    local values = type(h.values) == "table" and h.values or {}
+    local wants = type(h.wants) == "table" and h.wants or {}
+    local need, needNotes = AP.settingRows(h.blockers, wants, "Need_")
+    local suggest, suggestNotes = AP.settingRows(h.warnings, wants, "Suggest_")
+    local cols = AP.settingCols(need, suggest)
     F:text("h:health", getText("IGUI_MSH_Admin_HealthHead"), "text", UIFont.Medium)
     if h.blocked then
         F:text("hb", getText("IGUI_MSH_Admin_NeedHead"), "warning")
-        for i, k in ipairs(h.blockers or {}) do
-            F:text("hb" .. i, getText("IGUI_MSH_Admin_Need_" .. k, tostring(values[k] or "-")), "text")
+        for i, k in ipairs(needNotes) do F:text("hx" .. i, getText("IGUI_MSH_Admin_Need_" .. k), "text") end
+        if #need > 0 then
+            F:text("hy", getText("IGUI_MSH_Admin_NeedWhy"), "textMuted")
+            AP.settingTable(P, F, "hb", need, cols, true)
+            AP.layoutFix(P, F, h)
         end
-        F:text("hy", getText("IGUI_MSH_Admin_NeedWhy"), "textMuted")
-        AP.layoutFix(P, F, h)
     else
         F:text("hb", getText("IGUI_MSH_Admin_Healthy"), "text")
     end
-    if type(h.warnings) == "table" and #h.warnings > 0 then
-        F:text("hw", getText("IGUI_MSH_Admin_SuggestHead"), "warning")
-        for i, k in ipairs(h.warnings) do
-            F:text("hw" .. i, getText("IGUI_MSH_Admin_Suggest_" .. k, tostring(values[k] or "-")), "text")
-        end
+    if #suggest + #suggestNotes > 0 then
+        F.y = F.y + K.GAP
+        F:text("hw", getText("IGUI_MSH_Admin_SuggestHead"), "text")
+        AP.settingTable(P, F, "hw", suggest, cols, #need == 0)
+        for i, k in ipairs(suggestNotes) do F:text("hz" .. i, getText("IGUI_MSH_Admin_Suggest_" .. k), "text") end
     end
+    F.y = F.y + K.GAP
     local sw = P.options and P.options.settingsWarnings
     if type(sw) == "table" and #sw > 0 then
         local names = {}
@@ -650,25 +655,81 @@ function AP.layoutStatus(P, pg)
     AP.layoutRecovery(P, pg)
 end
 
--- 〔套用必要設定〕：帳號能改伺服器設定才有按鈕，否則只寫請伺服器主改（沙盒、資料檔那幾項不是伺服器設定，沒有按鈕）
+-- 不符的伺服器設定 → 表格列 { name, want, why }；沒有「改成」值的（沙盒、資料檔讀不到）放第二個回傳值，寫成段落。
+--   ChatStreams 要拿掉的是 sh，「改成」欄用譯文
+function AP.settingRows(list, wants, kind)
+    local rows, notes = {}, {}
+    for _, k in ipairs(type(list) == "table" and list or {}) do
+        local want = k == "ChatStreams" and getText("IGUI_MSH_Admin_DropSh") or wants[k]
+        if want ~= nil then
+            rows[#rows + 1] = { name = k, want = tostring(want), why = getText("IGUI_MSH_Admin_" .. kind .. k) }
+        else
+            notes[#notes + 1] = k
+        end
+    end
+    return rows, notes
+end
+
+-- 兩張表共用欄位的 x：寬度照表頭與兩張表全部的列量（左緣對齊）
+function AP.settingCols(a, b)
+    local nameW = K.textW(UIFont.Small, getText("IGUI_MSH_Admin_ColSetting"))
+    local wantW = K.textW(UIFont.Small, getText("IGUI_MSH_Admin_ColWant"))
+    for _, rows in ipairs({ a, b }) do
+        for _, r in ipairs(rows) do
+            nameW = math.max(nameW, K.textW(UIFont.Small, r.name))
+            wantW = math.max(wantW, K.textW(UIFont.Small, r.want))
+        end
+    end
+    local xWant = K.PAD + nameW + 2 * K.GAP
+    return { xWant = xWant, xWhy = xWant + wantW + 2 * K.GAP }
+end
+
+-- 一張「設定｜改成｜原因」表（表頭可省）：設定名與值一行，原因欄換行，列高照原因的行數
+function AP.settingTable(P, F, key, rows, cols, header)
+    local lh = K.fontH(UIFont.Small) + 2
+    local whyW = math.max(1, F.width - K.PAD - cols.xWhy)
+    local function cell(k, text, x, y, token)
+        local l = F:label(k, text, token)
+        l:setX(x)
+        l:setY(y)
+    end
+    if header and #rows > 0 then
+        cell(key .. "h1", getText("IGUI_MSH_Admin_ColSetting"), K.PAD, F.y, "textMuted")
+        cell(key .. "h2", getText("IGUI_MSH_Admin_ColWant"), cols.xWant, F.y, "textMuted")
+        cell(key .. "h3", getText("IGUI_MSH_Admin_ColWhy"), cols.xWhy, F.y, "textMuted")
+        F.y = F.y + lh + 2
+    end
+    for i, r in ipairs(rows) do
+        local y = F.y
+        cell(key .. i .. "n", r.name, K.PAD, y)
+        cell(key .. i .. "w", r.want, cols.xWant, y)
+        local lines = K.wrap(P.UI, r.why, whyW, UIFont.Small)
+        for j, line in ipairs(lines) do cell(key .. i .. "r" .. j, line, cols.xWhy, y + (j - 1) * lh, "textMuted") end
+        F.y = y + math.max(1, #lines) * lh + 2
+    end
+    F.y = F.y + K.GAP - 2
+end
+
+-- 〔修正伺服器設定〕：帳號能改伺服器設定才有按鈕，否則只寫請伺服器主改。一般樣式：這頁的主要動作是底列〔套用變更〕
 function AP.layoutFix(P, F, h)
-    if #AP.fixCommands(h.fixes) == 0 then return end
+    if #AP.fixCommands(h) == 0 then return end
     if not AP.canChangeOptions() then return F:text("hn", getText("IGUI_MSH_Admin_FixNoPerm"), "textMuted") end
-    local b = F:button("hfix", getText("IGUI_MSH_Admin_Fix"), P, AP.onFix, "primary")
+    local b = F:button("hfix", getText("IGUI_MSH_Admin_Fix"), P, AP.onFix)
     b:setEnabled(not P.fixBusy)
     F:row({ b })
-    F:text("hn", getText("IGUI_MSH_Admin_FixHow", getText("IGUI_AdminPanel_SeeServerOptions"),
-        getText("IGUI_PlayerStats_Change"), getText("IGUI_PlayerStats_ReloadOptions")), "textMuted")
+    -- 翻譯包可能在原版按鈕名後面多一個空白（sh-adminfix-1011b 德文：「ansehen “」）
+    F:text("hn", getText("IGUI_MSH_Admin_FixHow", MSH.trim(getText("IGUI_AdminPanel_SeeServerOptions"))), "textMuted")
 end
 
 -- 走原版伺服器設定畫面同一條路（ISServerOptions.lua:184 /changeoption、:220 /reloadoptions）：引擎檢查帳號的
 --   ChangeAndReloadServerOptions 並寫 admin log（ChangeOptionCommand.java:26-51）；/reloadoptions 重讀設定檔再送給所有玩家
 --   （ReloadOptionsCommand.java、GameServer.sendOptionsToClients）。選項名與值只收英數，引號拆不壞指令
-function AP.fixCommands(fixes)
+function AP.fixCommands(h)
     local cmds, lines = {}, {}
-    for _, f in ipairs(type(fixes) == "table" and fixes or {}) do
-        local k, v = tostring(f.option), tostring(f.value)
-        if string.match(k, "^%w+$") and string.match(v, "^%w+$") then
+    local wants = type(h) == "table" and type(h.wants) == "table" and h.wants or {}
+    for _, k in ipairs(type(h) == "table" and type(h.blockers) == "table" and h.blockers or {}) do
+        local v = wants[k]
+        if v ~= nil and string.match(tostring(k), "^%w+$") and string.match(tostring(v), "^%w+$") then
             cmds[#cmds + 1] = "/changeoption " .. k .. " \"" .. v .. "\""
             lines[#lines + 1] = k .. " = " .. v
         end
@@ -685,7 +746,7 @@ function AP.canChangeOptions()
 end
 
 function AP.onFix(P)
-    local cmds, lines = AP.fixCommands(P.options and P.options.health and P.options.health.fixes)
+    local cmds, lines = AP.fixCommands(P.options and P.options.health)
     if #cmds == 0 or P.fixBusy then return end
     P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_Fix"), theme = P.theme,
         text = getText("IGUI_MSH_Admin_FixText", table.concat(lines, "\n")),
@@ -704,7 +765,7 @@ function AP.checkFix(P)
     MSH.Client.send("adminOptions", {}, function(res)
         P.fixBusy = nil
         if res.ok then P.options = res end
-        local done = res.ok and #AP.fixCommands(res.health and res.health.fixes) == 0
+        local done = res.ok and #AP.fixCommands(res.health) == 0
         AP.say(P, getText(done and "IGUI_MSH_Admin_FixDone" or "IGUI_MSH_Admin_FixLater"), done and "text" or "warning")
         AP.layoutPage(P, "rules")
     end)

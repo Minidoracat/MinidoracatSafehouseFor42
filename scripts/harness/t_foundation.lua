@@ -112,14 +112,15 @@ return function(T)
     H.evaluate(T.now)
     check(not H.blocked() and #H.state.warnings == 2, "AllowCoop、SaveWorldEveryMinutes=0 只是警告")
     check(T.logged("HEALTH_BLOCKED"), "進 blocked 寫 audit")
-    T.serverOptions.PlayerSafehouse = "true"
-    T.serverOptions.AntiCheatSafeHouse = "4"
+
+    -- 〔修正伺服器設定〕把每個不符的必要設定改成 wants 的值：改完一定要通過檢查（anyOf 的反作弊也一樣）
+    local wants = H.wants()
+    for _, b in ipairs(H.BLOCKERS) do T.serverOptions[b.option] = b.anyOf and "4" or "x" end
     H.evaluate(T.now)
-    local values, fixes = H.detail()
-    check(values.PlayerSafehouse == "true" and values.AntiCheatSafeHouse == "4" and values.SaveWorldEveryMinutes == "0"
-        and values.War == nil, "detail：只回不符選項的目前值（必要與建議都有）")
-    check(#fixes == 2 and fixes[1].option == "PlayerSafehouse" and fixes[1].value == "false"
-        and fixes[2].option == "AntiCheatSafeHouse" and fixes[2].value == "3", "detail：必要設定要改成的值（反作弊 1–3 都行，改成 3）")
+    local blockedBefore = #H.state.blockers
+    for _, b in ipairs(H.BLOCKERS) do T.serverOptions[b.option] = wants[b.option] end
+    H.evaluate(T.now)
+    check(blockedBefore == #H.BLOCKERS and not H.blocked(), "wants：每個必要設定改成面板給的值後通過檢查")
 
     -- 管理員面板逐項顯示 IGUI_MSH_Admin_Need_<項目>／Suggest_<項目>；缺譯文會直接秀出鍵名（verify 只比各語言鍵集合一致）
     for _, b in ipairs(H.BLOCKERS) do
