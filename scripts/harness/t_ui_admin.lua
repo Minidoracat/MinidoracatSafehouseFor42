@@ -283,8 +283,23 @@ return function(T)
     check(rules["mw#1"] ~= nil and rules["ma#1"] ~= nil and rules["ms#1"] ~= nil and rules["mf#1"] ~= nil
         and rules["mr#1"] == nil, "遷移區：等待原因、已接管、依原因略過、清單檔位置；沒有修補就不顯示")
     local deeds = P.pages.deeds.flow.pool
-    check(deeds["f:Tier1Side"] ~= nil and deeds["f:Tier8Rent"] ~= nil and deeds["warn2#1"] == nil, "地契頁 8 級全部排出、沒有警告")
-    check(deeds["f:Tier4Side"].enabled == false and deeds["f:Tier3Side"].enabled ~= false, "未啟用的等級灰階（不能改）")
+    local function shown(key) return deeds[key] ~= nil and deeds[key]:isVisible() end
+    check(shown("f:Tier1Side") and shown("f:Tier3Rent") and not shown("f:Tier4Side") and deeds["warn2#1"] == nil,
+        "地契頁只列啟用的 3 級（預設）、沒有警告")
+    local tiers = P.pages.deeds.fields.TiersEnabled
+    fw.click(deeds.tierAdd)
+    check(tiers.value == 4 and shown("f:Tier4Side") and shown("f:Tier4Craft"), "〔新增第 4 級〕：多出第 4 級那一列")
+    deeds["f:Tier4Side"]:setText("50")
+    fw.click(deeds.tierRemove)
+    check(tiers.value == 3 and not shown("f:Tier4Side"), "〔移除第 4 級〕：那一列收起")
+    for _ = 1, 6 do fw.click(deeds.tierAdd) end
+    check(tiers.value == 8 and shown("f:Tier8Rent") and deeds.tierAdd.enabled == false and deeds.tierRemove.enabled ~= false,
+        "加到上限 8 級：〔新增〕停用")
+    for _ = 1, 8 do fw.click(deeds.tierRemove) end
+    check(tiers.value == 1 and not shown("f:Tier2Side") and deeds.tierRemove.enabled == false and deeds.tierAdd.enabled ~= false,
+        "減到 1 級：〔移除〕停用")
+    fw.click(deeds.tierAdd)
+    fw.click(deeds.tierAdd)
 
     deeds["f:Tier1Side"]:setText("30")
     local free2 = deeds["f:Tier2Free"]
@@ -296,7 +311,7 @@ return function(T)
     fw.click(craft)
     check(tips[#tips] == "CraftMinidoracatSafehouseDeed1Strict", "換難度後預覽跟著換")
     local cw = select(3, AP.deedColumns()).Craft
-    check(craft.width == cw and deeds["f:Tier2Craft"].width == cw and deeds["f:Tier8Craft"].width == cw,
+    check(craft.width == cw and deeds["f:Tier2Craft"].width == cw and deeds["f:Tier3Craft"].width == cw,
         "換難度後按鈕寬度不變：每一列都是整欄寬（實際 " .. craft.width .. "／" .. cw .. "）")
     craft:onMouseMoveOutside(0, 0)
     check(craft.__toolTip == nil, "滑鼠離開收掉提示框")
@@ -306,7 +321,8 @@ return function(T)
     local keys = {}
     for k in pairs(sent and sent.args.changes or {}) do keys[#keys + 1] = k end
     check(sent ~= nil and #keys == 3 and sent.args.changes.Tier1Side == 30 and sent.args.changes.Tier2Free == false
-        and sent.args.changes.Tier1Craft == 4, "套用：只送地契頁改過的三個鍵（實際 " .. table.concat(keys, ",") .. "）")
+        and sent.args.changes.Tier1Craft == 4,
+        "套用：只送地契頁改過的三個鍵；加回原數的等級數、移除那級改過的欄位不送（實際 " .. table.concat(keys, ",") .. "）")
     answer("adminSetOptions", { ok = false, code = "BAD_OPTION", key = "Tier1Side", reason = "OUT_OF_RANGE" })
     check(deeds["f:Tier1Side"].invalid == true and P.busy == nil, "伺服器回欄位錯誤：標在那一欄")
     deeds["f:Tier1Side"]:setText("abc")
@@ -525,8 +541,8 @@ return function(T)
     local function fits(el, widest) return el ~= nil and el.width >= measure(widest) + PAD_IN end
     local deedPool = PB.pages.deeds.flow.pool
     local narrow = {}
-    for _, s in ipairs({ { "Tier1Side", "96" }, { "Tier1Area", "9216" }, { "Tier1Area", "9999" }, { "Tier8Area", "9999" },
-        { "Tier1PerPlayer", "100" }, { "Tier1LootChance", "100.00" }, { "TiersEnabled", "8" } }) do
+    for _, s in ipairs({ { "Tier1Side", "96" }, { "Tier1Area", "9216" }, { "Tier1Area", "9999" }, { "Tier3Area", "9999" },
+        { "Tier1PerPlayer", "100" }, { "Tier1LootChance", "100.00" } }) do
         if not fits(deedPool["f:" .. s[1]], s[2]) then narrow[#narrow + 1] = s[1] .. "=" .. tostring(deedPool["f:" .. s[1]] and deedPool["f:" .. s[1]].width) end
     end
     check(#narrow == 0, "地契頁每個數字框寬 ≥ 量到的最寬合法值＋內距（太窄：" .. table.concat(narrow, ",") .. "）")
@@ -581,6 +597,54 @@ return function(T)
     saved2.RedrawLimit = 2
     answer("adminSetOptions", { values = saved2 })
     check(rl:getText() == "2" and not rl.invalid and PR.values.RedrawLimit == 2, "存檔成功：欄位改回伺服器值 2、清掉錯誤")
+    AP.instance = nil
+
+    T.section("AdminPanel：每個沙盒選項都能在面板上改")
+    -- 使用者 2026-10-12：「所有沙盒設定，管理面板都要有」。啟用 8 級、伺服器沒有小地圖（資源點設定照樣列出）
+    local all = {}
+    for k, v in pairs(values) do all[k] = v end
+    all.TiersEnabled = 8
+    local PA = AP.open({ tab = "rules" })
+    answer("adminOptions", { values = all, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
+    local missing = {}
+    for _, o in ipairs(MSH.Settings.OPTIONS) do
+        local found = false
+        for _, id in ipairs({ "rules", "deeds", "exclusions" }) do
+            local pg = PA.pages[id]
+            local f = pg.fields[o.key]
+            -- 〔套用變更〕收的就是這些欄位（AP.onApply：這一輪排到、元件看得見）
+            if f ~= nil and f.gen == pg.flow.gen and (f.el == nil or f.el:isVisible()) then found = true end
+        end
+        if not found then missing[#missing + 1] = o.key end
+    end
+    check(#missing == 0, "每個選項都有排出來的欄位（缺：" .. table.concat(missing, ",") .. "）")
+    local ex = PA.pages.exclusions.flow.pool
+    check(ex["noMiniMap#1"] ~= nil and ex["noMiniMap#1"]:isVisible() and ex["f:AvoidResources"]:isVisible(),
+        "沒有小地圖：資源點設定照樣列出，上面寫明現在不阻擋")
+    AP.instance = nil
+
+    T.section("AdminPanel：付費頁只列啟用的等級，收起的等級不讀")
+    local four = {}
+    for k, v in pairs(values) do four[k] = v end
+    four.TiersEnabled = 4
+    local PP = AP.open({ tab = "paid" })
+    answer("adminOptions", { values = four, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
+    answer("adminPlans", { economy = "READY", currencies = { "survivor" },
+        tiers = { planRow(1, 1), planRow(2, 1), planRow(3, 1), planRow(4, 1), planRow(5, 1) } })
+    local pp = PP.pages.paid.flow.pool
+    check(pp["pl:rentalPrice:4"] ~= nil and pp["pl:rentalPrice:4"]:isVisible() and pp["pl:rentalPrice:5"] == nil,
+        "只列啟用的 4 級（Economy 有 5 級的方案）")
+    pp["pl:rentalPrice:4"]:setText("abc")
+    PP.values.TiersEnabled = 3   -- 地契頁移除第 4 級並套用後
+    AP.layoutPage(PP, "paid")
+    pp["pl:rentalPrice:2"]:setText("300")
+    fw.click(PP.barFlow.pool.apply)
+    local ps = lastCmd("adminSetPlan")
+    check(not pp["pl:rentalPrice:4"]:isVisible() and PP.pages.paid.errors["rentalPrice:4"] == nil
+        and ps ~= nil and ps.args.tier == 2 and ps.args.values.rentalPrice == 300,
+        "收起的第 4 級：留在欄位裡的錯字不擋套用、不送，只送改了的 2 級")
+    fw.click(pp.goDeeds)
+    check(PP.current == "deeds", "〔到地契頁增減等級〕切到地契頁")
     AP.instance = nil
 
     T.section("AdminPanel：伺服器狀態表與〔修正伺服器設定〕")

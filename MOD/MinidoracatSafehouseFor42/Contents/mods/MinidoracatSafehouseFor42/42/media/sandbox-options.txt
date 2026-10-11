@@ -38,6 +38,12 @@ option MinidoracatSafehouse.RedrawMinutes
 option MinidoracatSafehouse.RedrawLimit
 {type = integer, min = 1, max = 20, default = 5, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_RedrawLimit,}
 
+option MinidoracatSafehouse.RangesFaction
+{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_RangesFaction,}
+
+option MinidoracatSafehouse.RangesOthers
+{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_RangesOthers,}
+
 option MinidoracatSafehouse.AvoidRoads
 {type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_AvoidRoads,}
 

@@ -36,6 +36,7 @@ AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服�
 AP.FILTERS = { "all", "owners", "overrides" }
 AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxSide", "FreeMaxArea", "ClaimGap", "MaxShares",
     "AllowFactionShare", "LapseKeepDays", "RedrawMinutes", "RedrawLimit", "MaxPieces" }
+AP.RANGE_KEYS = { "RangesFaction", "RangesOthers" }
 AP.CRAFT_LEVELS = { [2] = "Easy", [3] = "Standard", [4] = "Strict" }
 -- Economy 方案 12 欄（entitlements-api.md；ECEntitlementPlans.lua:3-61）與付費頁可改欄位的範圍
 AP.PLAN_FIELDS = { "permanentEnabled", "permanentCurrency", "permanentPrice", "permanentLimit", "rentalEnabled",
@@ -605,6 +606,12 @@ function AP.layoutRules(P, pg)
     end
     -- 每間最多塊數調高有代價（使用者 2026-10-12：「寫清楚注意事項」）：注意事項直接寫在最後一列底下，不只放滑鼠提示
     F:text("piecesHelp", getText("Sandbox_MinidoracatSafehouse_MaxPieces_tooltip"), "textMuted")
+    -- 地面顯示範圍：玩家看得到哪些別人的安全屋（使用者 2026-10-12：預設自己的與同陣營的；Ranges.lua）
+    F.y = F.y + K.GAP
+    F:text("h:ranges", getText("IGUI_MSH_Admin_RangesHead"), "text", UIFont.Medium)
+    local rw = AP.labelWidth(AP.RANGE_KEYS)
+    for _, key in ipairs(AP.RANGE_KEYS) do AP.formRow(pg, key, rw, { AP.boolField(P, pg, key) }) end
+    F:text("rangesHelp", getText("IGUI_MSH_Admin_RangesHelp"), "textMuted")
 end
 
 -- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定排成「設定｜改成｜原因」表，必要與建議
@@ -877,12 +884,27 @@ end
 
 function AP.economyReady(P) return P.plans ~= nil and P.plans.economy == "READY" end
 
--- 目前輸入的啟用等級數（還在打字、不是數字時用伺服器值）
-function AP.currentTiers(P, pg)
+-- 啟用的等級數（沙盒 TiersEnabled）：不是輸入框，是表格底下的〔新增第 N 級〕〔移除第 N 級〕（使用者 2026-10-12：
+-- 「管理員要添加才那麼多，預設顯示 3 個就好，顯示可以設定的上限」）。值放在欄位的 value，按〔套用變更〕才送出
+function AP.tierField(P, pg)
+    local f = field(pg, "TiersEnabled", "enum")
+    f.kind, f.el = "enum", nil   -- 舊版這欄是輸入框（熱重載後沿用的欄位）
+    AP.syncField(P, pg, f)
+    return f
+end
+
+function AP.onTierAdd(P)
+    local pg = P.pages.deeds
     local f = pg.fields.TiersEnabled
-    local n = f and AP.parseInt(f.el:getText())
-    if n == nil or n < 1 or n > MSH.MAX_TIER then n = AP.effective(P.values, "TiersEnabled") end
-    return n
+    if f and f.value < MSH.MAX_TIER then f.value = f.value + 1 end
+    AP.layoutPage(P, pg.id)
+end
+
+function AP.onTierRemove(P)
+    local pg = P.pages.deeds
+    local f = pg.fields.TiersEnabled
+    if f and f.value > 1 then f.value = f.value - 1 end
+    AP.layoutPage(P, pg.id)
 end
 
 function AP.onDeedsEdit(P, pg) AP.layoutPage(P, pg.id) end
@@ -975,12 +997,10 @@ end
 function AP.layoutDeeds(P, pg)
     local F = pg.flow
     local econ = AP.economyReady(P)
-    local head = { F:label("kLabel", AP.optionLabel("TiersEnabled")),
-        AP.numField(P, pg, "TiersEnabled", AP.fieldW("TiersEnabled", 48), AP.onDeedsEdit),
-        F:label("kOf", getText("IGUI_MSH_Admin_TiersOf", MSH.MAX_TIER), "textMuted") }
+    local k = AP.tierField(P, pg).value
+    local head = { F:label("kLabel", getText("IGUI_MSH_Admin_TiersCount", k, MSH.MAX_TIER)) }
     if AP.shopApi() then head[#head + 1] = F:button("shop", getText("IGUI_MSH_Admin_ShopAdd"), P, AP.onShop) end
     F:row(head)
-    local k = AP.currentTiers(P, pg)
     local xs, _, ws = AP.deedColumns()
     local hy = F.y
     for _, c in ipairs(AP.DEED_COLS) do
@@ -989,14 +1009,25 @@ function AP.layoutDeeds(P, pg)
         l:setY(hy)
     end
     F.y = hy + K.fontH(UIFont.Small) + 4
-    for n = 1, MSH.MAX_TIER do AP.layoutDeedRow(P, pg, n, n <= k, econ, xs, ws) end
+    -- 只排啟用的等級：移除的那級欄位不在這一輪（f.gen 不同），〔套用變更〕不會送它沒套用的改動。
+    -- 存值照實顯示（不夾範圍），列數不超過上限
+    for n = 1, math.min(k, MSH.MAX_TIER) do AP.layoutDeedRow(P, pg, n, econ, xs, ws) end
+    local add = F:button("tierAdd", getText(k < MSH.MAX_TIER and "IGUI_MSH_Admin_TierAdd" or "IGUI_MSH_Admin_TierMax",
+        k < MSH.MAX_TIER and k + 1 or MSH.MAX_TIER), P, AP.onTierAdd)
+    add:setEnabled(k < MSH.MAX_TIER)
+    local remove = F:button("tierRemove", getText("IGUI_MSH_Admin_TierRemove", k), P, AP.onTierRemove)
+    remove:setEnabled(k > 1)
+    local tip = getText("Sandbox_MinidoracatSafehouse_TiersEnabled_tooltip")
+    add:setTooltip(tip)
+    remove:setTooltip(tip)
+    F:row({ add, remove })
     if not econ then F:text("noEcon", getText("IGUI_MSH_Admin_NoEconomyDeeds"), "textMuted") end
 end
 
-function AP.layoutDeedRow(P, pg, n, on, econ, xs, ws)
+function AP.layoutDeedRow(P, pg, n, econ, xs, ws)
     local F = pg.flow
     local p = "Tier" .. n
-    local tl = F:label("tn" .. n, getText("IGUI_MSH_Admin_TierN", n), on and "text" or "textDisabled")
+    local tl = F:label("tn" .. n, getText("IGUI_MSH_Admin_TierN", n))
     local ctrls = {
         Tier = tl,
         Side = AP.numField(P, pg, p .. "Side", AP.deedFieldW("Side")),
@@ -1014,11 +1045,11 @@ function AP.layoutDeedRow(P, pg, n, on, econ, xs, ws)
         local el = ctrls[c]
         el:setX(xs[c])
         el:setY(F.y + math.floor((rowH - el.height) / 2))
-        if el ~= tl then el:setEnabled(on and (econ or (c ~= "Buy" and c ~= "Rent"))) end
+        if el ~= tl then el:setEnabled(econ or (c ~= "Buy" and c ~= "Rent")) end
     end
     F.y = F.y + rowH + 4
     local free, buy, rent = ctrls.Free:getChecked(), ctrls.Buy:getChecked(), ctrls.Rent:getChecked()
-    if on and AP.nobodyCanBuild(free, buy, rent, econ) then
+    if AP.nobodyCanBuild(free, buy, rent, econ) then
         F:text("warn" .. n, getText("IGUI_MSH_Admin_NobodyCanBuild", n), "warning")
     end
 end
@@ -1126,8 +1157,11 @@ function AP.categories()
             end
         end
     end
+    -- 沒有 MiniMap：只列預設的 8 類，名稱用本 MOD 自己的譯文（和 MiniMap 的類別名一致）
     if #out == 0 then
-        for k in string.gmatch(Settings.DEFAULT_RESOURCE_CATS, "[^;]+") do out[#out + 1] = { key = k, label = k } end
+        for k in string.gmatch(Settings.DEFAULT_RESOURCE_CATS, "[^;]+") do
+            out[#out + 1] = { key = k, label = getText("IGUI_MSH_Admin_Res_" .. k) }
+        end
     end
     return out
 end
@@ -1147,8 +1181,9 @@ function AP.layoutExclusions(P, pg)
         or "IGUI_MSH_Admin_ParkingNone"), "textMuted")
     F.y = F.y + K.GAP
     F:text("h:res", getText("IGUI_MSH_Admin_ResourcesHead"), "text", UIFont.Medium)
+    -- 沒有 MiniMap 照樣列出來可以先設好（使用者 2026-10-12：「所有沙盒設定，管理面板都要有」），只是現在不阻擋
     if not (P.options and P.options.resourceApi) then
-        return F:text("noMiniMap", getText("IGUI_MSH_Admin_NoMiniMap"), "textMuted")
+        F:text("noMiniMap", getText("IGUI_MSH_Admin_NoMiniMap"), "warning")
     end
     AP.formRow(pg, "AvoidResources", lw, { AP.boolField(P, pg, "AvoidResources") })
     AP.formRow(pg, "ResourceRule", lw, AP.enumField(P, pg, "ResourceRule", {
@@ -1401,22 +1436,31 @@ function AP.layoutPaid(P, pg)
     F.y = F.y + K.GAP
     F:text("h:tiers", getText("IGUI_MSH_Admin_PlanTiers"), "text", UIFont.Medium)
     F:text("planNote", getText("IGUI_MSH_Admin_PlanNote"), "textMuted")
+    -- 只列啟用的等級（使用者 2026-10-12：「管理員要添加才那麼多，預設顯示 3 個就好，顯示可以設定的上限」）；
+    -- 等級在「地契」頁新增或移除，這裡寫目前幾級、最多幾級並給一顆跳過去的按鈕
     local k = AP.effective(P.values, "TiersEnabled")
     local tw = K.textW(UIFont.Small, getText("IGUI_MSH_Admin_TierN", 8)) + K.GAP
     for _, t in ipairs(tiers) do
-        local on = t.tier <= k
-        local tl = F:label("pt" .. t.tier, getText("IGUI_MSH_Admin_TierN", t.tier), on and "text" or "textDisabled")
-        tl:setWidth(tw)
-        local plan = t.plan or {}
-        F:row({ tl,
-            F:label("pp" .. t.tier .. "L", AP.planLabel("permanentPrice"), "textMuted"),
-            AP.planField(P, pg, "permanentPrice:" .. t.tier, plan.permanentPrice, AP.planFieldW("permanentPrice", 90), on),
-            F:label("pr" .. t.tier .. "L", AP.planLabel("rentalPrice"), "textMuted"),
-            AP.planField(P, pg, "rentalPrice:" .. t.tier, plan.rentalPrice, AP.planFieldW("rentalPrice", 90), on) })
-        if t.provisional then F:text("pv" .. t.tier, getText("IGUI_MSH_Admin_PlanProvisional"), "warning") end
-        local te = pg.tierErrors and pg.tierErrors[t.tier]
-        if te then F:text("pe" .. t.tier, te, "errorText") end
+        if t.tier <= k then
+            local tl = F:label("pt" .. t.tier, getText("IGUI_MSH_Admin_TierN", t.tier))
+            tl:setWidth(tw)
+            local plan = t.plan or {}
+            F:row({ tl,
+                F:label("pp" .. t.tier .. "L", AP.planLabel("permanentPrice"), "textMuted"),
+                AP.planField(P, pg, "permanentPrice:" .. t.tier, plan.permanentPrice, AP.planFieldW("permanentPrice", 90)),
+                F:label("pr" .. t.tier .. "L", AP.planLabel("rentalPrice"), "textMuted"),
+                AP.planField(P, pg, "rentalPrice:" .. t.tier, plan.rentalPrice, AP.planFieldW("rentalPrice", 90)) })
+            if t.provisional then F:text("pv" .. t.tier, getText("IGUI_MSH_Admin_PlanProvisional"), "warning") end
+            local te = pg.tierErrors and pg.tierErrors[t.tier]
+            if te then F:text("pe" .. t.tier, te, "errorText") end
+        end
     end
+    F:row({ F:label("planCount", getText("IGUI_MSH_Admin_TiersCount", k, MSH.MAX_TIER), "textMuted"),
+        F:button("goDeeds", getText("IGUI_MSH_Admin_GoDeeds"), P, AP.onGoDeeds) })
+end
+
+function AP.onGoDeeds(P)
+    AP.select(P, "deeds")
 end
 
 function AP.onCurrency(P, b)
@@ -1453,7 +1497,7 @@ function AP.gatherPlans(P, pg)
         for _, f in ipairs({ "permanentPrice", "rentalPrice" }) do
             local key = f .. ":" .. t.tier
             local el = F.pool["pl:" .. key]
-            if el ~= nil and el.mshEnabled then
+            if el ~= nil and el.mshEnabled and el:isVisible() then   -- 沒列出的等級（還沒啟用）不讀
                 local v = AP.parseInt(el:getText())
                 local e = AP.planFieldError(f, v)
                 if e then

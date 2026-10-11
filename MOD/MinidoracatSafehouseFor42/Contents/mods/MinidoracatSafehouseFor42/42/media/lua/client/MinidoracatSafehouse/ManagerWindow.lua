@@ -290,13 +290,24 @@ function W:build()
     self.list:initialise()
     body:addChild(self.list)
     self.list:setVisible(false)
-    -- 清單底下：在地面顯示範圍（全域開關，關窗照畫；Ranges.lua，使用者 2026-10-11）
+    -- 清單底下：在地面顯示範圍（總開關＋四類 chip；關窗照畫；Ranges.lua，使用者 2026-10-11、10-12）
     self.rangesBox = UI.Checkbox.new({ x = 0, y = 0, label = getText("IGUI_MSH_Manager_ShowRanges"),
         tooltip = getText("IGUI_MSH_Manager_ShowRanges_tooltip"), checked = MSH.Ranges ~= nil and MSH.Ranges.isOn(),
         theme = self.theme, target = self, onChange = W.onRanges })
     body:addChild(self.rangesBox)
     self.rangesBox:setVisible(false)
     self.rangesChrome = self.rangesBox.width - measure(self.rangesBox.label)   -- 開關本體＋間距
+    -- 每類一顆 chip，圖示是原版純白貼圖（media/ui/whitebar.png，12x40 全白）染成那類在地面的顏色（框架 rev 17 iconColor）
+    self.rangeChips = {}
+    if MSH.Ranges ~= nil then
+        local tex = UI.CAPABILITIES.buttonIconColor == true and getTexture("media/ui/whitebar.png") or nil
+        for _, kind in ipairs(MSH.Ranges.KINDS) do
+            local b = self:button(body, getText("IGUI_MSH_Ranges_" .. kind), W.onRangeKind, self, "chip", tex)
+            b.internal = kind
+            if tex ~= nil then b:setIconColor(MSH.Ranges.SWATCHES[kind]) end
+            self.rangeChips[#self.rangeChips + 1] = b
+        end
+    end
     self.btnCreateEmpty = self:button(body, getText("IGUI_MSH_Manager_Create"), W.onCreate, self, "primary", "plus")
 
     self.btnBack = self:button(body, getText("IGUI_MSH_Manager_Back"), W.onBack, self, nil, "chevronLeft")
@@ -321,6 +332,7 @@ function W:build()
     self.btnDismiss = self:button(body, getText("IGUI_MSH_Manager_Dismiss"), W.onDismiss, self)
     self.hideable = { self.list, self.rangesBox, self.btnCreateEmpty, self.btnBack, self.btnRename, self.tabs, self.scroll,
         self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnCreate, self.btnAdmin }
+    for _, b in ipairs(self.rangeChips) do self.hideable[#self.hideable + 1] = b end
 
     -- 窄版門檻：詳細欄放不下最長的標籤加一個典型值（以目前字型量測，§10.3 Narrow）
     local lw = 0
@@ -619,17 +631,38 @@ function W:layout()
     if showDetail then self:layoutDetail(dx, mainTop, dw, mainH) end
 end
 
+-- 在地面顯示範圍：總開關一列，底下四類 chip（放不下換行）。總開關關著時 chip 停用；伺服器沒開放的那類停用、
+-- 滑鼠提示寫原因。place＝false 只量高度。回傳整塊高度
+function W:layoutRanges(x, y, w, place)
+    local R, GAP = MSH.Ranges, MW.GAP
+    local box = self.rangesBox
+    box:setChecked(R.isOn(), true)
+    local label = self:fit(getText("IGUI_MSH_Manager_ShowRanges"), w - self.rangesChrome)
+    box:setLabel(label)
+    box:setWidth(self.rangesChrome + measure(label))
+    if place then self:place(box, x, y) end
+    local on, cx, cy = R.isOn(), x, y + box.height + GAP
+    for _, b in ipairs(self.rangeChips) do
+        local kind = b.internal
+        local allowed = R.allowed(kind)
+        b:setActive(allowed and R.kindOn(kind))
+        b:setEnabled(on and allowed)
+        b:setTooltip(getText(allowed and "IGUI_MSH_Ranges_" .. kind .. "_tooltip" or "IGUI_MSH_Ranges_NotAllowed"))
+        if cx > x and cx + b.width > x + w then cx, cy = x, cy + self.ch + GAP end
+        if place then self:place(b, cx, cy) end
+        cx = cx + b.width + GAP
+    end
+    if #self.rangeChips == 0 then return box.height end
+    return cy + self.ch - y
+end
+
 function W:layoutList(x, y, w, h)
     local B, GAP = self.back, MW.GAP
-    -- 底下一列：在地面顯示範圍（全域開關，ESC 選項頁改的也照這裡顯示）；欄窄時截字、滑鼠提示有全文
-    local box = self.rangesBox
+    -- 底下：在地面顯示範圍（全域開關，ESC 選項頁改的也照這裡顯示）；欄窄時截字、滑鼠提示有全文
     if MSH.Ranges ~= nil then
-        box:setChecked(MSH.Ranges.isOn(), true)
-        local label = self:fit(getText("IGUI_MSH_Manager_ShowRanges"), w - self.rangesChrome)
-        box:setLabel(label)
-        box:setWidth(self.rangesChrome + measure(label))
-        h = h - box.height - GAP
-        self:place(box, x, y + h + GAP)
+        MSH.Ranges.readAllow()
+        h = h - self:layoutRanges(x, y, w, false) - GAP
+        self:layoutRanges(x, y + h + GAP, w, true)
     end
     self.wellX, self.wellY, self.wellW, self.wellH = x, y, w, h
     local rows = MSH.Client.claims[self.area] or {}
@@ -657,6 +690,12 @@ function W:layoutEmpty(x, y, w)
     if MSH.CreatePanel then
         self.btnCreateEmpty:setEnabled(self.busy == nil)
         self:place(self.btnCreateEmpty, x, y)
+        y = y + self.ch + GAP * 3
+    end
+    -- 沒有自己的安全屋也看得到同陣營的、其他玩家的（伺服器開放時）
+    if MSH.Ranges ~= nil then
+        MSH.Ranges.readAllow()
+        self:layoutRanges(x, y, math.min(w, 420), true)
     end
 end
 
@@ -905,6 +944,16 @@ function W.onRanges(self, checked)
     if MSH.Ranges ~= nil then MSH.Ranges.setOn(checked) end
 end
 
+function W.onRangeKind(self, b)
+    local R = MSH.Ranges
+    if R ~= nil then R.setKind(b.internal, not R.kindOn(b.internal)) end
+end
+
+-- 開關（這裡、ESC 選項頁）或伺服器開放的類別變了：重排範圍那一塊
+function MW.onRangesChanged()
+    if MW.isOpen() then MW.instance.dirty = true end
+end
+
 -- 重新框選：建立面板 selecting，從這間現在的各塊開始改（標題、等級同舊屋由 CreatePanel 處理，§7.6）
 function W.onRedraw(self)
     local d = self.detail
@@ -1085,4 +1134,5 @@ end
 if first then
     MSH.Client.on("claims", "ManagerWindow", function() MSH.ManagerWindow.onClaims() end)
     MSH.Client.on("changed", "ManagerWindow", function(args) MSH.ManagerWindow.onChanged(args) end)
+    MSH.Client.on("ranges", "ManagerWindow", function() MSH.ManagerWindow.onRangesChanged() end)
 end

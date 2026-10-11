@@ -44,6 +44,10 @@ local OPTIONS = {
     { key = "RedrawMinutes", type = "int", min = 0, max = 1440, default = 30 },
     -- 每間在重新框選時限內最多重畫幾次（使用者 2026-10-11 同意改成沙盒選項；每次多一筆 tombstone 與兩次全服廣播）
     { key = "RedrawLimit", type = "int", min = 1, max = 20, default = 5 },
+    -- 地面顯示範圍：玩家看得到哪些別人的安全屋（使用者 2026-10-12：預設自己的與同陣營的）；自己的與分享給自己的一定看得到。
+    -- 只影響客戶端畫面（Ranges.lua）：原版本來就把每間安全屋的範圍傳給所有客戶端（MetaDataPacket、SafehouseSync）
+    { key = "RangesFaction", type = "bool", default = true },
+    { key = "RangesOthers", type = "bool", default = false },
     { key = "AvoidRoads", type = "bool", default = true },
     { key = "RoadMargin", type = "int", min = 0, max = 8, default = 1 },
     { key = "RoadKinds", type = "string", default = "" },
@@ -154,6 +158,8 @@ function S.get()
         allowFactionShare = raw.AllowFactionShare,
         lapseKeepDays = raw.LapseKeepDays,
         redrawMinutes = raw.RedrawMinutes,
+        rangesFaction = raw.RangesFaction,
+        rangesOthers = raw.RangesOthers,
         redrawLimit = raw.RedrawLimit,
         avoidRoads = raw.AvoidRoads,
         roadMargin = raw.RoadMargin,

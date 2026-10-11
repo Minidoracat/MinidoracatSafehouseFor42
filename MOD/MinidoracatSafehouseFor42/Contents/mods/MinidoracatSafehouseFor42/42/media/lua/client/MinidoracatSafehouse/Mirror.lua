@@ -11,6 +11,7 @@ if not isClient() then return end
 
 require "MinidoracatSafehouse/Contract"
 require "MinidoracatSafehouse/Settings"
+require "MinidoracatSafehouse/Client"
 
 local MSH = MinidoracatSafehouse
 local first = MSH.Mirror == nil
@@ -99,7 +100,10 @@ function M.onSandboxSync(args)
             if ok then any = true else MSH.log("sandboxSync " .. k .. " failed: " .. tostring(err)) end
         end
     end
-    if any then opts:toLua() end
+    if any then
+        opts:toLua()
+        MSH.Client.emit("sandbox")   -- 地面範圍、管理視窗照新的開放範圍重畫
+    end
 end
 
 -- OnServerCommand（GameClient.java:1071）

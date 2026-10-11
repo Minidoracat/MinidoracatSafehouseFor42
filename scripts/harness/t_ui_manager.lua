@@ -216,17 +216,29 @@ return function(T)
         "遷移來的不提地契；不用「取消安全屋」那句")
     check(MW.clock(61000) == "1:01" and MW.clock(1) == "0:01" and MW.clock(-5) == "0:00", "倒數 m:ss、秒無條件進位、不出負數")
 
-    T.section("在地面顯示範圍：我的與分享給我的，關掉視窗也照畫")
+    T.section("在地面顯示範圍：四類四種顏色、預設畫自己的與同陣營的、伺服器與玩家各自的開關")
     local Rg = MSH.Ranges
     local strips = {}
     addAreaHighlightForPlayer = function(pn, x1, y1, x2, y2, z, r, g, b, a)
-        strips[#strips + 1] = { x1 = x1, y1 = y1, x2 = x2, y2 = y2, z = z, r = r, g = g }
+        strips[#strips + 1] = { x1 = x1, y1 = y1, x2 = x2, y2 = y2, z = z, color = r .. "/" .. g .. "/" .. b }
+    end
+    local function colorOf(kind)
+        local c = Rg.COLORS[kind]
+        return c.r .. "/" .. c.g .. "/" .. c.b
     end
     T.player({ name = "alice", x = 105, y = 205, z = 1.6 })
-    -- L 形兩塊（我的）＋一塊（分享給我的）＋別人的一塊＋很遠的我的一塊
+    -- 我的 L 形兩塊、分享給我的、同陣營 bob 的（managed）、其他玩家 dave 的（managed）與 carol 的（原版）、很遠的我的
     local natives = { SafeHouse.addSafeHouse(100, 200, 4, 10, "@MSH:3"), SafeHouse.addSafeHouse(104, 206, 6, 4, "@MSH:3"),
         SafeHouse.addSafeHouse(130, 200, 5, 5, "@MSH:4"), SafeHouse.addSafeHouse(150, 200, 5, 5, "@MSH:5"),
+        SafeHouse.addSafeHouse(170, 200, 5, 5, "@MSH:7"), SafeHouse.addSafeHouse(190, 200, 5, 5, "carol"),
         SafeHouse.addSafeHouse(5000, 5000, 5, 5, "@MSH:6") }
+    local owners = { ["@MSH:5"] = "bob", ["@MSH:7"] = "dave" }
+    local lookups, realOwnerName = 0, MSH.PublicApi.ownerName
+    MSH.PublicApi.ownerName = function(o)
+        lookups = lookups + 1
+        return owners[o]
+    end
+    local team = T.faction("Team", "alice", { "bob" })
     local savedClaims = MSH.Client.claims
     MSH.Client.claims = { mine = { { claimId = 3 }, { claimId = 6 } }, shared = { { claimId = 4 } }, byId = {}, at = 1 }
     MSH.Client.emit("claims", MSH.Client.claims)
@@ -239,17 +251,18 @@ return function(T)
                 for y = s.y1, s.y2 - 1 do
                     local k = x .. "," .. y
                     if cells[k] then dup = true end
-                    cells[k], colors[k] = true, s.g
+                    cells[k], colors[k] = true, s.color
                 end
             end
         end
         return cells, dup, colors
     end
-    local cells = drawn()
-    check(next(cells) == nil and not Rg.isOn(), "預設關閉：不畫")
-    Rg.setOn(true)
-    local dup, colors
-    cells, dup, colors = drawn()
+    local function sync(changes) T.fire("OnServerCommand", MSH.MODULE, "sandboxSync", changes) end
+    local cells, dup, colors = drawn()
+    check(Rg.isOn() and colors["100,200"] == colorOf("own") and colors["130,200"] == colorOf("shared")
+        and colors["150,200"] == colorOf("faction") and cells["170,200"] == nil and cells["190,200"] == nil
+        and cells["5000,5000"] == nil,
+        "預設開著：我的、分享給我的、同陣營的各用自己的顏色；其他玩家的不畫（伺服器預設不開放）、很遠的不畫")
     local L = { { x = 100, y = 200, w = 4, h = 10 }, { x = 104, y = 206, w = 6, h = 4 } }
     local function edgeOf(rects, x, y)
         local R = MSH.Rect
@@ -262,10 +275,28 @@ return function(T)
             if edgeOf(L, x, y) ~= (cells[x .. "," .. y] == true) then lOk = false end
         end
     end
-    check(lOk and not dup and strips[1].z == 1, "打開：我的 L 形兩塊畫成一個外緣、交界不畫、用玩家所在樓層")
-    check(colors["100,200"] == Rg.COLOR_OWNER.g and colors["130,200"] == Rg.COLOR_MEMBER.g,
-        "自己的與分享給我的用不同顏色")
-    check(cells["150,200"] == nil and cells["5000,5000"] == nil, "別人的不畫；很遠的自己的不畫")
+    check(lOk and not dup and strips[1].z == 1, "我的 L 形兩塊畫成一個外緣、交界不畫、用玩家所在樓層")
+    sync({ RangesOthers = true })
+    cells, dup, colors = drawn()
+    local purple = colorOf("others")
+    check(colors["170,200"] == purple and colors["190,200"] == purple and purple ~= colorOf("own")
+        and purple ~= colorOf("shared") and purple ~= colorOf("faction") and colors["150,200"] == colorOf("faction"),
+        "伺服器開放其他玩家的（sandboxSync）：managed 與原版的都用第四種顏色，同陣營的照舊")
+    sync({ RangesFaction = false })
+    cells = drawn()
+    check(cells["150,200"] == nil and cells["170,200"] == true, "伺服器關掉同陣營的：bob 的不畫，也不改用其他玩家的顏色畫")
+    sync({ RangesFaction = true })
+    Rg.setKind("shared", false)
+    cells = drawn()
+    check(cells["130,200"] == nil and cells["100,200"] == true and cells["150,200"] == true and cells["170,200"] == true,
+        "玩家關掉某一類：只少那一類")
+    Rg.setKind("shared", true)
+    T.disband(team)
+    T.fire("SyncFaction", "Team")
+    lookups = 0
+    cells, dup, colors = drawn()
+    check(colors["150,200"] == purple and lookups == 0,
+        "退出陣營（SyncFaction）：bob 的改算其他玩家的；不在陣營時不為分類去查 managed 的屋主")
     local rebuilds, realRebuild = 0, Rg.rebuild
     Rg.rebuild = function() rebuilds = rebuilds + 1; realRebuild() end
     drawn()
@@ -277,9 +308,11 @@ return function(T)
     Rg.rebuild = realRebuild
     Rg.setOn(false)
     cells = drawn()
-    check(next(cells) == nil, "關掉後不畫")
+    check(next(cells) == nil, "總開關關掉：什麼都不畫")
+    sync({ RangesOthers = false })
     for _, h in ipairs(natives) do SafeHouse.removeSafeHouse(h) end
     MSH.Client.claims = savedClaims
+    MSH.PublicApi.ownerName = realOwnerName
     Rg.dirty = true
     addAreaHighlightForPlayer = nil
 
