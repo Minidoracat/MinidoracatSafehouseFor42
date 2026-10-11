@@ -1,4 +1,4 @@
-[h1]Minidoracat Safehouse 42.20.4-0.1.0[/h1]
+[h1]Minidoracat Safehouse for B42 42.20.4-0.1.0[/h1]
 [i]2026-08-31[/i]
 
 [h3]✨ 新增[/h3]
