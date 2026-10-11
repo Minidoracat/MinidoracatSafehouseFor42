@@ -1,5 +1,5 @@
 version=1
-title=[B42] Minidoracat Safehouse
+title=[B42] Safehouse by Minidoracat
 description=[h1]🏠 Minidoracat Safehouse for B42[/h1]
 description=[h3]By Minidoracat[/h3]
 description=
