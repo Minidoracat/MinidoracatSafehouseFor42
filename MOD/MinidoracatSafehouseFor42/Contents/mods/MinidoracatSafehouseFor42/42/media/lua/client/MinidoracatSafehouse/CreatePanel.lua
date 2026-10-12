@@ -1,8 +1,9 @@
 -- MinidoracatSafehouse/CreatePanel.lua：建立面板（計畫 §10.4 狀態表、§7.2 框選、§7.6 重新框選、§1.1 第 3、11 點）。
--- 入口：MSH.CreatePanel.open(opts)；地契物品右鍵「使用地契」（OnFillInventoryObjectContextMenu）；管理視窗「建立安全屋」。
---   opts = { deedType?, mode = "create" | "redraw", claimId?, revision?, tier?, source?, rects?, playerNum? }
+-- 入口：MSH.CreatePanel.open(opts)；地契物品右鍵「使用地契」（OnFillInventoryObjectContextMenu）；管理視窗「建立安全屋」
+--   與〔重新框選〕（ManagerWindow.openCreate：先收起管理視窗，這裡關窗時開回來、建立成功時開到新的那間）。
+--   opts = { deedType?, mode = "create" | "redraw", claimId?, revision?, tier?, source?, rects?, playerNum?, fromManager? }
 --   （source：重新框選時舊屋的來源，決定顯示的大小上限；rects：重新框選時從舊屋的各塊開始改；
---    playerNum：開窗的玩家，分割畫面次玩家不能建）
+--    playerNum：開窗的玩家，分割畫面次玩家不能建；fromManager：從管理視窗開的）
 -- 狀態機（不碰畫面，scripts/harness/t_ui_create.lua 直接測）：
 --   idle → selecting（一塊一塊加入或挖掉，Select.lua／Shape.lua）→ preview → confirm → submitting → 成功（開管理視窗）／
 --   失敗（回 preview 顯示原因）；preview／confirm 的〔修改範圍〕回 selecting、範圍保留；
@@ -80,9 +81,11 @@ function P.pickDeed(m, want)
     m.deedType = tier and MSH.deedType(tier) or nil
 end
 
+-- opts.fromManager：從管理視窗開的（ManagerWindow.openCreate 先把它收起來），關掉時開回來（P.close）
 function P.newModel(opts, playerNum)
     opts = opts or {}
-    local m = { phase = P.IDLE, playerNum = playerNum or 0, mode = opts.mode == "redraw" and "redraw" or "create" }
+    local m = { phase = P.IDLE, playerNum = playerNum or 0, mode = opts.mode == "redraw" and "redraw" or "create",
+        fromManager = opts.fromManager == true }
     if m.mode == "redraw" then
         -- 等級沿用舊屋、不經過背包（§7.6）；範圍從舊屋的各塊開始
         m.claimId, m.revision, m.tier = opts.claimId, opts.revision, opts.tier
@@ -360,16 +363,19 @@ function P.submit(m, titleText)
     return m.rid ~= nil
 end
 
+local function openManager(opts)
+    local W = MSH.ManagerWindow
+    if W == nil or W.open == nil then return end
+    local ok, err = pcall(W.open, opts)
+    if not ok then MSH.log("ManagerWindow.open failed: " .. tostring(err)) end
+end
+
 function P.succeed(m, claimId)
     m.phase, m.newClaimId = P.DONE, claimId
     MSH.Client.refreshList()
     if not m.closed then
         P.close(m)
-        local W = MSH.ManagerWindow
-        if W ~= nil and W.open ~= nil then
-            local ok, err = pcall(W.open, { claimId = claimId })
-            if not ok then MSH.log("ManagerWindow.open failed: " .. tostring(err)) end
-        end
+        openManager({ claimId = claimId })
     end
     changed(m)
 end
@@ -783,7 +789,7 @@ local function drawProposal(v, m, p)
     local z = math.floor(p:getZ())   -- IsoMovingObject.java:525
     if v.flatSrc ~= m.rects then v.flatSrc, v.flat = m.rects, flatOf(m.rects) end
     local Tint = MSH.FloorTint
-    Tint.setRects("shape", v.flat, m.rangeBad and v.colors.errorText or v.colors.accent, Sel.PIECE_TINT, z)
+    Tint.setRects("shape", v.flat, m.rangeBad and v.colors.errorText or Sel.FLOOR_OK, Sel.PIECE_TINT, z)
     Tint.setRects("marks", m.marks or EMPTY, v.colors.errorText, P.MARK_TINT, z)
     Tint.setRect("pending", nil)
 end
@@ -817,7 +823,7 @@ function V.frame(v)
     pendingLine(v)
     v.tinted = true
     MSH.FloorTint.setRects("marks", EMPTY, v.colors.errorText, P.MARK_TINT, math.floor(p:getZ()))
-    Sel.draw(s, p, v.colors.accent, v.colors.errorText, v.over)
+    Sel.draw(s, p, Sel.FLOOR_OK, v.colors.errorText, v.over)
 end
 V.clearTint = clearTint
 
@@ -985,6 +991,7 @@ function P.fallback()
     if not ok then MSH.log("create panel fallback failed: " .. tostring(err)) end
 end
 
+-- 關窗；從管理視窗開的把管理視窗開回來（建立成功時由 P.succeed 開到新的那間，這裡不重複開）
 function P.close(m)
     if m.closed then return end
     m.closed = true
@@ -1001,10 +1008,17 @@ function P.close(m)
             win:removeFromUIManager()
         end)
     end
+    if m.fromManager and m.phase ~= P.DONE then openManager({}) end
 end
 
 local function openUnsafe(opts)
-    if P.model ~= nil then P.close(P.model) end   -- 一次一個；待定中的建立不會因此取消
+    local prev = P.model
+    if prev ~= nil then
+        -- 一次一個；待定中的建立不會因此取消。前一個是從管理視窗開的：關掉後開回管理視窗的事交給新的這個
+        opts.fromManager = opts.fromManager or prev.fromManager
+        prev.fromManager = false
+        P.close(prev)
+    end
     local UI = MSH.Client.ui({ "window", "controls", "focus" })
     if UI == nil then
         MSH.log("create panel needs MinidoracatUI rev " .. tostring(MSH.Client.MIN_REV) .. " with window/controls/focus")

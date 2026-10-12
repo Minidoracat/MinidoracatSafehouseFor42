@@ -31,13 +31,16 @@ local Shape = MSH.Shape
 S.DRAG = "drag"
 S.WALK = "walk"
 
--- 地板的染色強度（FloorTint：把地板的光照色往顏色拉這個比例）。各塊輪流用不同強度（草地上幾乎看不出分界：
--- sh-createtint-1012b）；拉到一半的那塊與游標格更深。原本疊色的 0.22 在深色草地上看不出來（sh-pieces2-1011b），
--- 染色的 0.5 在偏暗的碎石地上也淡（sh-req-1012a），最淡取 0.55
-S.PIECE_TINT = { 0.75, 0.55, 0.68, 0.62 }
-S.RAW_TINT = { 0.6 }
-S.PENDING_TINT = 0.85
-S.CURSOR_TINT = 0.9
+-- 地面上框選的顏色與強度（FloorTint：把地板的光照色往顏色拉這個比例）。顏色不用主題的 accent（黃）：草地本來就偏黃綠，
+-- 黃色染上去幾乎看不出來（2026-10-12 使用者選「換明顯一點的顏色」）。sh-tintcolor-1012b 在白天的院子草地上量和沒染的
+-- 色差（Lab ΔE 中位數）：黃 0.75／1 是 6／7，青 16／19–22，藍、紫、橘也在 13–30，洋紅與紅最大但會和標紅搞混；取青色，
+-- 草地變成一眼看得出的鮮綠、柏油路變青。標紅與超過上限仍用主題的 errorText。
+-- 各塊輪流用不同強度（草地上分界不明顯：sh-createtint-1012b）；拉到一半的那塊與游標格最深
+S.FLOOR_OK = { r = 0.2, g = 0.9, b = 1.0 }
+S.PIECE_TINT = { 0.85, 0.65, 0.78, 0.72 }
+S.RAW_TINT = { 0.75 }
+S.PENDING_TINT = 1.0
+S.CURSOR_TINT = 1.0
 
 -- s = { tool, playerNum, ax, ay（第一角）, bx, by（終點）, cx, cy（手把游標）, dragging, cut（挖掉模式）, shape }
 -- rects：重新框選時從現有範圍開始

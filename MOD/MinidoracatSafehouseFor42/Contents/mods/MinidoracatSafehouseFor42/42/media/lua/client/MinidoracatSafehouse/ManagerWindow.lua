@@ -923,8 +923,19 @@ function W.onRefresh(self)
     self:loadDetail()
 end
 
+-- 從管理視窗開建立面板（建立、重新框選）：先把管理視窗收起來，框選時不擋地面；建立面板關掉時開回來（CreatePanel.close），
+-- 建立成功時開到新的那間（CreatePanel.succeed）。使用者 2026-10-12：「按下建立安全屋的時候，視窗應該先關閉換成調整安全屋的
+-- 小視窗，等調整安全屋的視窗關閉後才恢復原來視窗」。建立面板沒開成（框架不合、建窗失敗）就馬上開回來：管理視窗不能就此消失
+function MW.openCreate(opts)
+    if MSH.CreatePanel == nil then return end
+    local w = MW.instance
+    if w ~= nil and w.win:getIsVisible() then w.win:close() end
+    opts.fromManager = true
+    if MSH.CreatePanel.open(opts) == nil and not MW.isOpen() then MW.open() end
+end
+
 function W.onCreate()
-    if MSH.CreatePanel then MSH.CreatePanel.open({ mode = "create" }) end
+    MW.openCreate({ mode = "create" })
 end
 
 function W.onSlots()
@@ -962,8 +973,8 @@ end
 -- 重新框選：建立面板 selecting，從這間現在的各塊開始改（標題、等級同舊屋由 CreatePanel 處理，§7.6）
 function W.onRedraw(self)
     local d = self.detail
-    if d == nil or MSH.CreatePanel == nil then return end
-    MSH.CreatePanel.open({ mode = "redraw", claimId = d.claimId, revision = d.revision, tier = d.deedTier,
+    if d == nil then return end
+    MW.openCreate({ mode = "redraw", claimId = d.claimId, revision = d.revision, tier = d.deedTier,
         source = d.source, rects = d.rects })
 end
 

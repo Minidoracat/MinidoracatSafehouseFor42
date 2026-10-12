@@ -289,8 +289,8 @@ return function(T)
     p.x, p.y = 39, 19
     local c1, k1, a1 = frame()
     check(v.sizeText == "IGUI_MSH_Select_Pending|30,10" and count(c1) == 300 and c1["10,10"] and c1["39,19"]
-        and k1["10,10"] == colorOf(colors.accent) and a1["10,10"] == Sel.PENDING_TINT,
-        "拉到一半的那塊：每幀寫出大小、整塊地板用 accent 染色")
+        and k1["10,10"] == colorOf(Sel.FLOOR_OK) and a1["10,10"] == Sel.PENDING_TINT,
+        "拉到一半的那塊：每幀寫出大小、整塊地板染成框選的顏色")
     check(onlyPrimary("apply"), "拉到一半：只有〔加入這塊〕是主要按鈕")
     check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600,4") == "textMuted",
         "上限行寫出邊長、面積與塊數上限（2 級 40 × 40、1,600、沙盒預設 4 塊，不是硬上限）")
@@ -301,7 +301,7 @@ return function(T)
     check(P.applyPiece(vm) and Sel.bounds(vm.sel) == nil, "〔加入這塊〕：走到的那塊套用進範圍")
     local c2, k2, a2 = frame()
     check(lineTok("IGUI_MSH_Select_Shape|50,10,500,1") == "errorText" and k2["10,10"] == colorOf(colors.errorText)
-        and a2["10,10"] == Sel.PIECE_TINT[1] and c2["59,19"] and k2["59,19"] == colorOf(colors.accent)
+        and a2["10,10"] == Sel.PIECE_TINT[1] and c2["59,19"] and k2["59,19"] == colorOf(Sel.FLOOR_OK)
         and a2["59,19"] == Sel.CURSOR_TINT,
         "只有邊長超過：範圍行與範圍都變錯誤色；游標（玩家所在格）蓋在上面")
     check(onlyPrimary("done"), "範圍有東西、沒有拉到一半：只有〔完成〕是主要按鈕")
@@ -320,8 +320,8 @@ return function(T)
     local pvs = lastSent()
     check(pvs.command == "preview" and pvs.args.rects[1].w == 8, "完成後送預檢（走位還沒套用的那塊也算進去）")
     local c3, k3 = frame()
-    check(count(c3) == 64 and c3["10,10"] and c3["17,17"] and not c3["18,18"] and k3["10,10"] == colorOf(colors.accent),
-        "等預檢時照樣在地板上畫範圍（accent），沒有游標格")
+    check(count(c3) == 64 and c3["10,10"] and c3["17,17"] and not c3["18,18"] and k3["10,10"] == colorOf(Sel.FLOOR_OK),
+        "等預檢時照樣在地板上畫範圍（框選的顏色），沒有游標格")
     reply(pvs, { pass = false, checks = {
         { name = "roads", ok = false, code = "ROAD", x = 12, y = 13, kind = "main", areas = { 12, 13, 1, 1, 15, 11, 2, 7 } },
         { name = "resources", ok = false, code = "RESOURCE", cat = "police", x = 5, y = 5, w = 20, h = 30 },
@@ -329,7 +329,7 @@ return function(T)
         { name = "quota", ok = false, code = "QUOTA_FULL", tier = 2 },
         { name = "identity", ok = true } } })
     local c4, k4, a4 = frame()
-    local err, acc = colorOf(colors.errorText), colorOf(colors.accent)
+    local err, acc = colorOf(colors.errorText), colorOf(Sel.FLOOR_OK)
     check(k4["12,13"] == err and k4["15,11"] == err and k4["16,17"] == err and k4["5,5"] == err and k4["24,34"] == err
         and k4["22,13"] == err and a4["12,13"] > Sel.PIECE_TINT[1] and not c4["25,5"] and not c4["4,5"]
         and not c4["5,35"] and count(c4) == 20 * 30,
@@ -464,6 +464,25 @@ return function(T)
     check(next((tw.lit(0))) ~= nil, "（前置）框選中地上有範圍")
     P.close(vm)
     check(next((tw.lit(0))) == nil, "關掉面板：地上的框選跟著收掉")
+
+    T.section("建立面板：從管理視窗開的，關掉時開回管理視窗（使用者 2026-10-12）")
+    local DEED2 = "MinidoracatSafehouse.Deed2"
+    local n0 = #opened
+    P.close(P.open({ deedType = DEED2, fromManager = true }))
+    check(#opened == n0 + 1 and opened[#opened].claimId == nil, "從管理視窗開的：關掉時把管理視窗開回來")
+    n0 = #opened
+    P.close(P.open({ deedType = DEED2 }))
+    check(#opened == n0, "從地契開的：關掉時不開管理視窗")
+    P.open({ deedType = DEED2, fromManager = true })
+    n0 = #opened
+    local second = P.open({ deedType = DEED2 })   -- 例：建立面板開著時又在背包對地契按「使用地契」
+    check(#opened == n0 and second.fromManager, "換開另一個面板：前一個關掉時不開管理視窗，交給新的這個")
+    P.close(second)
+    check(#opened == n0 + 1, "新的這個關掉時才開回管理視窗")
+    local done = P.open({ deedType = DEED2, fromManager = true })
+    n0 = #opened
+    P.succeed(done, 77)
+    check(#opened == n0 + 1 and opened[#opened].claimId == 77, "建立成功：管理視窗只開一次，開到新的那間")
     tw.restore()
     MSH.Client._theme = nil
     for _, k in ipairs(G) do _G[k] = savedG[k] end
