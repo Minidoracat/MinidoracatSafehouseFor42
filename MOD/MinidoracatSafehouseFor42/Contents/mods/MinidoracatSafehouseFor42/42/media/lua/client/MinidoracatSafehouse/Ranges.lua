@@ -25,6 +25,7 @@ require "MinidoracatSafehouse/Settings"
 require "MinidoracatSafehouse/Client"
 require "MinidoracatSafehouse/PublicApi"
 require "MinidoracatSafehouse/FloorTint"
+require "MinidoracatSafehouse/Select"
 
 local MSH = MinidoracatSafehouse
 local first = MSH.Ranges == nil
@@ -34,13 +35,19 @@ MSH.Ranges = R
 R.OPTIONS_ID = "MinidoracatSafehouse"
 R.SCAN_MS = 500                                            -- 多久掃一次附近的外緣格
 R.KINDS = { "own", "shared", "faction", "others" }
--- 地板染色的顏色；a 是往這個顏色拉的比例（Color.tintABGR 把地板的頂點光照色往 rgb 拉 a，`Color.java:243-253`）：
--- 0.5 在碎石地上很淡（sh-rangesdiag-1012a），取 0.7。紅色留給建立面板標衝突，其他玩家的用紫色
+-- 地板染色的顏色；a 是往這個顏色拉的比例（Color.tintABGR 把地板的頂點光照色往 rgb 拉 a，`Color.java:243-253`），全部 1。
+-- 染色是把地板原本的顏色乘上這個顏色：白天地面的光照已經接近全亮，染不出比地面更亮的顏色，只能換色；草地本來就偏
+-- 黃綠，黃、綠染上去幾乎看不出來。使用者 2026-10-12 要「和面板一樣」「再高亮一點」，選了換成草地上看得清楚的顏色：
+-- 「我的」和建立面板的框選同一個青色（Select.FLOOR_OK），分享給我的藍、同陣營橘、其他玩家洋紅。
+-- sh-tintbright-1012b 在白天的院子草地上量和沒染的色差（Lab ΔE 中位數）：從黃 7、藍 14、綠 13、紫 18 提到 25、33、28、40，
+-- 兩兩之間最少從 7（藍對綠）提到 15（橘對洋紅）；藍、橘、洋紅在草地上會變深。紅色留給建立面板的標紅：洋紅、橘在草地上
+-- 和它接近（7、9），但都是「不能蓋在這裡」，不另外分
+local OK = MSH.Select.FLOOR_OK
 R.COLORS = {
-    own = { r = 1.0, g = 0.85, b = 0.4, a = 0.7 },
-    shared = { r = 0.45, g = 0.8, b = 1.0, a = 0.7 },
-    faction = { r = 0.5, g = 0.9, b = 0.45, a = 0.7 },
-    others = { r = 0.8, g = 0.55, b = 1.0, a = 0.7 },
+    own = { r = OK.r, g = OK.g, b = OK.b, a = 1.0 },
+    shared = { r = 0.35, g = 0.5, b = 1.0, a = 1.0 },
+    faction = { r = 1.0, g = 0.55, b = 0.1, a = 1.0 },
+    others = { r = 1.0, g = 0.35, b = 0.95, a = 1.0 },
 }
 -- 管理視窗 chip 上的色塊（同色、不透明）
 R.SWATCHES = {}

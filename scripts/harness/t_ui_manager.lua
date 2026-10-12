@@ -325,9 +325,9 @@ return function(T)
         "下一輪掃描補上：被取消的、換了新地板的都重新染色")
     sync({ RangesOthers = true })
     cells, colors = drawn()
-    local purple = colorOf("others")
-    check(colors["140,200"] == purple and colors["150,200"] == purple and purple ~= colorOf("own")
-        and purple ~= colorOf("shared") and purple ~= colorOf("faction") and colors["130,200"] == colorOf("faction"),
+    local othersC = colorOf("others")
+    check(colors["140,200"] == othersC and colors["150,200"] == othersC and othersC ~= colorOf("own")
+        and othersC ~= colorOf("shared") and othersC ~= colorOf("faction") and colors["130,200"] == colorOf("faction"),
         "伺服器開放其他玩家的（sandboxSync）：managed 與原版的都用第四種顏色，同陣營的照舊")
     sync({ RangesFaction = false })
     cells = drawn()
@@ -343,7 +343,7 @@ return function(T)
     T.fire("SyncFaction", "Team")
     lookups = 0
     cells, colors = drawn()
-    check(colors["130,200"] == purple and lookups == 0,
+    check(colors["130,200"] == othersC and lookups == 0,
         "退出陣營（SyncFaction）：bob 的改算其他玩家的；不在陣營時不為分類去查 managed 的屋主")
     local rebuilds, realRebuild = 0, Rg.rebuild
     Rg.rebuild = function() rebuilds = rebuilds + 1; realRebuild() end

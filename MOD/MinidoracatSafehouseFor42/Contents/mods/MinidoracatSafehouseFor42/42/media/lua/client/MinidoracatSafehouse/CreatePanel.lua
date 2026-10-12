@@ -771,7 +771,7 @@ local function pendingLine(v)
     end
 end
 
-P.MARK_TINT = { 0.9 }
+P.MARK_TINT = { 1.0 }   -- 標紅比框選各塊（Select.PIECE_TINT）都深
 local EMPTY = {}
 
 -- m.rects（{ x, y, w, h } 的列表）→ FloorTint 要的扁平陣列；m.rects 換了才重排
