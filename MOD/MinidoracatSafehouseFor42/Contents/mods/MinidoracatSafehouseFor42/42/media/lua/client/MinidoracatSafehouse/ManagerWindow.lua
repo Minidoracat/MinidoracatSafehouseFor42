@@ -23,6 +23,7 @@ local LC, SRC = MSH.LIFECYCLE, MSH.SOURCE
 -- rev 16：ScrollPanel、Text.wrap；Window／Button／Tabs／Dialog／VirtualList、Autocomplete（rev 11）更早（ui-framework 摘要 §1）
 MW.CAPS = { "window", "controls", "dialog", "virtualList", "scrollPanel", "textWrap", "autocomplete" }
 MW.PAD, MW.GAP = 10, 6
+MW.LIST_PAD = 2   -- 清單（VirtualList）上下的內距
 
 -- ===== 狀態（§10.3）：只顯示最高優先的一個與下一步，其餘收進「詳細」 =====
 -- 伺服器設定不完整 ＞ 修復已暫停 ＞ 成員同步受干擾 ＞ 租約寬限或已停用 ＞ 土地規則警告 ＞ 已保護；數字小＝優先。
@@ -185,6 +186,7 @@ function W.new(UI)
     self.fh = getTextManager():getFontHeight(UIFont.Small)
     self.fhM = getTextManager():getFontHeight(UIFont.Medium)
     self.ch = self.fh + 10
+    self.rowH = self.fh * 2 + 14   -- 清單一列：名稱＋狀態兩行
     self.GAP = MW.GAP
     self.iconW = 18
     self.iconDy = math.floor((self.fh - 14) / 2)
@@ -275,7 +277,7 @@ function W:build()
     self.btnAdmin = self:button(body, getText("IGUI_MSH_Manager_Admin"), W.onAdmin, self, nil, "settings")
 
     local c = self.theme.colors
-    self.list = UI.VirtualList.new({ x = 0, y = 0, width = 200, height = 200, rowHeight = self.fh * 2 + 14, padding = 2,
+    self.list = UI.VirtualList.new({ x = 0, y = 0, width = 200, height = 200, rowHeight = self.rowH, padding = MW.LIST_PAD,
         createCell = function(l)
             local cell = V.Cell:new(0, 0, 0, 0)
             cell.background = false
@@ -582,7 +584,7 @@ function W:layout()
     for _, el in ipairs(self.hideable) do el:setVisible(false) end
     self.wellX = nil
 
-    -- 上列：左邊兩區分頁，右邊動作；放不下就把動作換到第二排
+    -- 上列：左邊兩區分頁，右邊動作；放不下就把動作換到第二排，第二排也放不下（最小寬 300）就從左邊排、放不下再換行
     local claims = MSH.Client.claims
     self:place(self.areaTabs, PAD, PAD)
     local right = { self.btnRefresh }
@@ -593,13 +595,20 @@ function W:layout()
     for _, b in ipairs(right) do need = need + b.width + GAP end
     local by = PAD
     if PAD + self.areaTabs.width + GAP + need > BW - PAD then by = PAD + ch + GAP end
-    local x = BW - PAD
-    for _, b in ipairs(right) do
-        x = x - b.width
-        self:place(b, x, by)
-        x = x - GAP
+    local mainTop
+    if need - GAP > BW - PAD * 2 then
+        local row = {}
+        for i = #right, 1, -1 do row[#row + 1] = right[i] end   -- 由左到右的順序同靠右排時
+        mainTop = self:flow(row, PAD, by, BW - PAD * 2) + PAD
+    else
+        local x = BW - PAD
+        for _, b in ipairs(right) do
+            x = x - b.width
+            self:place(b, x, by)
+            x = x - GAP
+        end
+        mainTop = by + ch + PAD
     end
-    local mainTop = by + ch + PAD
 
     -- 頁尾：訊息最多兩行；結果待定時右邊〔查詢結果〕〔關閉〕
     local footH = math.max(ch, fh * 2)
@@ -619,7 +628,8 @@ function W:layout()
     local mainH = footY - GAP - mainTop
 
     if self.listState == "ready" and #claims.mine + #claims.shared == 0 then
-        return self:layoutEmpty(PAD, mainTop, BW - PAD * 2)
+        if self:layoutEmpty(PAD, mainTop, BW - PAD * 2, mainTop + mainH) then return self:layout() end
+        return
     end
 
     local listW = math.max(160, math.min(300, math.floor(BW * 0.34)))
@@ -631,7 +641,7 @@ function W:layout()
         showDetail = self.showDetail == true and self.selectedId ~= nil
         showList = not showDetail
     end
-    if showList then self:layoutList(PAD, mainTop, listW, mainH) end
+    if showList and self:layoutList(PAD, mainTop, listW, mainH) then return self:layout() end
     if showDetail then self:layoutDetail(dx, mainTop, dw, mainH) end
 end
 
@@ -660,12 +670,30 @@ function W:layoutRanges(x, y, w, place)
     return cy + self.ch - y
 end
 
+-- 視窗不夠高、左欄放不下時：最小高度提高到放得下為止並長高 px（不超過螢幕，貼著底就往上移），回 true＝長高了、要重排。
+-- 字型大、譯文長、欄窄時「在地面顯示範圍」那塊會多換幾行；最小高度只升不降（使用者 2026-10-12 問這塊會不會被擠掉）
+function W:grow(px)
+    local win = self.win
+    local sh = getCore():getScreenHeight()
+    local want = math.min(win.height + px, sh)
+    if want <= win.height then return false end
+    win.minHeight = math.max(win.minHeight, want)
+    if win:getY() + want > sh then win:setY(math.max(0, sh - want)) end
+    win:setHeight(want)
+    return true
+end
+
+-- 左欄：上面是安全屋清單（VirtualList，列高固定、多了就捲），底下是「在地面顯示範圍」那塊。那塊先量高度、固定在底下，
+-- 安全屋再多也不會把它擠出去；清單至少留兩列，留不到就把視窗長高（W:grow）。回 true＝長高了、要重排
 function W:layoutList(x, y, w, h)
     local B, GAP = self.back, MW.GAP
-    -- 底下：在地面顯示範圍（全域開關，ESC 選項頁改的也照這裡顯示）；欄窄時截字、滑鼠提示有全文
+    -- 欄窄時截字、滑鼠提示有全文；全域開關，ESC 選項頁改的也照這裡顯示
     if MSH.Ranges ~= nil then
         MSH.Ranges.readAllow()
         h = h - self:layoutRanges(x, y, w, false) - GAP
+        local short = self.rowH * 2 + MW.LIST_PAD * 2 - h
+        if short > 0 and self:grow(short) then return true end
+        h = math.max(0, h)   -- 長到螢幕高還放不下（小螢幕配很大的字）：清單收到 0，不給負的高度
         self:layoutRanges(x, y + h + GAP, w, true)
     end
     self.wellX, self.wellY, self.wellW, self.wellH = x, y, w, h
@@ -684,8 +712,8 @@ function W:layoutList(x, y, w, h)
     end
 end
 
--- 沒有任何安全屋：地契說明＋〔建立安全屋〕（§10.2）
-function W:layoutEmpty(x, y, w)
+-- 沒有任何安全屋：地契說明＋〔建立安全屋〕（§10.2），底下「在地面顯示範圍」；bottom＝頁尾上緣，放不下就長高（回 true）
+function W:layoutEmpty(x, y, w, bottom)
     local B, GAP = self.back, MW.GAP
     y = self:addWrapped(B, getText("IGUI_MSH_Manager_EmptyTitle"), x, y, w, "text", UIFont.Medium) + GAP
     local free = MSH.Settings.get().createMode == MSH.Settings.CREATE.FREE
@@ -699,7 +727,10 @@ function W:layoutEmpty(x, y, w)
     -- 沒有自己的安全屋也看得到同陣營的、其他玩家的（伺服器開放時）
     if MSH.Ranges ~= nil then
         MSH.Ranges.readAllow()
-        self:layoutRanges(x, y, math.min(w, 420), true)
+        local rw = math.min(w, 420)
+        local short = y + self:layoutRanges(x, y, rw, false) - bottom
+        if short > 0 and self:grow(short) then return true end
+        self:layoutRanges(x, y, rw, true)
     end
 end
 

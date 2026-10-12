@@ -384,6 +384,186 @@ return function(T)
     T.player({ name = "root", admin = true })
     check(MW.isAdmin(), "CanSetupSafehouses 才顯示")
 
+    T.section("ManagerWindow：安全屋多、視窗小、字大時，左欄「在地面顯示範圍」與上列按鈕都在視窗裡（使用者 2026-10-12）")
+    -- 寬鬆的假框架：每個元件記住位置、大小、可見；字寬 charW、字高 fh 可調（模擬放大字型）
+    local fw = { charW = 7, fh = 16, sw = 1280, sh = 720 }
+    local savedG = {}
+    for _, k in ipairs({ "ISPanel", "ISUIElement", "getTextManager", "getCore", "UIFont", "MinidoracatUI", "getTexture" }) do
+        savedG[k] = _G[k]
+    end
+    local function cls(base)
+        local c = {}
+        c.__index = c
+        if base then setmetatable(c, { __index = base }) end
+        function c:derive() return cls(self) end
+        return c
+    end
+    local W0 = cls()
+    function W0:new(x, y, w, h)
+        return setmetatable({ x = x or 0, y = y or 0, width = w or 60, height = h or 20, visible = true, kids = {} }, self)
+    end
+    for _, k in ipairs({ "initialise", "bringToTop", "drawText", "drawRect", "drawRectBorder", "drawTextureScaled",
+        "setTooltip", "setActive", "setStyle", "setIconColor", "setItemVisible", "setSelected", "setSelectedIndex",
+        "scrollTo", "setYScroll", "setCapture", "removeFromUIManager", "setInvalid", "setItemLabel" }) do
+        W0[k] = function() end
+    end
+    function W0:addChild(k) self.kids[#self.kids + 1] = k; k.parent = self end
+    function W0:addToUIManager() self.added = true end
+    function W0:setVisible(v) self.visible = v end
+    function W0:getIsVisible() return self.visible end
+    function W0:isVisible() return self.visible end
+    function W0:setX(v) self.x = v end
+    function W0:setY(v) self.y = v end
+    function W0:getX() return self.x end
+    function W0:getY() return self.y end
+    function W0:setWidth(v) self.width = v end
+    function W0:setHeight(v) self.height = v end
+    function W0:getWidth() return self.width end
+    function W0:getHeight() return self.height end
+    function W0:setEnabled(v) self.enabled = v ~= false end
+    function W0:isEnabled() return self.enabled ~= false end
+    function W0:contentTop() return 24 end
+    function W0:contentWidth() return self.width - 12 end
+    function W0:close() self.visible = false if self.onClose then self.onClose(self) end end
+    function W0:resize(w, h) self.width, self.height = w, h end
+    function W0:setItems(rows) self.items = rows end
+    function W0:isSelected() return false end
+    function W0:setChecked(v) self.checked = v end
+    function W0:setLabel(l) self.label = l end
+    function W0:setTitle(t) self.title = t if self.autoW then self.width = #tostring(t) * fw.charW + 20 end end
+    function W0:setText(t) self.text = t end
+    function W0:getText() return self.text or "" end
+    function W0:clear() self.rows = {} end
+    function W0:add() end
+    ISUIElement, ISPanel = W0, cls(W0)
+    UIFont = { Small = "Small", Medium = "Medium" }
+    getTexture = function() return nil end
+    getTextManager = function()
+        return { MeasureStringX = function(_, _, s) return #tostring(s) * fw.charW end,
+            getFontHeight = function() return fw.fh end }
+    end
+    local core = { getScreenWidth = function() return fw.sw end, getScreenHeight = function() return fw.sh end }
+    getCore = function() return core end
+    local function make(opts, h)
+        local e = W0:new(opts.x, opts.y, opts.width or 60, opts.height or h or 20)
+        for k, v in pairs(opts) do if e[k] == nil then e[k] = v end end
+        return e
+    end
+    local caps = {}
+    for _, c in ipairs(MW.CAPS) do caps[c] = true end
+    local colors = {}
+    for _, t in ipairs({ "text", "textMuted", "textDisabled", "warning", "errorText", "accent", "hover", "selected" }) do
+        colors[t] = { r = 1, g = 1, b = 1, a = 1 }
+    end
+    MinidoracatUI = { v1 = { API_MAJOR = 1, API_REVISION = 18, CAPABILITIES = caps,
+        Theme = { defaultPalette = function() return {} end, create = function() return { colors = colors } end },
+        Text = {
+            fit = function(s) return s end,
+            wrap = function(s, w)
+                local per = math.max(1, math.floor(w / fw.charW))
+                local out = {}
+                for i = 1, #s, per do out[#out + 1] = string.sub(s, i, i + per - 1) end
+                return #out > 0 and out or { "" }
+            end },
+        Icons = { draw = function() end },
+        Dialog = { show = function(o) return o end },
+        Window = { new = function(o) return make(o) end },
+        ScrollPanel = { new = function(o) return make(o) end },
+        VirtualList = { new = function(o) return make(o) end },
+        Tabs = { new = function(o)
+            local t = make(o, fw.fh + 10)
+            local w = 0
+            for _, it in ipairs(o.items or {}) do w = w + #tostring(it.label) * fw.charW + 20 end
+            t.width = w
+            return t
+        end },
+        Checkbox = { new = function(o)
+            local c = make(o, fw.fh + 4)
+            c.width = 24 + #tostring(o.label) * fw.charW
+            return c
+        end },
+        Button = { new = function(o)
+            local b = make(o, fw.fh + 10)
+            b.autoW = o.width == nil
+            if b.autoW then b.width = #tostring(o.title or "") * fw.charW + 20 + (o.icon and 18 or 0) end
+            return b
+        end },
+        Autocomplete = { new = function()
+            local ac = { field = W0:new(0, 0, 180, 20), list = W0:new(0, 0, 180, 100), text = "" }
+            for _, k in ipairs({ "addTo", "anchorList", "setResults", "queryFailed" }) do ac[k] = function() end end
+            function ac:setText(t) self.text = t end
+            function ac:getText() return self.text end
+            function ac:setVisible(v) self.field.visible = v end
+            function ac:setEnabled() end
+            function ac:isOpen() return false end
+            return ac
+        end },
+    } }
+    -- 開一個新的管理視窗，清單回 n 間（伺服器 list 回覆照真的格式），視窗改成 w×h 後重排
+    local function openWith(n, w, h)
+        MW.instance, MSH.Client._theme = nil, nil
+        local win = MW.open({})
+        local sent = T.clientSent[#T.clientSent]
+        local claims = {}
+        for i = 1, n do
+            claims[i] = { claimId = 500 + i, revision = 1, title = "house " .. i, actorRole = "owner", bits = MSH.SHARE_ALL,
+                lifecycle = "active", healthSummary = "PROTECTED" }
+        end
+        T.fire("OnServerCommand", MSH.MODULE, "result", { command = "list", requestId = sent.args.requestId, ok = true,
+            code = "OK", claims = claims })
+        win.win:setWidth(w)
+        win.win:setHeight(h)
+        win:layout()
+        return win
+    end
+    -- 左欄與上列都在視窗裡：範圍那塊（開關＋全部 chip）在清單底下、頁尾上面；清單至少兩列；上列按鈕不超出左右邊
+    local function fits(win)
+        local BW, BH = win.body.width, win.body.height
+        local footY = BH - MW.PAD - math.max(win.ch, win.fh * 2)
+        local box = win.rangesBox
+        local bottom = box.y + box.height
+        local allChips = true
+        for _, b in ipairs(win.rangeChips) do
+            allChips = allChips and b.visible
+            bottom = math.max(bottom, b.y + b.height)
+        end
+        local inRow = true
+        for _, b in ipairs({ win.btnRefresh, win.btnSlots, win.btnCreate, win.btnAdmin }) do
+            if b.visible and (b.x < 0 or b.x + b.width > BW) then inRow = false end
+        end
+        local listOk = win.list.visible and win.list.height >= win.rowH * 2 + MW.LIST_PAD * 2
+            and win.list.y + win.list.height <= box.y
+        return box.visible and allChips and bottom <= footY and listOk and inRow and win.win.height <= fw.sh,
+            string.format("win=%dx%d list=%s,%d..%d ranges=%d..%d footY=%d", win.win.width, win.win.height,
+                tostring(win.list.visible), win.list.y, win.list.y + win.list.height, box.y, bottom, footY)
+    end
+    local a = openWith(150, 860, 560)
+    local okA, infoA = fits(a)
+    check(okA and #a.list.items == 150, "預設大小、150 間：清單會捲，範圍那塊固定在底下（" .. infoA .. "）")
+    local b = openWith(150, 300, 280)
+    local okB, infoB = fits(b)
+    check(okB and b.win.height > 280 and b.win.minHeight == b.win.height,
+        "縮到最小 300×280：上列按鈕換行不出界；清單留不到兩列就把視窗長高、最小高度跟著提高（" .. infoB .. "）")
+    fw.charW, fw.fh = 16, 40   -- 放大字型（約 2.5x）
+    local c = openWith(150, 860, 560)
+    local okC, infoC = fits(c)
+    check(okC and c.win.height > 560, "字型放大：預設大小放不下兩列清單就長高（" .. infoC .. "）")
+    fw.sh = 600
+    local d = openWith(150, 300, 280)
+    local _, infoD = fits(d)
+    check(d.win.height == 600 and d.list.height >= 0 and d.rangesBox.visible,
+        "螢幕不夠高（小螢幕配很大的字）：長到螢幕高為止，清單不給負的高度（" .. infoD .. "）")
+    fw.charW, fw.fh, fw.sh = 7, 16, 720
+    local e = openWith(0, 300, 280)
+    local BH = e.body.height
+    local footY = BH - MW.PAD - math.max(e.ch, e.fh * 2)
+    local eb = e.rangesBox.y + e.rangesBox.height
+    for _, k in ipairs(e.rangeChips) do eb = math.max(eb, k.y + k.height) end
+    check(e.rangesBox.visible and eb <= footY,
+        "沒有安全屋、最小大小：說明與〔建立安全屋〕底下的範圍那塊在頁尾上面（" .. eb .. " ≤ " .. footY .. "）")
+    MW.instance, MSH.Client._theme = nil, nil
+    for k, v in pairs(savedG) do _G[k] = v end
+
     T.section("ManagerWindow：沒有 UI 框架時退最小 fallback、不報錯")
     -- 原版 ISPanel／ISButton 的最小假物件（只有 fallback 用到的方法）
     local function element(x, y, w, h)
