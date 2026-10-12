@@ -519,7 +519,7 @@ end
 -- 疊色：IsoSprite.new():RenderGhostTileColor 記進 w.ghost（"x,y,z" → { color="r/g/b", a }），
 -- w.overlay(z) 觸發一次 RenderOpaqueObjectsInWorld(0) 回那一層疊的格子與顏色、透明度；w.ghostCalls＝畫了幾格。
 -- 假鏡頭：1280×720 的畫面以 0 號玩家為中心、一格 w.px 畫素（FloorTint.window 用四個螢幕角算看得到的範圍：
--- x ±1280/2/w.px、y ±720/2/w.px）。換掉 getCell、getCore、screenToIsoX/Y、IsoSprite、Core，w.restore() 還原
+-- x ±1280/2/w.px、y ±720/2/w.px）。換掉 getCell、getCore、screenToIsoX/Y、IsoSprite，w.restore() 還原
 function T.tintWorld()
     local w = { floors = {}, reads = 0, sets = 0, unloaded = {}, air = {}, nofloor = {}, buildings = {}, ghost = {},
         ghostCalls = 0, textures = {} }
@@ -567,8 +567,7 @@ function T.tintWorld()
         end
         return cells, colors, alphas
     end
-    local real = { getCell = getCell, getCore = getCore, sx = screenToIsoX, sy = screenToIsoY, IsoSprite = IsoSprite,
-        Core = Core }
+    local real = { getCell = getCell, getCore = getCore, sx = screenToIsoX, sy = screenToIsoY, IsoSprite = IsoSprite }
     getCell = function()
         return { getGridSquare = function(_, x, y, z)
             w.reads = w.reads + 1
@@ -589,7 +588,6 @@ function T.tintWorld()
     getCore = function() return core end   -- 引擎的 getCore() 回同一個物件，每幀呼叫不配置
     screenToIsoX = function(pn, sx) return getSpecificPlayer(pn):getX() + (sx - 640) / w.px end
     screenToIsoY = function(pn, _, sy) return getSpecificPlayer(pn):getY() + (sy - 360) / w.px end
-    Core = { getTileScale = function() return 2 end }
     IsoSprite = { new = function()
         local s = {}
         function s:LoadSingleTexture(path) w.textures[#w.textures + 1] = path end
@@ -601,7 +599,7 @@ function T.tintWorld()
     end }
     function w.restore()
         getCell, getCore, screenToIsoX, screenToIsoY = real.getCell, real.getCore, real.sx, real.sy
-        IsoSprite, Core = real.IsoSprite, real.Core
+        IsoSprite = real.IsoSprite
     end
     return w
 end

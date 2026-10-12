@@ -317,7 +317,6 @@ return function(T)
         and colors["130,200"] == ovOf("faction") and cells["140,200"] == nil and cells["150,200"] == nil
         and cells["5000,5000"] == nil and lit(1)["100,200"] == nil,
         "預設開著：我的、分享給我的、同陣營的外緣各疊自己的顏色、地板不染；其他玩家的不畫（伺服器預設不開放）、很遠的不畫")
-    check(tw.textures[1] == "media/textures/MinidoracatSafehouse/FloorFill2x.png", "疊色用 2x 的白色菱形（Core.getTileScale 2）")
     local tcells, tcolors = lit(1)
     check(tcolors["103,204"] == tintOf("own") and tcolors["103,203"] == tintOf("own") and colors["103,204"] == tintOf("own")
         and tcells["103,205"] == nil and tcells["105,206"] == nil and tcells["100,200"] == nil,

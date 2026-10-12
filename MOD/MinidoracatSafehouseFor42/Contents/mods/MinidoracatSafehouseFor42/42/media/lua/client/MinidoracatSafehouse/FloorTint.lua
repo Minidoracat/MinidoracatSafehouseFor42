@@ -37,7 +37,9 @@ F.NEAR_MS = 200                    -- 多久看一次別的玩家站在哪（本
 -- 菱形和這個矩形有重疊的格子改用染色；站在格子中央時是腳下、身後兩格與兩側共 7 格（sh-rangesov-1013a 用整塊 4×4 太大）
 F.BODY_W, F.BODY_TOP, F.BODY_BOTTOM = 30, 136, 10
 F.OCC_MAX = 20000                  -- 被擋住的快取上限，滿了整個清掉
-F.TEX = "media/textures/MinidoracatSafehouse/FloorFill"   -- 白色實心菱形，＋"2x" 是 Core.getTileScale() == 2 用的
+-- 白色實心菱形（128×256，2x 貼圖）。B42 沒有 1x 貼圖：getOptionTexture2x 固定回 true（Core.java:3448-3450）。
+-- ponytail: 只放 2x；哪天恢復 1x（Core.getTileScale() == 1）要補一張 64×128 的、照它選
+F.TEX = "media/textures/MinidoracatSafehouse/FloorFill2x.png"
 F.cells = F.cells or {}       -- 圖層 → { [鍵] = 顏色 }
 F.floor = F.floor or {}       -- 鍵 → 染著的地板物件
 F.shown = F.shown or {}       -- 鍵 → 那塊地板目前染的顏色
@@ -322,7 +324,7 @@ function F.render(playerIndex)
     local s = F.sprite
     if s == nil then
         s = IsoSprite.new()   -- 同原版 ISBuildingObject.getFloorCursorSprite（ISBuildingObject.lua:694-698）
-        s:LoadSingleTexture(F.TEX .. (Core.getTileScale() == 2 and "2x" or "") .. ".png")
+        s:LoadSingleTexture(F.TEX)
         F.sprite = s
     end
     local l = F.list
