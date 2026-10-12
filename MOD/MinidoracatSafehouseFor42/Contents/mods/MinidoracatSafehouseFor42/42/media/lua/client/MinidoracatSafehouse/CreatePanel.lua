@@ -20,6 +20,7 @@ require "MinidoracatSafehouse/Contract"
 require "MinidoracatSafehouse/Settings"
 require "MinidoracatSafehouse/Client"
 require "MinidoracatSafehouse/Select"
+require "MinidoracatSafehouse/FloorTint"
 
 local MSH = MinidoracatSafehouse
 local first = MSH.CreatePanel == nil
@@ -764,47 +765,61 @@ local function pendingLine(v)
     end
 end
 
-P.MARK_ALPHA = 0.9
+P.MARK_TINT = { 0.9 }
+local EMPTY = {}
 
--- 預檢之後（preview、confirm、送出中）：照樣畫提案的各塊（輪流的不透明度，同 Select.draw），沒過的項目帶的格子
--- 用錯誤色、更不透明地疊在上面。addAreaHighlightForPlayer(playerIndex, x1, y1, x2, y2, z, r, g, b, a)：x2／y2 不含
--- （LuaManager.java:12519）。每幀跑：不用 ipairs、不配置
-local function drawProposal(v, m, p)
-    local rects, z = m.rects, math.floor(p:getZ())   -- IsoMovingObject.java:525
-    local c = m.rangeBad and v.colors.errorText or v.colors.accent
-    local alphas = Sel.PIECE_ALPHA
-    for i = 1, #rects do
-        local r = rects[i]
-        addAreaHighlightForPlayer(m.playerNum, r.x, r.y, r.x + r.w, r.y + r.h, z, c.r, c.g, c.b,
-            alphas[(i - 1) % #alphas + 1])
+-- m.rects（{ x, y, w, h } 的列表）→ FloorTint 要的扁平陣列；m.rects 換了才重排
+local function flatOf(rects)
+    local out = {}
+    for i, r in ipairs(rects) do
+        out[i * 4 - 3], out[i * 4 - 2], out[i * 4 - 1], out[i * 4] = r.x, r.y, r.w, r.h
     end
-    local mk = m.marks
-    if mk == nil then return end
-    local e = v.colors.errorText
-    for i = 1, #mk, 4 do
-        local x, y = mk[i], mk[i + 1]
-        addAreaHighlightForPlayer(m.playerNum, x, y, x + mk[i + 2], y + mk[i + 3], z, e.r, e.g, e.b, P.MARK_ALPHA)
-    end
+    return out
 end
 
--- 每個 UI 幀（Body:prerender）：重加範圍高亮（§2.8 只畫一層）；框選中另有拖曳放開的套用、走位終點與那塊的大小
+-- 預檢之後（preview、confirm、送出中）：照樣在地板上畫提案的各塊（輪流的強度，同 Select.draw），沒過的項目帶的格子
+-- （"marks" 圖層）用錯誤色、更深地蓋在上面。每幀呼叫，FloorTint 只在範圍、標記或顏色變了時動地板
+local function drawProposal(v, m, p)
+    local z = math.floor(p:getZ())   -- IsoMovingObject.java:525
+    if v.flatSrc ~= m.rects then v.flatSrc, v.flat = m.rects, flatOf(m.rects) end
+    local Tint = MSH.FloorTint
+    Tint.setRects("shape", v.flat, m.rangeBad and v.colors.errorText or v.colors.accent, Sel.PIECE_TINT, z)
+    Tint.setRects("marks", m.marks or EMPTY, v.colors.errorText, P.MARK_TINT, z)
+    Tint.setRect("pending", nil)
+end
+
+-- 建立面板在地板上畫的三層（框選結束、取消、關窗時收掉；底下的地面範圍照常）
+local function clearTint(v)
+    if not v.tinted then return end
+    v.tinted, v.flatSrc, v.flat = false, nil, nil
+    local Tint = MSH.FloorTint
+    Tint.clear("shape")
+    Tint.clear("pending")
+    Tint.clear("marks")
+end
+
+-- 每個 UI 幀（Body:prerender）：地上的範圍（FloorTint，變了才動地板）；框選中另有拖曳放開的套用、走位終點與那塊的大小
 function V.frame(v)
     local m = v.m
     local p = player()
     if p == nil then return end
     local phase = m.phase
-    if phase == P.PREVIEW or phase == P.CONFIRM or phase == P.SUBMITTING then
-        if m.rects ~= nil then drawProposal(v, m, p) end
+    if (phase == P.PREVIEW or phase == P.CONFIRM or phase == P.SUBMITTING) and m.rects ~= nil then
+        v.tinted = true
+        drawProposal(v, m, p)
         return
     end
-    if phase ~= P.SELECTING or m.sel == nil then return end
+    if phase ~= P.SELECTING or m.sel == nil then return clearTint(v) end
     local s = m.sel
     if Sel.update(s, p) or (s.ax ~= nil) ~= v.corner or (s.tool == Sel.DRAG and Sel.usingJoypad(s)) ~= v.joy then
         V.layout(v)
     end
     pendingLine(v)
+    v.tinted = true
+    MSH.FloorTint.setRects("marks", EMPTY, v.colors.errorText, P.MARK_TINT, math.floor(p:getZ()))
     Sel.draw(s, p, v.colors.accent, v.colors.errorText, v.over)
 end
+V.clearTint = clearTint
 
 function V.draw(el, v)
     local colors = v.colors
@@ -977,6 +992,7 @@ function P.close(m)
     if P.model == m then P.model = nil end
     local v = m.view
     m.view, m.onChange = nil, nil
+    if v ~= nil then clearTint(v) end   -- 地板上的框選與標紅跟著收掉
     if v ~= nil and v.win ~= nil then
         local win = v.win
         v.win = nil

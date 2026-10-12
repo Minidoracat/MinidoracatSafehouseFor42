@@ -24,6 +24,7 @@ return {
     { dir = "client", name = "MinidoracatSafehouse/Mirror" },
     { dir = "client", name = "MinidoracatSafehouse/PublicApi" },
     { dir = "client", name = "MinidoracatSafehouse/Client" },
+    { dir = "client", name = "MinidoracatSafehouse/FloorTint" },
     { dir = "client", name = "MinidoracatSafehouse/Ranges" },
     { dir = "client", name = "MinidoracatSafehouse/Shape" },
     { dir = "client", name = "MinidoracatSafehouse/Select" },

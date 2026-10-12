@@ -272,37 +272,8 @@ return function(T)
         local c = Rg.COLORS[kind]
         return c.r .. "/" .. c.g .. "/" .. c.b
     end
-    -- 假世界：每格一個常駐的地板物件，記住染色狀態（IsoObject:isHighlighted／setHighlighted／setHighlightColor）
-    local world, reads = {}, 0
-    local function floorAt(x, y, z)
-        local k = x .. "," .. y .. "," .. z
-        local f = world[k]
-        if f == nil then
-            f = { x = x, y = y, z = z, on = false }
-            function f:isHighlighted() return self.on end
-            function f:setHighlighted(pn, on) self.on = on end
-            function f:setHighlightColor(pn, r, g, b) self.color = r .. "/" .. g .. "/" .. b end
-            world[k] = f
-        end
-        return f
-    end
-    local realGetCell = getCell
-    getCell = function()
-        return { getGridSquare = function(_, x, y, z)
-            reads = reads + 1
-            local f = floorAt(x, y, z)
-            return { getFloor = function() return f end }
-        end }
-    end
-    local function lit(z)
-        local cells, colors = {}, {}
-        for _, f in pairs(world) do
-            if f.on and f.z == z then
-                cells[f.x .. "," .. f.y], colors[f.x .. "," .. f.y] = true, f.color
-            end
-        end
-        return cells, colors
-    end
+    local tw = T.tintWorld()
+    local world, lit = tw.floors, tw.lit
     -- 一輪掃描（過了 SCAN_MS 的下一幀）
     local function drawn(z)
         T.advance(Rg.SCAN_MS)
@@ -344,10 +315,10 @@ return function(T)
         end
     end
     check(lOk and next((lit(0))) == nil, "我的 L 形兩塊染成一個外緣、交界不染、只染玩家所在樓層")
-    reads = 0
+    tw.reads = 0
     world["100,200,1"].on = false   -- 別的功能取消了這格的染色
     T.fire("OnPreUIDraw")
-    check(reads == 0 and not world["100,200,1"].on, "掃描間隔內每幀只比時間：不讀格子")
+    check(tw.reads == 0 and not world["100,200,1"].on, "掃描間隔內每幀只比時間：不讀格子")
     world["101,200,1"] = nil          -- 區塊重新載入：這格換了新的地板物件
     cells = drawn()
     check(world["100,200,1"].on and world["101,200,1"] ~= nil and world["101,200,1"].on,
@@ -389,13 +360,22 @@ return function(T)
     check(next((drawn(0))) == nil, "走遠：附近沒有的那幾間都取消")
     alice.x = 105
     drawn(0)
+    -- 只染畫面看得到的格子外加幾格（假鏡頭 x ±80）：鏡頭往東移 81 格，不等掃描間隔、下一幀就照新的畫面重切，
+    -- 跨在邊上的那間只染範圍裡的那一段
+    alice.x = 186
+    T.fire("OnPreUIDraw")
+    local moved = lit(0)
+    check(moved["100,200"] == nil and moved["101,200"] == nil and moved["102,200"] == true and moved["150,200"] == true,
+        "鏡頭移出染色範圍：不等掃描間隔，下一幀就照新的畫面重切；跨在邊上的那間只染範圍裡的那一段")
+    alice.x = 105
+    drawn(0)
     Rg.setOn(false)
     check(next((drawn(0))) == nil, "總開關關掉：染過的地板都取消")
     sync({ RangesOthers = false })
     for _, h in ipairs(natives) do SafeHouse.removeSafeHouse(h) end
     MSH.Client.claims = savedClaims
     MSH.PublicApi.ownerName = realOwnerName
-    getCell = realGetCell
+    tw.restore()
     Rg.dirty = true
 
     T.section("ManagerWindow：管理員按鈕")

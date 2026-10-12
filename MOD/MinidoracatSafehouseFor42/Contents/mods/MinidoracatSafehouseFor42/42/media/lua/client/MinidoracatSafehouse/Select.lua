@@ -2,7 +2,8 @@
 -- 只產生提案範圍，伺服器不看玩家怎麼選。每拉好一塊矩形就照目前的模式「加入」或「挖掉」，疊出的形狀與切塊在 Shape.lua；
 --   〔復原〕退回上一步、〔清除〕清空（也能復原）。挖掉只在範圍不是空的時候有意義。
 --   拖曳（drag）：照原版動物區工具 media/lua/client/ISUI/Animal/ISAddDesignationAnimalZoneUI.lua——
---     pickSquare 以 screenToIsoX/Y 取格（:296-302）、addAreaHighlightForPlayer 畫框（:271）、
+--     pickSquare 以 screenToIsoX/Y 取格（:296-302）；範圍畫在地板上（FloorTint：原版 addAreaHighlightForPlayer 會蓋住
+--     站在範圍裡的人物，2026-10-12 使用者要求畫在人物下層），
 --     手把以十字鍵逐格移動游標，〔設第一角〕後改移動終點（:355-398；onClick ADD :332-349），再按〔加入這塊〕。
 --     滑鼠放開就照模式套用這一塊；點一下（沒拖）＝一格。
 --     滑鼠不照原版用視窗的 onMouseDownOutside（:47-75）：子元件接走點擊後，引擎改呼叫父視窗的 onMouseDownOutside
@@ -11,16 +12,16 @@
 --     isMouseButtonDown(0)（LuaManager.java:8027-8031）更新終點、放開就套用。
 --   走位（walk）：照原版管理員安全區工具 media/lua/client/ISUI/AdminPanel/ISAddSafeZoneUI.lua——
 --     起點＝按〔設第一角〕時玩家所在格（:176）、終點＝玩家目前位置（:84）、每幀畫範圍（:107），走到對角按〔加入這塊〕。
--- 預覽每個 UI 幀重加、只畫一層（§2.8）：由建立面板的 prerender 呼叫 Sel.draw。
+-- 地上的範圍由建立面板的 prerender 每幀呼叫 Sel.draw，交給 FloorTint：範圍、顏色或位置變了才動地板。
 -- 每幀路徑（update／bounds／draw）不配置 table 或 closure（形狀結果在 Shape.result 快取到下一次改動）。
 -- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/Lua/LuaManager.java
---   screenToIsoX/Y :3795、:3806；getMouseX/Y :8014、:8046；isMouseButtonDown :8030；wasMouseActiveMoreRecentlyThanJoypad :6421；
---   addAreaHighlightForPlayer(playerIndex, x1, y1, x2, y2, z, r, g, b, a)（x2/y2 不含）:12519。
+--   screenToIsoX/Y :3795、:3806；getMouseX/Y :8014、:8046；isMouseButtonDown :8030；wasMouseActiveMoreRecentlyThanJoypad :6421。
 
 if not isClient() then return end
 
 require "MinidoracatSafehouse/Contract"
 require "MinidoracatSafehouse/Shape"
+require "MinidoracatSafehouse/FloorTint"
 
 local MSH = MinidoracatSafehouse
 local S = MSH.Select or {}
@@ -30,11 +31,13 @@ local Shape = MSH.Shape
 S.DRAG = "drag"
 S.WALK = "walk"
 
--- 各塊輪流用的不透明度：相鄰的塊看得出分界；拉到一半的那塊另外疊一層。最淡的不低於 0.3：原本第 4 塊是 0.22，
--- 鋪在深色草地上幾乎看不出來，重新框選的預檢看起來像沒有填色（sh-pieces2-1011b 的 p2-redraw-preview 逐格比對）
-S.PIECE_ALPHA = { 0.5, 0.3, 0.43, 0.37 }
-S.RAW_ALPHA = 0.4
-S.PENDING_ALPHA = 0.6
+-- 地板的染色強度（FloorTint：把地板的光照色往顏色拉這個比例）。各塊輪流用不同強度（草地上幾乎看不出分界：
+-- sh-createtint-1012b）；拉到一半的那塊與游標格更深。原本疊色的 0.22 在深色草地上看不出來（sh-pieces2-1011b），
+-- 染色的 0.5 在偏暗的碎石地上也淡（sh-req-1012a），最淡取 0.55
+S.PIECE_TINT = { 0.75, 0.55, 0.68, 0.62 }
+S.RAW_TINT = { 0.6 }
+S.PENDING_TINT = 0.85
+S.CURSOR_TINT = 0.9
 
 -- s = { tool, playerNum, ax, ay（第一角）, bx, by（終點）, cx, cy（手把游標）, dragging, cut（挖掉模式）, shape }
 -- rects：重新框選時從現有範圍開始
@@ -177,23 +180,19 @@ function S.stop(s)
     setWorldMenu(false)
 end
 
--- 每個 UI 幀重加一次（只畫一層）：範圍的各塊（輪流的不透明度；形狀不合規則或 over＝超過大小上限時用 bad 色）、
--- 拉到一半的那塊（加入用 ok 色、挖掉用 bad 色），沒在拉時畫游標格（:304-320）
+-- 每幀呼叫：範圍的各塊（"shape" 圖層，輪流的強度；形狀不合規則或 over＝超過大小上限時用 bad 色）、拉到一半的那塊
+-- （"pending"：加入用 ok 色、挖掉用 bad 色），沒在拉時是游標格（:304-320）。FloorTint 只在範圍、顏色或位置變了時動地板
 function S.draw(s, player, ok, bad, over)
     if player == nil then return end
     local px, py, z = cellOf(player)
     local res = Shape.result(s.shape)
     local c = (over or (res.err ~= nil and res.err ~= "EMPTY")) and bad or ok
-    local d, alphas = res.draw, S.PIECE_ALPHA
-    for k = 1, #d, 4 do
-        local a = S.RAW_ALPHA
-        if res.rects ~= nil then a = alphas[((k - 1) / 4) % #alphas + 1] end
-        addAreaHighlightForPlayer(s.playerNum, d[k], d[k + 1], d[k] + d[k + 2], d[k + 1] + d[k + 3], z, c.r, c.g, c.b, a)
-    end
+    local Tint = MSH.FloorTint
+    Tint.setRects("shape", res.draw, c, res.rects ~= nil and S.PIECE_TINT or S.RAW_TINT, z)
+    local pc = s.cut and bad or ok
     local x, y, w, h = S.bounds(s)
     if x ~= nil then
-        local pc = s.cut and bad or ok
-        addAreaHighlightForPlayer(s.playerNum, x, y, x + w, y + h, z, pc.r, pc.g, pc.b, S.PENDING_ALPHA)
+        Tint.setRect("pending", x, y, w, h, z, Tint.color(pc, S.PENDING_TINT))
         return
     end
     local cx, cy = px, py
@@ -204,6 +203,5 @@ function S.draw(s, player, ok, bad, over)
             cx, cy = S.pick(s, getMouseX(), getMouseY(), z)
         end
     end
-    local cc = s.cut and bad or ok
-    addAreaHighlightForPlayer(s.playerNum, cx, cy, cx + 1, cy + 1, z, cc.r, cc.g, cc.b, 1)
+    Tint.setRect("pending", cx, cy, 1, 1, z, Tint.color(pc, S.CURSOR_TINT))
 end

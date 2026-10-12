@@ -510,6 +510,59 @@ function getCell()
         end,
     }
 end
+-- 地板染色的假世界（FloorTint、Ranges、建立面板）：每格一個常駐的地板物件，記住 setHighlightColor 的顏色（"r/g/b"）、
+-- 強度與 setHighlighted 的狀態（IsoObject:isHighlighted／setHighlighted／setHighlightColor）。w.reads＝讀格子次數、
+-- w.sets＝setHighlightColor 次數；w.unloaded["x,y"]＝true 時那格沒載入。假鏡頭：1280×720 的畫面以 0 號玩家為中心、
+-- 一格 w.px 畫素（FloorTint.window 用四個螢幕角算看得到的範圍：x ±1280/2/w.px、y ±720/2/w.px）。換掉 getCell、
+-- getCore、screenToIsoX/Y，w.restore() 還原
+function T.tintWorld()
+    local w = { floors = {}, reads = 0, sets = 0, unloaded = {} }
+    function w.floorAt(x, y, z)
+        local k = x .. "," .. y .. "," .. z
+        local f = w.floors[k]
+        if f == nil then
+            f = { x = x, y = y, z = z, on = false }
+            function f:isHighlighted() return self.on end
+            function f:setHighlighted(pn, on) self.on = on end
+            function f:setHighlightColor(pn, r, g, b, a)
+                w.sets = w.sets + 1
+                self.color = r .. "/" .. g .. "/" .. b
+                self.alpha = a
+            end
+            w.floors[k] = f
+        end
+        return f
+    end
+    -- z 這層染著的格子："x,y" → true、"x,y" → "r/g/b"、"x,y" → a
+    function w.lit(z)
+        local cells, colors, alphas = {}, {}, {}
+        for _, f in pairs(w.floors) do
+            if f.on and f.z == z then
+                local k = f.x .. "," .. f.y
+                cells[k], colors[k], alphas[k] = true, f.color, f.alpha
+            end
+        end
+        return cells, colors, alphas
+    end
+    local real = { getCell = getCell, getCore = getCore, sx = screenToIsoX, sy = screenToIsoY }
+    getCell = function()
+        return { getGridSquare = function(_, x, y, z)
+            w.reads = w.reads + 1
+            if w.unloaded[x .. "," .. y] then return nil end
+            local f = w.floorAt(x, y, z)
+            return { getFloor = function() return f end }
+        end }
+    end
+    w.px = 8
+    local core = { getScreenWidth = function() return 1280 end, getScreenHeight = function() return 720 end }
+    getCore = function() return core end   -- 引擎的 getCore() 回同一個物件，每幀呼叫不配置
+    screenToIsoX = function(pn, sx) return getSpecificPlayer(pn):getX() + (sx - 640) / w.px end
+    screenToIsoY = function(pn, _, sy) return getSpecificPlayer(pn):getY() + (sy - 360) / w.px end
+    function w.restore()
+        getCell, getCore, screenToIsoX, screenToIsoY = real.getCell, real.getCore, real.sx, real.sy
+    end
+    return w
+end
 -- RoomDef／BuildingDef（RoomDef.java:207-217、BuildingDef.java:98-100,186-204）
 T.rooms = {}
 function T.building(x, y, w, h, roomNames)

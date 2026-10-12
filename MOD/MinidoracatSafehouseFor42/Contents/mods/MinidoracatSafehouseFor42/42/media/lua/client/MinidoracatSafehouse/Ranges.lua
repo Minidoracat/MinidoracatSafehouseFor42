@@ -13,12 +13,10 @@
 --   registry。屋主還沒查到的先算其他玩家的。四類互不重疊：關掉同陣營的，同陣營的屋不會改用其他玩家的顏色畫出來。
 -- 暫停保護（lapsed）沒有原生，不畫。清單、原生、陣營（SyncFaction）、屋主表（OnReceiveGlobalModData）、沙盒（sandboxSync）
 --   或開關一變就標記重算，重算時才配置。
--- 畫法是把外緣那幾格的地板染色（IsoObject:setHighlighted／setHighlightColor），不用 addAreaHighlightForPlayer：
---   後者在整個世界畫完後才畫、深度刻意往前推一點（FBORenderAreaHighlights.java:251-259），站在範圍上的人物下半身
---   會被蓋住（2026-10-12 使用者截圖）；地板染色在人物之後重畫那一格地板、照地板自己的深度，人物照樣在上面
---   （FBORenderCell.java:1128-1137 renderMovingObjects 之後 FBORenderObjectHighlight.render；地板用 FloorShaper
---   的 tint，IsoObject.java:3686-3700）。染色是常駐的（renderOnce＝false），不必每幀重設；每 SCAN_MS 掃一次
---   玩家附近各間的外緣格：地板換了（區塊重新載入）或被別的功能取消染色就補上。關掉、重算、換樓層、離開範圍時取消。
+-- 畫法是把外緣那幾格的地板染色（FloorTint.lua 檔頭有為什麼：addAreaHighlightForPlayer 會蓋住站在範圍上的人物，
+--   2026-10-12 使用者截圖），圖層 "ranges"，建立面板的框選與標紅蓋在它上面。染色是常駐的，不必每幀重設；每 SCAN_MS，
+--   或鏡頭移出 FloorTint 的染色範圍（畫面看得到的格子外加幾格）時，把範圍裡的外緣格交給 FloorTint、範圍外的取消
+--   （地板換了或被別的功能取消染色由 FloorTint.tick 補上）。關掉、重算、換樓層時全部取消。
 
 if not isClient() then return end
 
@@ -26,6 +24,7 @@ require "MinidoracatSafehouse/Contract"
 require "MinidoracatSafehouse/Settings"
 require "MinidoracatSafehouse/Client"
 require "MinidoracatSafehouse/PublicApi"
+require "MinidoracatSafehouse/FloorTint"
 
 local MSH = MinidoracatSafehouse
 local first = MSH.Ranges == nil
@@ -33,7 +32,6 @@ local R = MSH.Ranges or {}
 MSH.Ranges = R
 
 R.OPTIONS_ID = "MinidoracatSafehouse"
-R.REACH = 60                                               -- 玩家離外框這麼多格以內才染色
 R.SCAN_MS = 500                                            -- 多久掃一次附近的外緣格
 R.KINDS = { "own", "shared", "faction", "others" }
 -- 地板染色的顏色；a 是往這個顏色拉的比例（Color.tintABGR 把地板的頂點光照色往 rgb 拉 a，`Color.java:243-253`）：
@@ -244,74 +242,72 @@ function R.rebuild()
     R.list = out
 end
 
--- 每幀只比時間；到了 SCAN_MS（或標記重算）才掃附近的外緣格
+-- 每幀只比時間與染色範圍；到了 SCAN_MS、標記重算或鏡頭移出了染色範圍，才把外緣格交給 FloorTint
 function R.update()
     local now = getTimestampMs()
-    if not R.dirty and now < (R.nextScan or 0) then return end
-    R.nextScan = now + R.SCAN_MS
+    local p = getSpecificPlayer(0)
+    local on = p ~= nil and R.isOn()
+    local z = on and math.floor(p:getZ()) or nil   -- IsoMovingObject.java:525
+    local v = on and MSH.FloorTint.window(z) or nil
+    local seq = v and v.seq
+    if not R.dirty and now < (R.nextScan or 0) and seq == R.seq then return end
+    R.nextScan, R.seq = now + R.SCAN_MS, seq
     if R.dirty then
         R.dimAll()
         R.rebuild()
     end
-    local p = getSpecificPlayer(0)
-    if not R.isOn() or p == nil then return R.dimAll() end
-    local z = math.floor(p:getZ())   -- IsoMovingObject.java:525
+    if not on then return R.dimAll() end
     if z ~= R.litZ then
         R.dimAll()
         R.litZ = z
     end
-    local px, py = p:getX(), p:getY()
-    local reach, list, cell = R.REACH, R.list, getCell()
+    local list, cell = R.list, getCell()
     for i = 1, #list do
         local c = list[i]
-        if px >= c.x1 - reach and px <= c.x2 + reach and py >= c.y1 - reach and py <= c.y2 + reach then
-            R.light(c, cell, z)
+        if c.x2 > v.x0 and c.x1 <= v.x1 and c.y2 > v.y0 and c.y1 <= v.y1 then
+            R.light(c, cell, z, v)
         else
             R.dim(c)
         end
     end
 end
 
--- 這一間外緣的每一格地板染成這類的顏色；c.lit[第幾格]＝染過的地板（區塊重新載入後地板是新物件，照樣補上）。
--- getGridSquare 沒載入回 nil（IsoCell.java:3190-3192）；IsoGridSquare:getFloor；IsoObject:isHighlighted／
--- setHighlightColor／setHighlighted(playerIndex, on, renderOnce)（IsoObject.java:5041-5119；getFloor IsoGridSquare.java:4652）
-function R.light(c, cell, z)
-    local a, col = c.areas, c.color
-    local lit = c.lit
-    if lit == nil then
-        lit = {}
-        c.lit = lit
-    end
-    local n = 0
+-- 這一間外緣在染色範圍 v 裡的格子交給 FloorTint（"ranges" 圖層）、範圍外的取消；同一層、同一個範圍交過就不再跑
+function R.light(c, cell, z, v)
+    if c.litZ == z and c.litSeq == v.seq then return end
+    local a, col, Tint = c.areas, c.color, MSH.FloorTint
     for k = 1, #a, 4 do
         local x0, y0 = a[k], a[k + 1]
         for x = x0, x0 + a[k + 2] - 1 do
             for y = y0, y0 + a[k + 3] - 1 do
-                n = n + 1
-                local sq = cell:getGridSquare(x, y, z)
-                local floor = sq and sq:getFloor()
-                if floor == nil then
-                    lit[n] = nil
-                elseif lit[n] ~= floor or not floor:isHighlighted(0) then
-                    floor:setHighlightColor(0, col.r, col.g, col.b, col.a)
-                    floor:setHighlighted(0, true, false)
-                    lit[n] = floor
+                if x >= v.x0 and x <= v.x1 and y >= v.y0 and y <= v.y1 then
+                    Tint.put(cell, "ranges", x, y, z, col)
+                else
+                    Tint.remove(cell, "ranges", x, y, z)
                 end
             end
         end
     end
+    c.litZ, c.litSeq = z, v.seq
 end
 
--- 取消這一間染過的地板（已卸載的舊地板呼叫也無害：FBORenderObjectHighlight 只是從集合移除）
+-- 取消這一間的外緣（框選蓋在上面的格子照樣是框選的顏色）
 function R.dim(c)
-    local lit = c.lit
-    if lit == nil then return end
-    for _, floor in pairs(lit) do floor:setHighlighted(0, false, false) end
-    c.lit = nil
+    local z = c.litZ
+    if z == nil then return end
+    c.litZ = nil
+    local a, cell, remove = c.areas, getCell(), MSH.FloorTint.remove
+    for k = 1, #a, 4 do
+        local x0, y0 = a[k], a[k + 1]
+        for x = x0, x0 + a[k + 2] - 1 do
+            for y = y0, y0 + a[k + 3] - 1 do remove(cell, "ranges", x, y, z) end
+        end
+    end
 end
 
 function R.dimAll()
-    for i = 1, #R.list do R.dim(R.list[i]) end
+    MSH.FloorTint.clear("ranges")
+    for i = 1, #R.list do R.list[i].litZ = nil end
 end
 
 if first then
