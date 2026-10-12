@@ -47,6 +47,15 @@ function SP.bitsText(bits)
     return table.concat(parts, getText("IGUI_MSH_Share_ListSep"))
 end
 
+-- 概覽的身分欄（成員）：「成員（其他權限）」，括號裡不再列「成員」；只有成員一項時就寫「成員」
+-- （2026-10-13 發布前回歸 ui-mp 截圖：「成員（成員、用電器、邀請）」）
+function SP.roleText(bits)
+    if MSH.hasBit(bits, SHARE.MEMBER) then bits = bits - SHARE.MEMBER end
+    local extra = SP.bitsText(bits)
+    if extra == "" then return getText("IGUI_MSH_Share_Bit_MEMBER") end
+    return getText("IGUI_MSH_Manager_RoleMember", extra)
+end
+
 -- 能不能新增分享（「成員與分享」頁是否出現）：active 且是屋主、MANAGE 或 INVITE 成員（SharingServer 的 ACL；
 -- detail 沒有專用欄位，從 actorRole／bits／lifecycle 推）
 function SP.canAdd(d)

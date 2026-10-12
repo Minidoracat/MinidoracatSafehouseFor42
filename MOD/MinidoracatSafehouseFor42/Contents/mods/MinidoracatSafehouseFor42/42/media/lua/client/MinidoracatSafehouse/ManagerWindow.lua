@@ -78,11 +78,11 @@ function MW.statusText(code)
     return text, nextStep
 end
 
--- 放棄確認框的段落鍵（§10.3、§7.6）：第一句對齊原版 IGUI_SafehouseUI_ReleaseConfirm
--- （Translate/CH/IG_UI.json:763「你真的要放棄這個安全屋嗎?」）；用地契建的寫明地契不退；
+-- 放棄確認框的段落鍵（§10.3、§7.6）：第一句用本 MOD 自己的鍵（原版 IGUI_SafehouseUI_ReleaseConfirm 英文寫 release、
+-- 和〔放棄安全屋〕對不上，繁中是半形問號，2026-10-13 發布前回歸 ui-mp 截圖）；用地契建的寫明地契不退；
 -- 重新框選緩衝期內提示改用〔重新框選〕。不用「取消安全屋」（和〔取消〕撞字）。
 function MW.releaseKeys(d, redrawLeftMs)
-    local keys = { "IGUI_SafehouseUI_ReleaseConfirm" }
+    local keys = { "IGUI_MSH_Manager_ReleaseConfirm" }
     if d.source == SRC.DEED then keys[#keys + 1] = "IGUI_MSH_Manager_ReleaseNoRefund" end
     if (redrawLeftMs or 0) > 0 then keys[#keys + 1] = "IGUI_MSH_Manager_ReleaseTryRedraw" end
     return keys
@@ -820,7 +820,7 @@ function W:layoutOverview(d, cw)
     if d.actorRole == "owner" then
         y = self:infoRow(L, "Role", getText("IGUI_MSH_Manager_RoleOwner"), y, vx, vw)
     else
-        y = self:infoRow(L, "Role", getText("IGUI_MSH_Manager_RoleMember", MSH.SharingPage.bitsText(d.bits or 0)), y, vx, vw)
+        y = self:infoRow(L, "Role", MSH.SharingPage.roleText(d.bits or 0), y, vx, vw)
         local o = type(d.roster) == "table" and d.roster[1] or nil
         if o and o.role == "owner" then y = self:infoRow(L, "Owner", o.user or "", y, vx, vw) end
     end

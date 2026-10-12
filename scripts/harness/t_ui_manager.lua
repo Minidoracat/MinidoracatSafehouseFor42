@@ -90,6 +90,10 @@ return function(T)
     check(SP.bitsText(SHARE.MEMBER + SHARE.MANAGE + SHARE.INVITE) == getText("IGUI_MSH_Share_Bit_MEMBER") .. sep
         .. getText("IGUI_MSH_Share_Bit_INVITE") .. sep .. getText("IGUI_MSH_Share_Bit_MANAGE"),
         "名單與角色文字列出邀請（在管理之前）")
+    check(SP.roleText(SHARE.MEMBER + SHARE.USE + SHARE.INVITE) == getText("IGUI_MSH_Manager_RoleMember",
+        getText("IGUI_MSH_Share_Bit_USE") .. sep .. getText("IGUI_MSH_Share_Bit_INVITE"))
+        and SP.roleText(SHARE.MEMBER) == getText("IGUI_MSH_Share_Bit_MEMBER"),
+        "概覽的身分欄：括號裡只列成員以外的權限，不再寫「成員（成員、…）」；只有成員就寫「成員」")
 
     T.section("SharingPage：每種角色的 chip、按鈕與送出的位元（邀請，使用者 2026-10-11）")
     -- 假元件：只記可見、可用、勾選與文字；host 照管理視窗的介面（button／newLines／place／fit／flow／mutate／say）
@@ -257,10 +261,10 @@ return function(T)
         return false
     end
     local keys = MW.releaseKeys({ source = MSH.SOURCE.DEED }, 120000)
-    check(keys[1] == "IGUI_SafehouseUI_ReleaseConfirm" and has(keys, "IGUI_MSH_Manager_ReleaseNoRefund")
+    check(keys[1] == "IGUI_MSH_Manager_ReleaseConfirm" and has(keys, "IGUI_MSH_Manager_ReleaseNoRefund")
         and has(keys, "IGUI_MSH_Manager_ReleaseTryRedraw"), "地契建的：寫明不退地契；緩衝期內提示改用重新框選")
     keys = MW.releaseKeys({ source = MSH.SOURCE.FREE }, 0)
-    check(#keys == 1 and keys[1] == "IGUI_SafehouseUI_ReleaseConfirm", "免費、緩衝期已過：只有原版確認句")
+    check(#keys == 1 and keys[1] == "IGUI_MSH_Manager_ReleaseConfirm", "免費、緩衝期已過：只有確認句")
     keys = MW.releaseKeys({ source = MSH.SOURCE.LEGACY }, 0)
     check(not has(keys, "IGUI_MSH_Manager_ReleaseNoRefund") and not has(keys, "IGUI_SafehouseUI_Release"),
         "遷移來的不提地契；不用「取消安全屋」那句")

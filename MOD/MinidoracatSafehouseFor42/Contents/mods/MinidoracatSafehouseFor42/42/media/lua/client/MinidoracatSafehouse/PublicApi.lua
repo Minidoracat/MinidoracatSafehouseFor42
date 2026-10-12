@@ -10,7 +10,8 @@
 --   只在原生安全屋清單變動（OnSafehousesChanged，SafeHouse.java:81、318、SafehouseSyncPacket.java:99）之後才再確認，
 --   而且只為了更新（已知查不到、已命中的屋主可能換人）的 request 至少隔 5 分鐘：清單一直在變時（例：成員同步被干擾，
 --   每 500 ms 廣播）每個客戶端最多 5 分鐘抓一次整張表。只有送出當下要的 owner 才會被回覆判成查不到（回覆可能比新屋的
---   原生同步晚到）。進場不主動抓，第一次查不到才抓。
+--   原生同步晚到）。進場不主動抓，第一次查不到才抓。被節流擋下的 owner 由 OnTick 在 30 秒滿時補送：地面範圍只在重算時
+--   查一次，沒人再查的話新屋會一直分不出類（sh-rel-ranges-1013a：同陣營的第二間 29 秒後仍沒畫）。
 
 if not isClient() then return end
 
@@ -27,6 +28,7 @@ P.LOST_MS = 60000              -- 回覆遺失：超過這麼久沒回就不再�
 P.names = P.names or {}        -- "@MSH:<id>" → 屋主帳號名（最近一次回覆的內容）
 P.missing = P.missing or {}    -- 回覆後仍查不到的 owner 字串
 P.wanted = P.wanted or {}      -- 查不到、還沒送出 request 的 owner 字串
+P.hasWanted = P.hasWanted or false   -- wanted 裡有東西（Kahlua 沒有 next，用旗標）
 P.asked = P.asked or {}        -- 送出中的 request 要的 owner 字串（回覆只判這些）
 P.sentAt = P.sentAt or nil     -- 上次送出 request 的時間
 P.inflight = P.inflight or false
@@ -40,10 +42,17 @@ function P.request(now)
     local ok, err = pcall(ModData.request, MSH.TAG)
     if ok then
         P.inflight, P.stale = true, false
-        P.asked, P.wanted = P.wanted, {}
+        P.asked, P.wanted, P.hasWanted = P.wanted, {}, false
     else
         MSH.log("PublicApi: ModData.request failed: " .. tostring(err))
     end
+end
+
+-- 節流：回覆遺失（超過 LOST_MS）就不再當作進行中；沒有進行中、距上次送出滿 gap 才送
+local function maybeRequest(gap)
+    local now = getTimestampMs()
+    if P.inflight and now - P.sentAt >= P.LOST_MS then P.inflight = false end
+    if not P.inflight and (P.sentAt == nil or now - P.sentAt >= gap) then P.request(now) end
 end
 
 -- 每幀可呼叫：命中且清單沒變只做一次查表；其餘路徑不建 table、不切字串（string.find 只回位置）
@@ -53,7 +62,7 @@ function P.ownerName(owner)
     if name == nil then
         if string.find(owner, "^@MSH:%d+$") == nil then return nil end
         if not P.missing[owner] then
-            P.wanted[owner] = true
+            P.wanted[owner], P.hasWanted = true, true
             gap = P.INTERVAL_MS
         elseif P.stale then
             gap = P.REFRESH_MS
@@ -61,12 +70,13 @@ function P.ownerName(owner)
     elseif P.stale then
         gap = P.REFRESH_MS
     end
-    if gap ~= nil then
-        local now = getTimestampMs()
-        if P.inflight and now - P.sentAt >= P.LOST_MS then P.inflight = false end
-        if not P.inflight and (P.sentAt == nil or now - P.sentAt >= gap) then P.request(now) end
-    end
+    if gap ~= nil then maybeRequest(gap) end
     return name
+end
+
+-- OnTick：被節流擋下的 owner 滿 INTERVAL_MS 補送（沒有要查的只比一個旗標）
+function P.tick()
+    if P.hasWanted then maybeRequest(P.INTERVAL_MS) end
 end
 
 -- 回覆：只收本 MOD 的 tag；table 是 false（伺服器沒有這張表）時清快取。整份換新（放棄的屋不再留名字）。
@@ -105,7 +115,8 @@ v1.CAPABILITIES.ownerName = true
 v1.ownerName = P.ownerName
 
 if first then
-    -- OnReceiveGlobalModData：LuaEventManager.java:817；OnSafehousesChanged：:775
+    -- OnReceiveGlobalModData：LuaEventManager.java:817；OnSafehousesChanged：:775；OnTick：:593
     Events.OnReceiveGlobalModData.Add(function(tag, data) MSH.PublicApi.onReceive(tag, data) end)
     Events.OnSafehousesChanged.Add(function() MSH.PublicApi.onSafehousesChanged() end)
+    Events.OnTick.Add(function() MSH.PublicApi.tick() end)
 end

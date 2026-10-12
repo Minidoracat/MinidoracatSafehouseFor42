@@ -40,7 +40,7 @@ Project Zomboid Build 42 MOD。
 |---|---|---|
 | `PlayerSafehouse` | `false` | 原版建立安全屋不經過任何 MOD 檢查，地契、名額、道路、資源點都管不到 |
 | `AdminSafehouse` | `false` | 同上（建築物安全屋的路徑） |
-| `SafeHouseRemovalTime` | `0` | 原版會把屋主太久沒上線的安全屋刪掉 |
+| `SafeHouseRemovalTime` | `0` | 原版會刪掉太久（真實時間的小時數）沒有成員回去的安全屋 |
 | `War` | `false` | 原版戰爭模式會刪掉安全屋 |
 | `SafehouseAllowTrepass` | `false` | 非成員要被趕出安全屋 |
 | `SafehouseAllowLoot` | `false` | 非成員不能拿安全屋裡的東西 |
@@ -142,7 +142,7 @@ Project Zomboid Build 42 MOD。
 ## 移除本 MOD 前
 
 - 地契物品在移除後的第一次載入就消失，裝回來也找不回。
-- 已建的安全屋會留在世界上，成員照原版受保護，但沒有人能再從遊戲內管理（屋主是本 MOD 的服務帳號），只能用原版管理員工具處理。之後若把 `SafeHouseRemovalTime` 改成非 0，這些安全屋會因為「屋主沒上線」被原版刪掉。
+- 已建的安全屋會留在世界上，成員照原版受保護，也能用原版〔退出安全屋〕離開；但沒有人能再從遊戲內管理（屋主是本 MOD 的服務帳號），只能用原版管理員工具處理。之後若把 `SafeHouseRemovalTime` 改成非 0，超過那麼多小時（真實時間）都沒有成員進屋的安全屋會被原版刪掉。
 - 先備份 `<伺服器名>_SandboxVars.lua`（見上面「規則與預設值」）。
 
 ## 資料存在哪裡（伺服器）
