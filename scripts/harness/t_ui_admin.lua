@@ -783,6 +783,8 @@ return function(T)
     check(PF.message == "IGUI_MSH_Admin_FixDone" and not pool.hfix:isVisible() and pool["hb#1"].text == "IGUI_MSH_Admin_Healthy",
         "改好：說已修正、改顯示檢查通過")
     check(pool["f:MaxShares"]:getText() == "7", "只重抓狀態：還沒套用的規則編輯留著")
+    AP.select(PF, "paid")
+    check(PF.message == nil, "換到別的分頁：上一頁的結果訊息（已修正）清掉")
     SendCommandToServer, boss.canOptions, AP.instance = savedSend, nil, nil
 
     MinidoracatEconomy = nil

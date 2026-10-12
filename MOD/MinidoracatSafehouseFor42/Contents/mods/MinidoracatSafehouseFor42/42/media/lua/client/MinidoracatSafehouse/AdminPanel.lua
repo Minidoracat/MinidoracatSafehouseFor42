@@ -313,8 +313,10 @@ end
 
 function AP.visible(P) return P ~= nil and P.win:isVisible() end
 
+-- 換分頁時清掉底列上一頁的結果訊息（等候中的不清）：「伺服器設定已修正」留在付費頁會看不懂（2026-10-13 standalone-mp）
 function AP.select(P, id)
     if P.pages[id] == nil then id = "rules" end
+    if id ~= P.current and not P.busy then P.message = nil end
     P.current = id
     P.tabs:setSelected(id, true)
     AP.hideTips(P)
