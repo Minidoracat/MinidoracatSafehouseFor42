@@ -512,7 +512,8 @@ function getCell()
 end
 -- 地面標示的假世界（FloorTint、Ranges、建立面板）：每格一個常駐的地板物件，記住 setHighlightColor 的顏色（"r/g/b"）、
 -- 強度與 setHighlighted 的狀態（IsoObject:isHighlighted／setHighlighted／setHighlightColor）。w.reads＝讀格子次數、
--- w.sets＝setHighlightColor 次數；w.unloaded["x,y"]＝true 時那格沒載入；w.buildings["x,y,z"] 有值時那格是房子的一部分
+-- w.sets＝setHighlightColor 次數；w.unloaded["x,y"]＝true 時那格沒載入；w.air["x,y,z"]＝true 時那格沒有格子（樓上的
+-- 空中）、w.nofloor["x,y,z"]＝true 時有格子沒地板；w.buildings["x,y,z"] 有值時那格是房子的一部分
 -- （isOutside 回 false）：true＝房間、最高就是這層（一層樓），數字＝房間、那棟最高那層的 z（BuildingDef:getMaxLevel），
 -- "roof"＝沒有房間的屋簷下（getBuilding 回 nil）。
 -- 疊色：IsoSprite.new():RenderGhostTileColor 記進 w.ghost（"x,y,z" → { color="r/g/b", a }），
@@ -520,7 +521,8 @@ end
 -- 假鏡頭：1280×720 的畫面以 0 號玩家為中心、一格 w.px 畫素（FloorTint.window 用四個螢幕角算看得到的範圍：
 -- x ±1280/2/w.px、y ±720/2/w.px）。換掉 getCell、getCore、screenToIsoX/Y、IsoSprite、Core，w.restore() 還原
 function T.tintWorld()
-    local w = { floors = {}, reads = 0, sets = 0, unloaded = {}, buildings = {}, ghost = {}, ghostCalls = 0, textures = {} }
+    local w = { floors = {}, reads = 0, sets = 0, unloaded = {}, air = {}, nofloor = {}, buildings = {}, ghost = {},
+        ghostCalls = 0, textures = {} }
     -- 疊色的貼圖物件與「被房子擋住」的快取跟著假世界走：換一個假世界就重來
     local FT = MinidoracatSafehouse and MinidoracatSafehouse.FloorTint
     if FT then FT.sprite, FT.occ, FT.occN = nil, {}, 0 end
@@ -571,8 +573,10 @@ function T.tintWorld()
         return { getGridSquare = function(_, x, y, z)
             w.reads = w.reads + 1
             if w.unloaded[x .. "," .. y] then return nil end
-            local f = w.floorAt(x, y, z)
-            local b = w.buildings[x .. "," .. y .. "," .. z]
+            local k = x .. "," .. y .. "," .. z
+            if w.air[k] then return nil end
+            local f = not w.nofloor[k] and w.floorAt(x, y, z) or nil
+            local b = w.buildings[k]
             local top = b == true and z or b
             local inside = b ~= nil and b ~= "roof"
                 and { getDef = function() return { getMaxLevel = function() return top end } end } or nil

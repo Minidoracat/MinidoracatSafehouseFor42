@@ -433,6 +433,19 @@ return function(T)
         "沒有房間的屋簷下（門廊）算一層樓：後面第 5 列染色、第 6 列疊色，屋簷下那格自己也染色")
     MSH.FloorTint.clear("ranges")
     tw.buildings["47,27,0"], tw.buildings["37,47,0"], tw.buildings["67,17,0"] = nil, nil, nil
+    -- 樓上（z＝1）的外緣格：空中（沒有格子）、有格子沒地板的不疊色也不染（疊色不看地板，會浮在半空）；有地板的照樣
+    -- 疊色。沒有格子的那格之後有了地板（載入或蓋了地板），下一輪掃描改成疊色
+    tw.air["50,50,1"], tw.nofloor["51,50,1"] = true, true
+    for x = 50, 52 do MSH.FloorTint.put(getCell(), "ranges", x, 50, 1, belowOv) end
+    local ovs1, tints1 = tw.overlay(1), tw.lit(1)
+    check(not ovs1["50,50"] and not tints1["50,50"] and not ovs1["51,50"] and not tints1["51,50"] and ovs1["52,50"],
+        "樓上的外緣格：空中、沒地板的格子不疊色也不染（不會浮在半空）；有地板的照樣疊色")
+    tw.air["50,50,1"] = nil
+    T.advance(MSH.FloorTint.SCAN_MS)
+    MSH.FloorTint.tick()   -- 不 fire OnPreUIDraw：這裡 Ranges 關著，它的掃描會把手放的 "ranges" 格清掉
+    check(tw.overlay(1)["50,50"] == true, "空中那格之後有了地板：下一輪掃描改成疊色")
+    MSH.FloorTint.clear("ranges")
+    tw.nofloor["51,50,1"] = nil
     -- 很長的範圍只染畫面看得到的格子外加 MARGIN 格（假鏡頭 x ±80，env T.tintWorld）；鏡頭移出這個範圍才重切；
     -- 區塊重新載入換了地板，下一輪（FloorTint.tick）補上
     local M = MSH.FloorTint.MARGIN

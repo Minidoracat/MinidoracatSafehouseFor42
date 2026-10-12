@@ -102,16 +102,17 @@ local function storeys(cell, x, y, z)
     return b and b:getDef():getMaxLevel() - z + 1 or 1
 end
 
--- 這格是房子的一部分，或畫面上被前方的房子擋住：疊色會畫到牆、屋頂、欄杆上。前方第 d 列（x、y 都加 d）是房子，而且
--- d ≤ 樓層數 × OCC_ROWS＋OCC_ROOF。前 OCC_ROWS 列連左右半格（往畫面下方的三個方向）一起看，再往前只看正前方。
--- 沒載入的先當沒被擋、不記
+-- 這格不能疊色：是房子的一部分，或畫面上被前方的房子擋住（疊色會畫到牆、屋頂、欄杆上）。前方第 d 列（x、y 都加 d）
+-- 是房子，而且 d ≤ 樓層數 × OCC_ROWS＋OCC_ROOF。前 OCC_ROWS 列連左右半格（往畫面下方的三個方向）一起看，再往前只看
+-- 正前方。沒有地板的格子（樓上的空中沒有格子，或有格子沒地板）也不能：疊色不看地板，會浮在半空；改走染色那條，沒地板
+-- 就什麼都不畫（和改疊色前一樣）。沒有格子的不記：也可能是還沒載入，載入後由 F.tick 補
 local function occluded(cell, k)
     local o = F.occ[k]
     if o ~= nil then return o end
     local x, y, z = unkey(k)
     local sq = cell:getGridSquare(x, y, z)
-    if sq == nil then return false end
-    o = not sq:isOutside()
+    if sq == nil then return true end
+    o = not sq:isOutside() or sq:getFloor() == nil
     local d, rows = 1, F.OCC_ROWS
     while not o and d <= F.OCC_DEPTH do
         local n = storeys(cell, x + d, y + d, z)
