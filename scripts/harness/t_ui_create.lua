@@ -236,6 +236,7 @@ return function(T)
         TextField = { new = function(o) return make(o) end },
     } }
     MSH.Client._theme = nil
+    T.sandbox("Tier2Side", 40)   -- 這段的走位拉 50 × 10＝500 格：外框上限設 40（預設 80）才會只超過外框
     P.open({ deedType = "MinidoracatSafehouse.Deed2" })
     local vm = P.model
     local v = vm.view
@@ -292,8 +293,8 @@ return function(T)
         and k1["10,10"] == colorOf(Sel.FLOOR_OK) and a1["10,10"] == Sel.PENDING_TINT,
         "拉到一半的那塊：每幀寫出大小、整塊地板染成框選的顏色")
     check(onlyPrimary("apply"), "拉到一半：只有〔加入這塊〕是主要按鈕")
-    check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600,4") == "textMuted",
-        "上限行寫出邊長、面積與塊數上限（2 級 40 × 40、1,600、沙盒預設 4 塊，不是硬上限）")
+    check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600,4,IGUI_MSH_AreaSquare|40") == "textMuted",
+        "上限行寫出格數（旁邊是幾乘幾：1,600 是 40 × 40）、外框與塊數上限（沙盒預設 4 塊，不是硬上限）")
     p.x, p.y = 41, 19
     local c1b = frame()
     check(c1b["41,19"] and c1b["40,10"] and count(c1b) == 320, "走位終點往外走：拉到一半那塊跟著長大")
@@ -303,7 +304,7 @@ return function(T)
     check(lineTok("IGUI_MSH_Select_Shape|50,10,500,1") == "errorText" and k2["10,10"] == colorOf(colors.errorText)
         and a2["10,10"] == Sel.PIECE_TINT[1] and c2["59,19"] and k2["59,19"] == colorOf(Sel.FLOOR_OK)
         and a2["59,19"] == Sel.CURSOR_TINT,
-        "只有邊長超過：範圍行與範圍都變錯誤色；游標（玩家所在格）蓋在上面")
+        "只有外框超過：範圍行與範圍都變錯誤色；游標（玩家所在格）蓋在上面")
     check(onlyPrimary("done"), "範圍有東西、沒有拉到一半：只有〔完成〕是主要按鈕")
     local gs, ss = steady()
     check(ss == 0 and gs < 1, "框選畫面範圍沒變時每幀不配置、不碰地板（200 幀增加 " .. string.format("%.2f", gs)
@@ -335,6 +336,14 @@ return function(T)
         and not c4["5,35"] and count(c4) == 20 * 30,
         "沒過的項目：每塊道路格、資源點整棟、相鄰範圍用錯誤色、更深地染，邊界照座標（全落在資源點那棟 20×30 裡）")
     check(k4["13,13"] == err and k4["10,10"] == err, "範圍和資源點整棟重疊的格子顯示錯誤色（標紅蓋過範圍）")
+    -- 間距太近寫出至少要隔幾格（使用者 2026-10-12）：數字是伺服器同步來的 ClaimGap，管理員改了就跟著換
+    local closeLine = "IGUI_MSH_Create_CheckFail|IGUI_MSH_Create_Check_overlap,IGUI_MSH_Code_TOO_CLOSE|"
+    check(lineTok(closeLine .. "2") == "errorText", "間距太近：寫出至少要隔 2 格（沙盒預設 ClaimGap）")
+    T.sandbox("ClaimGap", 5)
+    P.View.layout(v)
+    check(lineTok(closeLine .. "5") == "errorText" and lineTok(closeLine .. "2") == nil,
+        "管理員把間距改成 5（sandboxSync）：重排後寫 5")
+    T.sandbox("ClaimGap", 2)
     local gp, sp = steady()
     check(sp == 0 and gp < 1, "預檢畫面每幀不配置、不碰地板（200 幀增加 " .. string.format("%.2f", gp) .. " KB、重設 "
         .. sp .. " 格）")

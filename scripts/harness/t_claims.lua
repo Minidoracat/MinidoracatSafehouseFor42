@@ -94,8 +94,8 @@ return function(T)
     boot({ sandbox = { CreateMode = 2 } })
     local carol = T.player({ name = "carol", x = 305, y = 305, items = { D1 } })
     rejects(carol, { rects = { rect(300, 300, 10, 10) }, deedType = D1 }, "BAD_DEED", "免費模式帶地契：BAD_DEED", D1)
-    local big = rejects(carol, { rects = { rect(300, 300, 25, 10) } }, "TOO_BIG", "免費模式超過免費上限")
-    check(big.maxSide == 24 and big.maxArea == 576, "TOO_BIG 帶上限")
+    local big = rejects(carol, { rects = { rect(300, 300, 49, 10) } }, "TOO_BIG", "免費模式外框超過免費上限（預設 48）")
+    check(big.maxSide == 48 and big.maxArea == 576, "TOO_BIG 帶上限")
     res = T.cmd(carol, "create", { rects = { rect(300, 300, 10, 10) } })
     check(res.ok and R.get(res.claimId).source == "free" and res.deedTier == 1 and deeds(carol, D1) == 1
         and #T.itemSyncs == 0, "免費模式建立：source free、不碰地契")
@@ -120,8 +120,8 @@ return function(T)
     rejects(p, { rects = { good } }, "NO_DEED", "地契模式沒帶地契", D1)
     rejects(p, { rects = { good }, deedType = D2 }, "NO_DEED", "背包裡沒有這種地契", D1)
     rejects(p, { rects = { good }, deedType = D4 }, "TIER_DISABLED", "未啟用的等級", D4)
-    local tb = rejects(p, { rects = { rect(1000, 1000, 25, 10) }, deedType = D1 }, "TOO_BIG", "超過 1 級邊長", D1)
-    check(tb.maxSide == 24 and tb.maxArea == 576, "TOO_BIG 帶該級上限")
+    local tb = rejects(p, { rects = { rect(1000, 1000, 49, 10) }, deedType = D1 }, "TOO_BIG", "超過 1 級外框上限 48", D1)
+    check(tb.maxSide == 48 and tb.maxArea == 576, "TOO_BIG 帶該級上限")
     T.sandbox("Tier1Area", 50)
     rejects(p, { rects = { good }, deedType = D1 }, "TOO_BIG", "超過 1 級面積", D1)
     T.sandbox("Tier1Area", 576)
@@ -339,17 +339,17 @@ return function(T)
     local kai = T.player({ name = "kai", x = 0, y = 0, items = { D1 } })
     SafeHouse.addSafeHouse(4000, 4000, 5, 5, "stranger")
     local houses, syncs = #T.houses, #T.syncs
-    res = T.cmd(kai, "preview", { rects = { rect(4000, 4000, 50, 10) }, deedType = D2 })
+    res = T.cmd(kai, "preview", { rects = { rect(4000, 4000, 81, 10) }, deedType = D2 })
     local byName = {}
     for _, c in ipairs(res.checks) do byName[c.name] = c end
     check(res.ok and res.pass == false, "預檢失敗但指令本身成功")
     check(byName.onsite.code == "NOT_ON_SITE" and byName.deed.code == "NO_DEED" and byName.size.code == "TOO_BIG"
-        and byName.overlap.code == "ONLINE_ID_COLLISION" and byName.size.maxSide == 40, "同時回報不在場、沒地契、太大、撞號")
+        and byName.overlap.code == "ONLINE_ID_COLLISION" and byName.size.maxSide == 80, "同時回報不在場、沒地契、太大、撞號")
     check(byName.identity.ok and byName.quota.ok and byName.title.ok and byName.occupancy.ok and byName.roads.ok
         and byName.resources.ok, "其他檢查通過")
     check(#T.houses == houses and #T.syncs == syncs and recCount() == 0 and deeds(kai, D1) == 1
         and R.binding("kai") == nil, "預檢不建原生、不扣地契、不寫綁定")
-    res = T.cmd(kai, "preview", { rects = { rect(4000, 4000, 50, 10) }, deedType = D2 })
+    res = T.cmd(kai, "preview", { rects = { rect(4000, 4000, 81, 10) }, deedType = D2 })
     check(res == nil, "預檢 500 ms 內重送：丟掉、不回覆")
     T.advance(500)
     kai.x, kai.y = 4105, 4105

@@ -171,15 +171,30 @@ end
 -- ===== 結果碼文字（§10.4：每個原因碼都有一句原因加一句動作，12 語同步）=====
 -- 鍵：IGUI_MSH_Code_<CODE>（原因）、IGUI_MSH_CodeAction_<CODE>（動作，可沒有）；沒有原因鍵就用 IGUI_MSH_Code_Generic（%1＝碼）。
 -- getText 找不到鍵時回傳鍵本身（原版 Translator 行為）。
+-- 間距太近（TOO_CLOSE）寫出至少要隔幾格（使用者 2026-10-12：「可以增加顯示要格多少嗎? 可能要抓伺服器設定動態顯示」）：
+-- 讀伺服器同步來的沙盒值（Settings.get；管理員面板改了會 sandboxSync），和伺服器判斷用的是同一個 ClaimGap
 function C.codeText(code)
     local c = tostring(code)
     local key = "IGUI_MSH_Code_" .. c
-    local reason = getText(key)
+    local reason
+    if c == MSH.CODE.TOO_CLOSE then
+        reason = getText(key, tostring(MSH.Settings.get().claimGap))
+    else
+        reason = getText(key)
+    end
     if reason == key then reason = getText("IGUI_MSH_Code_Generic", c) end
     local akey = "IGUI_MSH_CodeAction_" .. c
     local action = getText(akey)
     if action == akey then action = nil end
     return reason, action
+end
+
+-- 面積換成「幾乘幾」放在格數旁邊（使用者 2026-10-12：「旁邊可以括號是以幾乘幾計算的」）：剛好是平方數寫「24 × 24」，
+-- 管理員設了別的數就寫最接近的「約 32 × 32」。只在排版時呼叫
+function C.areaSquare(area)
+    local n = math.max(1, math.floor(math.sqrt(area) + 0.5))
+    if n * n == area then return getText("IGUI_MSH_AreaSquare", tostring(n)) end
+    return getText("IGUI_MSH_AreaSquareAbout", tostring(n))
 end
 
 -- ===== 自己的安全屋（manager 投影 list：claimId, revision, title, actorRole, bits, lifecycle, healthSummary）=====

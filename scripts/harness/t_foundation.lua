@@ -40,14 +40,16 @@ return function(T)
     check(cfg.maxPieces == 4, "每間最多塊數預設 4（使用者 2026-10-12）")
     check(cfg.roadKinds.main and cfg.roadKinds.street and not cfg.roadKinds.gravel, "道路類別預設 main;street")
     check(cfg.resourceCats.military and cfg.resourceCats.prison and not cfg.resourceCats.food, "資源類別預設 8 類")
-    check(cfg.tiers[1].side == 24 and cfg.tiers[2].area == 1600 and cfg.tiers[8].side == 64, "各級預設大小")
+    check(cfg.tiers[1].side == 48 and cfg.tiers[1].area == 576 and cfg.tiers[2].side == 80 and cfg.tiers[2].area == 1600
+        and cfg.tiers[8].side == 96 and cfg.tiers[8].area == 4096 and cfg.freeMaxSide == 48 and cfg.freeMaxArea == 576,
+        "各級預設大小：格數 576／1,600／4,096，外框上限是同面積正方形邊長的 2 倍（48／80，最多 96；使用者 2026-10-12）")
     check(cfg.tiers[1].craft == 3 and cfg.tiers[2].craft == 1 and cfg.tiers[1].free and not cfg.tiers[1].buy,
         "製作與名額開關預設")
     T.sandbox("ClaimGap", 99)
     T.sandbox("Tier1Area", 9000)
     T.sandbox("RoadKinds", "main;lava")
     cfg, warn = Settings.get()
-    check(cfg.claimGap == 16 and cfg.tiers[1].area == 576, "超出範圍夾回、面積不超過邊長平方")
+    check(cfg.claimGap == 16 and cfg.tiers[1].area == 48 * 48, "超出範圍夾回、面積不超過外框上限的平方")
     check(#warn == 3, "三個不合法值各記一筆警告（實際 " .. #warn .. "）")
     T.resetSandbox()
     local ok, key, why = Settings.validateChanges({ Tier1Side = 10, Tier1Area = 200 })

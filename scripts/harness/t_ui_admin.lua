@@ -300,6 +300,31 @@ return function(T)
         "減到 1 級：〔移除〕停用")
     fw.click(deeds.tierAdd)
     fw.click(deeds.tierAdd)
+    -- 面積框旁寫幾乘幾（使用者 2026-10-12：「旁邊可以括號是以幾乘幾計算的」），打字時跟著變、不是數字就空白；
+    -- 放在面積框右邊，最寬的「（約 96 × 96）」也不壓到外框那欄
+    local realGetText = getText
+    getText = function(k, ...)
+        local a = { ... }
+        return #a == 0 and k or (k .. "|" .. table.concat(a, ","))
+    end
+    local area1 = deeds["f:Tier1Area"]
+    local area1Text = area1:getText()
+    local function typeArea(t)
+        area1:setText(t)
+        area1.onChange(area1, t)
+    end
+    typeArea("576")
+    local eq1 = deeds["aq:Tier1Area"]
+    local xsEq = AP.deedColumns()
+    check(eq1 ~= nil and eq1:isVisible() and eq1.text == "IGUI_MSH_Admin_AreaEq|IGUI_MSH_AreaSquare|24"
+        and eq1.x >= area1.x + area1.width, "面積 576：框的右邊寫（24 × 24）")
+    typeArea("1000")
+    check(eq1.text == "IGUI_MSH_Admin_AreaEq|IGUI_MSH_AreaSquareAbout|32" and eq1.x + eq1.width <= xsEq.Side,
+        "打成 1000：跟著改成（約 32 × 32），不壓到外框那欄")
+    typeArea("abc")
+    check(eq1.text == "", "不是數字：空白")
+    getText = realGetText
+    typeArea(area1Text)
 
     deeds["f:Tier1Side"]:setText("30")
     local free2 = deeds["f:Tier2Free"]

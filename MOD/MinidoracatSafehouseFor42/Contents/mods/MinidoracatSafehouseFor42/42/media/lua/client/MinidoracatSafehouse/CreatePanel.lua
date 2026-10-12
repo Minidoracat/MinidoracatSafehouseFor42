@@ -549,7 +549,8 @@ local function layoutIdle(v, y, list)
         y = para(v, getText("IGUI_MSH_Create_Tier", tostring(m.tier)), "text", nil, y)
     end
     if v.maxSide ~= nil then
-        y = para(v, getText("IGUI_MSH_Create_Limit", tostring(v.maxSide), tostring(v.maxArea)), "textMuted", nil, y)
+        y = para(v, getText("IGUI_MSH_Create_Limit", tostring(v.maxSide), tostring(v.maxArea),
+            MSH.Client.areaSquare(v.maxArea)), "textMuted", nil, y)
     end
     local s, t = m.slots, P.tierSlots(m)
     if m.mode == "create" and type(s) == "table" and type(s.free) == "table" then
@@ -614,7 +615,8 @@ local function layoutSelecting(v, y, list)
     end
     local max = s.shape.max
     if v.maxSide ~= nil then
-        y = para(v, getText("IGUI_MSH_Select_ShapeLimit", v.maxSide, v.maxArea, max), "textMuted", nil, y)
+        y = para(v, getText("IGUI_MSH_Select_ShapeLimit", v.maxSide, v.maxArea, max, MSH.Client.areaSquare(v.maxArea)),
+            "textMuted", nil, y)
     else
         y = para(v, getText("IGUI_MSH_Select_PieceLimit", max), "textMuted", nil, y)
     end

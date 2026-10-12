@@ -20,20 +20,23 @@ S.ROAD_KINDS = { "main", "street", "gravel", "sidewalk" }
 S.DEFAULT_ROAD_KINDS = "main;street"
 S.DEFAULT_RESOURCE_CATS = "military;police;gunstore;medical;pharmacy;fire;gas;prison"
 
--- 各級預設：1 級 24／576、2 級 40／1,600、3–8 級 64／4,096（§7.1）；掉落 1 級 1%、2 級 0.5%、其餘 0.2%；
+-- 各級預設：面積 1 級 576（24 × 24）、2 級 1,600（40 × 40）、3–8 級 4,096（64 × 64）；外框（整間的外接矩形）上限是同面積
+-- 正方形邊長的 2 倍、最多 96：48、80、96（使用者 2026-10-12 選「以格數為主，外框放寬成 2 倍」：L、U 形的外框比同面積的
+-- 正方形大，原本外框＝邊長時 25 × 20、330 格的 L 形就超過 1 級；外框不整個拿掉是因為闖入者會被傳到那一塊的左上角外面、
+-- 伺服器只載入玩家附近的格子、細長的範圍能圍住一大片地）。掉落 1 級 1%、2 級 0.5%、其餘 0.2%；
 -- 製作 1 級標準、其餘不開放（使用者 2026-10-10 裁定 craftdefault）
 local TIER_DEFAULT = {
-    { side = 24, area = 576, loot = 1.0, craft = 3 },
-    { side = 40, area = 1600, loot = 0.5, craft = 1 },
-    { side = 64, area = 4096, loot = 0.2, craft = 1 },
+    { side = 48, area = 576, loot = 1.0, craft = 3 },
+    { side = 80, area = 1600, loot = 0.5, craft = 1 },
+    { side = 96, area = 4096, loot = 0.2, craft = 1 },
 }
 
 -- type: bool | int | double | enum | string；enum 的值是 1..values
 local OPTIONS = {
     { key = "CreateMode", type = "enum", values = 2, default = S.CREATE.DEED },
     { key = "ClaimsPerPlayer", type = "int", min = 0, max = 100, default = 1 },
-    { key = "FreeMaxSide", type = "int", min = 1, max = 96, default = 24 },
     { key = "FreeMaxArea", type = "int", min = 1, max = 9216, default = 576 },
+    { key = "FreeMaxSide", type = "int", min = 1, max = 96, default = 48 },
     { key = "ClaimGap", type = "int", min = 0, max = 16, default = 2 },
     -- 一間最多幾塊矩形（使用者 2026-10-12：預設 4，管理員可調高）；每塊一個原生 SafeHouse，登入封包、全服名單額度與
     -- 客戶端切塊的成本都隨它成長，硬上限 LIMIT.MAX_PIECES 由 registry 與校正的容量預算決定
@@ -58,8 +61,8 @@ local OPTIONS = {
 }
 for n = 1, MSH.MAX_TIER do
     local d = TIER_DEFAULT[n] or TIER_DEFAULT[3]
-    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Side", type = "int", min = 1, max = 96, default = d.side, tier = n }
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Area", type = "int", min = 1, max = 9216, default = d.area, tier = n }
+    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Side", type = "int", min = 1, max = 96, default = d.side, tier = n }
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "PerPlayer", type = "int", min = 0, max = 100, default = 0, tier = n }
 end
 for n = 1, MSH.MAX_TIER do

@@ -49,9 +49,15 @@ R.COLORS = {
     faction = { r = 1.0, g = 0.55, b = 0.1, a = 1.0 },
     others = { r = 1.0, g = 0.35, b = 0.95, a = 1.0 },
 }
--- 管理視窗 chip 上的色塊（同色、不透明）
-R.SWATCHES = {}
-for k, c in pairs(R.COLORS) do R.SWATCHES[k] = { r = c.r, g = c.g, b = c.b, a = 1 } end
+-- 管理視窗 chip 上的色塊是地上實際看到的顏色，不是染色用的顏色：地板是原色乘上染色，草地上會變深、色相也偏
+-- （青變綠、洋紅變暗紅）。使用者 2026-10-12：「按鈕顏色，應該要更接近一點實際顏色，避免誤會」。數值取 sh-tintbright-1012b
+-- 白天草地與人行道兩處的中位數平均，四色乘同一個倍數調亮（最亮的通道到 0.9），所以分享給我的比較暗
+R.SWATCHES = {
+    own = { r = 0.16, g = 0.9, b = 0.61, a = 1 },
+    shared = { r = 0.2, g = 0.35, b = 0.55, a = 1 },
+    faction = { r = 0.87, g = 0.43, b = 0.01, a = 1 },
+    others = { r = 0.88, g = 0.22, b = 0.55, a = 1 },
+}
 R.OPT_IDS = { own = "ShowOwn", shared = "ShowShared", faction = "ShowFaction", others = "ShowOthers" }
 R.list = R.list or {}
 R.allow = R.allow or { own = true, shared = true, faction = true, others = false }

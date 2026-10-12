@@ -144,7 +144,11 @@ return function(T)
     check(E.registerDock() == false, "框架 rev 12（沒有 Dock）：不登記")
 
     T.section("Entry：地契說明")
-    getText = function(key, a) if a ~= nil then return key .. "=" .. a end return key end
+    getText = function(key, ...)
+        local a = { ... }
+        if #a > 0 then return key .. "=" .. table.concat(a, ",") end
+        return key
+    end
     local function texts(lines)
         local out = {}
         for i, l in ipairs(lines) do out[i] = l[1] .. (l[2] and "!" or "") end
@@ -156,15 +160,20 @@ return function(T)
     T.sandbox("Tier2Side", 30)
     T.sandbox("Tier2Area", 2000)
     local t2 = E.tipLines(T.item("MinidoracatSafehouse.Deed2"))
-    check(t2 ~= nil and texts(t2) == "IGUI_MSH_Deed_MaxSide=30|IGUI_MSH_Deed_MaxArea=900|IGUI_MSH_Deed_Enabled",
-        "啟用的等級：最大邊長、最大面積（面積夾到邊長平方，與伺服器套用的上限相同）")
+    check(t2 ~= nil and texts(t2) == "IGUI_MSH_Deed_MaxArea=900,IGUI_MSH_AreaSquare=30|IGUI_MSH_Deed_MaxSide=30|IGUI_MSH_Deed_Enabled",
+        "啟用的等級：先寫最大面積與幾乘幾，再寫外框上限（面積夾到外框上限的平方，與伺服器套用的上限相同）")
+    T.sandbox("Tier2Area", 800)
+    T.advance(E.TIP_TTL_MS)
+    check(texts(E.tipLines(T.item("MinidoracatSafehouse.Deed2"))) ==
+        "IGUI_MSH_Deed_MaxArea=800,IGUI_MSH_AreaSquareAbout=28|IGUI_MSH_Deed_MaxSide=30|IGUI_MSH_Deed_Enabled",
+        "面積不是平方數（管理員設 800）：寫最接近的「約 28 × 28」")
     local t5 = E.tipLines(T.item("MinidoracatSafehouse.Deed5"))
-    check(t5 ~= nil and texts(t5) == "IGUI_MSH_Deed_MaxSide=64|IGUI_MSH_Deed_MaxArea=4096|IGUI_MSH_Deed_Disabled!",
+    check(t5 ~= nil and texts(t5) == "IGUI_MSH_Deed_MaxArea=4096,IGUI_MSH_AreaSquare=64|IGUI_MSH_Deed_MaxSide=96|IGUI_MSH_Deed_Disabled!",
         "超過 TiersEnabled 的等級：寫「未啟用」並用警告色")
     T.sandbox("TiersEnabled", 5)
     check(E.tipLines(T.item("MinidoracatSafehouse.Deed5")) == t5, "同一級 1 秒內重用同一份（render 每幀不重讀設定）")
     T.advance(E.TIP_TTL_MS)
-    check(texts(E.tipLines(T.item("MinidoracatSafehouse.Deed5"))) == "IGUI_MSH_Deed_MaxSide=64|IGUI_MSH_Deed_MaxArea=4096|IGUI_MSH_Deed_Enabled",
+    check(texts(E.tipLines(T.item("MinidoracatSafehouse.Deed5"))) == "IGUI_MSH_Deed_MaxArea=4096,IGUI_MSH_AreaSquare=64|IGUI_MSH_Deed_MaxSide=96|IGUI_MSH_Deed_Enabled",
         "sandboxSync 改設定後 1 秒內反映")
     -- 原版 render 畫 0..50 的框（ISToolTipInv.lua:103-104）：說明框要貼在它下面，實例的 drawRect 用完要還原
     local Class = {}

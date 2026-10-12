@@ -138,15 +138,15 @@ function E.onClaims(claims)
 end
 
 -- ===== 地契物品說明（§10.8）=====
--- 每行 { 文字, 是否警告色 }。大小照伺服器實際套用的上限（Settings.sizeLimit 含硬上限）；
--- getText 的數字參數先轉字串（pz-family-docs conventions.md「帶參 getText」）。
+-- 每行 { 文字, 是否警告色 }。大小照伺服器實際套用的上限（Settings.sizeLimit 含硬上限）：面積在前、旁邊寫「幾乘幾」，
+-- 外框上限在後（使用者 2026-10-12：以格數為主）。getText 的數字參數先轉字串（pz-family-docs conventions.md「帶參 getText」）。
 function E.deedLines(cfg, tier)
     local t = cfg.tiers[tier]
     if t == nil then return nil end
     local side, area = MSH.Settings.sizeLimit(cfg, MSH.SOURCE.DEED, tier)
     local lines = {
+        { getText("IGUI_MSH_Deed_MaxArea", tostring(math.floor(area)), MSH.Client.areaSquare(math.floor(area))), false },
         { getText("IGUI_MSH_Deed_MaxSide", tostring(math.floor(side))), false },
-        { getText("IGUI_MSH_Deed_MaxArea", tostring(math.floor(area))), false },
     }
     if t.enabled then
         lines[3] = { getText("IGUI_MSH_Deed_Enabled"), false }

@@ -34,7 +34,7 @@ AP.TABS = { "rules", "deeds", "exclusions", "players", "paid" }
 AP.QUERY_DEBOUNCE_MS = 650   -- Economy QUERY_DEBOUNCE_MS
 AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服器 cooldownMs = 500）
 AP.FILTERS = { "all", "owners", "overrides" }
-AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxSide", "FreeMaxArea", "ClaimGap", "MaxShares",
+AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxArea", "FreeMaxSide", "ClaimGap", "MaxShares",
     "AllowFactionShare", "LapseKeepDays", "RedrawMinutes", "RedrawLimit", "MaxPieces" }
 AP.RANGE_KEYS = { "RangesFaction", "RangesOthers" }
 AP.CRAFT_LEVELS = { [2] = "Easy", [3] = "Standard", [4] = "Strict" }
@@ -599,6 +599,8 @@ function AP.layoutRules(P, pg)
                 getText("Sandbox_MinidoracatSafehouse_CreateMode_option2") })
         elseif o.type == "bool" then
             ctrls = { AP.boolField(P, pg, key) }
+        elseif key == "FreeMaxArea" then
+            ctrls = { AP.numField(P, pg, key, AP.fieldW(key, 70), AP.onRelayout), AP.areaEqLabel(pg, key) }
         else
             ctrls = { AP.numField(P, pg, key, AP.fieldW(key, 70)) }
         end
@@ -946,9 +948,10 @@ function AP.onTierRemove(P)
     AP.layoutPage(P, pg.id)
 end
 
-function AP.onDeedsEdit(P, pg) AP.layoutPage(P, pg.id) end
+function AP.onRelayout(P, pg) AP.layoutPage(P, pg.id) end
 
-AP.DEED_COLS = { "Tier", "Side", "Area", "PerPlayer", "Loot", "Craft", "Free", "Buy", "Rent" }
+-- 面積在外框前面（使用者 2026-10-12：以格數為主），面積框旁邊寫「（24 × 24）」
+AP.DEED_COLS = { "Tier", "Area", "Side", "PerPlayer", "Loot", "Craft", "Free", "Buy", "Rent" }
 AP.DEED_MIN_W = { Tier = 40, Side = 56, Area = 64, PerPlayer = 56, Loot = 56, Craft = 70, Free = 40, Buy = 40, Rent = 40 }
 AP.DEED_FIELD_W = { Side = 52, Area = 60, PerPlayer = 52, Loot = 52 }   -- 下限；實際寬度見 AP.fieldW
 AP.DEED_FIELD_KEY = { Side = "Side", Area = "Area", PerPlayer = "PerPlayer", Loot = "LootChance" }
@@ -1004,6 +1007,20 @@ function AP.perPlayerFieldW() return AP.fieldW("Tier1PerPlayer", AP.DEED_FIELD_W
 
 function AP.deedFieldW(c) return AP.fieldW("Tier1" .. AP.DEED_FIELD_KEY[c], AP.DEED_FIELD_W[c]) end
 
+-- 面積框旁的「（24 × 24）」（使用者 2026-10-12：「格子都可以讓管理員自由調整對吧? 旁邊可以括號是以幾乘幾計算的」）：
+-- 照輸入框目前的字，打字時跟著變（面積框的 onEdit 重排整頁）；不是數字就空白
+function AP.areaEqLabel(pg, key)
+    local v = tonumber(MSH.trim(pg.fields[key].el:getText()))
+    local text = (v ~= nil and v >= 1) and getText("IGUI_MSH_Admin_AreaEq", MSH.Client.areaSquare(math.floor(v))) or ""
+    return pg.flow:label("aq:" .. key, text, "textMuted")
+end
+
+-- 最寬的樣子「（約 96 × 96）」：數字最多兩位（面積上限 9,216＝96²），每位用最寬的數字量
+function AP.areaEqW()
+    return K.textW(UIFont.Small, getText("IGUI_MSH_Admin_AreaEq", getText("IGUI_MSH_AreaSquareAbout", "")))
+        + 4 * AP.numberTextW(0, 9)
+end
+
 -- 欄位 x 位置與寬度：表頭、該欄控制項（列標「N 級」取 8 級、製作取四個難度名稱最寬者、輸入框、開關）都量進去。
 -- 回 xs, 表格右緣, ws
 function AP.deedColumns()
@@ -1017,7 +1034,7 @@ function AP.deedColumns()
                 w = math.max(w, K.textW(UIFont.Small, getText("Sandbox_MinidoracatSafehouse_CraftLevel_option" .. i)) + 24)
             end
         elseif AP.DEED_FIELD_KEY[c] then
-            w = math.max(w, AP.deedFieldW(c))
+            w = math.max(w, AP.deedFieldW(c) + (c == "Area" and K.GAP + AP.areaEqW() or 0))
         else
             w = math.max(w, AP.TOGGLE_W)
         end
@@ -1069,15 +1086,16 @@ function AP.layoutDeedRow(P, pg, n, econ, xs, ws)
     local tl = F:label("tn" .. n, getText("IGUI_MSH_Admin_TierN", n))
     local ctrls = {
         Tier = tl,
+        Area = AP.numField(P, pg, p .. "Area", AP.deedFieldW("Area"), AP.onRelayout),
         Side = AP.numField(P, pg, p .. "Side", AP.deedFieldW("Side")),
-        Area = AP.numField(P, pg, p .. "Area", AP.deedFieldW("Area")),
         PerPlayer = AP.numField(P, pg, p .. "PerPlayer", AP.deedFieldW("PerPlayer"), nil, true),
         Loot = AP.numField(P, pg, p .. "LootChance", AP.deedFieldW("Loot")),
         Craft = AP.craftButton(P, pg, n, ws.Craft),
-        Free = AP.boolField(P, pg, p .. "Free", "", AP.onDeedsEdit),
-        Buy = AP.boolField(P, pg, p .. "Buy", "", AP.onDeedsEdit),
-        Rent = AP.boolField(P, pg, p .. "Rent", "", AP.onDeedsEdit),
+        Free = AP.boolField(P, pg, p .. "Free", "", AP.onRelayout),
+        Buy = AP.boolField(P, pg, p .. "Buy", "", AP.onRelayout),
+        Rent = AP.boolField(P, pg, p .. "Rent", "", AP.onRelayout),
     }
+    local eq = AP.areaEqLabel(pg, p .. "Area")
     local rowH = 0
     for _, c in pairs(ctrls) do rowH = math.max(rowH, c.height) end
     for _, c in ipairs(AP.DEED_COLS) do
@@ -1086,6 +1104,8 @@ function AP.layoutDeedRow(P, pg, n, econ, xs, ws)
         el:setY(F.y + math.floor((rowH - el.height) / 2))
         if el ~= tl then el:setEnabled(econ or (c ~= "Buy" and c ~= "Rent")) end
     end
+    eq:setX(xs.Area + ctrls.Area.width + K.GAP)
+    eq:setY(F.y + math.floor((rowH - eq.height) / 2))
     F.y = F.y + rowH + 4
     local free, buy, rent = ctrls.Free:getChecked(), ctrls.Buy:getChecked(), ctrls.Rent:getChecked()
     if AP.nobodyCanBuild(free, buy, rent, econ) then
