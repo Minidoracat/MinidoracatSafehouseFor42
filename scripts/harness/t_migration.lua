@@ -316,6 +316,7 @@ return function(T)
     check(MSH.claimIdOf(houseAt(100).owner) ~= nil and houseAt(1000).owner == "own10" and fileLines("skip") == st.skipped.OVER_CAP,
         "最舊的先接、最新的留原版、寫 skip 行")
     local nid = create("newbie", 5000)
+    T.player({ name = "friend", x = 9000, y = 9000 })   -- 分享對象要是伺服器認得的玩家（在線）
     local share = nid and T.cmd(T.player({ name = "newbie", x = 5005, y = 5005 }), "share",
         { claimId = nid, expectedRevision = R.get(nid).revision, targetUsername = "friend", bits = MSH.SHARE.MEMBER })
     check(nid ~= nil and share and share.ok, "接管後一般玩家照常建立、分享")

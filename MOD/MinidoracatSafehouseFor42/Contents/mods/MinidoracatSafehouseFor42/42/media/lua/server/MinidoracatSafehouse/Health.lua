@@ -25,8 +25,9 @@ H.BLOCKERS = {
     -- 4＝關閉閘門（§2.2）；〔修正伺服器設定〕改成 3（只記 log，不踢誠實玩家，§5）
     { option = "AntiCheatSafeHouse", anyOf = { ["1"] = true, ["2"] = true, ["3"] = true }, fix = "3" },
 }
--- 建議項目要改成的值（管理員面板「改成」欄）。ChatStreams 要拿掉的是 sh，面板用譯文寫
-H.SUGGEST_WANT = { SafehouseAllowRespawn = "false", AllowCoop = "false", SaveWorldEveryMinutes = "10-15" }
+-- 建議項目要改成的值（管理員面板「建議值」欄與逐項〔套用〕，都是能直接送 /changeoption 的值）。存檔間隔建議 10–15 分鐘，
+-- 取 10（當機時遺失的時間較短）；ChatStreams 是目前的值拿掉 sh（H.wants 照當下的值算）
+H.SUGGEST_WANT = { SafehouseAllowRespawn = "false", AllowCoop = "false", SaveWorldEveryMinutes = "10" }
 
 H.state = H.state or { blocked = false, blockers = {}, warnings = {}, settingsWarnings = {}, key = "" }
 H.hostile = H.hostile or { active = false, since = nil, names = {} }
@@ -86,11 +87,25 @@ function H.evaluate(now)
     return st
 end
 
--- 管理員面板「改成」欄與〔修正伺服器設定〕：每個伺服器設定要改成的值（必要的取 fix 或 want，建議的取 SUGGEST_WANT）
+-- 管理員面板「建議值」欄與〔修正伺服器設定〕、逐項〔套用〕：每個伺服器設定要改成的值（必要的取 fix 或 want，建議的取
+-- SUGGEST_WANT；ChatStreams 取目前的串流拿掉 sh，順序照舊）
 function H.wants()
     local out = {}
     for _, b in ipairs(H.BLOCKERS) do out[b.option] = b.fix or b.want end
     for k, v in pairs(H.SUGGEST_WANT) do out[k] = v end
+    local keep = {}
+    for token in string.gmatch(optionValue("ChatStreams") or "", "[^,]+") do
+        local t = MSH.trim(token)
+        if t ~= "" and t ~= "sh" then keep[#keep + 1] = t end
+    end
+    out.ChatStreams = table.concat(keep, ",")
+    return out
+end
+
+-- 管理員面板「目前值」欄：表上每個伺服器設定現在的值（讀不到的不列）
+function H.current()
+    local out = {}
+    for k in pairs(H.wants()) do out[k] = optionValue(k) end
     return out
 end
 

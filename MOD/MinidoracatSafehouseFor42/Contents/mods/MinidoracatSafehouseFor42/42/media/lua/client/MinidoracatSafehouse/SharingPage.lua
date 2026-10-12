@@ -2,6 +2,8 @@
 -- 照 VM 車隊視窗「先勾權限，再選對象」（MinidoracatVehicleManager_FleetWindow.lua layoutOwner :1096-1175）：
 --   上半「目前分享給」逐列（陣營「名稱」：權限、玩家：權限）各一顆〔停止〕，陣營暫停時寫原因並給〔恢復分享〕；
 --   下半先勾權限 chip（成員以外的都自動帶成員），再輸入玩家名稱〔分享給玩家〕或〔分享給陣營〕（屋主目前所在陣營）。
+--   玩家名稱是框架的 Autocomplete（rev 11）：打字時向伺服器查候選（shareCandidates，Sharing.candidates）、點選寫進
+--   輸入框；伺服器另外檢查新加的名字是不是認得的玩家（UNKNOWN_PLAYER，使用者 2026-10-12）。
 -- 只送提案，畫面以伺服器結果與重抓的 detail 為準（§10.4 最後一段）。這裡只是不給按（體驗），伺服器才是防線（契約 M2）：
 --   屋主全部可給；MANAGE 成員只能給自己有的位元（另外可給 INVITE）、不能給 MANAGE、不能動屋主、自己、實際持有 MANAGE
 --   的人；只有 INVITE 的成員只能把新玩家加進來（名單上已有的名字送出前就擋），位元 ⊆ 自己的、不含 INVITE 與 MANAGE，
@@ -135,23 +137,27 @@ function SP.new(host, parent)
         b.internal = name
         p.chips[i] = b
     end
-    p.user = host.UI.TextField.new({ x = 0, y = 0, width = 180, height = host.ch, theme = host.theme,
-        placeholder = getText("IGUI_MSH_Share_UserHint"), maxLength = MSH.LIMIT.USERNAME_CHARS })
-    parent:addChild(p.user)
-    p.user:setVisible(false)
     p.btnUser = host:button(parent, getText("IGUI_MSH_Share_ToPlayer"), Page.onShareUser, p, "primary")
     p.btnFaction = host:button(parent, getText("IGUI_MSH_Share_ToFaction"), Page.onShareFaction, p)
     p.btnFaction:setTooltip(getText("IGUI_MSH_Share_FactionNoInvite"))   -- 共用同一排 chip：說明陣營分享不含這兩位
     p.btnResume = host:button(parent, getText("IGUI_MSH_Share_Resume"), Page.onResume, p, "primary")
     p.btnFactionStop = host:button(parent, getText("IGUI_MSH_Share_Stop"), Page.onStopFaction, p, nil, "close")
-    p.fixed = { p.lines, p.user, p.btnUser, p.btnFaction, p.btnResume, p.btnFactionStop }
+    local online = getText("IGUI_MSH_Share_Online")
+    p.ac = host.UI.Autocomplete.new({ width = 180, theme = host.theme, placeholder = getText("IGUI_MSH_Share_UserHint"),
+        maxLength = MSH.LIMIT.USERNAME_CHARS, target = p, onQuery = Page.onQuery, onPick = function() end,
+        labelOf = function(row) return row.name end, tagOf = function(row) return row.online and online or nil end })
+    p.ac:addTo(parent)   -- 下拉最後加：蓋在同一頁其他元件上面
+    p.ac:setVisible(false)
+    p.fixed = { p.lines, p.btnUser, p.btnFaction, p.btnResume, p.btnFactionStop }
     return p
 end
 
+-- 換分頁、沒有詳情時收起（同一頁重排不經這裡：每次重排都收起會讓正在打字的輸入框失焦）
 function Page:hide()
     for _, el in ipairs(self.fixed) do el:setVisible(false) end
     for _, b in ipairs(self.chips) do b:setVisible(false) end
     for _, b in ipairs(self.rows) do b:setVisible(false) end
+    self.ac:setVisible(false)
 end
 
 -- 第 i 列玩家的〔停止〕（用到才建，之後重用）
@@ -170,7 +176,7 @@ function Page:layout(d, x0, y0, w)
     local L, fh, ch, gap = self.lines, host.fh, host.ch, host.GAP
     if d.claimId ~= self.claimId then
         self.claimId, self.bits = d.claimId, SP.DEFAULT_BITS
-        self.user:setText("")
+        self.ac:setText("")
     end
     self.bits = SP.shareBits(d, self.bits)
     local a, limits, grants, fs = d.actions or {}, d.limits or {}, d.grants or {}, d.factionShare
@@ -255,16 +261,20 @@ function Page:layout(d, x0, y0, w)
     y = host:flow(shown, x0, y0 + y, w) - y0 + gap
 
     -- 再選對象：玩家名稱＋〔分享給玩家〕、〔分享給陣營〕（只限屋主、伺服器設定允許）
-    self.user:setWidth(math.min(180, w))
-    self.user:setEnabled(idle)
+    local field = self.ac.field
+    field:setWidth(math.min(180, w))
+    self.ac:setVisible(true)
+    self.ac:setEnabled(idle)
     self.btnUser:setEnabled(idle)
-    local targets = { self.user, self.btnUser }
+    local targets = { field, self.btnUser }
     self.btnFaction:setVisible(false)
     if a.canShareFaction and limits.allowFactionShare ~= false then
         self.btnFaction:setEnabled(idle)
         targets[#targets + 1] = self.btnFaction
     end
     y = host:flow(targets, x0, y0 + y, w) - y0
+    -- 下拉掛在輸入框下面、高度不超過捲動區扣掉輸入框（管理視窗開著時每幀把它捲進可視區，W:prerender）
+    self.ac:anchorList(math.max(0, self.parent.height - host.ch - 2 * gap))
     L:setWidth(w)
     L:setHeight(y)
     return y0 + y
@@ -284,14 +294,26 @@ end
 function Page:reset()
     local d = self.host.detail
     self.bits = d and SP.shareBits(d, SP.DEFAULT_BITS) or SP.DEFAULT_BITS
-    self.user:setText("")
+    self.ac:setText("")
     self:syncChips()
+end
+
+-- 候選（Autocomplete 的 onQuery）：一次只送一筆，送不出去回 false（框架下一幀再問）。回覆的文字已經不是目前的輸入時
+--   框架自己丟掉；逾時重新計時再問，被拒（沒有權限、屋不在）安靜收起（候選只是方便，不是結果）
+function Page.onQuery(p, text, ac)
+    local d = p.host.detail
+    if d == nil or MSH.Client.isPending(p.queryRid) then return false end
+    p.queryRid = MSH.Client.send("shareCandidates", { claimId = d.claimId, query = text }, function(res)
+        p.queryRid = nil
+        if res.ok then ac:setResults(text, res.rows) else ac:queryFailed(res.code == "NO_REPLY") end
+    end)
+    return p.queryRid ~= nil
 end
 
 function Page.onShareUser(p)
     local host, d = p.host, p.host.detail
     if d == nil then return end
-    local user = MSH.trim(p.user:getText() or "")
+    local user = p.ac:getText()
     if not MSH.validUsername(user) then return host:say(getText("IGUI_MSH_Share_NeedUser"), "errorText") end
     if SP.alreadyListed(d, user) then return host:say(getText("IGUI_MSH_Share_AlreadyListed"), "errorText") end
     local bits = SP.shareBits(d, p.bits)

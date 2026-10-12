@@ -121,13 +121,25 @@ return function(T)
     for _, b in ipairs(H.BLOCKERS) do T.serverOptions[b.option] = wants[b.option] end
     H.evaluate(T.now)
     check(blockedBefore == #H.BLOCKERS and not H.blocked(), "wants：每個必要設定改成面板給的值後通過檢查")
+    -- 建議表逐項〔套用〕：每個建議項目改成 wants 的值後警告消失；ChatStreams 只拿掉 sh、其他串流照原順序
+    T.serverOptions.SafehouseAllowRespawn, T.serverOptions.AllowCoop = "true", "true"
+    T.serverOptions.SaveWorldEveryMinutes, T.serverOptions.ChatStreams = "45", "s, r,sh,f"
+    H.evaluate(T.now)
+    local warned = #H.state.warnings
+    local now = H.current()
+    wants = H.wants()
+    for _, k in ipairs(H.state.warnings) do T.serverOptions[k] = wants[k] end
+    H.evaluate(T.now)
+    check(warned == 4 and #H.state.warnings == 0 and wants.ChatStreams == "s,r,f" and now.ChatStreams == "s, r,sh,f"
+        and now.SaveWorldEveryMinutes == "45" and now.PlayerSafehouse == T.serverOptions.PlayerSafehouse,
+        "wants：每個建議項目改成面板給的值後警告消失；current 是各項目前的值")
 
     -- 管理員面板逐項顯示 IGUI_MSH_Admin_Need_<項目>／Suggest_<項目>；缺譯文會直接秀出鍵名（verify 只比各語言鍵集合一致）
     for _, b in ipairs(H.BLOCKERS) do
         T.serverOptions[b.option] = b.anyOf and "4" or (b.want == "0" and "24" or "true")
     end
-    T.serverOptions.SafehouseAllowRespawn = "true"
-    T.serverOptions.ChatStreams = "s,sh"
+    T.serverOptions.SafehouseAllowRespawn, T.serverOptions.AllowCoop = "true", "true"
+    T.serverOptions.SaveWorldEveryMinutes, T.serverOptions.ChatStreams = "0", "s,sh"
     local sb = SandboxVars.MinidoracatSafehouse
     SandboxVars.MinidoracatSafehouse = nil
     MSH.Registry.readOnly, MSH.Registry.privateUnreadable = true, true

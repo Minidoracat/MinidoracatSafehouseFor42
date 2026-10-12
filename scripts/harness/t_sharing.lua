@@ -58,6 +58,7 @@ return function(T)
     local carol = T.player({ name = "carol", x = 500, y = 500 })
     local dave = T.player({ name = "dave", x = 500, y = 500 })
     local eve = T.player({ name = "eve", x = 500, y = 500 })
+    T.player({ name = "erin", x = 500, y = 500 })
     local rec, hs = seed("alice", rect(100, 100, 10, 10))
     local rev0 = rec.revision
     local lockedAt = {}
@@ -258,8 +259,8 @@ return function(T)
 
     T.section("停止陣營分享：MANAGE 成員可以")
     check(cmd(alice, "resumeFaction", rec).ok and has(hs, "gina"), "恢復")
-    check(cmd(alice, "share", rec, { targetUsername = "carol", bits = MANAGE }).ok, "carol 有 MANAGE")
     local carol2 = T.player({ name = "carol" })
+    check(cmd(alice, "share", rec, { targetUsername = "carol", bits = MANAGE }).ok, "carol 有 MANAGE")
     T.teleports = {}
     res = cmd(carol2, "unshareFaction", rec)
     check(res.ok and rec.factionShare == nil and not has(hs, "gina") and not has(hs, "fred") and has(hs, "bob"),
@@ -375,6 +376,7 @@ return function(T)
     alice = T.player({ name = "alice", x = 5, y = 5, sid = SID_A })
     local carolS = T.player({ name = "carol", x = 500, y = 500, sid = SID_C })
     local mia = T.player({ name = "mia", x = 500, y = 500, sid = 76561198000000004 })
+    T.player({ name = "dave", x = 500, y = 500, sid = 76561198000000007 })
     rec, hs = seed("alice", rect(100, 100, 10, 10))
     rec.grants = { { user = "carol", bits = MEMBER + MANAGE }, { user = "mia", bits = MEMBER } }
     check(R.binding("carol") == nil, "前提：carol 沒綁定")
@@ -431,6 +433,8 @@ return function(T)
         local ivy = T.player({ name = "ivy", x = 500, y = 500 })
         local max = T.player({ name = "max", x = 500, y = 500 })
         local fox1 = T.player({ name = "fox1", x = 500, y = 500 })
+        local pia = T.player({ name = "pia", x = 500, y = 500 })
+        for _, n in ipairs({ "bob", "nora", "quinn", "rex" }) do T.player({ name = n, x = 500, y = 500 }) end
         local r, h = seed("alice", rect(100, 100, 10, 10))
         check(MSH.SHARE_ALL == 127 and INVITE == 64, "INVITE＝64、SHARE_ALL＝127")
         check(cmd(al, "share", r, { targetUsername = "ivy", bits = INVITE + USE }).ok
@@ -462,7 +466,6 @@ return function(T)
             "MANAGE 成員仍只能給自己有的一般位元")
         check(cmd(al, "share", r, { targetUsername = "quinn", bits = MSH.SHARE_ALL }).ok
             and MSH.Claims.grantOf(r, "quinn").bits == 127, "屋主能給全部位元")
-        local pia = T.player({ name = "pia", x = 500, y = 500 })
         check(cmd(pia, "share", r, { targetUsername = "rex", bits = USE }).ok and has(h, "rex"),
             "只有 INVITE：邀沒有任何資格的人可以")
         check(code(cmd(pia, "share", r, { targetUsername = "fox1", bits = USE })) == "NOT_OWNER"
@@ -544,5 +547,49 @@ return function(T)
         T.tick(150)                         -- 超過 60 秒
         check(writes == 2 and R.binding("vic") ~= nil and R.binding("vic").src == "LOGIN", "60 秒後重試、成功綁定")
         R.setBinding = origSet
+    end
+
+    T.section("分享對象：伺服器認得的玩家才能新加、候選清單（使用者 2026-10-12）")
+    do
+        boot({ steam = true })
+        local al = T.player({ name = "alice", x = 5, y = 5, sid = 76561198000000201 })
+        local ivy = T.player({ name = "ivy", x = 500, y = 500, sid = 76561198000000202 })
+        local bart = T.player({ name = "Bart", x = 500, y = 500, sid = 76561198000000203 })
+        T.player({ name = "carla", x = 500, y = 500, sid = 76561198000000204 })
+        local r = seed("alice", rect(100, 100, 10, 10))
+        seed("alice", rect(300, 300, 5, 5)).grants = { { user = "zoe", bits = MEMBER } }   -- 以前分享過、現在離線
+        seed("olaf", rect(500, 500, 5, 5))                                                 -- 別間的屋主、離線
+        R.setBinding("quiet", 76561198000000205, "LOGIN", T.now)                           -- 登入過（Steam）、離線
+        local function cands(p, query)
+            local res = T.cmd(p, "shareCandidates", { claimId = r.claimId, query = query })
+            if not res.ok then return res.code, 0 end
+            local out = {}
+            for i, row in ipairs(res.rows) do out[i] = row.name .. (row.online and "+" or "") end
+            return table.concat(out, ","), #res.rows
+        end
+        check(cands(al, "") == "zoe,Bart+,carla+,ivy+",
+            "空白：先列自己分享過的人，再列在線玩家（不分大小寫排序、標在線）；不列自己與屋主")
+        check(cands(al, "AR") == "Bart+,carla+", "關鍵字不分大小寫比對名字的一部分")
+        check(cands(al, "ola") == "" and cands(al, "olaf") == "olaf" and cands(al, "qui") == ""
+            and cands(al, "quiet") == "quiet", "離線的已知玩家只在名字完全相符時列出（不能用關鍵字列舉全服玩家）")
+        check(cands(al, "Bart") == "Bart+" and cands(al, "bart") == "Bart+", "完全相符又在線：只列一次")
+        check(cmd(al, "share", r, { targetUsername = "ivy", bits = MSH.SHARE.INVITE + USE }).ok
+            and cmd(al, "share", r, { targetUsername = "carla", bits = MEMBER }).ok, "（前置）ivy 能邀請、carla 是成員")
+        check(cands(ivy, "") == "Bart+" and cands(al, "car") == "carla+",
+            "只有邀請的成員：不列這間已經有資格的人；屋主照列（輸入既有成員＝改權限）")
+        check(cmd(al, "share", r, { targetUsername = "Bart", bits = MEMBER }).ok and cands(bart, "") == "NOT_OWNER"
+            and cands(T.player({ name = "stranger", sid = 76561198000000206 }), "") == "NOT_FOUND",
+            "一般成員不能查（NOT_OWNER）；沒有角色的人看不到這間（NOT_FOUND）")
+        for i = 1, 25 do T.player({ name = string.format("p%02d", i), sid = 76561198000000300 + i }) end
+        local _, n = cands(al, "p")
+        check(n == 20, "最多 20 位")
+        local rev = r.revision
+        check(code(cmd(al, "share", r, { targetUsername = "nobody", bits = MEMBER })) == "UNKNOWN_PLAYER"
+            and MSH.Claims.grantOf(r, "nobody") == nil and r.revision == rev, "新加伺服器不認得的名字：UNKNOWN_PLAYER、沒有改動")
+        check(code(cmd(al, "share", r, { targetUsername = "olaF", bits = MEMBER })) == "UNKNOWN_PLAYER", "名字分大小寫")
+        check(cmd(al, "share", r, { targetUsername = "quiet", bits = MEMBER }).ok
+            and cmd(al, "share", r, { targetUsername = "olaf", bits = MEMBER }).ok
+            and cmd(al, "share", r, { targetUsername = "zoe", bits = MEMBER }).ok,
+            "離線但認得的可以：登入過（Steam 綁定）、別間的屋主、別間的成員")
     end
 end

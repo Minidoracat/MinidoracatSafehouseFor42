@@ -20,8 +20,8 @@ local MW = MSH.ManagerWindow or {}
 MSH.ManagerWindow = MW
 local LC, SRC = MSH.LIFECYCLE, MSH.SOURCE
 
--- rev 16：ScrollPanel、Text.wrap；Window／Button／Tabs／Dialog／VirtualList 更早（ui-framework 摘要 §1）
-MW.CAPS = { "window", "controls", "dialog", "virtualList", "scrollPanel", "textWrap" }
+-- rev 16：ScrollPanel、Text.wrap；Window／Button／Tabs／Dialog／VirtualList、Autocomplete（rev 11）更早（ui-framework 摘要 §1）
+MW.CAPS = { "window", "controls", "dialog", "virtualList", "scrollPanel", "textWrap", "autocomplete" }
 MW.PAD, MW.GAP = 10, 6
 
 -- ===== 狀態（§10.3）：只顯示最高優先的一個與下一步，其餘收進「詳細」 =====
@@ -548,6 +548,10 @@ function W:prerender(body)
         self:layout()
     end
     if self.wellX then self.theme:fill(body, self.wellX, self.wellY, self.wellW, self.wellH, "well") end
+    -- 分享對象的候選下拉在捲動區裡：開著就捲到看得見（輸入框靠近底部時會被裁掉；下拉出現後捲動區下一幀才量到新的
+    --   內容高、setYScroll 會先被夾住，所以每幀補；看得見時 scrollTo 不動）
+    local ac = self.share.ac
+    if ac:isOpen() then self.scroll:scrollTo(ac.list) end
     local deadline = self.redrawDeadline
     if deadline == nil or not self.btnRedraw:getIsVisible() then return end
     local left = deadline - getTimestampMs()
@@ -745,13 +749,14 @@ function W:layoutDetail(dx, y, dw, h)
     self.scroll:setHeight(math.max(ch, bottom - y))
     local cw = self.scroll:contentWidth()
     for _, el in ipairs(self.overviewWidgets) do el:setVisible(false) end
-    self.share:hide()
     self.lines:clear()
     local endY
     if self.tab == "share" then
+        -- 同一頁重排不先收起（Page:layout 自己管每個元件的顯示）：收起會讓正在打字的輸入框失焦
         self.lines:setVisible(false)
         endY = self.share:layout(d, 0, 0, cw)
     else
+        self.share:hide()
         self:place(self.lines, 0, 0)
         endY = self.tab == "land" and self:layoutLand(d, cw) or self:layoutOverview(d, cw)
         self.lines:setWidth(cw)

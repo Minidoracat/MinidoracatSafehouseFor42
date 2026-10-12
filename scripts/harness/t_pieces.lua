@@ -118,6 +118,7 @@ return function(T)
         "一塊的屋主被改：換回標記，這間照常 active")
 
     T.section("收斂：同一人在每一塊被補回，一輪只算一次干擾")
+    T.player({ name = "carol", x = 500, y = 500 })   -- 分享對象要是伺服器認得的玩家（在線）
     local four = T.cmd(alice, "share", { claimId = 1, expectedRevision = rec.revision, targetUsername = "carol",
         bits = MSH.SHARE.MEMBER })
     check(four.ok, "（前置）分享給 carol")
@@ -216,6 +217,7 @@ return function(T)
 
     T.section("名單容量：每塊各算一份")
     MSH.LIMIT.NATIVE_NAMES = 3
+    T.player({ name = "bob", x = 500, y = 500 })
     rec = R.get(1)
     res = T.cmd(alice, "share", { claimId = 1, expectedRevision = rec.revision, targetUsername = "bob",
         bits = MSH.SHARE.MEMBER })

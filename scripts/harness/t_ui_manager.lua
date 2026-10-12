@@ -65,7 +65,7 @@ return function(T)
         sentArgs = nil
         local host = { detail = d, say = function() end,
             mutate = function(_, command, args) sentArgs = { command = command, args = args } end }
-        local p = setmetatable({ host = host, bits = MSH.SHARE_ALL, user = { getText = function() return "bob" end } },
+        local p = setmetatable({ host = host, bits = MSH.SHARE_ALL, ac = { getText = function() return "bob" end } },
             SP.Page)
         SP.Page.onShareUser(p)
         return sentArgs and sentArgs.args.bits
@@ -109,9 +109,22 @@ return function(T)
         function e:add(t) self.texts = self.texts or {}; self.texts[#self.texts + 1] = t end
         return e
     end
+    -- 框架 Autocomplete 的替身：記文字、可見、可用、下拉高度上限、交回的結果
+    local function fakeAc(opts)
+        local ac = { opts = opts, field = el(180), text = "", visible = false, enabled = true }
+        function ac:setText(t) self.text = t end
+        function ac:getText() return MSH.trim(self.text) end
+        function ac:setVisible(v) self.visible = v; self.field.visible = v end
+        function ac:setEnabled(v) self.enabled = v end
+        function ac:addTo() end
+        function ac:anchorList(maxH) self.maxH = maxH end
+        function ac:setResults(text, rows) self.results = { text = text, rows = rows } return true end
+        function ac:queryFailed(retry) self.failed = retry end
+        return ac
+    end
     local sent
     local host = { ch = 20, fh = 14, GAP = 6, iconW = 18, me = "dave",
-        UI = { TextField = { new = function() return el(180) end } } }
+        UI = { Autocomplete = { new = fakeAc } } }
     function host:newLines() return el() end
     function host:button() return el() end
     function host:place(e) e.visible = true end
@@ -120,7 +133,7 @@ return function(T)
     function host:mutate(command, args) sent = { command = command, args = args } return true end
     local errors = 0
     function host:say(_, token) if token == "errorText" then errors = errors + 1 end end
-    local page = SP.new(host, { addChild = function() end })
+    local page = SP.new(host, { addChild = function() end, height = 300 })
     local function view(role, bits, lifecycle)
         local manage = role == "owner" or MSH.hasBit(bits, SHARE.MANAGE)
         return { claimId = 9, revision = 2, lifecycle = lifecycle or "active", actorRole = role, bits = bits,
@@ -140,7 +153,7 @@ return function(T)
     end
     local function shareAll(name)   -- 全部勾起來送給玩家（預設新玩家 zed）
         page.bits, sent = MSH.SHARE_ALL, nil
-        page.user:setText(name or "zed")
+        page.ac:setText(name or "zed")
         SP.Page.onShareUser(page)
         return sent and sent.args.bits
     end
@@ -179,7 +192,7 @@ return function(T)
     d = view("member", SHARE.MEMBER + SHARE.USE + SHARE.BUILD + SHARE.INVITE)
     check(render(d) == "MEMBER,USE,BUILD" and SP.canAdd(d), "只有邀請：看得到分享頁，只能勾自己有的，不能勾邀請與管理")
     check(stops() == "--" and not page.btnFactionStop.visible and not page.btnFaction.visible
-        and not page.btnResume.visible and page.user.visible and page.btnUser.visible,
+        and not page.btnResume.visible and page.ac.field.visible and page.btnUser.visible,
         "只有邀請：名單每列都沒有〔停止〕、看不到陣營分享按鈕，只有分享給玩家那一塊")
     check(shareAll() == SHARE.MEMBER + SHARE.USE + SHARE.BUILD and sent.command == "share",
         "只有邀請：送出的位元 ⊆ 自己的、不帶邀請與管理")
@@ -191,6 +204,43 @@ return function(T)
     check(render(d) == "" and shareAll() == nil and not SP.canAdd(d), "兩者都沒有：沒有分享頁、一個 chip 都不能勾、送不出去")
     check(not SP.canAdd(view("member", SHARE.MEMBER + SHARE.INVITE, "lapsed"))
         and not SP.canAdd(view("owner", MSH.SHARE_ALL, "lapsed")), "不是 active：沒有分享頁")
+
+    T.section("SharingPage：分享對象的候選（使用者 2026-10-12）")
+    local me = T.player({ name = "dave" })
+    d = view("owner", MSH.SHARE_ALL)
+    render(d)
+    local ac = page.ac
+    check(ac.visible and ac.field.visible and ac.maxH == 300 - host.ch - 2 * host.GAP,
+        "輸入框跟著分享頁顯示；下拉高度不超過捲動區扣掉輸入框")
+    check(ac.opts.labelOf({ name = "Bart", online = true }) == "Bart"
+        and ac.opts.tagOf({ name = "Bart", online = true }) == "IGUI_MSH_Share_Online"
+        and ac.opts.tagOf({ name = "zoe", online = false }) == nil, "候選列：名字；在線的標「在線上」")
+    local before = #T.clientSent
+    check(ac.opts.onQuery(page, "ba", ac) == true and #T.clientSent == before + 1, "打字：送出候選查詢")
+    local q = T.clientSent[#T.clientSent]
+    check(q.command == "shareCandidates" and q.args.claimId == 9 and q.args.query == "ba", "查詢帶這間的 claimId 與輸入的字")
+    check(ac.opts.onQuery(page, "bar", ac) == false and #T.clientSent == before + 1, "上一筆還沒回：不送（框架下一幀再問）")
+    local function reply(fields)
+        local r = { command = "shareCandidates", requestId = T.clientSent[#T.clientSent].args.requestId }
+        for k, v in pairs(fields) do r[k] = v end
+        T.fire("OnServerCommand", MSH.MODULE, "result", r)
+    end
+    reply({ ok = true, rows = { { name = "Bart", online = true } } })
+    check(ac.results ~= nil and ac.results.text == "ba" and ac.results.rows[1].name == "Bart",
+        "回覆交給框架，附送出時的字（框架比對目前輸入，過期的丟掉）")
+    check(ac.opts.onQuery(page, "bar", ac) == true, "回覆後可以再查")
+    reply({ ok = false, code = "NOT_OWNER" })
+    check(ac.failed == false, "被拒：安靜收起、不重查")
+    ac.opts.onQuery(page, "bart", ac)
+    T.advance(MSH.Client.TIMEOUT_MS)
+    MSH.Client.checkTimeouts(T.now)
+    check(ac.failed == true and ac.opts.onQuery(page, "bart", ac) == true, "逾時：讓框架重新計時再查")
+    page.host.detail = nil
+    check(ac.opts.onQuery(page, "x", ac) == false, "沒有詳情：不送")
+    page.host.detail = d
+    page:hide()
+    check(not ac.visible, "換分頁：輸入框與下拉收起")
+    T.disconnect(me)
 
     T.section("ManagerWindow：重新框選按鈕顯示剩幾次")
     local realGetText = getText
@@ -216,21 +266,54 @@ return function(T)
         "遷移來的不提地契；不用「取消安全屋」那句")
     check(MW.clock(61000) == "1:01" and MW.clock(1) == "0:01" and MW.clock(-5) == "0:00", "倒數 m:ss、秒無條件進位、不出負數")
 
-    T.section("在地面顯示範圍：四類四種顏色、預設畫自己的與同陣營的、伺服器與玩家各自的開關")
+    T.section("在地面顯示範圍：外緣格的地板染色、四類四種顏色、伺服器與玩家各自的開關")
     local Rg = MSH.Ranges
-    local strips = {}
-    addAreaHighlightForPlayer = function(pn, x1, y1, x2, y2, z, r, g, b, a)
-        strips[#strips + 1] = { x1 = x1, y1 = y1, x2 = x2, y2 = y2, z = z, color = r .. "/" .. g .. "/" .. b }
-    end
     local function colorOf(kind)
         local c = Rg.COLORS[kind]
         return c.r .. "/" .. c.g .. "/" .. c.b
     end
-    T.player({ name = "alice", x = 105, y = 205, z = 1.6 })
+    -- 假世界：每格一個常駐的地板物件，記住染色狀態（IsoObject:isHighlighted／setHighlighted／setHighlightColor）
+    local world, reads = {}, 0
+    local function floorAt(x, y, z)
+        local k = x .. "," .. y .. "," .. z
+        local f = world[k]
+        if f == nil then
+            f = { x = x, y = y, z = z, on = false }
+            function f:isHighlighted() return self.on end
+            function f:setHighlighted(pn, on) self.on = on end
+            function f:setHighlightColor(pn, r, g, b) self.color = r .. "/" .. g .. "/" .. b end
+            world[k] = f
+        end
+        return f
+    end
+    local realGetCell = getCell
+    getCell = function()
+        return { getGridSquare = function(_, x, y, z)
+            reads = reads + 1
+            local f = floorAt(x, y, z)
+            return { getFloor = function() return f end }
+        end }
+    end
+    local function lit(z)
+        local cells, colors = {}, {}
+        for _, f in pairs(world) do
+            if f.on and f.z == z then
+                cells[f.x .. "," .. f.y], colors[f.x .. "," .. f.y] = true, f.color
+            end
+        end
+        return cells, colors
+    end
+    -- 一輪掃描（過了 SCAN_MS 的下一幀）
+    local function drawn(z)
+        T.advance(Rg.SCAN_MS)
+        T.fire("OnPreUIDraw")
+        return lit(z or 1)
+    end
+    local alice = T.player({ name = "alice", x = 105, y = 205, z = 1.6 })
     -- 我的 L 形兩塊、分享給我的、同陣營 bob 的（managed）、其他玩家 dave 的（managed）與 carol 的（原版）、很遠的我的
     local natives = { SafeHouse.addSafeHouse(100, 200, 4, 10, "@MSH:3"), SafeHouse.addSafeHouse(104, 206, 6, 4, "@MSH:3"),
-        SafeHouse.addSafeHouse(130, 200, 5, 5, "@MSH:4"), SafeHouse.addSafeHouse(150, 200, 5, 5, "@MSH:5"),
-        SafeHouse.addSafeHouse(170, 200, 5, 5, "@MSH:7"), SafeHouse.addSafeHouse(190, 200, 5, 5, "carol"),
+        SafeHouse.addSafeHouse(120, 200, 5, 5, "@MSH:4"), SafeHouse.addSafeHouse(130, 200, 5, 5, "@MSH:5"),
+        SafeHouse.addSafeHouse(140, 200, 5, 5, "@MSH:7"), SafeHouse.addSafeHouse(150, 200, 5, 5, "carol"),
         SafeHouse.addSafeHouse(5000, 5000, 5, 5, "@MSH:6") }
     local owners = { ["@MSH:5"] = "bob", ["@MSH:7"] = "dave" }
     local lookups, realOwnerName = 0, MSH.PublicApi.ownerName
@@ -242,27 +325,12 @@ return function(T)
     local savedClaims = MSH.Client.claims
     MSH.Client.claims = { mine = { { claimId = 3 }, { claimId = 6 } }, shared = { { claimId = 4 } }, byId = {}, at = 1 }
     MSH.Client.emit("claims", MSH.Client.claims)
-    local function drawn()
-        strips = {}
-        T.fire("OnPreUIDraw")
-        local cells, dup, colors = {}, false, {}
-        for _, s in ipairs(strips) do
-            for x = s.x1, s.x2 - 1 do
-                for y = s.y1, s.y2 - 1 do
-                    local k = x .. "," .. y
-                    if cells[k] then dup = true end
-                    cells[k], colors[k] = true, s.color
-                end
-            end
-        end
-        return cells, dup, colors
-    end
     local function sync(changes) T.fire("OnServerCommand", MSH.MODULE, "sandboxSync", changes) end
-    local cells, dup, colors = drawn()
-    check(Rg.isOn() and colors["100,200"] == colorOf("own") and colors["130,200"] == colorOf("shared")
-        and colors["150,200"] == colorOf("faction") and cells["170,200"] == nil and cells["190,200"] == nil
+    local cells, colors = drawn()
+    check(Rg.isOn() and colors["100,200"] == colorOf("own") and colors["120,200"] == colorOf("shared")
+        and colors["130,200"] == colorOf("faction") and cells["140,200"] == nil and cells["150,200"] == nil
         and cells["5000,5000"] == nil,
-        "預設開著：我的、分享給我的、同陣營的各用自己的顏色；其他玩家的不畫（伺服器預設不開放）、很遠的不畫")
+        "預設開著：我的、分享給我的、同陣營的外緣地板各染自己的顏色；其他玩家的不染（伺服器預設不開放）、很遠的不染")
     local L = { { x = 100, y = 200, w = 4, h = 10 }, { x = 104, y = 206, w = 6, h = 4 } }
     local function edgeOf(rects, x, y)
         local R = MSH.Rect
@@ -275,46 +343,60 @@ return function(T)
             if edgeOf(L, x, y) ~= (cells[x .. "," .. y] == true) then lOk = false end
         end
     end
-    check(lOk and not dup and strips[1].z == 1, "我的 L 形兩塊畫成一個外緣、交界不畫、用玩家所在樓層")
+    check(lOk and next((lit(0))) == nil, "我的 L 形兩塊染成一個外緣、交界不染、只染玩家所在樓層")
+    reads = 0
+    world["100,200,1"].on = false   -- 別的功能取消了這格的染色
+    T.fire("OnPreUIDraw")
+    check(reads == 0 and not world["100,200,1"].on, "掃描間隔內每幀只比時間：不讀格子")
+    world["101,200,1"] = nil          -- 區塊重新載入：這格換了新的地板物件
+    cells = drawn()
+    check(world["100,200,1"].on and world["101,200,1"] ~= nil and world["101,200,1"].on,
+        "下一輪掃描補上：被取消的、換了新地板的都重新染色")
     sync({ RangesOthers = true })
-    cells, dup, colors = drawn()
+    cells, colors = drawn()
     local purple = colorOf("others")
-    check(colors["170,200"] == purple and colors["190,200"] == purple and purple ~= colorOf("own")
-        and purple ~= colorOf("shared") and purple ~= colorOf("faction") and colors["150,200"] == colorOf("faction"),
+    check(colors["140,200"] == purple and colors["150,200"] == purple and purple ~= colorOf("own")
+        and purple ~= colorOf("shared") and purple ~= colorOf("faction") and colors["130,200"] == colorOf("faction"),
         "伺服器開放其他玩家的（sandboxSync）：managed 與原版的都用第四種顏色，同陣營的照舊")
     sync({ RangesFaction = false })
     cells = drawn()
-    check(cells["150,200"] == nil and cells["170,200"] == true, "伺服器關掉同陣營的：bob 的不畫，也不改用其他玩家的顏色畫")
+    check(cells["130,200"] == nil and cells["140,200"] == true,
+        "伺服器關掉同陣營的：bob 的取消染色，也不改用其他玩家的顏色")
     sync({ RangesFaction = true })
     Rg.setKind("shared", false)
     cells = drawn()
-    check(cells["130,200"] == nil and cells["100,200"] == true and cells["150,200"] == true and cells["170,200"] == true,
+    check(cells["120,200"] == nil and cells["100,200"] == true and cells["130,200"] == true and cells["140,200"] == true,
         "玩家關掉某一類：只少那一類")
     Rg.setKind("shared", true)
     T.disband(team)
     T.fire("SyncFaction", "Team")
     lookups = 0
-    cells, dup, colors = drawn()
-    check(colors["150,200"] == purple and lookups == 0,
+    cells, colors = drawn()
+    check(colors["130,200"] == purple and lookups == 0,
         "退出陣營（SyncFaction）：bob 的改算其他玩家的；不在陣營時不為分類去查 managed 的屋主")
     local rebuilds, realRebuild = 0, Rg.rebuild
     Rg.rebuild = function() rebuilds = rebuilds + 1; realRebuild() end
     drawn()
     drawn()
-    check(rebuilds == 0, "沒有變動時每幀只畫算好的段、不重算")
+    check(rebuilds == 0, "沒有變動時不重算")
     T.fire("OnSafehousesChanged")
     drawn()
-    check(rebuilds == 1, "原生清單變了：下一幀重算一次")
+    check(rebuilds == 1, "原生清單變了：下一輪重算一次")
     Rg.rebuild = realRebuild
+    alice.z = 0.2
+    check(next((drawn(1))) == nil and lit(0)["100,200"] == true, "換樓層：原樓層的取消，改染玩家所在樓層")
+    alice.x = 1000
+    check(next((drawn(0))) == nil, "走遠：附近沒有的那幾間都取消")
+    alice.x = 105
+    drawn(0)
     Rg.setOn(false)
-    cells = drawn()
-    check(next(cells) == nil, "總開關關掉：什麼都不畫")
+    check(next((drawn(0))) == nil, "總開關關掉：染過的地板都取消")
     sync({ RangesOthers = false })
     for _, h in ipairs(natives) do SafeHouse.removeSafeHouse(h) end
     MSH.Client.claims = savedClaims
     MSH.PublicApi.ownerName = realOwnerName
+    getCell = realGetCell
     Rg.dirty = true
-    addAreaHighlightForPlayer = nil
 
     T.section("ManagerWindow：管理員按鈕")
     check(not MW.isAdmin(), "一般玩家不顯示管理員面板")

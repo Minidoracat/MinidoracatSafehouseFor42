@@ -12,10 +12,13 @@
 --   只有我在陣營裡、而且同陣營或其他玩家那類要畫時（要分出是哪一類）才查 managed 的屋主：不在陣營的人不必為了分類去抓
 --   registry。屋主還沒查到的先算其他玩家的。四類互不重疊：關掉同陣營的，同陣營的屋不會改用其他玩家的顏色畫出來。
 -- 暫停保護（lapsed）沒有原生，不畫。清單、原生、陣營（SyncFaction）、屋主表（OnReceiveGlobalModData）、沙盒（sandboxSync）
---   或開關一變就標記重算，重算時才配置；每幀只畫算好的段、不配置。
--- addAreaHighlightForPlayer 每幀要重加：FBORenderAreaHighlights.render 丟掉 renderTimeMs 不是本幀 UI 時間的
--- （FBORenderAreaHighlights.java:61-68；LuaManager.java:12515-12521）。OnPreUIDraw 在設好本幀 UI 時間之後觸發
--- （UIManager.java:273-296）。
+--   或開關一變就標記重算，重算時才配置。
+-- 畫法是把外緣那幾格的地板染色（IsoObject:setHighlighted／setHighlightColor），不用 addAreaHighlightForPlayer：
+--   後者在整個世界畫完後才畫、深度刻意往前推一點（FBORenderAreaHighlights.java:251-259），站在範圍上的人物下半身
+--   會被蓋住（2026-10-12 使用者截圖）；地板染色在人物之後重畫那一格地板、照地板自己的深度，人物照樣在上面
+--   （FBORenderCell.java:1128-1137 renderMovingObjects 之後 FBORenderObjectHighlight.render；地板用 FloorShaper
+--   的 tint，IsoObject.java:3686-3700）。染色是常駐的（renderOnce＝false），不必每幀重設；每 SCAN_MS 掃一次
+--   玩家附近各間的外緣格：地板換了（區塊重新載入）或被別的功能取消染色就補上。關掉、重算、換樓層、離開範圍時取消。
 
 if not isClient() then return end
 
@@ -30,14 +33,16 @@ local R = MSH.Ranges or {}
 MSH.Ranges = R
 
 R.OPTIONS_ID = "MinidoracatSafehouse"
-R.REACH = 100                                              -- 玩家離外框這麼多格以內才畫
+R.REACH = 60                                               -- 玩家離外框這麼多格以內才染色
+R.SCAN_MS = 500                                            -- 多久掃一次附近的外緣格
 R.KINDS = { "own", "shared", "faction", "others" }
--- 地面的顏色（半透明）；紅色留給建立面板標衝突，其他玩家的用紫色
+-- 地板染色的顏色；a 是往這個顏色拉的比例（Color.tintABGR 把地板的頂點光照色往 rgb 拉 a，`Color.java:243-253`）：
+-- 0.5 在碎石地上很淡（sh-rangesdiag-1012a），取 0.7。紅色留給建立面板標衝突，其他玩家的用紫色
 R.COLORS = {
-    own = { r = 1.0, g = 0.85, b = 0.4, a = 0.5 },
-    shared = { r = 0.45, g = 0.8, b = 1.0, a = 0.5 },
-    faction = { r = 0.5, g = 0.9, b = 0.45, a = 0.5 },
-    others = { r = 0.8, g = 0.55, b = 1.0, a = 0.5 },
+    own = { r = 1.0, g = 0.85, b = 0.4, a = 0.7 },
+    shared = { r = 0.45, g = 0.8, b = 1.0, a = 0.7 },
+    faction = { r = 0.5, g = 0.9, b = 0.45, a = 0.7 },
+    others = { r = 0.8, g = 0.55, b = 1.0, a = 0.7 },
 }
 -- 管理視窗 chip 上的色塊（同色、不透明）
 R.SWATCHES = {}
@@ -239,23 +244,74 @@ function R.rebuild()
     R.list = out
 end
 
-function R.draw()
-    if not R.isOn() then return end
+-- 每幀只比時間；到了 SCAN_MS（或標記重算）才掃附近的外緣格
+function R.update()
+    local now = getTimestampMs()
+    if not R.dirty and now < (R.nextScan or 0) then return end
+    R.nextScan = now + R.SCAN_MS
+    if R.dirty then
+        R.dimAll()
+        R.rebuild()
+    end
     local p = getSpecificPlayer(0)
-    if p == nil then return end
-    if R.dirty then R.rebuild() end
-    local px, py, z = p:getX(), p:getY(), math.floor(p:getZ())   -- IsoMovingObject.java:525
-    local reach, list = R.REACH, R.list
+    if not R.isOn() or p == nil then return R.dimAll() end
+    local z = math.floor(p:getZ())   -- IsoMovingObject.java:525
+    if z ~= R.litZ then
+        R.dimAll()
+        R.litZ = z
+    end
+    local px, py = p:getX(), p:getY()
+    local reach, list, cell = R.REACH, R.list, getCell()
     for i = 1, #list do
         local c = list[i]
         if px >= c.x1 - reach and px <= c.x2 + reach and py >= c.y1 - reach and py <= c.y2 + reach then
-            local col, a = c.color, c.areas
-            for k = 1, #a, 4 do
-                local x, y = a[k], a[k + 1]
-                addAreaHighlightForPlayer(0, x, y, x + a[k + 2], y + a[k + 3], z, col.r, col.g, col.b, col.a)
+            R.light(c, cell, z)
+        else
+            R.dim(c)
+        end
+    end
+end
+
+-- 這一間外緣的每一格地板染成這類的顏色；c.lit[第幾格]＝染過的地板（區塊重新載入後地板是新物件，照樣補上）。
+-- getGridSquare 沒載入回 nil（IsoCell.java:3190-3192）；IsoGridSquare:getFloor；IsoObject:isHighlighted／
+-- setHighlightColor／setHighlighted(playerIndex, on, renderOnce)（IsoObject.java:5041-5119；getFloor IsoGridSquare.java:4652）
+function R.light(c, cell, z)
+    local a, col = c.areas, c.color
+    local lit = c.lit
+    if lit == nil then
+        lit = {}
+        c.lit = lit
+    end
+    local n = 0
+    for k = 1, #a, 4 do
+        local x0, y0 = a[k], a[k + 1]
+        for x = x0, x0 + a[k + 2] - 1 do
+            for y = y0, y0 + a[k + 3] - 1 do
+                n = n + 1
+                local sq = cell:getGridSquare(x, y, z)
+                local floor = sq and sq:getFloor()
+                if floor == nil then
+                    lit[n] = nil
+                elseif lit[n] ~= floor or not floor:isHighlighted(0) then
+                    floor:setHighlightColor(0, col.r, col.g, col.b, col.a)
+                    floor:setHighlighted(0, true, false)
+                    lit[n] = floor
+                end
             end
         end
     end
+end
+
+-- 取消這一間染過的地板（已卸載的舊地板呼叫也無害：FBORenderObjectHighlight 只是從集合移除）
+function R.dim(c)
+    local lit = c.lit
+    if lit == nil then return end
+    for _, floor in pairs(lit) do floor:setHighlighted(0, false, false) end
+    c.lit = nil
+end
+
+function R.dimAll()
+    for i = 1, #R.list do R.dim(R.list[i]) end
 end
 
 if first then
@@ -265,5 +321,5 @@ if first then
     Events.SyncFaction.Add(function() MSH.Ranges.dirty = true end)           -- :770；FactionSyncPacket.java:68 等
     -- 屋主表到了（PublicApi 同一事件更新快取）：同陣營的才分得出來（:817）
     Events.OnReceiveGlobalModData.Add(function(tag) if tag == MSH.TAG then MSH.Ranges.dirty = true end end)
-    Events.OnPreUIDraw.Add(function() MSH.Ranges.draw() end)
+    Events.OnPreUIDraw.Add(function() MSH.Ranges.update() end)
 end

@@ -614,14 +614,14 @@ function AP.layoutRules(P, pg)
     F:text("rangesHelp", getText("IGUI_MSH_Admin_RangesHelp"), "textMuted")
 end
 
--- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定排成「設定｜改成｜原因」表，必要與建議
---   兩組共用欄位、組間留兩倍間距（使用者 2026-10-11：只列選項名看不懂、逐句說明又太複雜）；必要設定有〔修正伺服器設定〕
+-- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定排成「設定｜目前值｜建議值｜原因」表，必要與建議
+--   兩組共用欄位、組間留兩倍間距（使用者 2026-10-11：只列選項名看不懂、逐句說明又太複雜）；必要設定有〔修正伺服器設定〕，
+--   建議設定每列最右一個〔套用〕（使用者 2026-10-12：一個一個選擇套用、表格列出目前值和建議值）
 function AP.layoutStatus(P, pg)
     local F = pg.flow
     local h = P.options and P.options.health or {}
-    local wants = type(h.wants) == "table" and h.wants or {}
-    local need, needNotes = AP.settingRows(h.blockers, wants, "Need_")
-    local suggest, suggestNotes = AP.settingRows(h.warnings, wants, "Suggest_")
+    local need, needNotes = AP.settingRows(h.blockers, h, "Need_")
+    local suggest, suggestNotes = AP.settingRows(h.warnings, h, "Suggest_")
     local cols = AP.settingCols(need, suggest)
     F:text("h:health", getText("IGUI_MSH_Admin_HealthHead"), "text", UIFont.Medium)
     if h.blocked then
@@ -638,8 +638,13 @@ function AP.layoutStatus(P, pg)
     if #suggest + #suggestNotes > 0 then
         F.y = F.y + K.GAP
         F:text("hw", getText("IGUI_MSH_Admin_SuggestHead"), "text")
-        AP.settingTable(P, F, "hw", suggest, cols, #need == 0)
+        local canChange = AP.canChangeOptions()
+        AP.settingTable(P, F, "hw", suggest, cols, #need == 0, canChange)
         for i, k in ipairs(suggestNotes) do F:text("hz" .. i, getText("IGUI_MSH_Admin_Suggest_" .. k), "text") end
+        -- 必要表底下已經寫過一次
+        if #suggest > 0 and #need == 0 and not canChange then
+            F:text("hwn", getText("IGUI_MSH_Admin_FixNoPerm"), "textMuted")
+        end
     end
     F.y = F.y + K.GAP
     local sw = P.options and P.options.settingsWarnings
@@ -664,14 +669,17 @@ function AP.layoutStatus(P, pg)
     AP.layoutRecovery(P, pg)
 end
 
--- 不符的伺服器設定 → 表格列 { name, want, why }；沒有「改成」值的（沙盒、資料檔讀不到）放第二個回傳值，寫成段落。
---   ChatStreams 要拿掉的是 sh，「改成」欄用譯文
-function AP.settingRows(list, wants, kind)
+-- 不符的伺服器設定 → 表格列 { name, now, want, why }（目前值、建議值照伺服器送來的 current／wants，Health.lua）；
+--   沒有建議值的（沙盒、資料檔讀不到）放第二個回傳值，寫成段落
+function AP.settingRows(list, h, kind)
     local rows, notes = {}, {}
+    local wants = type(h.wants) == "table" and h.wants or {}
+    local now = type(h.current) == "table" and h.current or {}
     for _, k in ipairs(type(list) == "table" and list or {}) do
-        local want = k == "ChatStreams" and getText("IGUI_MSH_Admin_DropSh") or wants[k]
+        local want = wants[k]
         if want ~= nil then
-            rows[#rows + 1] = { name = k, want = tostring(want), why = getText("IGUI_MSH_Admin_" .. kind .. k) }
+            rows[#rows + 1] = { name = k, now = tostring(now[k] or "-"), want = tostring(want),
+                why = getText("IGUI_MSH_Admin_" .. kind .. k) }
         else
             notes[#notes + 1] = k
         end
@@ -682,21 +690,25 @@ end
 -- 兩張表共用欄位的 x：寬度照表頭與兩張表全部的列量（左緣對齊）
 function AP.settingCols(a, b)
     local nameW = K.textW(UIFont.Small, getText("IGUI_MSH_Admin_ColSetting"))
+    local nowW = K.textW(UIFont.Small, getText("IGUI_MSH_Admin_ColNow"))
     local wantW = K.textW(UIFont.Small, getText("IGUI_MSH_Admin_ColWant"))
     for _, rows in ipairs({ a, b }) do
         for _, r in ipairs(rows) do
             nameW = math.max(nameW, K.textW(UIFont.Small, r.name))
+            nowW = math.max(nowW, K.textW(UIFont.Small, r.now))
             wantW = math.max(wantW, K.textW(UIFont.Small, r.want))
         end
     end
-    local xWant = K.PAD + nameW + 2 * K.GAP
-    return { xWant = xWant, xWhy = xWant + wantW + 2 * K.GAP }
+    local xNow = K.PAD + nameW + 2 * K.GAP
+    local xWant = xNow + nowW + 2 * K.GAP
+    return { xNow = xNow, xWant = xWant, xWhy = xWant + wantW + 2 * K.GAP }
 end
 
--- 一張「設定｜改成｜原因」表（表頭可省）：設定名與值一行，原因欄換行，列高照原因的行數
-function AP.settingTable(P, F, key, rows, cols, header)
+-- 一張「設定｜目前值｜建議值｜原因」表（表頭可省）：設定名與值一行，原因欄換行；apply＝每列最右一個〔套用〕
+--   （AP.onFix 讀按鈕上的 mshOption）。列高照原因的行數與按鈕高，同列的字垂直置中
+function AP.settingTable(P, F, key, rows, cols, header, apply)
     local lh = K.fontH(UIFont.Small) + 2
-    local whyW = math.max(1, F.width - K.PAD - cols.xWhy)
+    local whyW = F.width - K.PAD - cols.xWhy
     local function cell(k, text, x, y, token)
         local l = F:label(k, text, token)
         l:setX(x)
@@ -704,17 +716,32 @@ function AP.settingTable(P, F, key, rows, cols, header)
     end
     if header and #rows > 0 then
         cell(key .. "h1", getText("IGUI_MSH_Admin_ColSetting"), K.PAD, F.y, "textMuted")
-        cell(key .. "h2", getText("IGUI_MSH_Admin_ColWant"), cols.xWant, F.y, "textMuted")
-        cell(key .. "h3", getText("IGUI_MSH_Admin_ColWhy"), cols.xWhy, F.y, "textMuted")
+        cell(key .. "h2", getText("IGUI_MSH_Admin_ColNow"), cols.xNow, F.y, "textMuted")
+        cell(key .. "h3", getText("IGUI_MSH_Admin_ColWant"), cols.xWant, F.y, "textMuted")
+        cell(key .. "h4", getText("IGUI_MSH_Admin_ColWhy"), cols.xWhy, F.y, "textMuted")
         F.y = F.y + lh + 2
     end
     for i, r in ipairs(rows) do
-        local y = F.y
-        cell(key .. i .. "n", r.name, K.PAD, y)
-        cell(key .. i .. "w", r.want, cols.xWant, y)
-        local lines = K.wrap(P.UI, r.why, whyW, UIFont.Small)
-        for j, line in ipairs(lines) do cell(key .. i .. "r" .. j, line, cols.xWhy, y + (j - 1) * lh, "textMuted") end
-        F.y = y + math.max(1, #lines) * lh + 2
+        local b, bw, bh = nil, 0, 0
+        if apply then
+            b = F:button(key .. i .. "a", getText("IGUI_MSH_Admin_ApplyOne"), P, AP.onFix)
+            b.mshOption = r.name
+            b:setEnabled(not P.fixBusy and #AP.fixCommands(P.options.health, { r.name }) > 0)
+            bw, bh = b.width + K.GAP, b.height
+        end
+        local lines = K.wrap(P.UI, r.why, math.max(1, whyW - bw), UIFont.Small)
+        local y, rowH = F.y, math.max(#lines * lh, bh, lh)
+        local ty = y + math.floor((rowH - lh) / 2)
+        cell(key .. i .. "n", r.name, K.PAD, ty)
+        cell(key .. i .. "c", r.now, cols.xNow, ty)
+        cell(key .. i .. "w", r.want, cols.xWant, ty)
+        local wy = y + math.floor((rowH - #lines * lh) / 2)
+        for j, line in ipairs(lines) do cell(key .. i .. "r" .. j, line, cols.xWhy, wy + (j - 1) * lh, "textMuted") end
+        if b ~= nil then
+            b:setX(F.width - K.PAD - b.width)
+            b:setY(y + math.floor((rowH - bh) / 2))
+        end
+        F.y = y + rowH + 2
     end
     F.y = F.y + K.GAP - 2
 end
@@ -732,13 +759,21 @@ end
 
 -- 走原版伺服器設定畫面同一條路（ISServerOptions.lua:184 /changeoption、:220 /reloadoptions）：引擎檢查帳號的
 --   ChangeAndReloadServerOptions 並寫 admin log（ChangeOptionCommand.java:26-51）；/reloadoptions 重讀設定檔再送給所有玩家
---   （ReloadOptionsCommand.java、GameServer.sendOptionsToClients）。選項名與值只收英數，引號拆不壞指令
-function AP.fixCommands(h)
+--   （ReloadOptionsCommand.java、GameServer.sendOptionsToClients）。keys 預設是全部必要設定，只送還列在必要或建議清單上的
+--   （重抓狀態後送出的那幾項都沒指令了＝改好了）。選項名只收英數、值只收英數與逗號（ChatStreams 的串流清單）：
+--   參數照引號切（CommandBase.java:210-213），引號拆不壞指令
+function AP.fixCommands(h, keys)
     local cmds, lines = {}, {}
-    local wants = type(h) == "table" and type(h.wants) == "table" and h.wants or {}
-    for _, k in ipairs(type(h) == "table" and type(h.blockers) == "table" and h.blockers or {}) do
+    h = type(h) == "table" and h or {}
+    local wants = type(h.wants) == "table" and h.wants or {}
+    local listed = {}
+    for _, list in ipairs({ h.blockers, h.warnings }) do
+        for _, k in ipairs(type(list) == "table" and list or {}) do listed[k] = true end
+    end
+    keys = keys or h.blockers
+    for _, k in ipairs(type(keys) == "table" and keys or {}) do
         local v = wants[k]
-        if v ~= nil and string.match(tostring(k), "^%w+$") and string.match(tostring(v), "^%w+$") then
+        if listed[k] and v ~= nil and string.match(tostring(k), "^%w+$") and string.match(tostring(v), "^[%w,]+$") then
             cmds[#cmds + 1] = "/changeoption " .. k .. " \"" .. v .. "\""
             lines[#lines + 1] = k .. " = " .. v
         end
@@ -754,27 +789,31 @@ function AP.canChangeOptions()
     return role ~= nil and role:hasCapability(Capability.ChangeAndReloadServerOptions) == true
 end
 
-function AP.onFix(P)
-    local cmds, lines = AP.fixCommands(P.options and P.options.health)
+-- 〔修正伺服器設定〕（全部必要設定）與建議表每列的〔套用〕（按鈕上的 mshOption 那一項）共用：確認後送原版指令，
+--   AP.FIX_WAIT_MS 後重抓狀態
+function AP.onFix(P, button)
+    local keys = button ~= nil and button.mshOption ~= nil and { button.mshOption } or nil
+    local cmds, lines = AP.fixCommands(P.options and P.options.health, keys)
     if #cmds == 0 or P.fixBusy then return end
     P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_Fix"), theme = P.theme,
         text = getText("IGUI_MSH_Admin_FixText", table.concat(lines, "\n")),
-        confirmText = getText("IGUI_MSH_Admin_Fix"), cancelText = getText("UI_Cancel"),
+        confirmText = getText(keys and "IGUI_MSH_Admin_ApplyOne" or "IGUI_MSH_Admin_Fix"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
             if not ok or P.fixBusy then return end
             for _, c in ipairs(cmds) do SendCommandToServer(c) end
-            P.fixBusy, P.fixDue = true, getTimestampMs() + AP.FIX_WAIT_MS
+            P.fixBusy, P.fixDue, P.fixKeys = true, getTimestampMs() + AP.FIX_WAIT_MS, keys
             AP.say(P, getText("IGUI_MSH_Admin_FixSent"), "textMuted")
             AP.layoutPage(P, "rules")
         end }))
 end
 
--- 送出 AP.FIX_WAIT_MS 後只重抓狀態（欄位不重設：還沒套用的規則編輯留著），看必要設定是不是都改好了
+-- 送出 AP.FIX_WAIT_MS 後只重抓狀態（欄位不重設：還沒套用的規則編輯留著），看送出的那幾項是不是都改好了
 function AP.checkFix(P)
+    local keys = P.fixKeys
     MSH.Client.send("adminOptions", {}, function(res)
-        P.fixBusy = nil
+        P.fixBusy, P.fixKeys = nil, nil
         if res.ok then P.options = res end
-        local done = res.ok and #AP.fixCommands(res.health) == 0
+        local done = res.ok and #AP.fixCommands(res.health, keys) == 0
         AP.say(P, getText(done and "IGUI_MSH_Admin_FixDone" or "IGUI_MSH_Admin_FixLater"), done and "text" or "warning")
         AP.layoutPage(P, "rules")
     end)

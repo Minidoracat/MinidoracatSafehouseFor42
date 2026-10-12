@@ -37,6 +37,7 @@ Sh.CYCLE_MS = 1000        -- 全部陣營分享輪完一次的目標（§6.5 hea
 -- ponytail: 每 tick 檢查數固定上限；伺服器 tick 很慢又有上百間陣營分享時一輪會超過 2 秒，實測不達標再調
 Sh.MAX_PER_TICK = 64
 Sh.NAME_BYTES = 64        -- factionShare.name／leader 的 UTF-8 上限（§4.2 第 238 行）
+Sh.CANDIDATES = 20        -- 分享對象候選最多幾位（同 Economy transfer.recipients）
 
 Sh.last = Sh.last or {}   -- claimId → { user = true }：上次套用到原生的應有名單（記憶體；重開後第一次同步當基準）
 Sh.queue = Sh.queue or {}
@@ -216,6 +217,75 @@ local function memberMayShare(rec, user, bits, mine)
     return MSH.Claims.roleOf(rec, user) == nil and not MSH.hasBit(bits, SHARE.INVITE) and subsetOf(bits, mine)
 end
 
+-- ===== 分享對象：存在檢查與候選 =====
+
+-- 伺服器認得的玩家：在線、Steam 模式登入過（bindings，Identity.bindOnLogin）、管理員設過個人名額（overrides）、
+--   某一間的屋主或成員。原版帳號資料庫 Lua 讀不到（ServerWorldDatabase 沒有 expose）；非 Steam 伺服器沒有 bindings，
+--   要對方在線或已經和某一間安全屋有關
+function Sh.known(name)
+    if R.binding(name) ~= nil or R.override(name) ~= nil or N.onlinePlayer(name) ~= nil then return true end
+    for id, rec in pairs(R.md.claims) do
+        if MSH.isInt(id) and type(rec) == "table" and not rec.malformed
+            and (rec.owner == name or MSH.Claims.grantOf(rec, name) ~= nil) then
+            return true
+        end
+    end
+    return false
+end
+
+local function lowerFirst(a, b)
+    local al, bl = string.lower(a), string.lower(b)
+    if al ~= bl then return al < bl end
+    return a < b
+end
+
+-- 分享對象候選（「成員與分享」頁輸入框的下拉）：照 Economy transfer.recipients（ECTransfer.lua:269-306）的順序——
+--   名字完全相符（分大小寫）的已知玩家、自己的安全屋分享過的人、名字含關鍵字（不分大小寫）的在線玩家，
+--   最多 Sh.CANDIDATES 位，rows＝{ name, online }。離線的已知玩家只在完全相符時列出，不能用關鍵字列舉全服玩家。
+--   不列自己與屋主；只有 INVITE 的成員不列這間已經有資格的人（伺服器不讓他動既有成員，memberMayShare）。
+--   只有能在這間新增分享的人能查（同 share 的 target(ctx, "invite")，但不比 revision、不綁定）
+function Sh.candidates(ctx)
+    local rec = R.get(ctx.args.claimId)
+    if rec == nil or not R.isLive(rec) or rec.malformed then return S.fail(CODE.NOT_FOUND) end
+    local role, mine = MSH.Claims.roleOf(rec, ctx.who)
+    if role == nil then return S.fail(CODE.NOT_FOUND) end
+    local inviteOnly = role ~= "owner" and not MSH.hasBit(mine, SHARE.MANAGE)
+    if inviteOnly and not MSH.hasBit(mine, SHARE.INVITE) then return S.fail(CODE.NOT_OWNER) end
+    local query = MSH.trim(ctx.args.query)
+    local needle = string.lower(query)
+    local online = {}
+    if S.netUp then
+        local list = getOnlinePlayers()
+        for i = 0, list:size() - 1 do
+            local name = list:get(i):getUsername()
+            if MSH.validUsername(name) then online[name] = true end
+        end
+    end
+    local rows, seen = {}, { [ctx.who] = true, [rec.owner] = true }
+    local function add(name)
+        if #rows >= Sh.CANDIDATES or seen[name] then return end
+        seen[name] = true
+        if inviteOnly and MSH.Claims.roleOf(rec, name) ~= nil then return end
+        rows[#rows + 1] = { name = name, online = online[name] == true }
+    end
+    local function matches(name) return string.find(string.lower(name), needle, 1, true) ~= nil end
+    if query ~= "" and Sh.known(query) then add(query) end
+    for _, r in ipairs(R.list()) do
+        if r.owner == ctx.who then
+            for _, g in ipairs(r.grants) do
+                if matches(g.user) then add(g.user) end
+            end
+        end
+    end
+    local names = {}
+    for name in pairs(online) do
+        if matches(name) then names[#names + 1] = name end
+    end
+    MSH.sortSafe(names, lowerFirst)
+    for _, name in ipairs(names) do add(name) end
+    return S.ok({ rows = rows })
+end
+
 -- ===== 指定玩家 =====
 
 function Sh.share(ctx)
@@ -230,6 +300,8 @@ function Sh.share(ctx)
     if not owner and not memberMayShare(rec, user, bits, mine) then return S.fail(CODE.NOT_OWNER) end
     local old = toSet(N.desiredPlayers(rec))
     if g == nil then
+        -- 新加的人要是伺服器認得的玩家：打錯字不會變成一筆沒人用的分享（使用者 2026-10-12）
+        if not Sh.known(user) then return S.fail(CODE.UNKNOWN_PLAYER) end
         if #rec.grants + 1 > MSH.Settings.get().maxShares then return S.fail(CODE.SHARE_FULL) end
         local entry = { user = user, bits = bits }
         if R.estimateBytes(entry) > LIMIT.REGISTRY_BYTES then return S.fail(CODE.REGISTRY_FULL) end
@@ -434,6 +506,8 @@ end
 S.define("share", { kind = "mutation",
     fields = { claimId = "claimId", expectedRevision = "revision", targetUsername = "username", bits = "bits" },
     run = function(ctx) return MSH.Sharing.share(ctx) end })
+S.define("shareCandidates", { kind = "query", fields = { claimId = "claimId", query = "query" },
+    run = function(ctx) return MSH.Sharing.candidates(ctx) end })
 S.define("unshare", { kind = "mutation",
     fields = { claimId = "claimId", expectedRevision = "revision", targetUsername = "username" },
     run = function(ctx) return MSH.Sharing.unshare(ctx) end })
