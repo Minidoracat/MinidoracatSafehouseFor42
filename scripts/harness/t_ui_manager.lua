@@ -266,21 +266,33 @@ return function(T)
         "遷移來的不提地契；不用「取消安全屋」那句")
     check(MW.clock(61000) == "1:01" and MW.clock(1) == "0:01" and MW.clock(-5) == "0:00", "倒數 m:ss、秒無條件進位、不出負數")
 
-    T.section("在地面顯示範圍：外緣格的地板染色、四類四種顏色、伺服器與玩家各自的開關")
-    local Rg = MSH.Ranges
-    local function colorOf(kind)
+    T.section("在地面顯示範圍：外緣格疊色（人物附近、屋裡、房子後面改地板染色）、四類四種顏色、伺服器與玩家各自的開關")
+    local Rg, FT = MSH.Ranges, MSH.FloorTint
+    local function ovOf(kind)
+        local c = Rg.COLORS[kind].ov
+        return c.r .. "/" .. c.g .. "/" .. c.b
+    end
+    local function tintOf(kind)
         local c = Rg.COLORS[kind]
         return c.r .. "/" .. c.g .. "/" .. c.b
     end
     local tw = T.tintWorld()
-    local world, lit = tw.floors, tw.lit
-    -- 一輪掃描（過了 SCAN_MS 的下一幀）
+    local world, lit, overlay = tw.floors, tw.lit, tw.overlay
+    -- 一輪掃描（過了 SCAN_MS 的下一幀）後畫一幀：z 這層畫出來的格子（疊色與染色合起來）與顏色
+    local function shown(z)
+        local cells, colors = overlay(z)
+        local tc, tcol = lit(z)
+        for k in pairs(tc) do cells[k], colors[k] = true, tcol[k] end
+        return cells, colors
+    end
+    -- 一輪掃描（過了 SCAN_MS 的下一幀），再一幀：FloorTint.tick 在 Ranges.update 之前跑，第一次畫到的那層下一幀才看玩家站在哪
     local function drawn(z)
         T.advance(Rg.SCAN_MS)
         T.fire("OnPreUIDraw")
-        return lit(z or 1)
+        T.fire("OnPreUIDraw")
+        return shown(z or 1)
     end
-    local alice = T.player({ name = "alice", x = 105, y = 205, z = 1.6 })
+    local alice = T.player({ name = "alice", x = 105.5, y = 205.5, z = 1.6 })
     -- 我的 L 形兩塊、分享給我的、同陣營 bob 的（managed）、其他玩家 dave 的（managed）與 carol 的（原版）、很遠的我的
     local natives = { SafeHouse.addSafeHouse(100, 200, 4, 10, "@MSH:3"), SafeHouse.addSafeHouse(104, 206, 6, 4, "@MSH:3"),
         SafeHouse.addSafeHouse(120, 200, 5, 5, "@MSH:4"), SafeHouse.addSafeHouse(130, 200, 5, 5, "@MSH:5"),
@@ -297,11 +309,23 @@ return function(T)
     MSH.Client.claims = { mine = { { claimId = 3 }, { claimId = 6 } }, shared = { { claimId = 4 } }, byId = {}, at = 1 }
     MSH.Client.emit("claims", MSH.Client.claims)
     local function sync(changes) T.fire("OnServerCommand", MSH.MODULE, "sandboxSync", changes) end
+    -- 分享給我的那間東南角外 (125,205) 有一層樓的房子：畫面上在它後面的外緣格被牆與屋頂擋住（前 3 列連左右半格、再往前
+    -- 正前方到第 5 列）；同陣營那間的 (134,200) 在屋裡
+    tw.buildings["125,205,1"], tw.buildings["134,200,1"] = true, true
     local cells, colors = drawn()
-    check(Rg.isOn() and colors["100,200"] == colorOf("own") and colors["120,200"] == colorOf("shared")
-        and colors["130,200"] == colorOf("faction") and cells["140,200"] == nil and cells["150,200"] == nil
-        and cells["5000,5000"] == nil,
-        "預設開著：我的、分享給我的、同陣營的外緣地板各染自己的顏色；其他玩家的不染（伺服器預設不開放）、很遠的不染")
+    check(Rg.isOn() and colors["100,200"] == ovOf("own") and colors["121,200"] == ovOf("shared")
+        and colors["130,200"] == ovOf("faction") and cells["140,200"] == nil and cells["150,200"] == nil
+        and cells["5000,5000"] == nil and lit(1)["100,200"] == nil,
+        "預設開著：我的、分享給我的、同陣營的外緣各疊自己的顏色、地板不染；其他玩家的不畫（伺服器預設不開放）、很遠的不畫")
+    check(tw.textures[1] == "media/textures/MinidoracatSafehouse/FloorFill2x.png", "疊色用 2x 的白色菱形（Core.getTileScale 2）")
+    local tcells, tcolors = lit(1)
+    check(tcolors["103,204"] == tintOf("own") and tcolors["103,203"] == tintOf("own") and colors["103,204"] == tintOf("own")
+        and tcells["103,205"] == nil and tcells["105,206"] == nil and tcells["100,200"] == nil,
+        "alice 站在格子中央：身體在畫面上蓋到的外緣格（身後的 103,203、103,204）改用地板染色，旁邊的照樣疊色")
+    check(tcolors["124,204"] == tintOf("shared") and tcolors["124,203"] == tintOf("shared") and tcolors["123,204"] == tintOf("shared")
+        and tcolors["120,200"] == tintOf("shared") and tcells["121,200"] == nil and tcolors["134,200"] == tintOf("faction")
+        and tcells["130,200"] == nil,
+        "前方的房子擋得到（前 3 列連左右半格、一層樓正前方到第 5 列）、在屋裡的外緣格改用地板染色（疊色會畫到牆與屋頂上）")
     local L = { { x = 100, y = 200, w = 4, h = 10 }, { x = 104, y = 206, w = 6, h = 4 } }
     local function edgeOf(rects, x, y)
         local R = MSH.Rect
@@ -314,30 +338,49 @@ return function(T)
             if edgeOf(L, x, y) ~= (cells[x .. "," .. y] == true) then lOk = false end
         end
     end
-    check(lOk and next((lit(0))) == nil, "我的 L 形兩塊染成一個外緣、交界不染、只染玩家所在樓層")
-    tw.reads = 0
-    world["100,200,1"].on = false   -- 別的功能取消了這格的染色
+    check(lOk and next((shown(0))) == nil, "我的 L 形兩塊畫成一個外緣、交界不畫、只畫玩家所在樓層")
+    local before = tw.ghostCalls
+    T.fire("RenderOpaqueObjectsInWorld", 1, 0, 0, 0, nil)
+    check(tw.ghostCalls == before, "只畫 0 號玩家的畫面")
+    alice.x, alice.y = 110.5, 210.5
     T.fire("OnPreUIDraw")
-    check(tw.reads == 0 and not world["100,200,1"].on, "掃描間隔內每幀只比時間：不讀格子")
-    world["101,200,1"] = nil          -- 區塊重新載入：這格換了新的地板物件
-    cells = drawn()
-    check(world["100,200,1"].on and world["101,200,1"] ~= nil and world["101,200,1"].on,
-        "下一輪掃描補上：被取消的、換了新地板的都重新染色")
+    cells, colors = shown(1)
+    check(colors["103,204"] == ovOf("own") and lit(1)["103,204"] == nil and lit(1)["109,209"] == true
+        and lit(1)["108,209"] == true and lit(1)["109,208"] == true,
+        "alice 走開：原本身後那幾格換回疊色、不等掃描間隔；新位置身後的外緣改染色")
+    alice.x, alice.y = 105.5, 205.5
+    T.fire("OnPreUIDraw")
+    local bobP = T.player({ name = "bob", x = 101.5, y = 201.5, z = 1 })
+    T.advance(FT.NEAR_MS)
+    T.fire("OnPreUIDraw")
+    check(lit(1)["100,200"] == true and overlay(1)["100,200"] == nil, "別的玩家（bob）站的地方附近也改用染色（每 NEAR_MS 看一次）")
+    T.disconnect(bobP)
+    T.advance(FT.NEAR_MS)
+    T.fire("OnPreUIDraw")
+    check(overlay(1)["100,200"] == true and not world["100,200,1"].on, "bob 離開：換回疊色")
+    tw.reads = 0
+    world["103,204,1"].on = false   -- 別的功能取消了這格的染色
+    T.fire("OnPreUIDraw")
+    check(tw.reads == 0 and not world["103,204,1"].on, "掃描間隔內每幀只比時間：不讀格子")
+    world["103,203,1"] = nil          -- 區塊重新載入：這格換了新的地板物件
+    drawn()
+    check(world["103,204,1"].on and world["103,203,1"] ~= nil and world["103,203,1"].on,
+        "下一輪掃描補上：被取消的、換了新地板的染色格都重新染色")
     sync({ RangesOthers = true })
     cells, colors = drawn()
-    local othersC = colorOf("others")
-    check(colors["140,200"] == othersC and colors["150,200"] == othersC and othersC ~= colorOf("own")
-        and othersC ~= colorOf("shared") and othersC ~= colorOf("faction") and colors["130,200"] == colorOf("faction"),
+    local othersC = ovOf("others")
+    check(colors["140,200"] == othersC and colors["150,200"] == othersC and othersC ~= ovOf("own")
+        and othersC ~= ovOf("shared") and othersC ~= ovOf("faction") and colors["130,200"] == ovOf("faction"),
         "伺服器開放其他玩家的（sandboxSync）：managed 與原版的都用第四種顏色，同陣營的照舊")
     sync({ RangesFaction = false })
     cells = drawn()
-    check(cells["130,200"] == nil and cells["140,200"] == true,
-        "伺服器關掉同陣營的：bob 的取消染色，也不改用其他玩家的顏色")
+    check(cells["130,200"] == nil and cells["134,200"] == nil and cells["140,200"] == true,
+        "伺服器關掉同陣營的：bob 的疊色與染色都取消，也不改用其他玩家的顏色")
     sync({ RangesFaction = true })
     Rg.setKind("shared", false)
     cells = drawn()
-    check(cells["120,200"] == nil and cells["100,200"] == true and cells["130,200"] == true and cells["140,200"] == true,
-        "玩家關掉某一類：只少那一類")
+    check(cells["120,200"] == nil and cells["124,204"] == nil and cells["100,200"] == true and cells["130,200"] == true
+        and cells["140,200"] == true, "玩家關掉某一類：只少那一類")
     Rg.setKind("shared", true)
     T.disband(team)
     T.fire("SyncFaction", "Team")
@@ -355,22 +398,22 @@ return function(T)
     check(rebuilds == 1, "原生清單變了：下一輪重算一次")
     Rg.rebuild = realRebuild
     alice.z = 0.2
-    check(next((drawn(1))) == nil and lit(0)["100,200"] == true, "換樓層：原樓層的取消，改染玩家所在樓層")
+    check(next((drawn(1))) == nil and shown(0)["100,200"] == true, "換樓層：原樓層的取消，改畫玩家所在樓層")
     alice.x = 1000
     check(next((drawn(0))) == nil, "走遠：附近沒有的那幾間都取消")
     alice.x = 105
     drawn(0)
-    -- 只染畫面看得到的格子外加幾格（假鏡頭 x ±80）：鏡頭往東移 81 格，不等掃描間隔、下一幀就照新的畫面重切，
-    -- 跨在邊上的那間只染範圍裡的那一段
+    -- 只畫畫面看得到的格子外加幾格（假鏡頭 x ±80）：鏡頭往東移 81 格，不等掃描間隔、下一幀就照新的畫面重切，
+    -- 跨在邊上的那間只畫範圍裡的那一段
     alice.x = 186
     T.fire("OnPreUIDraw")
-    local moved = lit(0)
+    local moved = shown(0)
     check(moved["100,200"] == nil and moved["101,200"] == nil and moved["102,200"] == true and moved["150,200"] == true,
-        "鏡頭移出染色範圍：不等掃描間隔，下一幀就照新的畫面重切；跨在邊上的那間只染範圍裡的那一段")
+        "鏡頭移出畫的範圍：不等掃描間隔，下一幀就照新的畫面重切；跨在邊上的那間只畫範圍裡的那一段")
     alice.x = 105
     drawn(0)
     Rg.setOn(false)
-    check(next((drawn(0))) == nil, "總開關關掉：染過的地板都取消")
+    check(next((drawn(0))) == nil and FT.n == 0 and next((lit(0))) == nil, "總開關關掉：疊色與染過的地板都取消")
     sync({ RangesOthers = false })
     for _, h in ipairs(natives) do SafeHouse.removeSafeHouse(h) end
     MSH.Client.claims = savedClaims

@@ -402,6 +402,37 @@ return function(T)
     local cb, kb2 = frame()
     check(count(cb) == 2 and kb2["10,10"] == colorOf(below), "取消框選：那格換回地面範圍的顏色，不會被一起取消")
     MSH.FloorTint.clear("ranges")
+    -- 疊色的地面範圍（顏色帶 ov）在框選底下也一樣：框選蓋過的那格改成框選的染色、拿掉疊色；取消框選換回疊色。
+    -- 玩家站到 (15,15)，(10,10) 不在人物身體蓋得到的格子裡（FloorTint.BODY_*），本來就是疊色
+    local belowOv = { r = 0.9, g = 0.9, b = 0.1, a = 0.7, ov = { r = 0.1, g = 0.2, b = 0.9, a = 0.45 } }
+    p.x, p.y = 15, 15
+    MSH.FloorTint.watchPlayers(getTimestampMs())
+    MSH.FloorTint.put(getCell(), "ranges", 10, 10, 0, belowOv)
+    check(tw.overlay(0)["10,10"] == true and tw.lit(0)["10,10"] == nil, "（前置）人物不在附近的地面範圍是疊色")
+    check(P.startSelect(vm, Sel.WALK), "（前置）框選蓋過疊色的那格")
+    p.x, p.y = 10, 10
+    Sel.mark(vm.sel, p)
+    p.x, p.y = 15, 15
+    local _, kb3 = frame()
+    check(kb3["10,10"] == acc and tw.overlay(0)["10,10"] == nil, "框選蓋過疊色的地面範圍：那格是框選的染色、不疊色")
+    P.back(vm)
+    frame()
+    check(tw.overlay(0)["10,10"] == true and tw.lit(0)["10,10"] == nil, "取消框選：那格換回疊色、地板不染")
+    MSH.FloorTint.clear("ranges")
+    -- 被房子擋住看幾列：正前方第 d 列是房子，而且 d ≤ 樓層數 × OCC_ROWS＋OCC_ROOF（3、2）。(47,27) 一層樓：(42,22) 在它
+    -- 後面第 5 列、(41,21) 第 6 列；(37,47) 兩層樓（最高 z＝1）：(29,39) 第 8 列、(28,38) 第 9 列；(67,17) 沒有房間的
+    -- 屋簷下（門廊）算一層：(62,12) 第 5 列、(61,11) 第 6 列，它自己那格也染色
+    tw.buildings["47,27,0"], tw.buildings["37,47,0"], tw.buildings["67,17,0"] = true, 1, "roof"
+    for _, c in ipairs({ { 42, 22 }, { 41, 21 }, { 29, 39 }, { 28, 38 }, { 62, 12 }, { 61, 11 }, { 67, 17 } }) do
+        MSH.FloorTint.put(getCell(), "ranges", c[1], c[2], 0, belowOv)
+    end
+    local ovs, tints = tw.overlay(0), tw.lit(0)
+    check(tints["42,22"] and not ovs["42,22"] and ovs["41,21"] and not tints["41,21"] and tints["29,39"] and ovs["28,38"],
+        "一層樓擋到後面第 5 列（牆＋屋頂）、第 6 列照樣疊色；兩層樓擋到第 8 列、再後面照樣疊色")
+    check(tints["62,12"] and ovs["61,11"] and tints["67,17"] and not ovs["67,17"],
+        "沒有房間的屋簷下（門廊）算一層樓：後面第 5 列染色、第 6 列疊色，屋簷下那格自己也染色")
+    MSH.FloorTint.clear("ranges")
+    tw.buildings["47,27,0"], tw.buildings["37,47,0"], tw.buildings["67,17,0"] = nil, nil, nil
     -- 很長的範圍只染畫面看得到的格子外加 MARGIN 格（假鏡頭 x ±80，env T.tintWorld）；鏡頭移出這個範圍才重切；
     -- 區塊重新載入換了地板，下一輪（FloorTint.tick）補上
     local M = MSH.FloorTint.MARGIN

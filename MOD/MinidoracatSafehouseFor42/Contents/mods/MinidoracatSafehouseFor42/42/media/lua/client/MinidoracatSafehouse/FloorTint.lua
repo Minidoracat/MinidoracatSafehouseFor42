@@ -1,17 +1,22 @@
--- MinidoracatSafehouse/FloorTint.lua：把地面標示畫在人物下層——地板染色（地面顯示範圍、建立面板的框選與標紅）。
--- 原版畫地面框的兩種方法都會蓋住站在上面的人物：addAreaHighlightForPlayer 與 WorldMarkers 都在世界畫完後才畫、深度刻意
---   往前推一點（FBORenderAreaHighlights.java:251-259、FBORenderWorldMarkers.java:224-233；2026-10-12 使用者截圖）。
---   地板染色（IsoObject:setHighlightColor＋setHighlighted(0, true, false)）由 FBORenderObjectHighlight 在人物之後、照
---   地板自己的深度重畫那一格（FBORenderCell.java:1128-1137；地板用 FloorShaper 的 tint，IsoObject.java:3686-3700），
---   人物照樣在上面（floortint-sp 實機）。tint 是把地板的光照色往顏色拉 a 的比例（Color.tintABGR，Color.java:243-253）。
--- 一格地板只能有一種顏色：各圖層（Ranges、建立面板的各塊／拉到一半那塊／標紅）各自交出自己的格子，同一格取
---   F.ORDER 裡最前面的圖層，只在那一格要顯示的顏色變了才呼叫引擎。所以框選蓋過地面範圍、關掉框選後底下的顏色回來，
---   兩邊不會互相取消。染色是常駐的（renderOnce＝false），不必每幀重設；每 SCAN_MS 對一次所有交出的格子（F.tick）：
---   區塊重新載入換了地板物件、被別的程式取消染色、之前沒載入的現在載入了，就重設。丟掉舊地板不必先取消：已經不在格子上的
---   物件，引擎畫的時候自己移出染色集合（FBORenderObjectHighlight.java:120-122）。
--- 成本：引擎每幀把每一塊染色的地板連同那格上面的物件重畫一次，畫面外的照樣算，草叢多的地方更貴。sh-tintperf2-1012a
---   （上限 244 FPS，createtint-mp 那塊草地）：64×64 全染 161 FPS，只染畫面看得到的 529 格 243、外加 6 格的 1,225 格 240。
---   所以只染畫面看得到的格子外加 MARGIN 格（F.window）：鏡頭移出這個範圍才重切，拉出再大的框也只染畫面上的那一塊。
+-- MinidoracatSafehouse/FloorTint.lua：地面標示（地面顯示範圍、建立面板的框選與標紅）。兩種畫法：
+-- 1. 地板染色（IsoObject:setHighlightColor＋setHighlighted(0, true, false)）：FBORenderObjectHighlight 在人物之後、照地板
+--    自己的深度重畫那一格（FBORenderCell.java:1128-1137；地板用 FloorShaper 的 tint，IsoObject.java:3686-3700），站在上面
+--    的人物、前面的房子照樣擋得住它（floortint-sp、sh-ranges-1012c 實機）。tint 把地板的光照色往顏色拉 a（Color.tintABGR，
+--    Color.java:243-253），最後乘上地板貼圖：草地幾乎沒有藍，藍、洋紅在草地上出不來（sh-tintbright-1012b）。
+-- 2. 疊色（顏色帶 ov 的：地面顯示範圍）：在 RenderOpaqueObjectsInWorld（FBORenderCell.java:1126，原版建造游標
+--    ISBuildingObject.lua:694-698 的畫法）用 IsoSprite:RenderGhostTileColor 疊一張白色菱形貼圖（IsoSprite.java:519-556），
+--    顏色照 alpha 混進地面，任何地面上都是同一個色相（sh-overlay-1012a：四類彼此、和標紅的色差都 ≥ 38）。但它關掉深度
+--    測試（IsoSprite.java:853-862），玩家又在 :1107 先畫好：站在上面的人物、前面房子的牆與屋簷都會被蓋住
+--    （sh-overlay-1013b、-1013c；把玩家重畫一次也蓋不回來）。所以在屋裡、前方的房子在畫面上擋得到（OCC_*）、人物身體
+--    在畫面上蓋得到（BODY_*）的格子改用同一個顏色的地板染色（使用者 2026-10-13 選定）。
+-- 一格只能有一種顏色：各圖層（Ranges、建立面板的各塊／拉到一半那塊／標紅）各自交出自己的格子，同一格取 F.ORDER 裡最前面的
+--   圖層，只在那一格要顯示的東西變了才呼叫引擎。所以框選蓋過地面範圍、關掉框選後底下的顏色回來，兩邊不會互相取消。
+-- 染色是常駐的（renderOnce＝false），不必每幀重設；每 SCAN_MS 對一次染色的格子（F.tick）：區塊重新載入換了地板物件、被別的
+--   程式取消染色、之前沒載入的現在載入了，就重設。疊色每幀照 F.list 畫，格子變了才重排（不配置）。
+-- 成本（上限 244 FPS）：染色由引擎每幀把每一塊染色的地板連同上面的物件重畫，草叢多的地方更貴（sh-tintperf2-1012a：64×64
+--   全染 161、畫面看得到的 529 格 243、1,225 格 240）；疊色每格一張貼圖（sh-rangesov-1013d：1,225 格 243.4、最低 238）。
+--   被擋住的判斷每格只在第一次讀格子（F.occ；1,225 格全新的一次 14 ms）。兩種都只畫畫面看得到的格子外加 MARGIN 格
+--   （F.window），鏡頭移出這個範圍才重切。
 -- 格子的鍵是 x、y、z 合成的整數（不配置）；z 在 -64..63、x、y 在 0..99999。
 
 if not isClient() then return end
@@ -24,11 +29,28 @@ MSH.FloorTint = F
 F.ORDER = { "marks", "pending", "shape", "ranges" }   -- 前面的蓋過後面的
 F.MARGIN = 4
 F.SCAN_MS = 500
+-- 被房子擋住：每層樓（牆）在畫面上 OCC_ROWS 列高，屋頂再 OCC_ROOF 列（sh-rangesov-1013c 一層樓：後面第 4 列被屋頂蓋住、
+-- 第 6 列沒有）；往前最多看 OCC_DEPTH 列（兩層樓＋屋頂）
+F.OCC_ROWS, F.OCC_ROOF, F.OCC_DEPTH = 3, 2, 8
+F.NEAR_MS = 200                    -- 多久看一次別的玩家站在哪（本機玩家每幀看）
+-- 人物在畫面上蓋住的範圍（2x 貼圖的畫素，菱形 128×64；1x 一樣比例）：腳兩側各 BODY_W、往上 BODY_TOP、往下 BODY_BOTTOM。
+-- 菱形和這個矩形有重疊的格子改用染色；站在格子中央時是腳下、身後兩格與兩側共 7 格（sh-rangesov-1013a 用整塊 4×4 太大）
+F.BODY_W, F.BODY_TOP, F.BODY_BOTTOM = 30, 136, 10
+F.OCC_MAX = 20000                  -- 被擋住的快取上限，滿了整個清掉
+F.TEX = "media/textures/MinidoracatSafehouse/FloorFill"   -- 白色實心菱形，＋"2x" 是 Core.getTileScale() == 2 用的
 F.cells = F.cells or {}       -- 圖層 → { [鍵] = 顏色 }
 F.floor = F.floor or {}       -- 鍵 → 染著的地板物件
 F.shown = F.shown or {}       -- 鍵 → 那塊地板目前染的顏色
+F.ov = F.ov or {}             -- 鍵 → 正在疊的顏色（某個顏色的 ov 表）
+F.occ = F.occ or {}           -- 鍵 → 是否被房子擋住（沒載入的不記）
+F.occN = F.occN or 0
+F.near = F.near or {}         -- 鍵 → true：有玩家站在附近
+F.list = F.list or {}         -- 疊色：x, y, z, r, g, b, a 每 7 個一格
+F.n = F.n or 0
+F.pk = F.pk or {}             -- 各玩家：所在格的鍵、蓋到哪幾格（BODY 的位元），兩個一組；[1]、[2] 是本機玩家
+F.pn = F.pn or 0
 F.last = F.last or {}         -- 圖層 → setRects／setRect 上次的參數（一樣就不動）
-F.win = F.win or { seq = 0 }  -- 染色範圍 x0, y0, x1, y1（含）、z；換了 seq 加一
+F.win = F.win or { seq = 0 }  -- 畫的範圍 x0, y0, x1, y1（含）、z；換了 seq 加一
 for _, name in ipairs(F.ORDER) do F.cells[name] = F.cells[name] or {} end
 
 local B = 100000
@@ -70,10 +92,51 @@ local function top(k)
     return nil
 end
 
--- 讓這一格的地板顯示最上層的顏色（沒有就取消）。不知道地板物件時才讀格子（IsoCell:getGridSquare 沒載入回 nil，
--- IsoCell.java:3190-3192；IsoGridSquare:getFloor IsoGridSquare.java:4652）
+-- 這一格是不是房子的一部分：在屋裡或頭上有屋頂、樓板（isOutside 是 false：exterior 只在沒有房間又沒有屋頂時設，
+-- IsoGridSquare.java:7306, 9431-9433）。回從這層往上幾層樓（BuildingDef:getMaxLevel，IsoBuilding.java:123、
+-- BuildingDef.java:82-90；沒有房間的屋簷下、門廊算一層），不是回 0
+local function storeys(cell, x, y, z)
+    local sq = cell:getGridSquare(x, y, z)
+    if sq == nil or sq:isOutside() then return 0 end
+    local b = sq:getBuilding()   -- IsoGridSquare.java:9266-9269
+    return b and b:getDef():getMaxLevel() - z + 1 or 1
+end
+
+-- 這格是房子的一部分，或畫面上被前方的房子擋住：疊色會畫到牆、屋頂、欄杆上。前方第 d 列（x、y 都加 d）是房子，而且
+-- d ≤ 樓層數 × OCC_ROWS＋OCC_ROOF。前 OCC_ROWS 列連左右半格（往畫面下方的三個方向）一起看，再往前只看正前方。
+-- 沒載入的先當沒被擋、不記
+local function occluded(cell, k)
+    local o = F.occ[k]
+    if o ~= nil then return o end
+    local x, y, z = unkey(k)
+    local sq = cell:getGridSquare(x, y, z)
+    if sq == nil then return false end
+    o = not sq:isOutside()
+    local d, rows = 1, F.OCC_ROWS
+    while not o and d <= F.OCC_DEPTH do
+        local n = storeys(cell, x + d, y + d, z)
+        if d <= rows then
+            o = n > 0 or storeys(cell, x + d, y + d - 1, z) > 0 or storeys(cell, x + d - 1, y + d, z) > 0
+        else
+            o = n > 0 and d <= rows * n + F.OCC_ROOF
+        end
+        d = d + 1
+    end
+    -- ponytail: 三層樓以上的房子只算到 OCC_DEPTH 列，再後面照樣疊色；要更高就加大 OCC_DEPTH（每格多讀一次格子）
+    -- ponytail: 蓋房子、拆房子不會讓快取失效，滿 OCC_MAX 才整個清掉；要即時就在 OnObjectAdded／OnTileRemoved 清掉附近幾格
+    if F.occN >= F.OCC_MAX then F.occ, F.occN = {}, 0 end
+    F.occ[k], F.occN = o, F.occN + 1
+    return o
+end
+
+-- 讓這一格顯示最上層的顏色（沒有就取消）：帶 ov、沒被擋、沒有人物蓋著就疊色，否則染地板。不知道地板物件時才讀格子
+-- （IsoCell:getGridSquare 沒載入回 nil，IsoCell.java:3190-3192；IsoGridSquare:getFloor IsoGridSquare.java:4652）
 local function show(cell, k)
     local want = top(k)
+    local ov = want and want.ov
+    if ov ~= nil and (F.near[k] or occluded(cell, k)) then ov = nil end
+    if F.ov[k] ~= ov then F.ov[k], F.listStale = ov, true end
+    if ov ~= nil then want = nil end
     local floor = F.floor[k]
     if want == nil then
         if floor ~= nil then floor:setHighlighted(0, false, false) end
@@ -124,9 +187,13 @@ function F.clear(name)
     end
 end
 
--- 對一格：地板換了物件（區塊重新載入）、被取消染色（isHighlighted IsoObject.java:5041-5043）、之前沒載入的現在載入了，
--- 就重設；沒載入的忘掉舊地板
+-- 對一格：疊色的格子之前沒載入、還不知道有沒有被擋的，重新判斷；染色的格子地板換了物件（區塊重新載入）、被取消染色
+-- （isHighlighted IsoObject.java:5041-5043）、之前沒載入的現在載入了，就重設；沒載入的忘掉舊地板
 local function recheck(cell, k)
+    if F.ov[k] ~= nil then
+        if F.occ[k] == nil then show(cell, k) end
+        return
+    end
     local x, y, z = unkey(k)
     local sq = cell:getGridSquare(x, y, z)
     local floor = sq and sq:getFloor()
@@ -138,9 +205,91 @@ local function recheck(cell, k)
     end
 end
 
--- 每個 UI 幀（OnPreUIDraw）只比時間；每 SCAN_MS 對一次各層交出的每一格
+-- 人物蓋得到的候選格：所在格往 x、y 各 -4..1（往上蓋、往下一點點）；位元 i 對應 BODY_DX[i]、BODY_DY[i]
+local BODY_DX, BODY_DY = {}, {}
+for dx = -4, 1 do
+    for dy = -4, 1 do
+        BODY_DX[#BODY_DX + 1], BODY_DY[#BODY_DY + 1] = dx, dy
+    end
+end
+
+-- 玩家 p 在第 z 層時回：所在格的鍵、人物蓋到哪幾格（位元和）。菱形與矩形重疊＝矩形離菱形中心最近的點在菱形裡
+-- （菱形是加權的 L1 球）。只有數字運算，每幀算也不配置
+local function standKey(p, z)
+    local pz = math.floor(p:getZ())   -- IsoMovingObject.java:525
+    if pz ~= z then return nil, 0 end
+    local x, y = p:getX(), p:getY()
+    local sx, sy = math.floor(x), math.floor(y)
+    local fx, fy = x - sx - 0.5, y - sy - 0.5
+    local px, py = (fx - fy) * 64, (fx + fy) * 32   -- 人物腳在所在格中心的哪裡（畫面畫素）
+    local top, bottom = py - F.BODY_TOP, py + F.BODY_BOTTOM
+    local mask, bit = 0, 1
+    for i = 1, #BODY_DX do
+        local cx, cy = (BODY_DX[i] - BODY_DY[i]) * 64, (BODY_DX[i] + BODY_DY[i]) * 32
+        local ddx = math.max(0, math.abs(cx - px) - F.BODY_W)
+        local ddy = cy < top and top - cy or (cy > bottom and cy - bottom or 0)
+        if ddx / 64 + ddy / 32 < 1 then mask = mask + bit end
+        bit = bit * 2
+    end
+    return key(sx, sy, pz), mask
+end
+
+-- 依目前各玩家蓋到的格子重算 F.near，進出的格子重新判斷（有人換了格子或蓋到的格子變了才跑，這時才配置）
+function F.renear(cell)
+    local old, near, pk = F.near, {}, F.pk
+    for j = 1, F.pn, 2 do
+        local k, mask = pk[j], pk[j + 1]
+        if k ~= nil then
+            local x, y, z = unkey(k)
+            for i = 1, #BODY_DX do
+                if mask % 2 == 1 then near[key(x + BODY_DX[i], y + BODY_DY[i], z)] = true end
+                mask = math.floor(mask / 2)
+            end
+        end
+    end
+    F.near = near
+    for k in pairs(near) do
+        if not old[k] then show(cell, k) end
+    end
+    for k in pairs(old) do
+        if not near[k] then show(cell, k) end
+    end
+end
+
+-- 本機玩家每幀、別的玩家（getOnlinePlayers：客戶端是 GameClient 認得的全部玩家，LuaManager.java:4457-4463）每 NEAR_MS
+-- 看一次站在哪、蓋到哪幾格，和上一輪一樣就不動；只看目前畫的那一層
+function F.watchPlayers(now)
+    local z = F.win.z
+    if z == nil then return end
+    local pk, changed = F.pk, false
+    local me = getSpecificPlayer(0)
+    local k, mask = nil, 0
+    if me then k, mask = standKey(me, z) end
+    if pk[1] ~= k or pk[2] ~= mask then pk[1], pk[2], changed = k, mask, true end
+    local n = math.max(F.pn, 2)
+    if now >= (F.nextNear or 0) then
+        F.nextNear = now + F.NEAR_MS
+        local list = getOnlinePlayers()
+        n = 2
+        for i = 0, (list and list:size() or 0) - 1 do
+            local p = list:get(i)
+            if p ~= me then
+                k, mask = standKey(p, z)
+                if k ~= nil then
+                    if pk[n + 1] ~= k or pk[n + 2] ~= mask then pk[n + 1], pk[n + 2], changed = k, mask, true end
+                    n = n + 2
+                end
+            end
+        end
+    end
+    if n ~= F.pn then F.pn, changed = n, true end
+    if changed then F.renear(getCell()) end
+end
+
+-- 每個 UI 幀（OnPreUIDraw）：看玩家站在哪；每 SCAN_MS 對一次各層交出的每一格
 function F.tick()
     local now = getTimestampMs()
+    F.watchPlayers(now)
     if now < (F.nextScan or 0) then return end
     F.nextScan = now + F.SCAN_MS
     local cell, order = nil, F.ORDER
@@ -149,6 +298,35 @@ function F.tick()
             cell = cell or getCell()
             recheck(cell, k)
         end
+    end
+end
+
+-- 疊色：照 F.ov 排成平的陣列（格子變了才排，重用同一張表）
+local function relist()
+    local l, n = F.list, 0
+    for k, c in pairs(F.ov) do
+        local x, y, z = unkey(k)
+        l[n + 1], l[n + 2], l[n + 3], l[n + 4], l[n + 5], l[n + 6], l[n + 7] = x, y, z, c.r, c.g, c.b, c.a
+        n = n + 7
+    end
+    F.n, F.listStale = n, false
+end
+
+-- RenderOpaqueObjectsInWorld（每幀、每個玩家畫面一次，FBORenderCell.java:3634-3656）：只畫 0 號玩家的畫面
+function F.render(playerIndex)
+    if playerIndex ~= 0 then return end
+    if F.listStale then relist() end
+    local n = F.n
+    if n == 0 then return end
+    local s = F.sprite
+    if s == nil then
+        s = IsoSprite.new()   -- 同原版 ISBuildingObject.getFloorCursorSprite（ISBuildingObject.lua:694-698）
+        s:LoadSingleTexture(F.TEX .. (Core.getTileScale() == 2 and "2x" or "") .. ".png")
+        F.sprite = s
+    end
+    local l = F.list
+    for i = 1, n, 7 do
+        s:RenderGhostTileColor(l[i], l[i + 1], l[i + 2], l[i + 3], l[i + 4], l[i + 5], l[i + 6])   -- IsoSprite.java:515-517
     end
 end
 
@@ -162,7 +340,7 @@ local function corner(sx, sy, z, x0, y0, x1, y1)
     return x0, y0, x1, y1
 end
 
--- 染色範圍：玩家 0 的畫面四個角換成格座標的外框，外加 MARGIN 格。畫面看得到的格子還在上次的範圍裡就不換（鏡頭每移
+-- 畫的範圍：玩家 0 的畫面四個角換成格座標的外框，外加 MARGIN 格。畫面看得到的格子還在上次的範圍裡就不換（鏡頭每移
 -- MARGIN 格左右才換一次），換了 seq 加一，各圖層下次呼叫時照新範圍重切。每幀可以呼叫多次、不配置
 function F.window(z)
     local core = getCore()
@@ -250,4 +428,5 @@ end
 
 if first then
     Events.OnPreUIDraw.Add(function() MSH.FloorTint.tick() end)
+    Events.RenderOpaqueObjectsInWorld.Add(function(playerIndex) MSH.FloorTint.render(playerIndex) end)   -- LuaEventManager.java:650
 end

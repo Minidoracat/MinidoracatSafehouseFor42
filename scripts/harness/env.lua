@@ -510,13 +510,20 @@ function getCell()
         end,
     }
 end
--- 地板染色的假世界（FloorTint、Ranges、建立面板）：每格一個常駐的地板物件，記住 setHighlightColor 的顏色（"r/g/b"）、
+-- 地面標示的假世界（FloorTint、Ranges、建立面板）：每格一個常駐的地板物件，記住 setHighlightColor 的顏色（"r/g/b"）、
 -- 強度與 setHighlighted 的狀態（IsoObject:isHighlighted／setHighlighted／setHighlightColor）。w.reads＝讀格子次數、
--- w.sets＝setHighlightColor 次數；w.unloaded["x,y"]＝true 時那格沒載入。假鏡頭：1280×720 的畫面以 0 號玩家為中心、
--- 一格 w.px 畫素（FloorTint.window 用四個螢幕角算看得到的範圍：x ±1280/2/w.px、y ±720/2/w.px）。換掉 getCell、
--- getCore、screenToIsoX/Y，w.restore() 還原
+-- w.sets＝setHighlightColor 次數；w.unloaded["x,y"]＝true 時那格沒載入；w.buildings["x,y,z"] 有值時那格是房子的一部分
+-- （isOutside 回 false）：true＝房間、最高就是這層（一層樓），數字＝房間、那棟最高那層的 z（BuildingDef:getMaxLevel），
+-- "roof"＝沒有房間的屋簷下（getBuilding 回 nil）。
+-- 疊色：IsoSprite.new():RenderGhostTileColor 記進 w.ghost（"x,y,z" → { color="r/g/b", a }），
+-- w.overlay(z) 觸發一次 RenderOpaqueObjectsInWorld(0) 回那一層疊的格子與顏色、透明度；w.ghostCalls＝畫了幾格。
+-- 假鏡頭：1280×720 的畫面以 0 號玩家為中心、一格 w.px 畫素（FloorTint.window 用四個螢幕角算看得到的範圍：
+-- x ±1280/2/w.px、y ±720/2/w.px）。換掉 getCell、getCore、screenToIsoX/Y、IsoSprite、Core，w.restore() 還原
 function T.tintWorld()
-    local w = { floors = {}, reads = 0, sets = 0, unloaded = {} }
+    local w = { floors = {}, reads = 0, sets = 0, unloaded = {}, buildings = {}, ghost = {}, ghostCalls = 0, textures = {} }
+    -- 疊色的貼圖物件與「被房子擋住」的快取跟著假世界走：換一個假世界就重來
+    local FT = MinidoracatSafehouse and MinidoracatSafehouse.FloorTint
+    if FT then FT.sprite, FT.occ, FT.occN = nil, {}, 0 end
     function w.floorAt(x, y, z)
         local k = x .. "," .. y .. "," .. z
         local f = w.floors[k]
@@ -544,13 +551,33 @@ function T.tintWorld()
         end
         return cells, colors, alphas
     end
-    local real = { getCell = getCell, getCore = getCore, sx = screenToIsoX, sy = screenToIsoY }
+    -- 畫一幀疊色，回 z 這層疊的格子（同 lit 的格式）
+    function w.overlay(z)
+        w.ghost = {}
+        T.fire("RenderOpaqueObjectsInWorld", 0, 0, 0, 0, nil)
+        local cells, colors, alphas = {}, {}, {}
+        for k, g in pairs(w.ghost) do
+            local x, y, gz = string.match(k, "^(-?%d+),(-?%d+),(-?%d+)$")
+            if tonumber(gz) == z then
+                local kk = x .. "," .. y
+                cells[kk], colors[kk], alphas[kk] = true, g.color, g.a
+            end
+        end
+        return cells, colors, alphas
+    end
+    local real = { getCell = getCell, getCore = getCore, sx = screenToIsoX, sy = screenToIsoY, IsoSprite = IsoSprite,
+        Core = Core }
     getCell = function()
         return { getGridSquare = function(_, x, y, z)
             w.reads = w.reads + 1
             if w.unloaded[x .. "," .. y] then return nil end
             local f = w.floorAt(x, y, z)
-            return { getFloor = function() return f end }
+            local b = w.buildings[x .. "," .. y .. "," .. z]
+            local top = b == true and z or b
+            local inside = b ~= nil and b ~= "roof"
+                and { getDef = function() return { getMaxLevel = function() return top end } end } or nil
+            return { getFloor = function() return f end, getBuilding = function() return inside end,
+                isOutside = function() return b == nil end }
         end }
     end
     w.px = 8
@@ -558,8 +585,19 @@ function T.tintWorld()
     getCore = function() return core end   -- 引擎的 getCore() 回同一個物件，每幀呼叫不配置
     screenToIsoX = function(pn, sx) return getSpecificPlayer(pn):getX() + (sx - 640) / w.px end
     screenToIsoY = function(pn, _, sy) return getSpecificPlayer(pn):getY() + (sy - 360) / w.px end
+    Core = { getTileScale = function() return 2 end }
+    IsoSprite = { new = function()
+        local s = {}
+        function s:LoadSingleTexture(path) w.textures[#w.textures + 1] = path end
+        function s:RenderGhostTileColor(x, y, z, r, g, b, a)
+            w.ghostCalls = w.ghostCalls + 1
+            w.ghost[x .. "," .. y .. "," .. z] = { color = r .. "/" .. g .. "/" .. b, a = a }
+        end
+        return s
+    end }
     function w.restore()
         getCell, getCore, screenToIsoX, screenToIsoY = real.getCell, real.getCore, real.sx, real.sy
+        IsoSprite, Core = real.IsoSprite, real.Core
     end
     return w
 end
