@@ -151,6 +151,60 @@ return function(T)
     code, d = roads()
     check(code == C.ROAD and d.x == 210, "沒有臥室的建築不放寬")
 
+    T.section("Exclusions：附屬建築（獨立車庫）的近區")
+    -- 住宅 (300,300) 10×10；附屬建築在東邊、中間隔 gap 格空地；範圍＝附屬建築外框，它東邊外一格（y=302）是街道
+    local function site(houseRooms, shedRooms, gap, w, h)
+        MSH = T.boot()
+        E = MSH.Exclusions
+        cfg = MSH.Settings.get()
+        w, h = w or 4, h or 5
+        local x = 310 + gap
+        T.building(300, 300, 10, 10, houseRooms)
+        T.building(x, 300, w, h, shedRooms)
+        rect = { x = x, y = 300, w = w, h = h }
+        T.floor(x + w, 302, "blends_street_01_96")
+        return x + w
+    end
+    site({ "bedroom" }, { "garagestorage" }, 4)
+    check(roads() == nil, "住宅旁隔 4 格的車庫：只圈車庫時門口的車道不擋（住宅外框＋3 管不到）")
+    T.floor(318, 303, "blends_street_01_80")
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "main" and d.x == 318 and d.y == 303 and sameAreas(d.areas, { 318, 303, 1, 1 }),
+        "車庫旁的主要道路照擋；放寬的街道格不標")
+    local sx = site({ "bedroom" }, { "garagestorage" }, 5)
+    code, d = roads()
+    check(code == C.ROAD and d.x == sx and d.kind == "street", "隔 5 格（超過 OUTBUILDING_REACH）的車庫不放寬")
+    sx = site({ "bedroom" }, { "mechanic" }, 4)
+    code, d = roads()
+    check(code == C.ROAD and d.x == sx, "住宅旁的修車廠（mechanic）不放寬")
+    sx = site({ "bedroom" }, { "garage", "office" }, 4)
+    code, d = roads()
+    check(code == C.ROAD and d.x == sx, "有一間不是附屬房名（office）的車庫不放寬")
+    sx = site({ "kitchen", "generalstore" }, { "garagestorage" }, 4)
+    code, d = roads()
+    check(code == C.ROAD and d.x == sx, "旁邊只有商店（沒有臥室）的車庫不放寬")
+    site({ "bedroom" }, { "garage" }, 4, 10, 10)
+    check(roads() == nil, "外框 100 格（OUTBUILDING_MAX_AREA）的車庫放寬")
+    sx = site({ "bedroom" }, { "garage" }, 4, 10, 11)
+    code, d = roads()
+    check(code == C.ROAD and d.x == sx, "外框超過 100 格的車庫不放寬")
+
+    -- 車庫 (314,308) 4×8：車庫外框＋3＝[311,321)×[305,319)、住宅外框＋3＝[297,313)²，合起來＝[297,321)×[297,319)
+    MSH = T.boot()
+    E = MSH.Exclusions
+    cfg = MSH.Settings.get()
+    T.building(300, 300, 10, 10, { "bedroom" })
+    T.building(314, 308, 4, 8, { "garage" })
+    rect = { x = 300, y = 300, w = 18, h = 16 }
+    T.floor(305, 315, "blends_street_01_96")
+    check(roads() == nil, "圈住屋子＋車庫：離兩棟外框都超過 3 格、在合起來的外框＋3 內的車道不擋")
+    rect = { x = 300, y = 300, w = 21, h = 16 }
+    T.floor(321, 310, "blends_street_01_96")
+    code, d = roads()
+    check(code == C.ROAD and d.x == 321 and d.y == 310 and sameAreas(d.areas, { 321, 310, 1, 1 }),
+        "合起來的外框＋3 外一格的街道照擋")
+    rect = { x = 200, y = 200, w = 20, h = 10 }
+
     T.section("Exclusions：MiniMap 停車場（v4 parkingIn）")
     MSH = T.boot()
     E = MSH.Exclusions

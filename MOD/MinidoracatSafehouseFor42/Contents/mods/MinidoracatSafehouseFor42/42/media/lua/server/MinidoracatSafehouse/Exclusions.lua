@@ -1,10 +1,11 @@
 -- MinidoracatSafehouse/Exclusions.lua：道路／資源點排除，建立確認當下判定一次（計畫 §8.1–8.3）。
 -- 道路＝地面層地板圖塊（只看 getFloor，路緣、標線等覆蓋圖掛在 attachedAnimSprite、不看：CellLoader.java:256-264）；
--- 自家車道放寬（使用者 2026-10-10 裁定 driveway、parkingsrc）：住宅外框＋roadMargin＋2 格內只有主要道路與 MiniMap 停車場算路。
+-- 自家車道放寬（使用者 2026-10-10 裁定 driveway、parkingsrc）：住宅外框＋roadMargin＋2 格內只有主要道路與 MiniMap 停車場算路；
+-- 住宅的獨立車庫等附屬建築也有近區（和住宅合起來的外框＋同樣格數，見 addOutbuilding）。
 -- 資源點＝MiniMap `MinidoracatMiniMapResourceAPI.buildingsIn`；MiniMap 缺席或版本不符＝不擋、設定隱藏（§8.2）。
 -- 成本（§12.4）：每塊範圍（含邊界）每格讀一次，相鄰塊的邊界帶會重疊多讀幾格；道路違規時照樣掃完（和通過時一樣多），
--- 違規格合併成矩形回給客戶端標紅（使用者 2026-10-11 裁定預檢標紅）；配置只隨請求（住宅數、停車區數、道路矩形數）
--- 成長，不逐格建表。範圍是一間的各塊（rects，使用者 2026-10-11 裁定多塊）。
+-- 違規格合併成矩形回給客戶端標紅（使用者 2026-10-11 裁定預檢標紅）；配置只隨請求（住宅數、附屬建築數（各多查一次
+-- RoomDef）、停車區數、道路矩形數）成長，不逐格建表。範圍是一間的各塊（rects，使用者 2026-10-11 裁定多塊）。
 -- 回傳一律 nil（通過）或 code, detail：ROAD { x, y, kind, areas }（第一格與它的類別；areas＝全部違規格的矩形，
 -- 扁平 x, y, w, h, ...）、NOT_LOADED { x, y }、RESOURCE { cat, x, y, w, h }、RESOURCE_PENDING、RESOURCE_ERROR。
 
@@ -55,7 +56,54 @@ local function hasBedroom(building)
     return false
 end
 
--- 範圍碰到的住宅（任一房叫 bedroom 的 BuildingDef）外框往外 d 格；每塊各查一次，同一棟只記一次
+-- 附屬建築（獨立車庫、車棚、工具間）：沒有臥室、每間房都在 OUTBUILDING_ROOMS、外框面積 ≤ OUTBUILDING_MAX_AREA，
+-- 而且外框往外 OUTBUILDING_REACH 格內有住宅的房間。房名照 2026-10-13 離線房屋分類的附屬建築名單；修車廠等商用車庫
+-- 有 mechanic／office 等房、不算。面積上限：原版住宅旁的附屬建築外框 p99 56 格、最大的雙車庫 60 格。
+-- 往外 5 格＝和住宅的房間之間最多隔 4 格空地，同地塊分組的間距 4；量的是房間（getRoomsIntersecting），外框含
+-- emptyoutside、比房間大，改量 4 格時原版 493 塊被擋的地還有 58 塊救不回來（5 格剩 16 塊，其中 8 塊是主要道路）。
+local OUTBUILDING_ROOMS = { garage = true, garagestorage = true, garage_storage = true, shed = true, ww_shed = true,
+    woodshed = true, storage = true, miscstorage = true, gardeningstorage = true, hunterstorage = true, boathouse = true,
+    empty = true, Empty = true, closet = true, laundry = true, bathroom = true }
+local OUTBUILDING_MAX_AREA = 100
+local OUTBUILDING_REACH = 5
+
+local function isOutbuilding(building)
+    if building:getW() * building:getH() > OUTBUILDING_MAX_AREA then return false end
+    local rooms = building:getRooms()
+    for i = 0, rooms:size() - 1 do
+        if not OUTBUILDING_ROOMS[rooms:get(i):getName()] then return false end
+    end
+    return true
+end
+
+-- 扁平陣列加一區：[x0, x1)×[y0, y1) 往外 d 格
+local function addZone(zones, x0, y0, x1, y1, d)
+    local n = #zones
+    zones[n + 1], zones[n + 2], zones[n + 3], zones[n + 4] = x0 - d, y0 - d, x1 + d, y1 + d
+end
+
+-- 附屬建築的近區＝它和附近每棟住宅合起來的外框往外 d 格：圈住屋子＋車庫的矩形常蓋到車庫門口往外 4–5 格的車道，
+-- 只給車庫外框＋d 不夠（2026-10-13 離線：原版 493 塊「住宅＋附屬建築」地被街道格擋下，車庫外框＋d 只救 160 塊，合起來救 477 塊）
+local function addOutbuilding(zones, b, d)
+    local x, y, w, h = b:getX(), b:getY(), b:getW(), b:getH()
+    local r = OUTBUILDING_REACH
+    local list = ArrayList.new()
+    getWorld():getMetaGrid():getRoomsIntersecting(x - r, y - r, w + 2 * r, h + 2 * r, list)
+    local done = {}
+    for i = 0, list:size() - 1 do
+        local house = list:get(i):getBuilding()
+        if house ~= nil and not done[house] then
+            done[house] = true
+            if hasBedroom(house) then
+                local hx, hy = house:getX(), house:getY()
+                addZone(zones, math.min(x, hx), math.min(y, hy), math.max(x + w, hx + house:getW()),
+                    math.max(y + h, hy + house:getH()), d)
+            end
+        end
+    end
+end
+
+-- 範圍碰到的住宅（任一房叫 bedroom 的 BuildingDef）外框往外 d 格，與附屬建築的近區；每塊各查一次，同一棟只記一次
 local function nearZones(rects, d)
     local seen, zones = {}, {}
     for _, rect in ipairs(rects) do
@@ -67,11 +115,10 @@ local function nearZones(rects, d)
             if b ~= nil and not seen[b] then
                 seen[b] = true
                 if hasBedroom(b) then
-                    -- BuildingDef.java:186-209
-                    local x, y = b:getX(), b:getY()
-                    local n = #zones
-                    zones[n + 1], zones[n + 2] = x - d, y - d
-                    zones[n + 3], zones[n + 4] = x + b:getW() + d, y + b:getH() + d
+                    local x, y = b:getX(), b:getY()        -- BuildingDef.java:186-209
+                    addZone(zones, x, y, x + b:getW(), y + b:getH(), d)
+                elseif isOutbuilding(b) then
+                    addOutbuilding(zones, b, d)
                 end
             end
         end
