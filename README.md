@@ -26,7 +26,7 @@ Project Zomboid Build 42 MOD。
 ## 需要什麼
 
 - **必要**：[Minidoracat UI Library](https://steamcommunity.com/sharedfiles/filedetails/?id=3789836701)（`MinidoracatUIFor42`，API rev 16 以上；rev 18 起視窗與對話框不透明，疊在一起時不會透出底下的字）。
-- **選用**：[Minidoracat MiniMap](https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359)（`MinidoracatMiniMapFor42`）。沒裝時不檢查資源點，管理員面板的資源點設定改成一行說明：要裝小地圖 MOD 才有這個功能；道路檢查照常，但住宅周圍的停車場不會額外判成道路（停車場資料要 MiniMap `42.21.0-0.42.0` 以上）。小地圖上的安全屋標籤顯示真正屋主要 MiniMap `42.21.0-0.43.0` 以上，舊版顯示服務帳號 `@MSH:<編號>`；多塊的安全屋合成一個框要 MiniMap 下一版，舊版每塊各畫一個框。
+- **選用**：[Minidoracat MiniMap](https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359)（`MinidoracatMiniMapFor42`）。沒裝時不檢查資源點，管理員面板的資源點設定改成一行說明：要裝小地圖 MOD 才有這個功能；道路檢查照常，但住宅周圍的停車場不會額外判成道路（停車場資料要 MiniMap `42.21.0-0.42.0` 以上）。小地圖上的安全屋標籤顯示真正屋主要 MiniMap `42.21.0-0.43.0` 以上，舊版顯示服務帳號 `@MSH:<編號>`；多塊的安全屋合成一個框要 MiniMap `42.21.0-0.43.1` 以上，舊版每塊各畫一個框。
 - **選用**：[Minidoracat Economy](https://steamcommunity.com/sharedfiles/filedetails/?id=3801482125)（`MinidoracatEconomyFor42`，需支援權益 API rev 2 的訂閱、租用與方案設定）。沒裝時只有免費名額，其他功能照常。
 - **只支援多人專用伺服器**。單人、自己開的多人（listen／合作主機）會載入，但不能建立或管理安全屋，介面顯示「僅支援專用伺服器」。分割畫面第 2–4 位玩家不能建立安全屋。
 
