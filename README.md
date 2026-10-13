@@ -28,7 +28,7 @@ Project Zomboid Build 42 MOD。
 - **必要**：[Minidoracat UI Library](https://steamcommunity.com/sharedfiles/filedetails/?id=3789836701)（`MinidoracatUIFor42`，API rev 16 以上；rev 18 起視窗與對話框不透明，疊在一起時不會透出底下的字）。
 - **選用**：[Minidoracat MiniMap](https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359)（`MinidoracatMiniMapFor42`）。沒裝時不檢查資源點，管理員面板的資源點設定改成一行說明：要裝小地圖 MOD 才有這個功能；道路檢查照常，但住宅周圍的停車場不會額外判成道路（停車場資料要 MiniMap `42.21.0-0.42.0` 以上）。小地圖上的安全屋標籤顯示真正屋主要 MiniMap `42.21.0-0.43.0` 以上，舊版顯示服務帳號 `@MSH:<編號>`；多塊的安全屋合成一個框要 MiniMap `42.21.0-0.43.1` 以上，舊版每塊各畫一個框。
 - **選用**：[Minidoracat Economy](https://steamcommunity.com/sharedfiles/filedetails/?id=3801482125)（`MinidoracatEconomyFor42`，需支援權益 API rev 2 的訂閱、租用與方案設定）。沒裝時只有免費名額，其他功能照常。
-- **只支援多人專用伺服器**。單人、自己開的多人（listen／合作主機）會載入，但不能建立或管理安全屋，介面顯示「僅支援專用伺服器」。分割畫面第 2–4 位玩家不能建立安全屋。
+- **只支援多人專用伺服器**。單人、自己開的多人（listen／合作主機）會載入，但不能建立或管理安全屋，介面顯示「安全屋管理只在專用伺服器上運作。」。分割畫面第 2–4 位玩家不能建立安全屋。
 
 ## 伺服器設定（必要）
 
@@ -61,7 +61,7 @@ Project Zomboid Build 42 MOD。
 
 ## 規則與預設值（沙盒選項）
 
-全部存在沙盒選項的「Minidoracat Safehouse」分頁，開服前就能設；開服後建議從管理員面板改（立即生效）。用原版伺服器設定畫面改也可以，約一分鐘內同步給線上玩家。
+全部存在沙盒選項的「Minidoracat 安全屋」分頁（英文介面是「Minidoracat Safehouse」），開服前就能設；開服後建議從管理員面板改（立即生效）。用原版伺服器設定畫面改也可以，約一分鐘內同步給線上玩家。
 
 | 設定 | 預設 |
 |---|---|
@@ -120,6 +120,7 @@ Project Zomboid Build 42 MOD。
 - 這些安全屋留在原地當原版安全屋，本 MOD 不管理也不刪除：範圍不合法、屋主名稱不合法、和另一間範圍或左上角相同、超過全服 256 間，或成員多到接管後會擠掉之後新建與分享的空間（依建立時間由舊到新接管，接管最多用掉一半的資料空間）。清單在 `Zomboid/Lua/MinidoracatSafehouse/<伺服器名>/migration-completion.txt` 的 `skip` 列；需要時用原版管理員工具處理（注意上面原版指令的名稱比對問題）。名稱超過 40 字的會截短。
 - 安全屋重生點與安全屋聊天不搬。
 - Better Safehouse 存在世界資料裡的記錄不讀也不改。
+- Better Safehouse 自己的地契物品（3.1.1 有 5 種）在它從 `Mods=` 拿掉後，第一次載入就會從玩家身上與容器裡消失，裝回來也找不回。要補償的話，由管理員改發本 MOD 的地契；切換前先公告。
 - 接管後、世界存檔前伺服器當掉：下次開服自動補回，不必處理。真的對不上的會出現在管理員面板「規則」頁的「需要處理的安全屋」，按「重新綁定」或「釋出」。
 
 **還原**：想放棄接管，關服後把存檔、伺服器設定檔、模組清單與 `Zomboid/Lua/MinidoracatSafehouse/<伺服器名>/` 一起還原成第 1 步的備份。

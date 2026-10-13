@@ -26,13 +26,13 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [h2]✨ Features[/h2]
 [list]
 [*] [b]Tiered deeds[/b]: the deed tier sets how large your safehouse can be
-[*] [b]Custom area[/b]: mark your own area, by default up to 4 rectangles (admins can allow up to 8) joined into L, U and other shapes, with the size limit shown as you go and road tiles in the way marked red; redraw it shortly after claiming
-[*] [b]Avoids roads and resource points[/b]: main roads and buildings such as military, police and medical sites cannot be claimed
-[*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately; friends can also be allowed just to invite others
-[*] [b]Manager window[/b]: see your own and shared safehouses, rename or release them; outline nearby safehouses on the ground in four colors (mine, shared with me, faction, other players)
-[*] [b]Vanilla protection[/b]: non-members cannot enter or take items; zombies can still spawn inside
+[*] [b]Custom area[/b]: drag or walk to two corners to mark the area, and join pieces into L or U shapes
+[*] [b]Avoids roads and resource points[/b]: roads, parking lots and buildings such as military, police and medical sites cannot be claimed
+[*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately
+[*] [b]Manager window[/b]: rename, share or release your safehouses, and see nearby safehouses outlined on the ground
+[*] [b]Vanilla protection[/b]: non-members cannot enter or take items, but zombies can still spawn inside
 [*] [b]Admin panel[/b]: adjust every rule in game, including deeds, exclusions and paid slots
-[*] [b]Take over existing safehouses[/b]: vanilla and Better Safehouse safehouses are taken over automatically at server start, keeping their owners and members
+[*] [b]Take over existing safehouses[/b]: vanilla and Better Safehouse safehouses are taken over automatically
 [/list]
 📖 [b]Server settings, taking over existing safehouses and known limits:[/b] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse full guide on GitHub[/url] (Traditional Chinese)
 
