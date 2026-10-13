@@ -3,6 +3,7 @@
 -- 加進去的物品跟著原本的同步送出，不必另外同步。第三參數可能是分布物件不是容器（ItemPickerJava.java:630
 -- 傳 containerDist.bags），索引它就 throw，所以第一個檢查一定是 instanceof（家族 pitfalls.md:74-83）。
 -- 只看容器種類 desk／filingcabinet／safe；判斷地契只用 full type（不用自訂 tag，§2.8）；每次都讀當下的 SandboxVars。
+-- 總開關 DeedLoot（預設關，使用者 2026-10-13）關著時任何等級都不掉。
 
 if isClient() then return end
 
@@ -29,14 +30,15 @@ function D.onFill(roomName, containerType, container)
     if not instanceof(container, "ItemContainer") then return end
     if not D.TYPES[containerType] then return end
     local sb = SandboxVars and SandboxVars.MinidoracatSafehouse
-    if type(sb) ~= "table" then return end
+    if type(sb) ~= "table" or sb.DeedLoot ~= true then return end
     local enabled = sb.TiersEnabled
     if type(enabled) ~= "number" then return end
     if hasDeed(container) then return end
     for n = 1, math.min(enabled, MSH.MAX_TIER) do
         local chance = sb["Tier" .. n .. "LootChance"]
-        -- ZombRand(10000) 回 0..9999（LuaManager.java:7064-7069）：機率 0 永不中、100 必中
-        if type(chance) == "number" and ZombRand(10000) < chance * 100 then
+        -- ZombRand(1000000) 回 0..999999（LuaManager.java:7064-7069，參數轉 long）：解析度 0.0001%，高等級的預設
+        -- 0.001–0.005% 才分得出來；機率 0 永不中、100 必中
+        if type(chance) == "number" and ZombRand(1000000) < chance * 10000 then
             container:AddItem(MSH.deedType(n))   -- ItemContainer.java:538
             return
         end

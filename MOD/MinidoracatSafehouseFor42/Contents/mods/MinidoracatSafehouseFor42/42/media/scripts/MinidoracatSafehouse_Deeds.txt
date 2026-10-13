@@ -3,13 +3,14 @@ module MinidoracatSafehouse
     /*
         地契 8 種（計畫 §7.1）：等級只由 full type 決定，不寫 modData、不加自訂 tag；種類只加不刪、不改名。
         屬性照 deeds-mp spike（2026-10-10 實測）；顯示名稱在 Translate/<LANG>/ItemName.json（MinidoracatSafehouse.Deed<N>）。
+        圖示 media/textures/Item_MinidoracatSafehouseDeed<N>.png 由 scripts/icons/build_deed_icons.py 產生（封蠟地契，2026-10-13）。
     */
     item Deed1
     {
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed1,
         WorldStaticModel = SheetOfPaper,
     }
 
@@ -18,7 +19,7 @@ module MinidoracatSafehouse
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed2,
         WorldStaticModel = SheetOfPaper,
     }
 
@@ -27,7 +28,7 @@ module MinidoracatSafehouse
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed3,
         WorldStaticModel = SheetOfPaper,
     }
 
@@ -36,7 +37,7 @@ module MinidoracatSafehouse
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed4,
         WorldStaticModel = SheetOfPaper,
     }
 
@@ -45,7 +46,7 @@ module MinidoracatSafehouse
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed5,
         WorldStaticModel = SheetOfPaper,
     }
 
@@ -54,7 +55,7 @@ module MinidoracatSafehouse
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed6,
         WorldStaticModel = SheetOfPaper,
     }
 
@@ -63,7 +64,7 @@ module MinidoracatSafehouse
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed7,
         WorldStaticModel = SheetOfPaper,
     }
 
@@ -72,7 +73,7 @@ module MinidoracatSafehouse
         DisplayCategory = Literature,
         ItemType = base:normal,
         Weight = 0.1,
-        Icon = Paper,
+        Icon = MinidoracatSafehouseDeed8,
         WorldStaticModel = SheetOfPaper,
     }
 }

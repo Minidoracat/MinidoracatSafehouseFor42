@@ -40,9 +40,12 @@ return function(T)
     check(cfg.maxPieces == 4, "每間最多塊數預設 4（使用者 2026-10-12）")
     check(cfg.roadKinds.main and cfg.roadKinds.street and not cfg.roadKinds.gravel, "道路類別預設 main;street")
     check(cfg.resourceCats.military and cfg.resourceCats.prison and not cfg.resourceCats.food, "資源類別預設 8 類")
-    check(cfg.tiers[1].side == 48 and cfg.tiers[1].area == 576 and cfg.tiers[2].side == 80 and cfg.tiers[2].area == 1600
-        and cfg.tiers[8].side == 96 and cfg.tiers[8].area == 4096 and cfg.freeMaxSide == 48 and cfg.freeMaxArea == 576,
-        "各級預設大小：格數 576／1,600／4,096，外框上限是同面積正方形邊長的 2 倍（48／80，最多 96；使用者 2026-10-12）")
+    local sizes, sizesOk = { 576, 1024, 1600, 2304, 3136, 4096, 6400, 9216 }, cfg.freeMaxSide == 48 and cfg.freeMaxArea == 576
+    for n, area in ipairs(sizes) do
+        sizesOk = sizesOk and cfg.tiers[n].area == area and cfg.tiers[n].side == math.min(2 * math.sqrt(area), 96)
+    end
+    check(sizesOk, "各級預設大小：邊長 24–96 的正方形格數（576…9,216），外框上限是同面積正方形邊長的 2 倍、最多 96"
+        .. "（使用者 2026-10-13 採用建議表）")
     check(cfg.tiers[1].craft == 3 and cfg.tiers[2].craft == 1 and cfg.tiers[1].free and not cfg.tiers[1].buy,
         "製作與名額開關預設")
     T.sandbox("ClaimGap", 99)

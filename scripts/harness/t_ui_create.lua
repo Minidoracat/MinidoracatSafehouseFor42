@@ -249,7 +249,7 @@ return function(T)
         TextField = { new = function(o) return make(o) end },
     } }
     MSH.Client._theme = nil
-    T.sandbox("Tier2Side", 40)   -- 這段的走位拉 50 × 10＝500 格：外框上限設 40（預設 80）才會只超過外框
+    T.sandbox("Tier2Side", 40)   -- 這段的走位拉 50 × 10＝500 格：外框上限設 40（預設 64）才會只超過外框
     P.open({ deedType = "MinidoracatSafehouse.Deed2" })
     local vm = P.model
     local v = vm.view
@@ -306,8 +306,8 @@ return function(T)
         and k1["10,10"] == colorOf(Sel.FLOOR_OK) and a1["10,10"] == Sel.PENDING_TINT,
         "拉到一半的那塊：每幀寫出大小、整塊地板染成框選的顏色")
     check(onlyPrimary("apply"), "拉到一半：只有〔加入這塊〕是主要按鈕")
-    check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1600,4,IGUI_MSH_AreaSquare|40") == "textMuted",
-        "上限行寫出格數（旁邊是幾乘幾：1,600 是 40 × 40）、外框與塊數上限（沙盒預設 4 塊，不是硬上限）")
+    check(lineTok("IGUI_MSH_Select_ShapeLimit|40,1024,4,IGUI_MSH_AreaSquare|32") == "textMuted",
+        "上限行寫出格數（旁邊是幾乘幾：1,024 是 32 × 32）、外框與塊數上限（沙盒預設 4 塊，不是硬上限）")
     p.x, p.y = 41, 19
     local c1b = frame()
     check(c1b["41,19"] and c1b["40,10"] and count(c1b) == 320, "走位終點往外走：拉到一半那塊跟著長大")

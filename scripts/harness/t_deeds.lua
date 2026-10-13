@@ -16,7 +16,7 @@ return function(T)
     end
 
     T.section("掉落：容器種類、分布物件、重複註冊")
-    local MSH = T.boot({ sandbox = { Tier1LootChance = 100, Tier2LootChance = 100, Tier3LootChance = 100 } })
+    local MSH = T.boot({ sandbox = { DeedLoot = true, Tier1LootChance = 100, Tier2LootChance = 100, Tier3LootChance = 100 } })
     for _, kind in ipairs({ "desk", "filingcabinet", "safe" }) do
         local got = deeds(fill(kind))
         check(#got == 1 and got[1] == "MinidoracatSafehouse.Deed1", kind .. "：機率 100 恰好一張 1 級")
@@ -34,22 +34,34 @@ return function(T)
     T.fire("OnFillContainer", "office", "desk", c)
     check(#deeds(c) == 1, "容器已有地契就不再加")
 
-    T.section("掉落：啟用等級、機率、即時讀沙盒")
+    T.section("掉落：總開關、啟用等級、機率、即時讀沙盒")
+    -- 總開關預設關（使用者 2026-10-13）：機率 100 也不掉
+    check(MSH.Settings.BY_KEY.DeedLoot.default == false, "DeedLoot 預設關")
+    T.sandbox("DeedLoot", false)
+    check(#deeds(fill("desk")) == 0, "DeedLoot 關：各級機率 100 也不掉")
+    T.sandbox("DeedLoot", true)
     T.sandbox("TiersEnabled", 1)
     T.sandbox("Tier1LootChance", 0)
     check(#deeds(fill("desk")) == 0, "1 級機率 0、2–3 級未啟用（機率 100）：不掉")
     T.sandbox("Tier1LootChance", 1)
-    T.randQueue = { 100 }
-    check(#deeds(fill("desk")) == 0, "1 級 1%：擲到 100 不中（< 100 才中）")
-    T.randQueue = { 99 }
-    check(#deeds(fill("desk")) == 1, "1 級 1%：擲到 99 中")
+    T.randQueue = { 10000 }
+    check(#deeds(fill("desk")) == 0, "1 級 1%：擲到 10000 不中（< 10000 才中）")
+    T.randQueue = { 9999 }
+    check(#deeds(fill("desk")) == 1, "1 級 1%：擲到 9999 中")
+    -- 高等級預設 0.001%：一百萬分之十，舊的 ZombRand(10000) 分不出 0.01% 以下
+    T.sandbox("Tier1LootChance", 0.001)
+    T.randQueue = { 10 }
+    check(#deeds(fill("desk")) == 0, "0.001%：擲到 10 不中")
+    T.randQueue = { 9 }
+    check(#deeds(fill("desk")) == 1, "0.001%：擲到 9 中（解析度 0.0001%）")
+    T.sandbox("Tier1LootChance", 1)
     T.sandbox("TiersEnabled", 3)
     T.sandbox("Tier2LootChance", 0.5)
     T.sandbox("Tier3LootChance", 0.2)
-    T.randQueue = { 9999, 49 }
+    T.randQueue = { 999999, 4999 }
     local got = deeds(fill("safe"))
     check(#got == 1 and got[1] == "MinidoracatSafehouse.Deed2", "1 級沒中、往上擲 2 級中：放 2 級並停止")
-    T.randQueue = { 9999, 50, 9999 }
+    T.randQueue = { 999999, 5000, 999999 }
     check(#deeds(fill("safe")) == 0 and #T.randQueue == 0, "三級都沒中：不掉、每級各擲一次")
     for n = 1, 8 do T.sandbox("Tier" .. n .. "LootChance", 0) end
     T.sandbox("TiersEnabled", 8)

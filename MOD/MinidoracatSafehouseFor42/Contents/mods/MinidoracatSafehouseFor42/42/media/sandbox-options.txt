@@ -75,25 +75,25 @@ option MinidoracatSafehouse.Tier1PerPlayer
 {type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1PerPlayer,}
 
 option MinidoracatSafehouse.Tier2Area
-{type = integer, min = 1, max = 9216, default = 1600, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Area,}
+{type = integer, min = 1, max = 9216, default = 1024, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Area,}
 
 option MinidoracatSafehouse.Tier2Side
-{type = integer, min = 1, max = 96, default = 80, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Side,}
+{type = integer, min = 1, max = 96, default = 64, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Side,}
 
 option MinidoracatSafehouse.Tier2PerPlayer
 {type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2PerPlayer,}
 
 option MinidoracatSafehouse.Tier3Area
-{type = integer, min = 1, max = 9216, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Area,}
+{type = integer, min = 1, max = 9216, default = 1600, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Area,}
 
 option MinidoracatSafehouse.Tier3Side
-{type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Side,}
+{type = integer, min = 1, max = 96, default = 80, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Side,}
 
 option MinidoracatSafehouse.Tier3PerPlayer
 {type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3PerPlayer,}
 
 option MinidoracatSafehouse.Tier4Area
-{type = integer, min = 1, max = 9216, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Area,}
+{type = integer, min = 1, max = 9216, default = 2304, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Area,}
 
 option MinidoracatSafehouse.Tier4Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Side,}
@@ -102,7 +102,7 @@ option MinidoracatSafehouse.Tier4PerPlayer
 {type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4PerPlayer,}
 
 option MinidoracatSafehouse.Tier5Area
-{type = integer, min = 1, max = 9216, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Area,}
+{type = integer, min = 1, max = 9216, default = 3136, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Area,}
 
 option MinidoracatSafehouse.Tier5Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Side,}
@@ -120,7 +120,7 @@ option MinidoracatSafehouse.Tier6PerPlayer
 {type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6PerPlayer,}
 
 option MinidoracatSafehouse.Tier7Area
-{type = integer, min = 1, max = 9216, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Area,}
+{type = integer, min = 1, max = 9216, default = 6400, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Area,}
 
 option MinidoracatSafehouse.Tier7Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Side,}
@@ -129,7 +129,7 @@ option MinidoracatSafehouse.Tier7PerPlayer
 {type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7PerPlayer,}
 
 option MinidoracatSafehouse.Tier8Area
-{type = integer, min = 1, max = 9216, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Area,}
+{type = integer, min = 1, max = 9216, default = 9216, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Area,}
 
 option MinidoracatSafehouse.Tier8Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Side,}
@@ -209,6 +209,9 @@ option MinidoracatSafehouse.Tier8Buy
 option MinidoracatSafehouse.Tier8Rent
 {type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Rent,}
 
+option MinidoracatSafehouse.DeedLoot
+{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_DeedLoot,}
+
 option MinidoracatSafehouse.Tier1LootChance
 {type = double, min = 0.0, max = 100.0, default = 1.0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1LootChance,}
 
@@ -216,43 +219,43 @@ option MinidoracatSafehouse.Tier1Craft
 {type = enum, numValues = 4, default = 3, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}
 
 option MinidoracatSafehouse.Tier2LootChance
-{type = double, min = 0.0, max = 100.0, default = 0.5, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2LootChance,}
+{type = double, min = 0.0, max = 100.0, default = 0.3, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2LootChance,}
 
 option MinidoracatSafehouse.Tier2Craft
 {type = enum, numValues = 4, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}
 
 option MinidoracatSafehouse.Tier3LootChance
-{type = double, min = 0.0, max = 100.0, default = 0.2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3LootChance,}
+{type = double, min = 0.0, max = 100.0, default = 0.1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3LootChance,}
 
 option MinidoracatSafehouse.Tier3Craft
 {type = enum, numValues = 4, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}
 
 option MinidoracatSafehouse.Tier4LootChance
-{type = double, min = 0.0, max = 100.0, default = 0.2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4LootChance,}
+{type = double, min = 0.0, max = 100.0, default = 0.03, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4LootChance,}
 
 option MinidoracatSafehouse.Tier4Craft
 {type = enum, numValues = 4, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}
 
 option MinidoracatSafehouse.Tier5LootChance
-{type = double, min = 0.0, max = 100.0, default = 0.2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5LootChance,}
+{type = double, min = 0.0, max = 100.0, default = 0.01, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5LootChance,}
 
 option MinidoracatSafehouse.Tier5Craft
 {type = enum, numValues = 4, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}
 
 option MinidoracatSafehouse.Tier6LootChance
-{type = double, min = 0.0, max = 100.0, default = 0.2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6LootChance,}
+{type = double, min = 0.0, max = 100.0, default = 0.005, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6LootChance,}
 
 option MinidoracatSafehouse.Tier6Craft
 {type = enum, numValues = 4, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}
 
 option MinidoracatSafehouse.Tier7LootChance
-{type = double, min = 0.0, max = 100.0, default = 0.2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7LootChance,}
+{type = double, min = 0.0, max = 100.0, default = 0.002, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7LootChance,}
 
 option MinidoracatSafehouse.Tier7Craft
 {type = enum, numValues = 4, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}
 
 option MinidoracatSafehouse.Tier8LootChance
-{type = double, min = 0.0, max = 100.0, default = 0.2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8LootChance,}
+{type = double, min = 0.0, max = 100.0, default = 0.001, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8LootChance,}
 
 option MinidoracatSafehouse.Tier8Craft
 {type = enum, numValues = 4, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Craft, valueTranslation = MinidoracatSafehouse_CraftLevel,}

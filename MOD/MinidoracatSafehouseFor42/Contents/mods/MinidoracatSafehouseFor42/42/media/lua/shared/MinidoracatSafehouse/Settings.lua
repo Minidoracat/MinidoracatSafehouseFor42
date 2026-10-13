@@ -20,15 +20,21 @@ S.ROAD_KINDS = { "main", "street", "gravel", "sidewalk" }
 S.DEFAULT_ROAD_KINDS = "main;street"
 S.DEFAULT_RESOURCE_CATS = "military;police;gunstore;medical;pharmacy;fire;gas;prison"
 
--- 各級預設：面積 1 級 576（24 × 24）、2 級 1,600（40 × 40）、3–8 級 4,096（64 × 64）；外框（整間的外接矩形）上限是同面積
--- 正方形邊長的 2 倍、最多 96：48、80、96（使用者 2026-10-12 選「以格數為主，外框放寬成 2 倍」：L、U 形的外框比同面積的
--- 正方形大，原本外框＝邊長時 25 × 20、330 格的 L 形就超過 1 級；外框不整個拿掉是因為闖入者會被傳到那一塊的左上角外面、
--- 伺服器只載入玩家附近的格子、細長的範圍能圍住一大片地）。掉落 1 級 1%、2 級 0.5%、其餘 0.2%；
--- 製作 1 級標準、其餘不開放（使用者 2026-10-10 裁定 craftdefault）
+-- 各級預設面積（使用者 2026-10-13 採用重新評估的建議表）：邊長 24、32、40、48、56、64、80、96 的正方形格數。1 級圈得下
+-- 房子連院子（原版地圖 88%），預設開放的 1–3 級最大 1,600；4,096 以上在城鎮多半圈不成一塊（被路切斷），放到 6 級以上。
+-- 外框（整間的外接矩形）上限是同面積正方形邊長的 2 倍、最多 96（使用者 2026-10-12 選「以格數為主，外框放寬成 2 倍」：
+-- L、U 形的外框比同面積的正方形大；外框不整個拿掉是因為闖入者會被傳到那一塊的左上角外面、伺服器只載入玩家附近的格子、
+-- 細長的範圍能圍住一大片地）。掉落機率每級約除以 3（使用者 2026-10-13：比逐級減半再陡），但 DeedLoot 預設關閉、
+-- 開了才照這些機率掉落；製作 1 級標準、其餘不開放（使用者 2026-10-10 裁定 craftdefault）
 local TIER_DEFAULT = {
     { side = 48, area = 576, loot = 1.0, craft = 3 },
-    { side = 80, area = 1600, loot = 0.5, craft = 1 },
-    { side = 96, area = 4096, loot = 0.2, craft = 1 },
+    { side = 64, area = 1024, loot = 0.3, craft = 1 },
+    { side = 80, area = 1600, loot = 0.1, craft = 1 },
+    { side = 96, area = 2304, loot = 0.03, craft = 1 },
+    { side = 96, area = 3136, loot = 0.01, craft = 1 },
+    { side = 96, area = 4096, loot = 0.005, craft = 1 },
+    { side = 96, area = 6400, loot = 0.002, craft = 1 },
+    { side = 96, area = 9216, loot = 0.001, craft = 1 },
 }
 
 -- type: bool | int | double | enum | string；enum 的值是 1..values
@@ -60,7 +66,7 @@ local OPTIONS = {
     { key = "TiersEnabled", type = "int", min = 1, max = 8, default = 3 },
 }
 for n = 1, MSH.MAX_TIER do
-    local d = TIER_DEFAULT[n] or TIER_DEFAULT[3]
+    local d = TIER_DEFAULT[n]
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Area", type = "int", min = 1, max = 9216, default = d.area, tier = n }
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Side", type = "int", min = 1, max = 96, default = d.side, tier = n }
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "PerPlayer", type = "int", min = 0, max = 100, default = 0, tier = n }
@@ -70,8 +76,10 @@ for n = 1, MSH.MAX_TIER do
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Buy", type = "bool", default = false, tier = n }
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Rent", type = "bool", default = false, tier = n }
 end
+-- 地契會不會從辦公桌、檔案櫃、保險箱掉出來（使用者 2026-10-13：預設不開）；關著時各級的掉落機率都不生效
+OPTIONS[#OPTIONS + 1] = { key = "DeedLoot", type = "bool", default = false }
 for n = 1, MSH.MAX_TIER do
-    local d = TIER_DEFAULT[n] or TIER_DEFAULT[3]
+    local d = TIER_DEFAULT[n]
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "LootChance", type = "double", min = 0, max = 100, default = d.loot, tier = n }
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Craft", type = "enum", values = 4, default = d.craft, tier = n }
 end

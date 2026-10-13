@@ -1060,6 +1060,10 @@ function AP.layoutDeeds(P, pg)
     local head = { F:label("kLabel", getText("IGUI_MSH_Admin_TiersCount", k, MSH.MAX_TIER)) }
     if AP.shopApi() then head[#head + 1] = F:button("shop", getText("IGUI_MSH_Admin_ShopAdd"), P, AP.onShop) end
     F:row(head)
+    -- 掉落總開關（使用者 2026-10-13：預設關）；關著時掉落欄反灰，切換就重排
+    local loot = AP.boolField(P, pg, "DeedLoot", nil, AP.onRelayout)
+    AP.formRow(pg, "DeedLoot", AP.labelWidth({ "DeedLoot" }), { loot })
+    local lootOn = loot:getChecked()
     local xs, _, ws = AP.deedColumns()
     local hy = F.y
     for _, c in ipairs(AP.DEED_COLS) do
@@ -1070,7 +1074,7 @@ function AP.layoutDeeds(P, pg)
     F.y = hy + K.fontH(UIFont.Small) + 4
     -- 只排啟用的等級：移除的那級欄位不在這一輪（f.gen 不同），〔套用變更〕不會送它沒套用的改動。
     -- 存值照實顯示（不夾範圍），列數不超過上限
-    for n = 1, math.min(k, MSH.MAX_TIER) do AP.layoutDeedRow(P, pg, n, econ, xs, ws) end
+    for n = 1, math.min(k, MSH.MAX_TIER) do AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn) end
     local add = F:button("tierAdd", getText(k < MSH.MAX_TIER and "IGUI_MSH_Admin_TierAdd" or "IGUI_MSH_Admin_TierMax",
         k < MSH.MAX_TIER and k + 1 or MSH.MAX_TIER), P, AP.onTierAdd)
     add:setEnabled(k < MSH.MAX_TIER)
@@ -1083,7 +1087,7 @@ function AP.layoutDeeds(P, pg)
     if not econ then F:text("noEcon", getText("IGUI_MSH_Admin_NoEconomyDeeds"), "textMuted") end
 end
 
-function AP.layoutDeedRow(P, pg, n, econ, xs, ws)
+function AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn)
     local F = pg.flow
     local p = "Tier" .. n
     local tl = F:label("tn" .. n, getText("IGUI_MSH_Admin_TierN", n))
@@ -1105,7 +1109,7 @@ function AP.layoutDeedRow(P, pg, n, econ, xs, ws)
         local el = ctrls[c]
         el:setX(xs[c])
         el:setY(F.y + math.floor((rowH - el.height) / 2))
-        if el ~= tl then el:setEnabled(econ or (c ~= "Buy" and c ~= "Rent")) end
+        if el ~= tl then el:setEnabled((econ or (c ~= "Buy" and c ~= "Rent")) and (lootOn or c ~= "Loot")) end
     end
     eq:setX(xs.Area + ctrls.Area.width + K.GAP)
     eq:setY(F.y + math.floor((rowH - eq.height) / 2))

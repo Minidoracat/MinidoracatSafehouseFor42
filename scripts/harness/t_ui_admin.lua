@@ -288,6 +288,14 @@ return function(T)
     local function shown(key) return deeds[key] ~= nil and deeds[key]:isVisible() end
     check(shown("f:Tier1Side") and shown("f:Tier3Rent") and not shown("f:Tier4Side") and deeds["warn2#1"] == nil,
         "地契頁只列啟用的 3 級（預設）、沒有警告")
+    -- 地契掉落總開關（使用者 2026-10-13：預設關）：關著時掉落欄反灰，勾起來不用存檔就能改
+    check(shown("f:DeedLoot") and not deeds["f:DeedLoot"]:getChecked() and deeds["f:Tier1LootChance"].enabled == false
+        and deeds["f:Tier3LootChance"].enabled == false and deeds["f:Tier1Area"].enabled ~= false,
+        "地契掉落預設關：各級掉落欄反灰，其他欄照常")
+    deeds["f:DeedLoot"]:setChecked(true)
+    check(deeds["f:Tier1LootChance"].enabled ~= false and deeds["f:Tier3LootChance"].enabled ~= false,
+        "勾起地契掉落：掉落欄馬上可以改")
+    deeds["f:DeedLoot"]:setChecked(false)
     local tiers = P.pages.deeds.fields.TiersEnabled
     fw.click(deeds.tierAdd)
     check(tiers.value == 4 and shown("f:Tier4Side") and shown("f:Tier4Craft"), "〔新增第 4 級〕：多出第 4 級那一列")

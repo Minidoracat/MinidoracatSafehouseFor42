@@ -17,7 +17,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 
 [h2]🚀 Quick start[/h2]
 [olist]
-[*] Find or craft a safehouse deed (the server may also allow free claims)
+[*] Craft a safehouse deed (the server may also sell deeds in the shop, let them drop as loot or allow free claims)
 [*] Right-click the deed, or open Safehouse Manager from the family toolbar, and choose to create a safehouse
 [*] Drag with the mouse or walk to two corners to mark the area, then confirm while standing inside it
 [*] Share the safehouse with friends or your faction from the manager window

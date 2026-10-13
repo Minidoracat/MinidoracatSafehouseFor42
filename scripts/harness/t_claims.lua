@@ -344,7 +344,7 @@ return function(T)
     for _, c in ipairs(res.checks) do byName[c.name] = c end
     check(res.ok and res.pass == false, "預檢失敗但指令本身成功")
     check(byName.onsite.code == "NOT_ON_SITE" and byName.deed.code == "NO_DEED" and byName.size.code == "TOO_BIG"
-        and byName.overlap.code == "ONLINE_ID_COLLISION" and byName.size.maxSide == 80, "同時回報不在場、沒地契、太大、撞號")
+        and byName.overlap.code == "ONLINE_ID_COLLISION" and byName.size.maxSide == 64, "同時回報不在場、沒地契、太大、撞號")
     check(byName.identity.ok and byName.quota.ok and byName.title.ok and byName.occupancy.ok and byName.roads.ok
         and byName.resources.ok, "其他檢查通過")
     check(#T.houses == houses and #T.syncs == syncs and recCount() == 0 and deeds(kai, D1) == 1
