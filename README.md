@@ -186,7 +186,7 @@ uv run --no-project python -B scripts/publish_workshop.py --mode all --dry-run  
 
 ## 版本
 
-版本號格式：`{PZ 版本}-{mod 版本}`（例 `42.20.4-0.1.0`），詳見 [CHANGELOG.md](CHANGELOG.md)。
+版本號格式：`{PZ 版本}-{mod 版本}`（例 `42.21.0-0.1.0`），詳見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 授權
 
