@@ -184,8 +184,12 @@ return function(T)
     check(#cl == 1 and cl[1].claimId == g2.claimId, "放棄後下一次查詢不再列出（索引隨 registry generation 失效）")
 
     T.section("Admin：個人上限")
+    local erin = T.player({ name = "erin", sid = 76561198000000777 })
     res = T.cmd(boss, "adminSetOverride", { targetUsername = "erin", n = 3 })
     check(res.ok and R.override("erin") == 3 and T.logged("ADMIN_OVERRIDE"), "設定個人上限並寫 audit")
+    local push = T.lastOf(erin, "changed")
+    check(push ~= nil and push.claimId == nil,
+        "對方在線：推 changed（不帶 claimId），開著的名額視窗、建立面板跟著重抓，不必重開")
     MSH = T.boot({ keepFiles = true })
     check(MSH.Registry.override("erin") == 3, "重開後個人上限還在")
     boss = T.player({ name = "boss", admin = true })

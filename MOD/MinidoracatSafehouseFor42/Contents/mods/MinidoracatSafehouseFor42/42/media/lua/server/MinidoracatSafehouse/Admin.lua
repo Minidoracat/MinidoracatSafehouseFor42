@@ -226,6 +226,11 @@ S.define("adminSetOverride", { kind = "mutation", admin = true, whenBlocked = tr
         local value = n >= 0 and n or nil
         if not MSH.Registry.setOverride(name, value) then return S.fail(CODE.SAVE_FAILED) end
         MSH.Audit.write("ADMIN_OVERRIDE", { actor = ctx.who, code = tostring(n), detail = name })
+        -- 對方在線就推 changed：客戶端重抓清單，開著的名額視窗、建立面板跟著重抓名額（不帶 claimId，管理視窗不重載詳情）
+        ctx.defer(function()
+            local p = MSH.Native.onlinePlayer(name)
+            if p then sendServerCommand(p, MSH.MODULE, "changed", {}) end   -- LuaManager.java:8962-8966
+        end)
         return S.ok({ targetUsername = name, n = n })
     end })
 
