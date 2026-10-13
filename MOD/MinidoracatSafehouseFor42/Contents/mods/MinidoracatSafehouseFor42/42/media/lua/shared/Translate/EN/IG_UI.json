@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "You don't own a safehouse yet.",
     "IGUI_MSH_Manager_AreaEmpty_shared": "No one has shared a safehouse with you.",
     "IGUI_MSH_Manager_EmptyTitle": "No safehouse yet",
-    "IGUI_MSH_Manager_EmptyDeed": "Creating a safehouse needs a deed. Deeds can be found or crafted, and the deed's tier decides the maximum size. Right-click a deed in your inventory and choose Use deed, or start with the button below.",
+    "IGUI_MSH_Manager_EmptyDeed": "Creating a safehouse needs a deed. Deeds are usually crafted; the server may also sell them or let them drop as loot. The deed's tier decides the maximum size. Right-click a deed in your inventory and choose Use deed, or start with the button below.",
     "IGUI_MSH_Manager_EmptyFree": "This server doesn't require a deed. Stand where you want protection and press the button below to mark the area.",
     "IGUI_MSH_Manager_PickOne": "Pick a safehouse from the list.",
     "IGUI_MSH_Manager_RoleOwner": "Owner",

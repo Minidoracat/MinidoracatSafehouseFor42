@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "Você ainda não tem uma base.",
     "IGUI_MSH_Manager_AreaEmpty_shared": "Ninguém compartilhou uma base com você.",
     "IGUI_MSH_Manager_EmptyTitle": "Nenhuma base ainda",
-    "IGUI_MSH_Manager_EmptyDeed": "Criar uma base exige uma escritura. Escrituras podem ser encontradas ou fabricadas, e o nível da escritura define o tamanho máximo. Clique com o botão direito numa escritura do inventário e escolha \"Usar escritura\", ou comece pelo botão abaixo.",
+    "IGUI_MSH_Manager_EmptyDeed": "Criar uma base exige uma escritura. Normalmente elas são fabricadas; o servidor também pode vendê-las ou fazê-las aparecer como saque. O nível da escritura define o tamanho máximo. Clique com o botão direito numa escritura do inventário e escolha \"Usar escritura\", ou comece pelo botão abaixo.",
     "IGUI_MSH_Manager_EmptyFree": "Este servidor não exige escritura. Fique onde quer proteção e clique no botão abaixo para marcar a área.",
     "IGUI_MSH_Manager_PickOne": "Escolha uma base da lista.",
     "IGUI_MSH_Manager_RoleOwner": "Dono",

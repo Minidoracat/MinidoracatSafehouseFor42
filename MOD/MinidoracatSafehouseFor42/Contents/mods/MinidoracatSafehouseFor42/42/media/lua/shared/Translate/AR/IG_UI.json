@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "Aún no tienes ningún refugio.",
     "IGUI_MSH_Manager_AreaEmpty_shared": "Nadie ha compartido un refugio contigo.",
     "IGUI_MSH_Manager_EmptyTitle": "Aún no hay refugio",
-    "IGUI_MSH_Manager_EmptyDeed": "Para crear un refugio necesitas una escritura. Las escrituras se encuentran o se fabrican, y su nivel define el tamaño máximo. Haz clic derecho en una escritura de tu inventario y elige \"Usar escritura\", o empieza con el botón de abajo.",
+    "IGUI_MSH_Manager_EmptyDeed": "Para crear un refugio necesitas una escritura. Normalmente se fabrican; el servidor también puede venderlas o hacer que aparezcan como botín. Su nivel define el tamaño máximo. Haz clic derecho en una escritura de tu inventario y elige \"Usar escritura\", o empieza con el botón de abajo.",
     "IGUI_MSH_Manager_EmptyFree": "Este servidor no requiere escritura. Colócate donde quieras protección y pulsa el botón de abajo para marcar el área.",
     "IGUI_MSH_Manager_PickOne": "Elige un refugio de la lista.",
     "IGUI_MSH_Manager_RoleOwner": "Propietario",

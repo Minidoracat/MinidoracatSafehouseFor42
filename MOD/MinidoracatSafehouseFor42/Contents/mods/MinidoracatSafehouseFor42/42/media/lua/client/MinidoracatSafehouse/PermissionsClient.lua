@@ -29,7 +29,9 @@ end
 -- { 全域表名, 位元, { 處理函式欄位 } }：只列伺服器會擋的動作的入口（Permissions.lua 的包裝對象）
 PC.HANDLERS = {
     { "ISWorldObjectContextMenu", BIT.USE, { "onToggleLight", "onToggleStove", "onStoveSetting", "onMicrowaveSetting",
-        "onPlugGenerator", "onActivateGenerator", "onTakeWater", "onDrink", "onFluidTransfer" } },   -- :1328, 1189, 1203, 1196, 540, 547, 2050, 2038, 2793
+        "onPlugGenerator", "onActivateGenerator", "doAddFuelGenerator", "onFixGenerator", "onTakeWater", "onDrink",
+        "onFluidTransfer" } },   -- :1328, 1189, 1203, 1196, 540, 547, 648（加油子選單的每一項）, 554, 2050, 2038, 2793
+    { "ISWorldObjectContextMenu", BIT.MOVE, { "onTakeGenerator" } },                                  -- :665
     { "ISRadioAndTvMenu", BIT.USE, { "openTvPanel" } },                                               -- ISRadioAndTvMenu.lua:8（世界上的電視／收音機）
     { "ISDisassembleMenu", BIT.MOVE, { "disassemble" } },                                             -- ISDisassembleMenu.lua:83（ISMoveablesAction scrap）
     { "ISWorldObjectContextMenu", BIT.BUILD, { "onDestroy", "onBarricade", "onUnbarricade", "onUnbarricadeMetal",

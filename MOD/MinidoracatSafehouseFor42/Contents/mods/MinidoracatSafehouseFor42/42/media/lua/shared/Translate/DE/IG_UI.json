@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "Du besitzt noch kein Safehouse.",
     "IGUI_MSH_Manager_AreaEmpty_shared": "Niemand hat ein Safehouse mit dir geteilt.",
     "IGUI_MSH_Manager_EmptyTitle": "Noch kein Safehouse",
-    "IGUI_MSH_Manager_EmptyDeed": "Für ein Safehouse brauchst du eine Urkunde. Urkunden kann man finden oder herstellen; ihre Stufe bestimmt die max. Größe. Rechtsklicke eine Urkunde im Inventar und wähle „Urkunde benutzen“ oder starte mit der Schaltfläche unten.",
+    "IGUI_MSH_Manager_EmptyDeed": "Für ein Safehouse brauchst du eine Urkunde. Urkunden stellt man meist selbst her; der Server kann sie auch verkaufen oder als Beute auftauchen lassen. Ihre Stufe bestimmt die max. Größe. Rechtsklicke eine Urkunde im Inventar und wähle „Urkunde benutzen“ oder starte mit der Schaltfläche unten.",
     "IGUI_MSH_Manager_EmptyFree": "Dieser Server verlangt keine Urkunde. Stell dich dorthin, wo du Schutz willst, und drücke die Schaltfläche unten, um den Bereich zu markieren.",
     "IGUI_MSH_Manager_PickOne": "Wähle ein Safehouse aus der Liste.",
     "IGUI_MSH_Manager_RoleOwner": "Eigentümer",

@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "你还没有自己的安全屋。",
     "IGUI_MSH_Manager_AreaEmpty_shared": "目前没有人分享安全屋给你。",
     "IGUI_MSH_Manager_EmptyTitle": "还没有安全屋",
-    "IGUI_MSH_Manager_EmptyDeed": "建立安全屋需要地契。地契可以捡到或制作，等级决定最大范围。在物品栏中右键点击地契选「使用地契」，或用下面的按钮开始。",
+    "IGUI_MSH_Manager_EmptyDeed": "建立安全屋需要地契。地契通常要自己制作，服务器也可能开放购买或掉落；等级决定最大范围。在物品栏中右键点击地契选「使用地契」，或用下面的按钮开始。",
     "IGUI_MSH_Manager_EmptyFree": "这个服务器建立安全屋不需要地契。站在要保护的地方，按下面的按钮开始框选范围。",
     "IGUI_MSH_Manager_PickOne": "从列表选一间安全屋。",
     "IGUI_MSH_Manager_RoleOwner": "屋主",

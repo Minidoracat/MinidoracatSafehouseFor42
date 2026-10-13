@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "Nie masz jeszcze schronienia.",
     "IGUI_MSH_Manager_AreaEmpty_shared": "Nikt nie udostępnił ci schronienia.",
     "IGUI_MSH_Manager_EmptyTitle": "Brak schronienia",
-    "IGUI_MSH_Manager_EmptyDeed": "Utworzenie schronienia wymaga aktu. Akty można znaleźć lub wytworzyć, a poziom aktu określa maksymalny rozmiar. Kliknij akt w ekwipunku prawym przyciskiem i wybierz „Użyj aktu” albo zacznij od przycisku poniżej.",
+    "IGUI_MSH_Manager_EmptyDeed": "Utworzenie schronienia wymaga aktu. Akty zwykle się wytwarza; serwer może też je sprzedawać albo pozwalać znaleźć je jako łup. Poziom aktu określa maksymalny rozmiar. Kliknij akt w ekwipunku prawym przyciskiem i wybierz „Użyj aktu” albo zacznij od przycisku poniżej.",
     "IGUI_MSH_Manager_EmptyFree": "Ten serwer nie wymaga aktu. Stań tam, gdzie chcesz ochrony, i naciśnij przycisk poniżej, aby zaznaczyć obszar.",
     "IGUI_MSH_Manager_PickOne": "Wybierz schronienie z listy.",
     "IGUI_MSH_Manager_RoleOwner": "Właściciel",

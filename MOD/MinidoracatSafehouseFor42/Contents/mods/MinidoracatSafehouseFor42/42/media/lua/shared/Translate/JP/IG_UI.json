@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "まだセーフハウスを所有していません。",
     "IGUI_MSH_Manager_AreaEmpty_shared": "あなたにセーフハウスを共有している人はいません。",
     "IGUI_MSH_Manager_EmptyTitle": "セーフハウスはまだありません",
-    "IGUI_MSH_Manager_EmptyDeed": "セーフハウスの作成には権利書が必要です。権利書は見つけるか作成でき、ランクによって最大の広さが決まります。インベントリの権利書を右クリックして「権利書を使う」を選ぶか、下のボタンから始めてください。",
+    "IGUI_MSH_Manager_EmptyDeed": "セーフハウスの作成には権利書が必要です。権利書はふつう自分で作成します（サーバーによっては購入やドロップでも手に入ります）。ランクによって最大の広さが決まります。インベントリの権利書を右クリックして「権利書を使う」を選ぶか、下のボタンから始めてください。",
     "IGUI_MSH_Manager_EmptyFree": "このサーバーでは権利書は不要です。保護したい場所に立ち、下のボタンを押して範囲を指定してください。",
     "IGUI_MSH_Manager_PickOne": "リストからセーフハウスを選んでください。",
     "IGUI_MSH_Manager_RoleOwner": "所有者",

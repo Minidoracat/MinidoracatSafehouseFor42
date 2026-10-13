@@ -63,6 +63,10 @@ P.WRAPS = {
     { "ISRadioAction", BIT.USE, function(a) return P.squareOf(a.device) end },              -- ISRadioAction.lua:197
     { "ISPlugGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },         -- ISPlugGenerator.lua:53
     { "ISActivateGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },     -- ISActivateGenerator.lua:62
+    -- 加油、修理與搬走發電機（2026-10-14 寫 perm3-mp 時發現沒包；三個都在 complete 才改發電機）
+    { "ISAddFuel", BIT.USE, function(a) return P.squareOf(a.generator) end },              -- ISAddFuel.lua:74
+    { "ISFixGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },         -- ISFixGenerator.lua:89
+    { "ISTakeGenerator", BIT.MOVE, function(a) return P.squareOf(a.generator) end },       -- ISTakeGenerator.lua:66
     { "ISFluidTransferAction", BIT.USE, fluidSquare },
     { "ISMoveablesAction", BIT.MOVE, function(a) return P.squareOf(a.square) end },         -- ISMoveablesAction.lua:274
     { "ISDestroyStuffAction", BIT.BUILD, function(a) return P.squareOf(a.item) end },       -- ISDestroyStuffAction.lua:362

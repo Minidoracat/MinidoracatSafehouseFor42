@@ -21,6 +21,7 @@ return function(T)
         { user = "full", bits = MEMBER_ALL },
         { user = "bare", bits = B.MEMBER },
         { user = "farmer", bits = B.MEMBER + B.FARM },
+        { user = "mover", bits = B.MEMBER + B.MOVE },
     })
     local legacy = mk(MSH, { x = 200, y = 100, w = 10, h = 10 }, "lord", MSH.SOURCE.LEGACY, {
         { user = "old", bits = MSH.SHARE_LEGACY },
@@ -30,6 +31,7 @@ return function(T)
     local full = T.player({ name = "full" })
     local bare = T.player({ name = "bare" })
     local farmer = T.player({ name = "farmer" })
+    local mover = T.player({ name = "mover" })
     local old = T.player({ name = "old" })
     local stranger = T.player({ name = "stranger" })
     local coop = T.player({ name = "owner2", num = 1 })   -- 分割畫面次玩家：principal 是 nil
@@ -42,6 +44,9 @@ return function(T)
         ISRadioAction = function(x, y) return { device = T.worldObject(x, y) } end,
         ISPlugGenerator = function(x, y) return { generator = T.worldObject(x, y) } end,
         ISActivateGenerator = function(x, y) return { generator = T.worldObject(x, y) } end,
+        ISAddFuel = function(x, y) return { generator = T.worldObject(x, y) } end,
+        ISFixGenerator = function(x, y) return { generator = T.worldObject(x, y) } end,
+        ISTakeGenerator = function(x, y) return { generator = T.worldObject(x, y) } end,
         ISFluidTransferAction = function(x, y) return { sourceOwner = T.item("Base.WaterBottle"), targetOwner = T.worldObject(x, y) } end,
         ISMoveablesAction = function(x, y) return { square = T.gridSquare(x, y) } end,
         ISDestroyStuffAction = function(x, y) return { item = T.worldObject(x, y) } end,
@@ -56,8 +61,8 @@ return function(T)
     }
     local CATEGORY = {
         USE = { "ISToggleLightAction", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator", "ISActivateGenerator",
-            "ISFluidTransferAction" },
-        MOVE = { "ISMoveablesAction" },
+            "ISAddFuel", "ISFixGenerator", "ISFluidTransferAction" },
+        MOVE = { "ISMoveablesAction", "ISTakeGenerator" },
         BUILD = { "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction", "ISUnbarricadeAction" },
         FARM = { "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction", "ISWaterPlantAction" },
     }
@@ -127,6 +132,12 @@ return function(T)
     local r1, ran1 = run("ISPlowAction", farmer, 101, 101)
     local r2, ran2 = run("ISToggleLightAction", farmer, 101, 101)
     check(r1 == true and ran1 and r2 == false and not ran2, "只有 FARM：耕種放行、開燈被拒")
+    -- 發電機：加油、修理看 USE（和接線、開關同一類），搬走看 MOVE（和搬家具同一類）
+    local g1, gran1 = run("ISTakeGenerator", mover, 101, 101)
+    local g2, gran2 = run("ISAddFuel", mover, 101, 101)
+    local g3, gran3 = run("ISFixGenerator", mover, 101, 101)
+    check(g1 == true and gran1 and g2 == false and not gran2 and g3 == false and not gran3,
+        "只有 MOVE：搬走發電機放行、加油與修理被拒")
     local r3, ran3 = run("ISToggleLightAction", coop, 101, 101)
     check(r3 == false and not ran3, "分割畫面次玩家（沒有 principal）冒用屋主名字：被拒")
     -- 液體面板兩邊都是物品（自己手上的瓶子）：不是世界目標，照原版

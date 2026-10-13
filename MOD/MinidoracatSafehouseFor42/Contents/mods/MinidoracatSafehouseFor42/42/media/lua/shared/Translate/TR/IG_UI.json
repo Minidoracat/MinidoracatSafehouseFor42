@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "Henüz bir güvenli eviniz yok.",
     "IGUI_MSH_Manager_AreaEmpty_shared": "Kimse sizinle güvenli ev paylaşmadı.",
     "IGUI_MSH_Manager_EmptyTitle": "Henüz güvenli ev yok",
-    "IGUI_MSH_Manager_EmptyDeed": "Güvenli ev oluşturmak için tapu gerekir. Tapular bulunabilir veya üretilebilir; tapunun seviyesi en büyük boyutu belirler. Envanterinizdeki bir tapuya sağ tıklayıp \"Tapuyu kullan\" seçeneğini seçin veya aşağıdaki düğmeyle başlayın.",
+    "IGUI_MSH_Manager_EmptyDeed": "Güvenli ev oluşturmak için tapu gerekir. Tapular genellikle üretilir; sunucu ayrıca satabilir veya ganimet olarak çıkmasına izin verebilir. Tapunun seviyesi en büyük boyutu belirler. Envanterinizdeki bir tapuya sağ tıklayıp \"Tapuyu kullan\" seçeneğini seçin veya aşağıdaki düğmeyle başlayın.",
     "IGUI_MSH_Manager_EmptyFree": "Bu sunucu tapu gerektirmez. Korumak istediğiniz yerde durun ve alanı işaretlemek için aşağıdaki düğmeye basın.",
     "IGUI_MSH_Manager_PickOne": "Listeden bir güvenli ev seçin.",
     "IGUI_MSH_Manager_RoleOwner": "Sahip",

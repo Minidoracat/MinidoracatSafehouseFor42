@@ -365,7 +365,7 @@
     "IGUI_MSH_Manager_AreaEmpty_mine": "아직 소유한 은신처가 없습니다.",
     "IGUI_MSH_Manager_AreaEmpty_shared": "공유받은 은신처가 없습니다.",
     "IGUI_MSH_Manager_EmptyTitle": "아직 은신처 없음",
-    "IGUI_MSH_Manager_EmptyDeed": "은신처를 만들려면 증서가 필요합니다. 증서는 찾거나 제작할 수 있으며, 증서 등급이 최대 크기를 정합니다. 소지품에서 증서를 우클릭해 '증서 사용'을 고르거나, 아래 버튼으로 시작하세요.",
+    "IGUI_MSH_Manager_EmptyDeed": "은신처를 만들려면 증서가 필요합니다. 증서는 보통 직접 제작하며, 서버에 따라 구매하거나 드롭으로 얻을 수도 있습니다. 증서 등급이 최대 크기를 정합니다. 소지품에서 증서를 우클릭해 '증서 사용'을 고르거나, 아래 버튼으로 시작하세요.",
     "IGUI_MSH_Manager_EmptyFree": "이 서버는 증서가 필요 없습니다. 보호할 곳에 서서 아래 버튼을 눌러 범위를 지정하세요.",
     "IGUI_MSH_Manager_PickOne": "목록에서 은신처를 고르세요.",
     "IGUI_MSH_Manager_RoleOwner": "소유자",
