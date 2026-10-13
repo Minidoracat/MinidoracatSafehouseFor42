@@ -3,7 +3,8 @@
 --   存檔後回快照；本機先逐欄檢查（Settings.validateChanges 同一套規則）並把錯誤標在欄位上，伺服器回的 BAD_OPTION
 --   { key, reason } 也標回該欄。付費頁照等級各送一次 adminSetPlan（帶該級 expectedRevision），逐級回錯、不互相連帶。
 -- 玩家頁照 Economy 身分清單（ECAdminIdentity.lua:71 QUERY_DEBOUNCE_MS、:205 loginsKey、:230 pump、:243-247 debounce）：
---   輸入停 650 ms 才送、一次只有一筆在路上、兩次送出至少隔 650 ms（伺服器 500 ms 內重送就丟、不回覆：Server.lua coolingDown）、
+--   輸入停 650 ms 才送、一次只有一筆在路上、上一筆回覆（或逾時）後至少隔 650 ms 才送下一筆（伺服器 500 ms 內重送就丟、
+--   不回覆：Server.lua coolingDown；從回覆算，同 Client.refreshSlots：伺服器卡頓時從送出算擋不住）、
 --   回覆的 (query, filter, page) 不是目前要的就丟掉，頁碼採用伺服器夾過的值。
 -- 只在 Capability.CanSetupSafehouses 時開（客戶端只是體驗，伺服器每個 admin 指令都再檢查，契約「客戶端模組」）。
 -- 伺服器狀態把不符的伺服器設定排成「設定｜改成｜原因」表；〔修正伺服器設定〕＝管理員自己按、確認後送原版
@@ -133,7 +134,7 @@ end
 
 -- 玩家分頁狀態（伺服器分頁；Economy ECAdminIdentity 的做法）
 function AP.pager()
-    return { query = "", filter = "all", page = 1, typed = "", typedAt = nil, inflight = nil, lastSent = nil,
+    return { query = "", filter = "all", page = 1, typed = "", typedAt = nil, inflight = nil, doneAt = nil,
         shown = nil, failed = nil, error = nil, rows = {}, pages = 1, total = 0 }
 end
 
@@ -152,7 +153,7 @@ end
 -- 讓目前這組條件重抓（改了上限、代為放棄之後）
 function AP.pagerInvalidate(p) p.shown, p.failed = nil, nil end
 
--- 該送就回 { query?, filter, page }, key；輸入還沒停 650 ms、有一筆在路上、離上次送出不到 650 ms、目前條件已有結果
+-- 該送就回 { query?, filter, page }, key；輸入還沒停 650 ms、有一筆在路上、離上一筆回覆不到 650 ms、目前條件已有結果
 -- （或剛失敗過，要按重新整理）都回 nil
 function AP.pagerPump(p, now)
     if p.typedAt ~= nil then
@@ -162,16 +163,16 @@ function AP.pagerPump(p, now)
         local q = string.sub(string.gsub(MSH.trim(p.typed), "%c", ""), 1, MSH.LIMIT.USERNAME_CHARS)
         if q ~= p.query then p.query, p.page = q, 1 end
     end
-    if p.inflight ~= nil or (p.lastSent ~= nil and now - p.lastSent < AP.GAP_MS) then return nil end
+    if p.inflight ~= nil or (p.doneAt ~= nil and now - p.doneAt < AP.GAP_MS) then return nil end
     local key = AP.pagerKey(p)
     if key == p.shown or key == p.failed then return nil end
-    p.inflight, p.lastSent = key, now
+    p.inflight = key
     return { query = p.query ~= "" and p.query or nil, filter = p.filter, page = p.page }, key
 end
 
--- 回覆：送出後條件變了（過期）就丟掉、回 false；採用時頁碼用伺服器夾過的值
-function AP.pagerReply(p, key, res)
-    if p.inflight == key then p.inflight = nil end
+-- 回覆（含 10 秒沒回覆）：送出後條件變了（過期）就丟掉、回 false；採用時頁碼用伺服器夾過的值
+function AP.pagerReply(p, key, res, now)
+    if p.inflight == key then p.inflight, p.doneAt = nil, now end
     if key ~= AP.pagerKey(p) then return false end
     if not res.ok then
         p.failed, p.error = key, res.code
@@ -1423,7 +1424,7 @@ function AP.onTick()
     local args, key = AP.pagerPump(P.pager, getTimestampMs())
     if args == nil then return end
     local rid = MSH.Client.send("adminPlayers", args, function(res)
-        if AP.pagerReply(P.pager, key, res) then AP.layoutPage(P, "players") end
+        if AP.pagerReply(P.pager, key, res, getTimestampMs()) then AP.layoutPage(P, "players") end
     end)
     if rid == nil then P.pager.inflight = nil end
     AP.layoutPage(P, "players")

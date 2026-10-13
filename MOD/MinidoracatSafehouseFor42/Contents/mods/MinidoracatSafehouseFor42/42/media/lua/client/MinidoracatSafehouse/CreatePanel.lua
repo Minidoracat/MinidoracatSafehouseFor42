@@ -35,7 +35,7 @@ local Sel = MSH.Select
 P.IDLE, P.SELECTING, P.PREVIEW, P.CONFIRM = "idle", "selecting", "preview", "confirm"
 P.SUBMITTING, P.PENDING, P.DONE = "submitting", "result-pending", "done"
 -- 預檢伺服器每人 500 ms 一次、冷卻中直接丟不回覆（Claims.lua preview cooldownMs、Server.lua coolingDown）；
--- 兩次之間至少隔這麼久，免得被丟掉後空等 10 秒
+-- 上一筆回覆（或逾時）之後至少隔這麼久才送下一筆，免得被丟掉後空等 10 秒（從回覆算，同 Client.refreshSlots）
 P.PREVIEW_GAP_MS = 600
 -- 本地閘門碼（不是伺服器結果碼）：文字鍵 IGUI_MSH_Create_Reason_<碼>／IGUI_MSH_Create_Action_<碼>
 P.LOCAL_CODES = { SPLIT = true, OFFLINE = true, NO_REPLY = true, UNCONFIRMED = true }
@@ -146,6 +146,7 @@ end
 -- 名額與伺服器閘門（slots：Economy 代理的查詢；blocked＝HEALTH_BLOCKED／NOT_SURVIVED）。和名額視窗共用 Client.refreshSlots
 -- （伺服器 500 ms 冷卻），結果由 "slots" 事件送到開著的面板：在名額視窗付款後，這裡的名額閘門跟著解除，不必重開
 function P.refreshSlots(m)
+    if MSH.SlotsWindow ~= nil then MSH.SlotsWindow.listen() end   -- 沒開過名額視窗也要跟上 Economy 推送
     MSH.Client.refreshSlots()
 end
 
@@ -216,23 +217,26 @@ function P.toIdle(m, notice)
     changed(m)
 end
 
--- 預檢排程：離上一次送出不到 PREVIEW_GAP_MS 就延後（同一位玩家所有面板共用）；過了時間由 pump 送
+-- 預檢排程：同一位玩家所有面板共用一條——同時一筆，上一筆回覆（或逾時）之後滿 PREVIEW_GAP_MS 才送下一筆。
+-- 從送出算擋不住伺服器卡頓：第一筆在伺服器排很久才處理、回覆一到就送第二筆，兩筆在伺服器上相隔不到 500 ms，第二筆
+-- （現在的範圍）被丟。送出中改了範圍就等這筆回來（舊範圍的結果不收）再送新的；到時間由 pump 送
 function P.schedulePreview(m, now)
-    now = now or getTimestampMs()
     clearPreview(m)
-    local at = now
-    if P.lastPreviewAt ~= nil and P.lastPreviewAt + P.PREVIEW_GAP_MS > at then at = P.lastPreviewAt + P.PREVIEW_GAP_MS end
-    m.previewWant, m.previewAt = true, at
-    P.pump(m, now)
+    m.previewWant = true
+    P.pump(m, now or getTimestampMs())
 end
 
 function P.pump(m, now)
-    if not (m.previewWant and m.phase == P.PREVIEW and now >= m.previewAt) then return end
-    m.previewWant = false
-    P.lastPreviewAt = now
+    if not (m.previewWant and m.phase == P.PREVIEW) or P.previewBusy then return end
+    if P.previewDoneAt ~= nil and now - P.previewDoneAt < P.PREVIEW_GAP_MS then return end
+    m.previewWant, P.previewBusy = false, true
     local args = { rects = MSH.Rect.copyList(m.rects) }
     if m.mode == "redraw" then args.claimId = m.claimId else args.deedType = m.deedType end
-    m.previewRid = MSH.Client.send("preview", args, function(res) P.onPreview(m, res) end)
+    m.previewRid = MSH.Client.send("preview", args, function(res)
+        P.previewBusy, P.previewDoneAt = false, getTimestampMs()
+        P.onPreview(m, res)
+    end)
+    if m.previewRid == nil then m.previewWant, P.previewBusy, P.previewDoneAt = true, false, now end
 end
 
 -- 〔完成〕：走位／手把還沒按〔加入這塊〕的那一塊也算進去；形狀合規則（Shape.result 沒有 err）才進 preview

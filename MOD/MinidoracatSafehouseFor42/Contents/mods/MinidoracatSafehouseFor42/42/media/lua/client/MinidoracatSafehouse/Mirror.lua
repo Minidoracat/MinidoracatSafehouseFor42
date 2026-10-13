@@ -20,7 +20,8 @@ MSH.Mirror = M
 
 M.TOMB_MS = 60000
 M.PERIOD_MS = 600000
-M.RETRY_MS = 5500          -- 伺服器校正 cooldown 5 秒（Calibrate.lua），太快重送會被丟、沒有回覆
+M.RETRY_MS = 5500          -- 伺服器校正 cooldown 5 秒（Calibrate.lua），太快重送會被丟、沒有回覆；從上一筆回覆算
+M.TIMEOUT_MS = 10000       -- 這麼久沒回覆就不再等（同 Client.TIMEOUT_MS）
 M.tombs = M.tombs or {}    -- claimId → tombstone 到期時間
 M.purging = false
 
@@ -71,8 +72,9 @@ end
 
 -- 校正結果：照 remove 清單移除（同樣留 tombstone），序號基準換成伺服器回覆當下的值
 function M.onCalibrated(res)
-    if res.ok ~= true or type(res.remove) ~= "table" then return end
     local now = getTimestampMs()
+    M.busy, M.doneAt = false, now
+    if res.ok ~= true or type(res.remove) ~= "table" then return end
     for _, id in ipairs(res.remove) do
         if MSH.isInt(id) then removeWithTomb(id, now) end
     end
@@ -145,7 +147,7 @@ function M.calibrate(now)
     local payload = { protocol = MSH.PROTOCOL, houses = houses }
     if M.bootId ~= nil then payload.bootId = M.bootId end
     sendClientCommand(player, MSH.MODULE, "calibrate", payload)
-    M.sentAt, M.want = now, false
+    M.sentAt, M.want, M.busy = now, false, true
     return true
 end
 
@@ -160,12 +162,14 @@ function M.onGameStart()
     Events.OnTick.Add(firstTick)
 end
 
--- 常駐：每 10 分鐘、seq 缺號、首次因沒有玩家沒送成時補送（間隔至少 RETRY_MS）
+-- 常駐：每 10 分鐘、seq 缺號、首次因沒有玩家沒送成時補送。同時一筆，上一筆回覆（或 10 秒沒回覆）之後滿 RETRY_MS 才送
+-- 下一筆（從回覆算，同 Client.refreshSlots：伺服器卡頓時從送出算，第二筆可能在冷卻內到、被丟）
 function M.onTick()
     if not M.started then return end
     local now = getTimestampMs()
     if M.sentAt == nil or now - M.sentAt >= M.PERIOD_MS then M.want = true end
-    if M.want and (M.sentAt == nil or now - M.sentAt >= M.RETRY_MS) then M.calibrate(now) end
+    if M.busy and now - M.sentAt >= M.TIMEOUT_MS then M.busy, M.doneAt = false, M.sentAt + M.TIMEOUT_MS end
+    if M.want and not M.busy and (M.doneAt == nil or now - M.doneAt >= M.RETRY_MS) then M.calibrate(now) end
 end
 
 if first then

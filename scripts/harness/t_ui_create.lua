@@ -86,11 +86,15 @@ return function(T)
     check(P.clear(m) and Sel.isEmpty(m.sel) and m.phase == P.SELECTING, "〔清除〕清空範圍")
     p.x, p.y = 10, 10
     walkRect(m, 15, 15)
-    check(#sentOf("preview") == before, "500 ms 冷卻內不送第二次預檢（伺服器會直接丟掉）")
     T.tick(6)
-    check(#sentOf("preview") == before + 1, "冷卻過了才送")
+    -- 伺服器卡頓時，從送出算的間隔擋不住：兩筆在伺服器上可能相隔不到 500 ms，第二筆（現在的範圍）被丟
+    check(#sentOf("preview") == before, "上一筆預檢還沒回覆：新範圍先不送")
     reply(pv, { pass = true, checks = {} })
     check(m.checks == nil, "舊範圍的晚到預檢結果不收")
+    T.tick(5)
+    check(#sentOf("preview") == before, "回覆後不到 PREVIEW_GAP_MS：不送（間隔從回覆算）")
+    T.tick(1)
+    check(#sentOf("preview") == before + 1, "回覆後滿間隔才送新範圍")
     reply(lastSent(), { pass = false, checks = { { name = "roads", ok = false, code = "ROAD" },
         { name = "quota", ok = false, code = "QUOTA_FULL", tier = 2, buy = { amount = 100, currency = "USD" } } } })
     check(m.pass == false and #m.checks == 2 and not P.toConfirm(m), "預檢沒過：留在 preview、不能確認")

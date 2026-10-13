@@ -94,7 +94,7 @@ return function(T)
         "補送那筆的結果交給 cb、更新清單，之後不再送")
 
     -- 伺服器 slots 冷卻 500 ms 內重送就丟、不回覆：名額視窗、建立面板、Economy 推送同一刻各要一次時，只能送一筆，
-    -- 回覆到了、離上次送出滿 SLOTS_GAP_MS 才補送一次（2026-10-13 使用者截圖：付款後名額停在 0）
+    -- 上一筆回覆後滿 SLOTS_GAP_MS 才補送一次（2026-10-13 使用者截圖：付款後名額停在 0）
     T.section("Client：名額摘要（slots）同時一筆、間隔滿了才補送")
     local got = {}
     C.on("slots", "test", function(res) got[#got + 1] = res end)
@@ -113,7 +113,7 @@ return function(T)
     T.advance(100)
     reply(first, { usable = 0 })
     T.fire("OnTick")
-    check(#got == 1 and got[1].usable == 0 and slotsSent() == s0 + 1, "回覆發給 slots 事件；離上次送出不到間隔：先不補送")
+    check(#got == 1 and got[1].usable == 0 and slotsSent() == s0 + 1, "回覆發給 slots 事件；離上一筆回覆不到間隔：先不補送")
     T.advance(C.SLOTS_GAP_MS)
     T.fire("OnTick")
     check(slotsSent() == s0 + 2, "送出中又被要過：間隔滿了補送一次（拿付款後的數字）")
@@ -132,9 +132,13 @@ return function(T)
     T.advance(C.SLOTS_GAP_MS + 100)
     T.fire("OnTick")
     check(slotsSent() == s0 + 4, "回覆比間隔慢：前一筆還在路上就不送第二筆")
+    -- 伺服器卡頓：前一筆在伺服器排了很久才處理，回覆一到就送下一筆的話，兩筆在伺服器上相隔不到 500 ms、下一筆被丟
     reply(lastSent(), {})
     T.fire("OnTick")
-    check(slotsSent() == s0 + 5, "前一筆回覆後：被要過的那次馬上補送")
+    check(slotsSent() == s0 + 4, "回覆很慢（伺服器卡頓）：回覆一到也不馬上送，間隔從回覆算")
+    T.advance(C.SLOTS_GAP_MS)
+    T.fire("OnTick")
+    check(slotsSent() == s0 + 5, "回覆後滿 SLOTS_GAP_MS：補送被要過的那次")
     reply(lastSent(), {})
     C.off("slots", "test")
 end

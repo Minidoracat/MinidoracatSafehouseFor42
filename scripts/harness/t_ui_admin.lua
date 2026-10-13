@@ -147,31 +147,33 @@ return function(T)
     check(args ~= nil and args.filter == "all" and args.page == 1 and args.query == nil, "開頁先抓全部玩家第 1 頁")
     check(AP.pagerPump(p, 100) == nil, "一筆在路上：不再送")
     AP.pagerType(p, "  Bo", 200)
-    check(AP.pagerReply(p, key, { ok = true, rows = { { name = "x" } }, page = 1, pages = 3, total = 120 }) == true
+    check(AP.pagerReply(p, key, { ok = true, rows = { { name = "x" } }, page = 1, pages = 3, total = 120 }, 210) == true
         and p.shown == AP.pagerKey(p), "回覆對得上目前條件：採用")
     check(AP.pagerPump(p, 700) == nil, "輸入還沒停 650 ms：不送")
     args, key = AP.pagerPump(p, 860)
     check(args ~= nil and args.query == "Bo" and args.page == 1, "停 650 ms 後送出（去頭尾空白）")
     AP.pagerSet(p, "filter", "owners")
-    check(AP.pagerReply(p, key, { ok = true, rows = { { name = "Bob" } }, page = 1, pages = 1, total = 1 }) == false
+    check(AP.pagerReply(p, key, { ok = true, rows = { { name = "Bob" } }, page = 1, pages = 1, total = 1 }, 900) == false
         and p.rows[1].name == "x", "送出後改了篩選：過期回覆丟掉、不蓋畫面")
-    check(AP.pagerPump(p, 1000) == nil, "離上次送出不到 650 ms：不送（伺服器 500 ms 內重送會丟）")
-    args, key = AP.pagerPump(p, 1520)
-    check(args ~= nil and args.filter == "owners" and args.query == "Bo", "間隔到了送新條件")
+    check(AP.pagerPump(p, 1500) == nil, "離上一筆回覆不到 650 ms：不送（伺服器 500 ms 內重送會丟）")
+    args, key = AP.pagerPump(p, 1550)
+    check(args ~= nil and args.filter == "owners" and args.query == "Bo", "回覆後滿 650 ms 送新條件")
     AP.pagerSet(p, "page", 9)
-    check(AP.pagerReply(p, key, { ok = true, rows = {}, page = 1, pages = 1, total = 0 }) == false, "改了頁碼：舊頁回覆丟掉")
-    args, key = AP.pagerPump(p, 2200)
-    AP.pagerReply(p, key, { ok = true, rows = { { name = "Bob" } }, page = 2, pages = 2, total = 51 })
-    check(p.page == 2 and p.shown == AP.pagerKey(p) and AP.pagerPump(p, 3000) == nil,
+    check(AP.pagerReply(p, key, { ok = true, rows = {}, page = 1, pages = 1, total = 0 }, 2400) == false, "改了頁碼：舊頁回覆丟掉")
+    -- 伺服器卡頓：上一筆在伺服器排了很久才處理，回覆一到就送的話兩筆在伺服器上相隔不到 500 ms、這一筆被丟
+    check(AP.pagerPump(p, 2500) == nil, "回覆很慢：離送出已過 650 ms、離回覆還不到，不送（間隔從回覆算）")
+    args, key = AP.pagerPump(p, 3050)
+    AP.pagerReply(p, key, { ok = true, rows = { { name = "Bob" } }, page = 2, pages = 2, total = 51 }, 3100)
+    check(args ~= nil and p.page == 2 and p.shown == AP.pagerKey(p) and AP.pagerPump(p, 4000) == nil,
         "頁碼超過最後一頁：採用伺服器夾過的頁碼，不再重抓")
     AP.pagerSet(p, "page", 1)
-    args, key = AP.pagerPump(p, 3000)
-    AP.pagerReply(p, key, { ok = false, code = "NO_REPLY" })
-    check(p.error == "NO_REPLY" and AP.pagerPump(p, 9000) == nil, "失敗：顯示原因、不自動重送")
+    args, key = AP.pagerPump(p, 4000)
+    AP.pagerReply(p, key, { ok = false, code = "NO_REPLY" }, 14000)
+    check(p.error == "NO_REPLY" and AP.pagerPump(p, 20000) == nil, "失敗：顯示原因、不自動重送")
     AP.pagerInvalidate(p)
-    check(AP.pagerPump(p, 9000) ~= nil, "重新整理（invalidate）後重抓")
-    AP.pagerType(p, "x\1" .. string.rep("a", 40), 9100)
-    args = AP.pagerPump(p, 20000)
+    check(AP.pagerPump(p, 20000) ~= nil, "重新整理（invalidate）後重抓")
+    AP.pagerType(p, "x\1" .. string.rep("a", 40), 20100)
+    args = AP.pagerPump(p, 30000)
     check(args == nil and #p.query == MSH.LIMIT.USERNAME_CHARS and not string.find(p.query, "%c"),
         "關鍵字去控制字元並截到伺服器上限")
 
@@ -458,15 +460,21 @@ return function(T)
     local ar = lastCall("setAutoRenew")
     check(ar ~= nil and ar[3] == true and ar[4] == 2 and ar[5] == 5 and ar[7] == "L1", "送出該張租約的自動續租（帶版本與條款版本）")
 
-    T.section("SlotsWindow：Economy 通知不造成無限重抓")
-    -- 假 Economy 照 adopt() 的行為：每個 requestState 回覆先通知 onChanged（版本相同也通知），再呼叫回呼
-    local listeners, waiting, stateReqs = {}, {}, 0
+    T.section("SlotsWindow：什麼時候重抓名額摘要（Economy 推送、自己的清單、沙盒；自己讀狀態不算）")
+    -- 假 Economy 照 ECEntitlementClient：每個 requestState 回覆先通知 onChanged（版本相同也通知），再呼叫回呼；
+    -- entitlement.changed 推送先採用（onChanged），再呼叫 onPush（:301-321）
+    local listeners, pushers, waiting, stateReqs = {}, {}, {}, 0
     local env3 = { sourceMod = SW.SRC, productId = "tier2", plan = env.plan,
         entitlement = { revision = 2, usable = 1, rentals = env.entitlement.rentals } }
     local function notify(e) for _, fn in ipairs(listeners) do fn(e) end end
+    local function push(args)
+        notify(args)
+        for _, fn in ipairs(pushers) do fn(args) end
+    end
     local E3 = {}
     for k, v in pairs(E) do E3[k] = v end
     E3.onChanged = function(fn) listeners[#listeners + 1] = fn end
+    E3.onPush = function(fn) pushers[#pushers + 1] = fn end
     E3.getState = function() return env3 end
     E3.requestState = function(src, product, cb)
         stateReqs = stateReqs + 1
@@ -503,16 +511,56 @@ return function(T)
     rounds(8)
     check(settled - base == 1 and countCmd("slots") == settled and #waiting == 0,
         "展開一級：自己的 requestState 回覆不觸發重抓，slots 只送開窗那一次（實際 " .. (countCmd("slots") - base) .. " 次）")
-    local reads = stateReqs
-    notify(env3)
-    rounds(3)
-    check(countCmd("slots") == settled and stateReqs == reads, "推送的狀態沒變（同版本、較新的請求）：不重抓")
     env3 = { sourceMod = SW.SRC, productId = "tier2", plan = env.plan,
         entitlement = { revision = 3, usable = 2, rentals = env.entitlement.rentals } }
     notify(env3)
-    check(countCmd("slots") == settled + 1, "權益版本變了：重抓一次摘要")
+    rounds(3)
+    check(countCmd("slots") == settled, "自己讀到的快照變了（沒有推送）：只重排，不重抓")
+    push(env3)
+    check(countCmd("slots") == settled + 1, "Economy 推送 entitlement.changed（付款、續租、到期）：重抓一次摘要")
     rounds(6)
     check(countCmd("slots") == settled + 1 and SW.visible(w3), "重抓後又穩定下來")
+    -- 2026-10-13 前用「狀態指紋變了才重抓」：展開那一級的 requestState 還在路上時，別處來的推送被當成自己的回覆略過
+    SW.requestState(w3)
+    local n = countCmd("slots")
+    push({ sourceMod = SW.SRC, productId = "tier2", entitlement = { revision = 4, usable = 3 } })
+    check(#waiting == 1 and countCmd("slots") == n + 1, "展開那一級正在讀狀態時來的推送：照樣重抓")
+    rounds(4)
+    n = countCmd("slots")
+    push({ sourceMod = "OtherMod", productId = "tier2" })
+    rounds(2)
+    check(countCmd("slots") == n, "別的 MOD 的推送：不重抓")
+    MSH.Client.emit("claims", MSH.Client.claims)
+    check(countCmd("slots") == n + 1, "自己的安全屋清單重抓了（建立、放棄、停用）：名額視窗開著就重抓「使用」數")
+    rounds(2)
+    MSH.Client.emit("sandbox")
+    check(countCmd("slots") == n + 2, "沙盒變了（管理員改每人上限）：重抓")
+    rounds(2)
+    w3.win:setVisible(false)
+    n = countCmd("slots")
+    push({ sourceMod = SW.SRC, productId = "tier2" })
+    MSH.Client.emit("claims", MSH.Client.claims)
+    rounds(2)
+    check(countCmd("slots") == n, "名額視窗和建立面板都沒開：不抓")
+    -- 名額視窗從沒開過、只開了建立面板（換一個還沒登記過的 Economy 客戶端）：在 Economy 錢包或別處付款
+    local pushers4 = {}
+    local E4 = {}
+    for k, v in pairs(E3) do E4[k] = v end
+    E4.onChanged = function() end
+    E4.onPush = function(fn) pushers4[#pushers4 + 1] = fn end
+    MinidoracatEconomy.v1.Client.Entitlements = E4
+    local CP = MSH.CreatePanel
+    local cm = {}
+    CP.model = cm
+    CP.refreshSlots(cm)
+    answer("slots", { free = { n = 1, used = 1 }, tiers = {} })
+    T.advance(MSH.Client.SLOTS_GAP_MS)
+    n = countCmd("slots")
+    for _, fn in ipairs(pushers4) do fn({ sourceMod = SW.SRC, productId = "tier2" }) end
+    answer("slots", slotsData)
+    check(#pushers4 == 1 and countCmd("slots") == n + 1 and cm.slots ~= nil and cm.slots.tiers[2].usable == 1,
+        "建立面板打開時就登記 Economy 推送：別處付款後，開著的建立面板拿到新名額")
+    CP.model = nil
 
     T.section("AdminPanel：譯文變長時欄寬、按鈕寬與面板寬跟著量測")
     -- 量測模型：fakeUI 的 MeasureStringX＝字數 × 7。放法文／俄文長度等級的譯文，placeholder 比原本固定欄寬 52 長

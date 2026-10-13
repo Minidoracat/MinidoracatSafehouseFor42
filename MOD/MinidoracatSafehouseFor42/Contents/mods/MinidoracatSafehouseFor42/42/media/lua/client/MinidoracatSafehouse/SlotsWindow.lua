@@ -272,7 +272,7 @@ end
 function SW.build(UI)
     local theme = MSH.Client.theme(UI)
     local x, y, W, H = K.center(480, 540)
-    local w = { UI = UI, theme = theme, seen = {} }
+    local w = { UI = UI, theme = theme }
     w.win = UI.Window.new(MSH.Client.windowOpts(UI, { x = x, y = y, width = W, height = H,
         title = getText("IGUI_MSH_Slots_Title"), theme = theme }))
     local top = w.win:contentTop()
@@ -285,43 +285,39 @@ end
 
 function SW.visible(w) return w ~= nil and w.win:isVisible() end
 
--- 本視窗關心的權益狀態指紋：權益／方案版本（Economy adopt 的排序鍵，ECEntitlementClient.lua:107-118）、usable、
--- 每張租約的 id／狀態／名額／自動續租狀態。只在推送時算，不在 render 裡
-function SW.stateKey(env)
-    local ent = type(env) == "table" and type(env.entitlement) == "table" and env.entitlement or {}
-    local plan = type(env) == "table" and type(env.plan) == "table" and env.plan or {}
-    local parts = { tostring(ent.revision), tostring(plan.revision), tostring(ent.usable) }
-    for _, r in ipairs(type(ent.rentals) == "table" and ent.rentals or {}) do
-        if type(r) == "table" then
-            parts[#parts + 1] = tostring(r.id) .. ":" .. tostring(r.state) .. ":" .. tostring(r.quantity) .. ":"
-                .. tostring(r.autoRenewState)
-        end
-    end
-    return table.concat(parts, "|")
+-- 摘要什麼時候重抓：伺服器那邊有東西變了才抓，自己讀 Economy 的回覆不抓——
+--   Economy 推送 entitlement.changed（付款、續租、進寬限、到期、退款；管理員改方案的公開通知）：Economy 客戶端 onPush
+--     （entitlements-api.md「客戶端 API」，ECEntitlementClient.lua:301-321）；
+--   自己的安全屋清單重抓了（建立、放棄、停用、恢復：Client 事件 "claims"）、沙盒變了（"sandbox"）。
+-- 名額視窗或建立面板開著才抓（兩邊都從 "slots" 事件更新；同時一筆、間隔由 Client.refreshSlots 管）。onChanged 是每個
+-- 採用的快照（含自己 requestState 的回覆，ECEntitlementClient.lua:137-150），只重排、不重抓，所以不會自己觸發自己。
+-- 2026-10-13 前用「狀態指紋變了才重抓」：展開的那一級正在讀狀態時，別處來的推送會被當成自己的回覆略過
+function SW.slotsChanged()
+    if SW.visible(SW.instance) or (MSH.CreatePanel ~= nil and MSH.CreatePanel.model ~= nil) then MSH.Client.refreshSlots() end
 end
 
--- Economy 的 adopt 在版本相同、只是請求較新時照樣通知（ECEntitlementClient.lua:137-150），每個 requestState 回覆都會
--- 觸發 onChanged；通知又在回呼之前（onReply :277-280）。所以：自己這一級的 requestState 還在路上時收到的通知只記下指紋、
--- 重排，不重抓摘要（摘要剛跟這筆一起抓過）；其他通知只有指紋真的變了才重抓（VM PaidSlotsWindow.lua:865-868 同理）。
--- 指紋第一次出現（沒看過這一級）也算變了：可能是別的視窗付款後的推送。
+function SW.onEconomyPush(args)
+    if type(args) ~= "table" or (args.sourceMod ~= nil and args.sourceMod ~= SW.SRC) then return end
+    SW.slotsChanged()
+end
+
 function SW.onEconomyChanged(env)
     local w = SW.instance
-    if not SW.visible(w) or type(env) ~= "table" or env.sourceMod ~= SW.SRC or type(env.productId) ~= "string" then return end
-    local key = SW.stateKey(env)
-    local prev = w.seen[env.productId]
-    w.seen[env.productId] = key
-    if prev ~= key and w.stateWaiting ~= env.productId then SW.refresh(w) end
-    SW.layout(w)
+    if SW.visible(w) and type(env) == "table" and env.sourceMod == SW.SRC then SW.layout(w) end
 end
 
+-- 名額視窗打開、建立面板打開（沒開過名額視窗也要跟上推送）時各試一次；同一個 Economy 客戶端只登記一次。onPush 是
+-- Economy 0.15.0 起才有（錢包「名額」分頁）：更舊的沒有推送觸發，只剩本視窗自己付款後重抓
 function SW.listen()
     local E = SW.api()
     if E == nil or SW.listening == E then return end
     SW.listening = E
     E.onChanged(function(env) MSH.SlotsWindow.onEconomyChanged(env) end)
+    if type(E.onPush) == "function" then E.onPush(function(args) MSH.SlotsWindow.onEconomyPush(args) end) end
 end
 
--- 摘要由 Client.refreshSlots 抓（同時一筆、間隔滿 500 ms 冷卻，連續要求只補抓一次），結果從 "slots" 事件回來（SW.onSlots）
+-- 摘要由 Client.refreshSlots 抓（同時一筆、上一筆回覆後滿 SLOTS_GAP_MS 才送下一筆、連續要求只補抓一次），結果從
+-- "slots" 事件回來（SW.onSlots）
 function SW.refresh(w)
     MSH.Client.refreshSlots()
 end
@@ -348,17 +344,11 @@ function SW.requestState(w)
     local E = SW.api()
     if E == nil or w.expanded == nil or not SW.ready(w) then return end
     w.stateError = nil
-    local product = SW.product(w.expanded)
-    w.stateWaiting = product
-    local rid, why = E.requestState(SW.SRC, product, function(res)
-        if w.stateWaiting == product then w.stateWaiting = nil end
+    local rid, why = E.requestState(SW.SRC, SW.product(w.expanded), function(res)
         w.stateError = (res.unknown or not res.ok) and SW.reasonText(res.error or "timeout", E) or nil
         SW.layout(w)
     end)
-    if rid == nil then
-        w.stateWaiting = nil
-        w.stateError = SW.reasonText(why or "invalid_args", E)
-    end
+    if rid == nil then w.stateError = SW.reasonText(why or "invalid_args", E) end
 end
 
 function SW.say(w, text, token)
@@ -696,4 +686,6 @@ end
 if first then
     Events.OnTick.Add(function() MSH.SlotsWindow.onTick() end)
     MSH.Client.on("slots", "SlotsWindow", function(res) MSH.SlotsWindow.onSlots(res) end)
+    MSH.Client.on("claims", "SlotsWindow", function() MSH.SlotsWindow.slotsChanged() end)
+    MSH.Client.on("sandbox", "SlotsWindow", function() MSH.SlotsWindow.slotsChanged() end)
 end
