@@ -143,17 +143,17 @@ function P.gate(m)
     return nil
 end
 
--- 名額與伺服器閘門（slots：Economy 代理的查詢；blocked＝HEALTH_BLOCKED／NOT_SURVIVED）
+-- 名額與伺服器閘門（slots：Economy 代理的查詢；blocked＝HEALTH_BLOCKED／NOT_SURVIVED）。和名額視窗共用 Client.refreshSlots
+-- （伺服器 500 ms 冷卻），結果由 "slots" 事件送到開著的面板：在名額視窗付款後，這裡的名額閘門跟著解除，不必重開
 function P.refreshSlots(m)
-    m.slotsRid = MSH.Client.send("slots", {}, function(res) P.onSlots(m, res) end)
+    MSH.Client.refreshSlots()
 end
 
 function P.onSlots(m, res)
-    if res.requestId ~= m.slotsRid then return end
     if res.ok then
         m.slots, m.blocked = res, res.blocked
     elseif res.code == CODE.DEDICATED_ONLY or res.code == CODE.IDENTITY_UNVERIFIED then
-        m.blocked = res.code   -- 這兩個擋住所有指令；其他失敗（沒回覆、冷卻）只是沒有名額資料
+        m.blocked = res.code   -- 這兩個擋住所有指令；其他失敗（沒回覆）只是沒有名額資料
     end
     changed(m)
 end
@@ -948,8 +948,15 @@ function V.build(m, UI)
         lineH = tm:getFontHeight(FONT) + 2, wrapOK = caps.textWrap == true and UI.Text ~= nil and UI.Text.wrap ~= nil,
         invalidOK = caps.textFieldInvalid == true }
     v.iconDY = math.floor((v.lineH - 2 - ICON) / 2)
-    -- 非 modal、不 alwaysOnTop；放右側，框選時不擋住角色附近的地面；框架有 opaqueWindow 時不透明（Client.windowOpts）
-    local win = UI.Window.new(MSH.Client.windowOpts(UI, { x = math.max(0, sw - w - 60), y = 120, width = w, height = 200,
+    -- 非 modal、不 alwaysOnTop；放右側，框選時不擋住角色附近的地面；框架有 opaqueWindow 時不透明（Client.windowOpts）。
+    -- 這次遊戲拖過就開在上次關掉的位置（使用者 2026-10-13：1280×720 時右側預設位置會蓋到預檢的範圍），超出畫面就拉回來
+    local x, y = math.max(0, sw - w - 60), 120
+    local last = P.lastPos
+    if last ~= nil then
+        x = math.max(0, math.min(last.x, sw - w))
+        y = math.max(0, math.min(last.y, getCore():getScreenHeight() - 200))
+    end
+    local win = UI.Window.new(MSH.Client.windowOpts(UI, { x = x, y = y, width = w, height = 200,
         icon = "house", theme = theme,
         title = getText(m.mode == "redraw" and "IGUI_MSH_Create_RedrawTitle" or "IGUI_MSH_Create_Title") }))
     v.win, v.top = win, win:contentTop()
@@ -1008,6 +1015,7 @@ function P.close(m)
         pcall(function()
             if win:getIsVisible() then win:close() end
             win:removeFromUIManager()
+            P.lastPos = { x = win:getX(), y = win:getY() }   -- 下次照這裡開（V.build）
         end)
     end
     if m.fromManager and m.phase ~= P.DONE then openManager({}) end
@@ -1079,5 +1087,9 @@ if first then
     Events.OnMouseDown.Add(function() MSH.CreatePanel.onWorldMouseDown() end)
     Events.OnFillInventoryObjectContextMenu.Add(function(playerNum, context, items)
         MSH.CreatePanel.onInventoryMenu(playerNum, context, items)
+    end)
+    MSH.Client.on("slots", "CreatePanel", function(res)
+        local m = MSH.CreatePanel.model
+        if m ~= nil then MSH.CreatePanel.onSlots(m, res) end
     end)
 end

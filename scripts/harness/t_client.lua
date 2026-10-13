@@ -92,4 +92,49 @@ return function(T)
         lifecycle = "active" } } })
     check(late ~= nil and late.ok and #late.claims == 1 and #T.clientSent == before + 2 and C.claims.byId[9] ~= nil,
         "補送那筆的結果交給 cb、更新清單，之後不再送")
+
+    -- 伺服器 slots 冷卻 500 ms 內重送就丟、不回覆：名額視窗、建立面板、Economy 推送同一刻各要一次時，只能送一筆，
+    -- 回覆到了、離上次送出滿 SLOTS_GAP_MS 才補送一次（2026-10-13 使用者截圖：付款後名額停在 0）
+    T.section("Client：名額摘要（slots）同時一筆、間隔滿了才補送")
+    local got = {}
+    C.on("slots", "test", function(res) got[#got + 1] = res end)
+    local function slotsSent()
+        local c = 0
+        for _, s in ipairs(T.clientSent) do if s.command == "slots" then c = c + 1 end end
+        return c
+    end
+    T.advance(C.SLOTS_GAP_MS)
+    local s0 = slotsSent()
+    C.refreshSlots()
+    local first = lastSent()
+    C.refreshSlots()
+    C.refreshSlots()
+    check(slotsSent() == s0 + 1 and first.command == "slots", "同一刻要三次：只送一筆")
+    T.advance(100)
+    reply(first, { usable = 0 })
+    T.fire("OnTick")
+    check(#got == 1 and got[1].usable == 0 and slotsSent() == s0 + 1, "回覆發給 slots 事件；離上次送出不到間隔：先不補送")
+    T.advance(C.SLOTS_GAP_MS)
+    T.fire("OnTick")
+    check(slotsSent() == s0 + 2, "送出中又被要過：間隔滿了補送一次（拿付款後的數字）")
+    reply(lastSent(), { usable = 1 })
+    T.advance(C.SLOTS_GAP_MS)
+    T.fire("OnTick")
+    check(#got == 2 and got[2].usable == 1 and slotsSent() == s0 + 2, "補送的結果也發事件；沒人再要就不再送")
+    C.refreshSlots()
+    T.advance(C.TIMEOUT_MS + 500)
+    T.fire("OnTick")
+    check(#got == 3 and got[3].code == "NO_REPLY", "沒回覆：10 秒後發 NO_REPLY，下一次照樣能送")
+    T.advance(C.SLOTS_GAP_MS)
+    C.refreshSlots()
+    check(slotsSent() == s0 + 4, "NO_REPLY 之後不卡在送出中")
+    C.refreshSlots()
+    T.advance(C.SLOTS_GAP_MS + 100)
+    T.fire("OnTick")
+    check(slotsSent() == s0 + 4, "回覆比間隔慢：前一筆還在路上就不送第二筆")
+    reply(lastSent(), {})
+    T.fire("OnTick")
+    check(slotsSent() == s0 + 5, "前一筆回覆後：被要過的那次馬上補送")
+    reply(lastSent(), {})
+    C.off("slots", "test")
 end

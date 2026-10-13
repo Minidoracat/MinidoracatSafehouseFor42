@@ -52,15 +52,22 @@ return function(T)
     check(free.source == MSH.SOURCE.FREE and free.deedType == nil and P.gate(free) == nil, "免費模式：不帶地契、以 1 級計")
     T.sandbox("CreateMode", MSH.Settings.CREATE.DEED)
 
+    -- 名額摘要同時一筆、間隔 SLOTS_GAP_MS（Client.refreshSlots）：每次重抓前先等過間隔；結果由 "slots" 事件交給開著的面板
+    local gap = MSH.Client.SLOTS_GAP_MS
+    P.model = m
+    T.advance(gap)
     P.refreshSlots(m)
     reply(lastSent(), { blocked = "HEALTH_BLOCKED", free = { n = 1, used = 0 }, tiers = {} })
     check(P.gate(m) == "HEALTH_BLOCKED" and not P.startSelect(m, Sel.WALK), "伺服器閘門（slots.blocked）擋住框選")
+    T.advance(gap)
     P.refreshSlots(m)
     reply(lastSent(), { free = { n = 1, used = 1 }, tiers = { { tier = 2, free = true, usable = 1, paid = 1 } } })
     check(P.gate(m) == MSH.CODE.QUOTA_FULL, "免費位與付費位都用完：QUOTA_FULL")
+    T.advance(gap)
     P.refreshSlots(m)
     reply(lastSent(), { free = { n = 1, used = 1 }, tiers = { { tier = 2, free = true, usable = 2, paid = 1 } } })
     check(P.gate(m) == nil, "還有付費位：可以建")
+    T.advance(gap)
     P.refreshSlots(m)
     T.fire("OnServerCommand", MSH.MODULE, "result",
         { command = "slots", requestId = lastSent().args.requestId, ok = false, code = "DEDICATED_ONLY" })
@@ -208,6 +215,8 @@ return function(T)
     function Base:getIsVisible() return self.visible end
     function Base:setX(n) self.x = n end
     function Base:setY(n) self.y = n end
+    function Base:getX() return self.x end
+    function Base:getY() return self.y end
     function Base:setWidth(n) self.width = n end
     function Base:setHeight(n) self.height = n end
     function Base:setEnabled(b) self.enabled = b end
@@ -536,6 +545,24 @@ return function(T)
     n0 = #opened
     P.succeed(done, 77)
     check(#opened == n0 + 1 and opened[#opened].claimId == 77, "建立成功：管理視窗只開一次，開到新的那間")
+
+    T.section("建立面板：這次遊戲拖過的位置，下次照那裡開（使用者 2026-10-13）")
+    P.lastPos = nil
+    local pm = P.open({ deedType = DEED2 })
+    local dx, dy = pm.view.win.x, pm.view.win.y
+    pm.view.win:setX(200)
+    pm.view.win:setY(300)
+    P.close(pm)
+    pm = P.open({ deedType = DEED2 })
+    check(dx == 1280 - pm.view.w - 60 and dy == 120 and pm.view.win.x == 200 and pm.view.win.y == 300,
+        "沒拖過開在右側預設位置；拖到 (200, 300) 關掉，下次開在 (200, 300)")
+    pm.view.win:setX(5000)
+    pm.view.win:setY(-50)
+    P.close(pm)
+    pm = P.open({ deedType = DEED2 })
+    check(pm.view.win.x == 1280 - pm.view.w and pm.view.win.y == 0, "上次的位置超出畫面（換了解析度）：拉回畫面內")
+    P.close(pm)
+    P.lastPos = nil
     tw.restore()
     MSH.Client._theme = nil
     for _, k in ipairs(G) do _G[k] = savedG[k] end

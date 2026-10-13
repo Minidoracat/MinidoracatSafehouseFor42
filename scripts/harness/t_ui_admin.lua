@@ -431,6 +431,7 @@ return function(T)
     local q = lastCall("quote")
     check(q ~= nil and q[2] == "tier2" and q[3] == "permanent" and q[4] == 1, "確認後先報價")
     local nSlots = countCmd("slots")
+    T.advance(MSH.Client.SLOTS_GAP_MS)   -- 名額摘要同時一筆、間隔 SLOTS_GAP_MS（Client.refreshSlots）
     q[5]({ ok = true, quote = { id = "Q1", orderId = "O1", amount = 4000, currency = "survivor" } })
     check(lastCall("purchase") == nil and countCmd("slots") == nSlots + 1, "報價金額和確認頁不同：不付款、重抓摘要")
     answer("slots", slotsData)
@@ -446,6 +447,7 @@ return function(T)
     local go = lastCall("getOrder")
     check(go ~= nil and go[3] == "O2" and lastCall("purchase") == pc, "查詢只讀同一筆訂單，不重送付款")
     nSlots = countCmd("slots")
+    T.advance(MSH.Client.SLOTS_GAP_MS)
     go[4]({ ok = true, known = true, order = { orderId = "O2", status = "paid" } })
     check(w.order == nil and countCmd("slots") == nSlots + 1, "查回最終結果才解除，並重抓摘要")
     answer("slots", slotsData)
@@ -488,11 +490,13 @@ return function(T)
             answerSlots()
             respond()
             T.advance(1000)
+            T.fire("OnTick")   -- 間隔滿了才送的那一筆（Client.pumpSlots）
         end
     end
     MinidoracatEconomy.v1.Client.Entitlements = E3
     SW.instance = nil
     local base = countCmd("slots")
+    T.advance(MSH.Client.SLOTS_GAP_MS)
     local w3 = SW.open({ tier = 2 })
     rounds(2)
     local settled = countCmd("slots")

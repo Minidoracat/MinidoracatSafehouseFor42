@@ -230,6 +230,29 @@ function C.refreshList(cb)
     return C.listRid
 end
 
+-- ===== 名額摘要（slots）=====
+-- 伺服器同一人 500 ms 內重送 slots 就丟、不回覆（Economy.lua slots 的 cooldownMs、Server.lua coolingDown）：太近的那次
+-- 10 秒後才 NO_REPLY，畫面停在舊值。付款時報價與付款的 Economy 推送相隔不到 500 ms，名額視窗各重抓一次，第二次（付款後的）
+-- 被丟，視窗停在 0（2026-10-13 使用者截圖：租了名額要重開視窗才有）。所以名額視窗與建立面板都從這裡抓：同時只送一筆；
+-- 送出中或離上次送出不到 SLOTS_GAP_MS 又被叫，就記下、間隔滿了再補送一次（onTick）；每個結果都發 "slots" 事件
+C.SLOTS_GAP_MS = 650   -- 伺服器冷卻 500 ms＋餘裕（同 Economy 客戶端的 ReadGate）
+
+function C.refreshSlots()
+    C.slotsWanted = true
+    C.pumpSlots(getTimestampMs())
+end
+
+function C.pumpSlots(now)
+    if not C.slotsWanted or C.slotsBusy then return end
+    if C.slotsAt ~= nil and now - C.slotsAt < C.SLOTS_GAP_MS then return end
+    C.slotsWanted, C.slotsBusy, C.slotsAt = false, true, now   -- 先標記：回覆在送出當下就到也不會卡住
+    local rid = C.send("slots", {}, function(res)
+        C.slotsBusy = false
+        C.emit("slots", res)
+    end)
+    if rid == nil then C.slotsWanted, C.slotsBusy = true, false end   -- 還沒有玩家：間隔滿了再試
+end
+
 -- 這格屬於哪間 managed 安全屋（本地原生清單裡 owner 是 @MSH:<id> 的；SafeHouse.getSafehouseList SafeHouse.java:652、
 -- getOwner :656、getX/getY/getW/getH :596-626），回 claimId 或 nil
 function C.claimAt(x, y)
@@ -266,7 +289,9 @@ function C.onServerCommand(module, command, args)
 end
 
 function C.onTick()
-    C.checkTimeouts(getTimestampMs())
+    local now = getTimestampMs()
+    C.checkTimeouts(now)
+    if C.slotsWanted then C.pumpSlots(now) end
 end
 
 -- 開局第一個 tick 抓一次清單（OnGameStart 當下送會走錯路徑，pitfalls.md「MP client 不可在 OnGameStart 直接送」）

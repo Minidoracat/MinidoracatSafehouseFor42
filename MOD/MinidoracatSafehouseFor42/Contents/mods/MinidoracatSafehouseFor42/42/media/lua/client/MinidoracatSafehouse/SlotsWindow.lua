@@ -321,19 +321,22 @@ function SW.listen()
     E.onChanged(function(env) MSH.SlotsWindow.onEconomyChanged(env) end)
 end
 
+-- 摘要由 Client.refreshSlots 抓（同時一筆、間隔滿 500 ms 冷卻，連續要求只補抓一次），結果從 "slots" 事件回來（SW.onSlots）
 function SW.refresh(w)
-    if w.loading then return end
-    w.loading = true
-    MSH.Client.send("slots", {}, function(res)
-        w.loading = false
-        if res.ok then
-            w.slots, w.loadError = res, nil
-        else
-            w.loadError = res.code
-        end
-        SW.requestState(w)
-        SW.layout(w)
-    end)
+    MSH.Client.refreshSlots()
+end
+
+function SW.onSlots(res)
+    local w = SW.instance
+    if w == nil then return end
+    if res.ok then
+        w.slots, w.loadError = res, nil
+    else
+        w.loadError = res.code
+    end
+    if not SW.visible(w) then return end
+    SW.requestState(w)
+    SW.layout(w)
 end
 
 function SW.product(tier) return "tier" .. tostring(tier) end
@@ -397,6 +400,8 @@ function SW.layout(w)
     local blocker = SW.blocker(s, E ~= nil)
     if blocker then F:text("blocker", getText(blocker), "warning") end
     for _, t in ipairs(s.tiers or {}) do SW.layoutTier(w, F, t, E, blocker) end
+    -- 重抓失敗時畫面上是上一次的數字：說出來，不讓舊值看起來像最新的
+    if w.loadError then F:text("loadErr", (MSH.Client.codeText(w.loadError)), "warning") end
     if w.busy then
         F:text("status", getText("IGUI_MSH_Slots_Busy"), "textMuted")
     elseif w.message then
@@ -690,4 +695,5 @@ end
 
 if first then
     Events.OnTick.Add(function() MSH.SlotsWindow.onTick() end)
+    MSH.Client.on("slots", "SlotsWindow", function(res) MSH.SlotsWindow.onSlots(res) end)
 end
