@@ -284,7 +284,7 @@ A switch under the list (on by default) outlines the safehouses near you on the 
 [h3]Safehouse respawn point[/h3]
 [list]
 [*] [b]Set it[/b]: stand inside this safehouse (owners and members alike) and press "Set as respawn point" on the Overview tab.
-[*] [b]Respawning[/b]: after you die, your next character always starts on the tile you stood on, whatever you pick in the spawn menu; if you die during the same session, the menu only offers "Safehouse".
+[*] [b]Respawning[/b]: after you die, your next character always starts on the tile you stood on, whatever you pick in the spawn menu; if you die during the same session, the spawn location menu is skipped.
 [*] [b]Upper floors[/b]: if the server can't confirm that floor is still there at that moment (the area isn't loaded, or the floor was dismantled or burned), you start on the same tile at ground level.
 [*] [b]One per player[/b]: setting it in another safehouse replaces it; you can also press "Clear respawn point".
 [*] [b]Paused[/b]: while the safehouse is released or suspended, or you've been removed as a member, you spawn the vanilla way; it works again once you have access back.
