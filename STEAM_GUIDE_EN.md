@@ -1,7 +1,7 @@
 <!-- 指南網址：https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336 -->
 <!-- Steam guide source (English): the full reference for this mod; the Workshop description only summarizes. Format and sync: pz-family-docs/release.md「完整說明：Steam 指南」 -->
 <!-- 標題：📖 Safehouse Mod Guide: Deeds, Claiming, Sharing, Paid Slots & Server Setup -->
-<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window, ground outlines and respawn points, paid slots, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
+<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window, ground outlines and respawn points, paid slots, idle release and insurance, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
 === 🚀 Quick start
 [b]繁體中文版：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307]Safehouse MOD 完整說明[/url]
 
@@ -251,6 +251,7 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [*] [b]Three tabs per safehouse[/b]: "Overview", "Members & sharing", "Land rules".
 [*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Set as respawn point", "Redraw", "Abandon safehouse...".
 [*] [b]Other buttons[/b]: "Create safehouse", "Slots".
+[*] [b]Idle release[/b]: the "Idle release" row on Overview shows how long is left; see "Idle release and insurance".
 [*] [b]After creating[/b]: the window opens on the new safehouse.
 [*] [b]Small window or large font[/b]: the window grows taller to fit.
 [*] [b]Vanilla UI[/b]: the vanilla claim-safehouse right-click option is removed; the vanilla safehouse window opens this manager for this mod's safehouses.
@@ -325,6 +326,46 @@ Default prices (set per tier by admins):
 [*] [b]Economy removed from the server[/b]: suspended safehouses are protected again; the excess only blocks new ones.
 [*] [b]Unsupported Economy version or a read failure[/b]: nothing changes; nothing is suspended or restored.
 [/list]
+=== 🧰 Idle release and insurance
+Safehouses nobody comes back to for too long are released automatically, freeing the land.
+[h3]How it counts[/h3]
+[list]
+[*] [b]Visits[/b]: the countdown starts over whenever the owner or anyone on the share list (including faction members it's shared with) steps into the area; the game records this about every 20 seconds.
+[*] [b]Being online isn't enough[/b]: if you're online but don't go back, the countdown keeps running.
+[*] [b]Release[/b]: after 14 days without a visit by default, it's released like an abandon, and the deed isn't returned.
+[*] [b]Bought-slot safehouses[/b]: 30 days by default.
+[*] [b]Rented-slot safehouses[/b]: follow their lease and are never released for being idle.
+[*] [b]Time that doesn't count[/b]: server downtime, and time the server is paused with nobody online.
+[*] [b]After the update[/b]: existing safehouses get the full limit, counted from the server's first start after the update.
+[*] [b]Losing paid protection[/b]: when a lease ends, a slot is refunded or Economy is removed from the server, that safehouse gets the full limit from that moment.
+[*] [b]Admin shortens the limit[/b]: you still get at least the new limit from that moment, so nothing is released right away.
+[/list]
+[h3]How long is left[/h3]
+[list]
+[*] [b]Overview[/b]: the "Idle release" row in the manager window shows the countdown, in a warning color under 1 day.
+[*] [b]Rules[/b]: hover the row to see this safehouse's limit and the rules.
+[/list]
+[h3]Idle-release insurance (needs Economy)[/h3]
+Players who can't log in for a while can pay to keep their safehouse longer.
+[olist]
+[*] Select the safehouse in the manager window and press "Extend" on Overview.
+[*] Enter how many days to buy (1–365).
+[*] The confirmation shows the daily price, total and the date it's kept until; confirm to pay.
+[/olist]
+[list]
+[*] [b]While insured[/b]: it isn't released.
+[*] [b]After it ends[/b]: the countdown starts again from the full limit.
+[*] [b]Rented-slot safehouses[/b]: don't need insurance and have no button.
+[*] [b]Not sold by default[/b]: admins turn on "Sell idle-release insurance" on the Rules tab.
+[*] [b]Refunds[/b]: an admin refund takes back the whole purchase.
+[/list]
+Default insurance per day (set per tier by admins on the Paid slots tab):
+[table]
+[tr][th]Deed[/th][th]Insurance per day[/th][/tr]
+[tr][td]Tier 1[/td][td]10[/td][/tr]
+[tr][td]Tier 2[/td][td]30[/td][/tr]
+[tr][td]Tier 3 and up[/td][td]70[/td][/tr]
+[/table]
 === ⚙️ Server settings
 This mod never changes server settings itself. If any vanilla option below is wrong, the server goes into "Server setup incomplete": creating, sharing and other changes stop, while existing safehouses stay protected, members stay in sync, admins can still act, and online admins get a notice.
 [h3]Required[/h3]
@@ -371,7 +412,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [h3]Five tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, free safehouses, gap, max pieces, share limit, keep days, faction sharing, redraw time and count, and which other safehouses players see on the ground; also the server settings status, takeover results and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, free safehouses, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, and which other safehouses players see on the ground; also the server settings status, takeover results and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
@@ -382,7 +423,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [/list]
 [*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod).
 [*] [b]Players[/b]: server-side paged search (50 per page); change a player's free safehouses, view, or release on their behalf (logged to the audit log).
-[*] [b]Paid slots[/b] (with Economy available): buy price and rent per period for each enabled tier, plus shared currency, period, grace, reminder, auto-renew and limits.
+[*] [b]Paid slots[/b] (with Economy available): buy price, rent per period and insurance per day for each enabled tier, plus shared currency, period, grace, reminder, auto-renew and limits.
 [list]
 [*] Only currencies enabled in the Economy are listed; you're warned if the current one gets disabled.
 [/list]
@@ -413,6 +454,9 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][td]Redraw time limit[/td][td]30 minutes (0 = off)[/td][/tr]
 [tr][td]Redraw limit per safehouse[/td][td]5 (1–20)[/td][/tr]
 [tr][td]Keep lapsed safehouses[/td][td]7 days[/td][/tr]
+[tr][td]Release idle safehouses (days)[/td][td]14 (0 = never, bought-slot safehouses included)[/td][/tr]
+[tr][td]Release idle bought-slot safehouses (days)[/td][td]30 (if not longer than the free limit, the free limit applies)[/td][/tr]
+[tr][td]Sell idle-release insurance (needs Economy)[/td][td]Off[/td][/tr]
 [tr][td]Avoid roads / Road margin[/td][td]On / 1 tile[/td][/tr]
 [tr][td]Ground that counts as road[/td][td]Main roads, streets and parking lots[/td][/tr]
 [tr][td]Avoid resource sites (needs MiniMap)[/td][td]On[/td][/tr]
@@ -514,6 +558,7 @@ Server-side data:
 [*] [b]Members removing themselves[/b]: a member who removes themselves with vanilla commands is teleported outside; the list is fixed on the next pass, the position isn't.
 [*] [b]Multi-piece safehouses[/b]: each piece is a separate vanilla safehouse, so a removed player may first land in another piece and is moved out again within about 20 seconds; the higher the piece limit, the more often.
 [*] [b]Server crashes[/b]: changes since the last world save roll back to the save. A just-created safehouse is the exception: it's restored on restart with the area, name and tier it was created with (sharing added later must be set again); released ones aren't restored. If the server crashed within 3½ minutes of creating it, the deed may have gone back to the owner, so it's listed under "Claims needing attention" in the admin panel (marked CRASH_UNCONFIRMED) instead: ask the owner, then press "Release…" if they still have the deed, or "Rebind" it to the original owner if they don't.
+[*] [b]Idle release counts visits, not logins[/b]: being online without going back doesn't reset the countdown; stepping into the area resets it within about 20 seconds.
 [*] [b]Server-wide limit[/b]: 256 safehouses (taken-over ones included).
 [/list]
 [h3]Player identity[/h3]
@@ -537,7 +582,6 @@ Server-side data:
 [*] Blocking zombies or vehicles.
 [*] Moving or expanding a safehouse (only redrawing right after creation).
 [*] Buying and selling land.
-[*] Releasing safehouses of long-absent owners.
 [*] A server-wide map browser or teleporting.
 [*] Keeping vanilla safehouse chat in sync.
 [*] Adding new deed kinds in game (8 tiers max).
@@ -567,6 +611,11 @@ Server-side data:
 [list]
 [*] The paid slot's lease ended and the grace period is over.
 [*] Renew in the slots window to restore protection; it's released if not renewed within the keep period (7 days by default).
+[/list]
+[h3]My safehouse was released?[/h3]
+[list]
+[*] Safehouses nobody visits for too long are released like an abandon, and the deed isn't returned; the "Idle release" row on Overview shows how long is left.
+[*] If you can't log in for a while and the server sells it, press "Extend" to buy insurance first.
 [/list]
 [h3]Why are there zombies inside?[/h3]
 [list]

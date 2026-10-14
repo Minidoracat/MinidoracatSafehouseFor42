@@ -32,7 +32,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [*] [b]Manager window[/b]: rename, share or release your safehouses, set a respawn point, and see nearby safehouses outlined on the ground
 [*] [b]Vanilla protection[/b]: non-members cannot enter or take items, but zombies can still spawn inside
 [*] [b]Admin panel[/b]: adjust every rule in game, including deeds, exclusions and paid slots
-[*] [b]Take over existing safehouses[/b]: vanilla and Better Safehouse safehouses are taken over automatically
+[*] [b]Idle release[/b]: safehouses nobody visits for too long are released; owners can buy insurance to keep them longer
 [/list]
 📖 [b]Deeds, claiming, sharing, paid slots and server settings:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336]Safehouse Mod Guide[/url]
 
