@@ -648,6 +648,161 @@ return function(T)
     check(not rw.btnRespawnSet.visible and not rw.btnRespawnClear.visible, "不是 active、點也不在這間：沒有重生點按鈕")
     showRespawn(nil)
     check(not rw.btnRespawnSet.visible and not rw.btnRespawnClear.visible, "舊伺服器沒有 respawn 欄位：不顯示")
+
+    T.section("ManagerWindow：閒置收回倒數、滑鼠提示與〔延長保留〕（使用者 2026-10-14）")
+    local UIv, realGetText2, savedEco = MinidoracatUI.v1, getText, MinidoracatEconomy
+    local realShow = UIv.Dialog.show
+    local dialogs = {}
+    UIv.Dialog.show = function(o) dialogs[#dialogs + 1] = o return o end
+    UIv.Date = { fromMs = function(ms) return ms, 1, 1 end, format = function(y) return "D" .. tostring(y) end }
+    -- 帶參數的鍵寫成「鍵|參數…」；名額視窗的原因鍵當作有譯文（SW.reasonText 先看鍵在不在）
+    getText = function(k, ...)
+        local a = { ... }
+        for i = 1, #a do a[i] = tostring(a[i]) end
+        if #a == 0 and string.find(k, "^IGUI_MSH_Slots_Reason_") then return "R:" .. k end
+        return #a == 0 and k or (k .. "|" .. table.concat(a, "|"))
+    end
+    local DAY, HOUR, MIN = 86400000, 3600000, 60000
+    local function showIdle(idle, role)
+        if rw.selectedId ~= 501 then rw:select(501) end
+        rw:loadDetail()
+        local req = T.clientSent[#T.clientSent]
+        T.fire("OnServerCommand", MSH.MODULE, "result", { command = "detail", requestId = req.args.requestId, ok = true,
+            code = "OK", claimId = 501, revision = 3, title = "house 1", rects = { { x = 100, y = 100, w = 10, h = 10 } },
+            actorRole = role or "owner", bits = MSH.SHARE_ALL, lifecycle = "active", healthSummary = "PROTECTED",
+            source = "deed", deedTier = 2, actions = {}, idle = idle })
+    end
+    local function idleRow()
+        for _, r in ipairs(rw.lines.rows) do
+            if string.find(r.text, "^IGUI_MSH_Manager_Idle") then return r end
+        end
+        return nil
+    end
+    local function tip() return rw.idleHover.visible and rw.idleHover.tooltip or "" end
+    local function has(s, part) return string.find(s, part, 1, true) ~= nil end
+    showIdle({ kind = "free", days = 14, remainingMs = 3 * DAY + 5 * HOUR + 30 * MIN })
+    local r = idleRow()
+    check(r ~= nil and r.text == "IGUI_MSH_Manager_IdleLeftDays|3|5" and r.token == "text",
+        "免費：≥ 1 天寫天＋小時（" .. tostring(r and r.text) .. "）")
+    local t = tip()
+    check(has(t, "IGUI_MSH_Manager_IdleTipWho") and has(t, "IGUI_MSH_Manager_IdleTipDays|14")
+        and has(t, "IGUI_MSH_Manager_IdleTipRelease") and not has(t, "IdleTipInsured") and has(t, " <LINE> "),
+        "滑鼠提示：誰進範圍重新計時、這間的天數、歸零收回不退地契；沒保險不寫保險")
+    rw.dirty = false
+    T.advance(30000)
+    rw:prerender(rw.body)
+    check(not rw.dirty, "同一分鐘內不重排")
+    T.advance(31000)
+    rw:prerender(rw.body)
+    check(rw.dirty, "顯示的分鐘數變了才重排（最多每分鐘一次）")
+    rw:prerender(rw.body)
+    check(not rw.dirty and idleRow().text == "IGUI_MSH_Manager_IdleLeftDays|3|5", "重排後照本機倒數")
+    showIdle({ kind = "buy", days = 30, remainingMs = 2 * HOUR + 4 * MIN + 1 })
+    r = idleRow()
+    check(r.text == "IGUI_MSH_Manager_IdleLeftHours|2|5" and r.token == "warning" and has(tip(), "IdleTipDays|30"),
+        "買斷：不到 1 天寫小時＋分（分無條件進位）、警告色；天數照 IdleBuyDays")
+    showIdle({ kind = "free", days = 14, remainingMs = 0 })
+    check(idleRow().text == "IGUI_MSH_Manager_IdleDue", "剩 0：寫到期")
+    showIdle({ kind = "rent" })
+    check(idleRow().text == "IGUI_MSH_Manager_IdleRent" and tip() == "IGUI_MSH_Manager_IdleTipRent", "租用：照租約，提示寫明")
+    showIdle({ kind = "unknown" })
+    check(idleRow().text == "IGUI_MSH_Manager_IdleUnknown" and tip() == "IGUI_MSH_Manager_IdleTipUnknown",
+        "讀不到 Economy：寫無法確認、期間不收回")
+    showIdle({ kind = "off" })
+    check(idleRow() == nil and not rw.idleHover.visible, "off：沒有這列")
+    showIdle(nil)
+    check(idleRow() == nil and not rw.idleHover.visible, "沒有 idle：沒有這列")
+    showIdle({ kind = "free", days = 14, remainingMs = 20 * DAY, insuredMs = 6 * DAY })
+    check(has(tip(), "IGUI_MSH_Manager_IdleTipInsured|D" .. tostring(T.now + 6 * DAY)), "保險中：提示寫保險到哪天")
+
+    local insure = { product = "insure2", tier = 2, price = 50, currency = "survivor", lease = "L9", maxDays = 365 }
+    local function insured(extra)
+        local idle = { kind = "free", days = 14, remainingMs = 10 * DAY, insuredMs = 2 * DAY, insure = insure }
+        for k, v in pairs(extra or {}) do idle[k] = v end
+        return idle
+    end
+    showIdle(insured())
+    check(not rw.btnInsure.visible, "沒有 Economy 客戶端：沒有〔延長保留〕")
+    local calls = {}
+    local function rec(name) return function(...) calls[#calls + 1] = { name = name, args = { ... } } return "rid" end end
+    local E = { quote = rec("quote"), purchase = rec("purchase"), getOrder = rec("getOrder"), requestState = rec("requestState"),
+        currencyName = function(c) return c end, errorText = function(c) return "E:" .. tostring(c) end,
+        orderOutcome = function(res) return res.order and res.order.status end }
+    local caps = { entitlements = true, rentals = true, rentalPeriods = false }
+    MinidoracatEconomy = { v1 = { Client = { API_MAJOR = 1, API_REVISION = 6, CAPABILITIES = caps, Entitlements = E } } }
+    showIdle(insured())
+    check(not rw.btnInsure.visible, "Economy 不能一次付多期（rentalPeriods）：沒有〔延長保留〕")
+    caps.rentalPeriods = true
+    showIdle(insured(), "member")
+    check(not rw.btnInsure.visible, "不是屋主：沒有〔延長保留〕")
+    showIdle({ kind = "free", days = 14, remainingMs = 10 * DAY })
+    check(not rw.btnInsure.visible, "伺服器沒給 insure（現在不能買）：沒有〔延長保留〕")
+    showIdle(insured())
+    check(rw.btnInsure.visible and rw.btnInsure:isEnabled(), "屋主、有 insure、Economy 支援：〔延長保留〕可按")
+    local function lastCall(name)
+        for i = #calls, 1, -1 do if calls[i].name == name then return calls[i].args end end
+        return nil
+    end
+    for _, bad in ipairs({ "0", "366", "abc", "2.5", "" }) do
+        rw.btnInsure.onClick(rw)
+        dialogs[#dialogs].onResult(true, bad)
+    end
+    check(lastCall("quote") == nil and #dialogs == 5 and rw.msgToken == "errorText"
+        and has(rw.msg, "IGUI_MSH_Manager_InsureBadDays|365"), "天數不是 1..maxDays 的整數：本機擋下、不報價")
+    check(has(dialogs[1].text, "IGUI_MSH_Manager_InsureAsk|IGUI_MSH_Slots_Money|50|survivor|365") and dialogs[1].input ~= nil,
+        "第一步：每日價格與天數上限、輸入框")
+    rw.btnInsure.onClick(rw)
+    dialogs[#dialogs].onResult(true, " 3 ")
+    local conf = dialogs[#dialogs]
+    local est = T.now + MW.insureEstimate(10 * DAY, 2 * DAY, 14, 3)
+    check(est == T.now + 19 * DAY and conf.text == "IGUI_MSH_Manager_InsureConfirm|3|IGUI_MSH_Slots_Money|50|survivor|"
+        .. "IGUI_MSH_Slots_Money|150|survivor|D" .. tostring(est), "第二步：天數、每日價格、合計＝價格 × 天數、預計保留到（保險剩餘＋天數＋門檻）")
+    check(MW.insureEstimate(40 * DAY, nil, 14, 1) == 40 * DAY, "預計剩餘不少於現在的剩餘")
+    conf.onResult(true)
+    local q = lastCall("quote")
+    check(q ~= nil and q[1] == MSH.MOD_ID and q[2] == "insure2" and q[3] == "rental" and q[4] == 1 and q[6] == "L9"
+        and q[7] == 3, "確認：報價 insure2、rental、數量 1、續保帶租約、periods＝天數")
+    local function details()
+        local n = 0
+        for _, s in ipairs(T.clientSent) do if s.command == "detail" then n = n + 1 end end
+        return n
+    end
+    local nDetail = details()
+    q[5]({ ok = true, quote = { id = "Q1", orderId = "O1", amount = 200, currency = "survivor" } })
+    check(lastCall("purchase") == nil and has(rw.msg, "IGUI_MSH_Slots_PriceChanged") and details() == nDetail + 1,
+        "報價金額不是價格 × 天數：不付款、說明新價格、重抓詳情")
+    showIdle(insured())
+    rw.btnInsure.onClick(rw)
+    dialogs[#dialogs].onResult(true, "3")
+    dialogs[#dialogs].onResult(true)
+    lastCall("quote")[5]({ ok = false, error = "INSURE_CLOSED" })
+    check(lastCall("purchase") == nil and rw.msg == "R:IGUI_MSH_Slots_Reason_INSURE_CLOSED" and rw.msgToken == "errorText",
+        "伺服器拒絕（INSURE_CLOSED）：走名額視窗的原因文字")
+    rw.btnInsure.onClick(rw)
+    dialogs[#dialogs].onResult(true, "3")
+    dialogs[#dialogs].onResult(true)
+    lastCall("quote")[5]({ ok = true, quote = { id = "Q2", orderId = "O2", amount = 150, currency = "survivor" } })
+    local pc = lastCall("purchase")
+    check(pc ~= nil and pc[1] == MSH.MOD_ID and pc[2] == "Q2", "金額一致：用同一張報價付款")
+    pc[3]({ ok = false, unknown = true, error = "timeout" })
+    check(rw.ins.order ~= nil and rw.btnInsureCheck.visible and not rw.btnInsure:isEnabled()
+        and has(rw.msg, "IGUI_MSH_Slots_NoAnswer"), "付款結果未知：保留付款鎖、〔延長保留〕停用、只給〔查詢購買結果〕")
+    local nQuote = #calls
+    rw.btnInsure.onClick(rw)
+    check(#calls == nQuote, "鎖著時按〔延長保留〕不動作")
+    rw.btnInsureCheck.onClick(rw)
+    local go = lastCall("getOrder")
+    check(go ~= nil and go[2] == "insure2" and go[3] == "O2" and lastCall("purchase") == pc, "查詢只讀同一筆訂單（insure2），不重送付款")
+    go[4]({ ok = true, known = false, order = { orderId = "O2" } })
+    check(rw.ins.order ~= nil and rw.btnInsureCheck.visible, "查回還不知道：鎖照舊")
+    rw.btnInsureCheck.onClick(rw)
+    nDetail = details()
+    lastCall("getOrder")[4]({ ok = true, known = true, order = { orderId = "O2", status = "paid" } })
+    check(rw.ins.order == nil and rw.msg == "IGUI_MSH_Manager_InsurePaid" and details() == nDetail + 1
+        and not rw.btnInsureCheck.visible, "查回已付款：解除鎖、寫保險已生效、重抓詳情")
+    MinidoracatEconomy = savedEco
+    UIv.Dialog.show, UIv.Date = realShow, nil
+    getText = realGetText2
     MW.instance, MSH.Client._theme = nil, nil
     for k, v in pairs(savedG) do _G[k] = v end
 

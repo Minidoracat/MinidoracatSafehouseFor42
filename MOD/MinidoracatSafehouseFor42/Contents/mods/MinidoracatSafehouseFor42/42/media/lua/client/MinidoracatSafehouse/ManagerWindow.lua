@@ -103,6 +103,77 @@ function MW.clock(ms)
     return string.format("%d:%02d", math.floor(s / 60), s % 60)
 end
 
+-- ===== 閒置收回與保險（使用者 2026-10-14，decisions.md）：資料只來自 detail 的 idle（契約見 Idle.lua）=====
+MW.DAY_MS = 86400000
+
+-- 保留時間列的值與色票；kind off、不認得或 free／buy 沒有剩餘時間時回 nil（不顯示這列）。leftMs＝本機倒數到的剩餘：
+-- ≥ 1 天寫「天＋小時」，不到寫「小時＋分」（分無條件進位），0＝到期
+function MW.idleText(idle, leftMs)
+    local k = idle.kind
+    if k == "rent" then return getText("IGUI_MSH_Manager_IdleRent"), "textMuted" end
+    if k == "unknown" then return getText("IGUI_MSH_Manager_IdleUnknown"), "textMuted" end
+    if (k ~= "free" and k ~= "buy") or not MSH.isFinite(leftMs) then return nil end
+    local m = math.max(0, math.ceil(leftMs / 60000))
+    if m == 0 then return getText("IGUI_MSH_Manager_IdleDue"), "warning" end
+    if m >= 1440 then
+        return getText("IGUI_MSH_Manager_IdleLeftDays", math.floor(m / 1440), math.floor(m % 1440 / 60)), "text"
+    end
+    return getText("IGUI_MSH_Manager_IdleLeftHours", math.floor(m / 60), m % 60), "warning"
+end
+
+-- 保留時間列的滑鼠提示：誰進範圍會重新計時、這間的天數、歸零會怎樣、保險到哪天（insuredDate 沒有＝沒保險）。
+-- 段落用原版 ISRichTextPanel 的 <LINE>：提示框寫 "\n" 時不換行（ISButton.updateTooltip 的 maxLineWidth 1000）
+function MW.idleTip(idle, insuredDate)
+    if idle.kind == "rent" then return getText("IGUI_MSH_Manager_IdleTipRent") end
+    if idle.kind == "unknown" then return getText("IGUI_MSH_Manager_IdleTipUnknown") end
+    local parts = { getText("IGUI_MSH_Manager_IdleTipWho"), getText("IGUI_MSH_Manager_IdleTipDays", idle.days or 0),
+        getText("IGUI_MSH_Manager_IdleTipRelease") }
+    if insuredDate then parts[#parts + 1] = getText("IGUI_MSH_Manager_IdleTipInsured", insuredDate) end
+    return table.concat(parts, " <LINE> ")
+end
+
+-- 買 d 天後預計還剩多久（契約：max(剩餘, 保險剩餘＋d 天＋門檻天數)）
+function MW.insureEstimate(leftMs, insuredMs, days, d)
+    return math.max(leftMs or 0, (insuredMs or 0) + (d + (days or 0)) * MW.DAY_MS)
+end
+
+-- 輸入的天數：1..maxDays 的整數，否則 nil
+function MW.insureDays(text, maxDays)
+    local n = tonumber(MSH.trim(tostring(text or "")))
+    if not MSH.isInt(n) or n < 1 or n > maxDays then return nil end
+    return n
+end
+
+-- 保險要 Economy 客戶端能一次付多期（CAPABILITIES.rentalPeriods）；沒有就不給〔延長保留〕
+function MW.insureApi()
+    local SW = MSH.SlotsWindow
+    if SW == nil then return nil end
+    local E, CL = SW.api()
+    if E ~= nil and CL.CAPABILITIES.rentalPeriods == true then return E end
+    return nil
+end
+
+-- 付款狀態（busy／pay／order）放在這個表，交給名額視窗的付款流程（SlotsWindow startQuote…onOrder）；訊息寫到頁尾
+function MW.insurePayer(mw)
+    return { mw = mw, ready = MW.insureReady, relayout = MW.insureRelayout, refresh = MW.insureRefresh,
+        texts = { IGUI_MSH_Slots_PaidDone = "IGUI_MSH_Manager_InsurePaid" } }
+end
+
+function MW.insureReady() return MW.insureApi() ~= nil end
+
+function MW.insureRelayout(p)
+    local mw = p.mw
+    if p.busy then
+        mw.msg, mw.msgToken = getText("IGUI_MSH_Slots_Busy"), "textMuted"
+    elseif p.message then
+        mw.msg, mw.msgToken, p.message = p.message, p.messageToken, nil
+    end
+    mw:layout()
+end
+
+-- 報價變了或付款有結果：重抓詳情（剩餘時間、保險、續保用的租約）
+function MW.insureRefresh(p) p.mw:loadDetail() end
+
 -- 重生點（使用者 2026-10-14）：〔設為重生點〕停用的原因鍵，可以設時回 nil。伺服器沒開放、或 0 號玩家不在這間的任一塊裡
 -- （客戶端只是先擋，伺服器用自己的座標再判一次，Respawn.lua）。prerender 每幀呼叫，不配置
 function MW.respawnBlock(d)
@@ -179,6 +250,13 @@ local function classes()
         self:drawText(self.sub, 26, y, s.r, s.g, s.b, s.a, UIFont.Small)
     end
     V.Cell = Cell
+
+    -- 文字列上的滑鼠提示（Lines 不吃滑鼠）：蓋在那一列上的透明面板，同 Cell 借原版 ISButton:updateTooltip
+    local Hover = ISPanel:derive("MSHManagerHover")
+    function Hover:prerender()
+        if self.tooltip or self.tooltipUI then ISButton.updateTooltip(self) end
+    end
+    V.Hover = Hover
     return V
 end
 
@@ -263,8 +341,8 @@ function W:addWrapped(L, text, x, y, w, token, font)
     return y + #lines * lh
 end
 
-local LABELS = { "Role", "Owner", "Location", "Source", "Slot", "Created", "Status", "ReleaseAt", "Respawn", "Gap", "Roads",
-    "Resources", "Number" }
+local LABELS = { "Role", "Owner", "Location", "Source", "Slot", "Created", "Status", "ReleaseAt", "Idle", "Respawn", "Gap",
+    "Roads", "Resources", "Number" }
 
 function W:build()
     local UI, win = self.UI, self.win
@@ -340,8 +418,16 @@ function W:build()
     self.btnLeave = self:button(self.scroll, getText("IGUI_MSH_Manager_Leave"), W.onLeave, self, "danger")
     self.btnRespawnSet = self:button(self.scroll, getText("IGUI_MSH_Manager_RespawnSet"), W.onRespawnSet, self)
     self.btnRespawnClear = self:button(self.scroll, getText("IGUI_MSH_Manager_RespawnClear"), W.onRespawnClear, self)
+    self.idleHover = V.Hover:new(0, 0, 1, 1)
+    self.idleHover.background = false
+    self.idleHover:initialise()
+    self.scroll:addChild(self.idleHover)
+    self.idleHover:setVisible(false)
+    self.btnInsure = self:button(self.scroll, getText("IGUI_MSH_Manager_Insure"), W.onInsure, self, nil, "coins")
+    self.btnInsureCheck = self:button(self.scroll, getText("IGUI_MSH_Slots_CheckOrder"), W.onInsureCheck, self, "primary")
+    self.ins = MW.insurePayer(self)
     self.overviewWidgets = { self.btnDetails, self.btnRedraw, self.btnRelease, self.btnLeave, self.btnRespawnSet,
-        self.btnRespawnClear }
+        self.btnRespawnClear, self.idleHover, self.btnInsure, self.btnInsureCheck }
     self.share = MSH.SharingPage.new(self, self.scroll)
 
     self.btnQuery = self:button(body, getText("IGUI_MSH_Manager_QueryResult"), W.onQuery, self, "primary")
@@ -447,7 +533,7 @@ end
 
 function W:clearSelection()
     self.selectedId, self.detail, self.detailState, self.detailRid = nil, nil, nil, nil
-    self.redrawDeadline, self.redrawsLeft = nil, nil
+    self.redrawDeadline, self.redrawsLeft, self.idleDeadline, self.insuredUntil = nil, nil, nil, nil
     self.showDetail = false
 end
 
@@ -487,6 +573,13 @@ function W:onDetail(id, rid, res)
         self.redrawDeadline = (MSH.isFinite(left) and left > 0) and getTimestampMs() + left or nil
         self.redrawsLeft = res.actions and res.actions.redrawsLeft or nil
         self.redrawShown = nil
+        -- 閒置收回：伺服器給的是剩餘毫秒，從收到回覆時起算（同重新框選）
+        local ik = type(res.idle) == "table" and res.idle or nil
+        local now = getTimestampMs()
+        local rem, ins = ik and ik.remainingMs, ik and ik.insuredMs
+        self.idleDeadline = MSH.isFinite(rem) and now + math.max(0, rem) or nil
+        self.insuredUntil = (MSH.isFinite(ins) and ins > 0) and now + ins or nil
+        self.idleShown = nil
     elseif res.code == "NOT_FOUND" then
         self:clearSelection()
         MSH.Client.refreshList()
@@ -572,6 +665,13 @@ function W:prerender(body)
     -- 〔設為重生點〕照玩家走進、走出範圍即時換可用與原因
     if self.btnRespawnSet:getIsVisible() and self.detail and MW.respawnBlock(self.detail) ~= self.respawnWhy then
         self.dirty = true
+    end
+    -- 閒置收回倒數：顯示的分鐘數變了才重排（最多每分鐘一次；≥ 1 天時字串每小時才變）
+    local idl = self.idleDeadline
+    if idl ~= nil and self.idleShown ~= nil and self.idleHover:getIsVisible() then
+        local m = math.ceil((idl - getTimestampMs()) / 60000)
+        if m < 0 then m = 0 end
+        if m ~= self.idleShown then self.dirty = true end
     end
     local deadline = self.redrawDeadline
     if deadline == nil or not self.btnRedraw:getIsVisible() then return end
@@ -863,6 +963,23 @@ function W:layoutOverview(d, cw)
     if created then y = self:infoRow(L, "Created", created, y, vx, vw) end
     local releaseAt = eco and self:dateText(eco.releaseAt)
     if releaseAt then y = self:infoRow(L, "ReleaseAt", releaseAt, y, vx, vw, "warning") end
+    -- 閒置收回：倒數或「照租約」等；滑鼠提示寫規則（使用者 2026-10-14）
+    local ik = type(d.idle) == "table" and d.idle or nil
+    local now = getTimestampMs()
+    local idleLeft = self.idleDeadline and math.max(0, self.idleDeadline - now) or nil
+    local itext, itoken = nil, nil
+    if ik then itext, itoken = MW.idleText(ik, idleLeft) end
+    if itext then
+        local y0 = y
+        y = self:infoRow(L, "Idle", itext, y, vx, vw, itoken)
+        local hv = self.idleHover
+        local insured = self.insuredUntil and self.insuredUntil > now and self:dateText(self.insuredUntil) or nil
+        hv.tooltip = MW.idleTip(ik, insured)
+        hv:setWidth(cw)
+        hv:setHeight(y - y0)
+        self:place(hv, 0, y0)
+        self.idleShown = idleLeft and math.ceil(idleLeft / 60000) or nil
+    end
     -- 重生點：自己的點在這間＝座標；active 才顯示「未設定／在別間」（不是 active 的不能設）
     local rs = type(d.respawn) == "table" and d.respawn or nil
     if rs and not (rs.here or d.lifecycle == LC.ACTIVE) then rs = nil end
@@ -919,6 +1036,16 @@ function W:layoutOverview(d, cw)
         self.respawnWhy = MW.respawnBlock(d)
         self.btnRespawnSet:setEnabled(idle and self.respawnWhy == nil)
         acts[#acts + 1] = self.btnRespawnSet
+    end
+    -- 閒置保險：屋主、伺服器說現在能買（idle.insure）、Economy 客戶端能一次付多期；結果未知時只給〔查詢購買結果〕
+    local insure = ik and d.actorRole == "owner" and type(ik.insure) == "table" and MW.insureApi() and ik.insure or nil
+    if insure then
+        self.btnInsure:setEnabled(idle and MSH.SlotsWindow.canPurchase(self.ins))
+        acts[#acts + 1] = self.btnInsure
+    end
+    if self.ins.order ~= nil and self.ins.claimId == d.claimId then
+        self.btnInsureCheck:setEnabled(self.ins.busy == nil)
+        acts[#acts + 1] = self.btnInsureCheck
     end
     if #acts > 0 then
         y = self:flow(acts, 0, y, cw) + GAP
@@ -1114,6 +1241,54 @@ end
 function W.onRespawnClear(self)
     if self.detail == nil or self.busy ~= nil then return end
     self:mutate("clearRespawn", {}, getText("IGUI_MSH_Manager_RespawnCleared"))
+end
+
+-- 閒置保險（使用者 2026-10-14）：先問天數（1..maxDays），再確認天數、每日價格、合計與預計保留到哪天；確認後走名額視窗
+-- 的付款流程（報價金額＝每日價格 × 天數才付；結果未知只查同一筆、不重送）。框架 Dialog 只有一個輸入框、打字時不能改內文，
+-- 所以合計放在第二步
+function W.onInsure(self)
+    local d = self.detail
+    local ik = d and type(d.idle) == "table" and d.idle or nil
+    local ins = ik and type(ik.insure) == "table" and ik.insure or nil
+    local E = MW.insureApi()
+    if ins == nil or E == nil or type(ins.price) ~= "number" or self.busy ~= nil
+        or not MSH.SlotsWindow.canPurchase(self.ins) then
+        return
+    end
+    local maxDays = MSH.isInt(ins.maxDays) and ins.maxDays or 365   -- Economy RENTAL_PERIODS_MAX
+    self.UI.Dialog.show(MSH.Client.windowOpts(self.UI, { title = getText("IGUI_MSH_Manager_InsureTitle"),
+        text = getText("IGUI_MSH_Manager_InsureAsk", MSH.SlotsWindow.money(E, { amount = ins.price, currency = ins.currency }),
+            maxDays),
+        theme = self.theme, input = { text = "", onlyNumbers = true }, confirmText = getText("IGUI_MSH_Manager_InsureNext"),
+        cancelText = getText("UI_Cancel"),
+        onResult = function(ok, input) if ok then self:insureConfirm(d, ins, input, maxDays) end end }))
+end
+
+function W:insureConfirm(d, ins, input, maxDays)
+    local days = MW.insureDays(input, maxDays)
+    if days == nil then return self:say(getText("IGUI_MSH_Manager_InsureBadDays", maxDays), "errorText") end
+    local SW, E = MSH.SlotsWindow, MW.insureApi()
+    if E == nil then return end
+    local now = getTimestampMs()
+    local left = self.idleDeadline and math.max(0, self.idleDeadline - now) or 0
+    local insured = self.insuredUntil and math.max(0, self.insuredUntil - now) or 0
+    local total = { amount = ins.price * days, currency = ins.currency }
+    local est = self:dateText(now + MW.insureEstimate(left, insured, d.idle.days, days)) or "-"
+    self.UI.Dialog.show(MSH.Client.windowOpts(self.UI, { title = getText("IGUI_MSH_Manager_InsureTitle"),
+        text = getText("IGUI_MSH_Manager_InsureConfirm", days, SW.money(E, { amount = ins.price, currency = ins.currency }),
+            SW.money(E, total), est),
+        theme = self.theme, confirmText = getText("IGUI_MSH_Slots_Pay"), cancelText = getText("UI_Cancel"),
+        onResult = function(ok)
+            local p = self.ins
+            if not ok or not SW.canPurchase(p) then return end
+            p.productId, p.claimId = ins.product, d.claimId
+            SW.startQuote(p, ins.tier, "rental", 1, total, ins.lease, days)
+        end }))
+end
+
+-- 結果未知：唯讀查同一筆訂單，查回最終結果才解除付款鎖
+function W.onInsureCheck(self)
+    MSH.SlotsWindow.onCheckOrder(self.ins)
 end
 
 -- 結果待定：同一 requestId 重送；伺服器 60 秒內回快取的原結果（Client.retry）

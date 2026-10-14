@@ -39,6 +39,7 @@ local SCENARIOS = {
     "t_sharing",
     "t_permissions",
     "t_economy",
+    "t_idle",
     "t_respawn",
     "t_client",
     "t_ui_create",

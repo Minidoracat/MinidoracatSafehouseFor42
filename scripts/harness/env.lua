@@ -391,7 +391,7 @@ function T.onlineId(x, y)
 end
 function T.house(x, y, w, h, owner)
     local hs = { __class = "SafeHouse", x = x, y = y, w = w, h = h, owner = owner, title = "Safehouse",
-        players = T.javaList({}), created = T.now, location = "Muldraugh, KY" }
+        players = T.javaList({}), created = T.now, location = "Muldraugh, KY", lastVisited = T.now }
     if T.noLocation then hs.location = nil end
     hs.onlineId = T.onlineId(x, y)
     function hs:getX() return self.x end
@@ -408,6 +408,9 @@ function T.house(x, y, w, h, owner)
     function hs:getTitle() return self.title end
     function hs:setTitle(t) self.title = t end
     function hs:getDatetimeCreated() return self.created end
+    -- 建立時記當下；名單上的人站在屋內時引擎刷新（SafeHouse.java:71、IsoPlayer.java:2177-2185）；測試用 T.visit 模擬
+    function hs:getLastVisited() return self.lastVisited end
+    function hs:setLastVisited(t) self.lastVisited = t end
     function hs:getLocation() return self.location end
     function hs:getOnlineID() return self.onlineId end
     function hs:playerAllowed(u) return self.players:contains(u) or self.owner == u end
@@ -921,11 +924,15 @@ function T.economy(opts)
         end
         return { ok = true, product = { sourceMod = e.source.modId, id = spec.id, nameKey = spec.nameKey } }
     end
-    function h.getEntitlement(user, product)
-        if e.failRead[user] then return { ok = false, error = "exception" } end
+    -- 權益快照（ECE:688-763）；onEntitlementChanged 也帶同一形狀（ECE:775-779），那份不會讀失敗，所以 failRead 只管 getEntitlement
+    function e.snapshot(user, product)
         local pl = e.plans[product]
         local ent = e.ents[user .. "|" .. product] or { permanent = 0, rental = 0, usable = 0, rentals = {}, state = "none" }
         return { ok = true, productId = product, plan = pl and shallow(pl.values), entitlement = ent }
+    end
+    function h.getEntitlement(user, product)
+        if e.failRead[user] then return { ok = false, error = "exception" } end
+        return e.snapshot(user, product)
     end
     function h.getPlan(product)
         local pl = e.plans[product]
@@ -987,7 +994,23 @@ function T.econSet(user, tier, permanent, leases)
     local product = "tier" .. tier
     e.ents[user .. "|" .. product] = { permanent = permanent or 0, rental = rental, usable = (permanent or 0) + rental,
         rentals = leases or {}, state = "active" }
-    for fn in pairs(e.listeners) do fn(user, product, {}) end
+    for fn in pairs(e.listeners) do fn(user, product, e.snapshot(user, product)) end
 end
+
+-- 保險（insure<N>）：rentalLimit 1，最多一張租約 { id, quantity = 1, state, paidUntil }；leases＝nil 表示沒有租約（到期移除或退款）
+function T.econInsure(user, tier, leases)
+    local e = T.econ
+    local rental = 0
+    for _, x in ipairs(leases or {}) do
+        if x.state == "active" or x.state == "grace" then rental = rental + x.quantity end
+    end
+    local product = "insure" .. tier
+    e.ents[user .. "|" .. product] = { permanent = 0, rental = rental, usable = rental, rentals = leases or {},
+        state = rental > 0 and "active" or "none" }
+    for fn in pairs(e.listeners) do fn(user, product, e.snapshot(user, product)) end
+end
+
+-- 名單上的人站進某塊：引擎約每 20 秒把那塊的 lastVisited 設成當下（IsoPlayer.java:2177-2185）
+function T.visit(hs) hs.lastVisited = T.now end
 
 return T

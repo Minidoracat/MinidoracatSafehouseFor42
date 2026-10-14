@@ -44,6 +44,9 @@ E.PLAN_FIELDS = { "permanentEnabled", "permanentCurrency", "permanentPrice", "pe
     "rentalEnabled", "rentalCurrency", "rentalPrice", "rentalLimit", "rentalDays",
     "graceHours", "reminderHours", "autoRenewAllowed" }
 E.RENT_DEFAULT = { 100, 300, 700 }   -- 月租預設照各級預設面積比例；4–8 級同 3 級（§1.3 第 57 行）
+-- 閒置保險每日價預設＝月租 ÷ 10（保險比租名額貴；管理員在付費頁逐級改）；4–8 級同 3 級
+E.INSURE_DEFAULT = { 10, 30, 70 }
+E.INSURE_MAX_DAYS = 365   -- 一次最多買幾天＝Economy RENTAL_PERIODS_MAX
 
 E.currencies = E.currencies or {}
 E.pending = E.pending or {}     -- onEntitlementChanged 排隊：owner → { [tier] = true }（下個 tick 持鎖處理）
@@ -62,6 +65,18 @@ function E.tierOf(productId)
     return n
 end
 
+-- 閒置保險（使用者 2026-10-14）：一級一個產品 insure<N>，租一期＝保一天；一次付多期要 Economy 的 periods（rentalPeriods 能力）
+function E.insureProduct(t)
+    return "insure" .. tostring(t)
+end
+
+function E.insureTierOf(productId)
+    if type(productId) ~= "string" then return nil end
+    local n = tonumber(string.match(productId, "^insure(%d)$"))
+    if n == nil or n < 1 or n > MSH.MAX_TIER then return nil end
+    return n
+end
+
 -- 等級可用：TiersEnabled 之內；免費建立模式只有 1 級（§1.3 第 67 行）
 function E.tierEnabled(cfg, t)
     return cfg.tiers[t].enabled and (cfg.createMode ~= MSH.Settings.CREATE.FREE or t == 1)
@@ -75,6 +90,21 @@ function E.defaults(t)
         rentalEnabled = false, rentalCurrency = "survivor", rentalPrice = rent, rentalLimit = 10, rentalDays = 30,
         graceHours = 24, reminderHours = 24, autoRenewAllowed = true,
     }
+end
+
+-- 保險方案除了每日價與幣別都固定：每期 1 天、每人一張、沒有寬限與提醒、不自動續租、不賣買斷。
+-- 開不開賣（rentalEnabled）照沙盒 IdleInsure（syncSwitches），這裡沿用 values 的值
+function E.insureFixed(values)
+    values.permanentEnabled, values.permanentLimit = false, 0
+    values.permanentCurrency, values.permanentPrice = values.rentalCurrency, values.rentalPrice
+    values.rentalLimit, values.rentalDays, values.graceHours, values.reminderHours = 1, 1, 0, 0
+    values.autoRenewAllowed = false
+    return values
+end
+
+function E.insureDefaults(t)
+    local price = E.INSURE_DEFAULT[t] or E.INSURE_DEFAULT[3]
+    return E.insureFixed({ rentalEnabled = false, rentalCurrency = "survivor", rentalPrice = price })
 end
 
 function E.planOf(p)
@@ -106,7 +136,7 @@ E.validator = E.validator or function(...) return MSH.Economy.validatePurchase(.
 E.listener = E.listener or function(u, p, snap) MSH.Economy.onChanged(u, p, snap) end
 
 function E.init()
-    E.src, E.error, E.currencies = nil, nil, {}
+    E.src, E.error, E.currencies, E.insureReady = nil, nil, {}, false
     if MinidoracatEconomy == nil then E.status = "ABSENT" return end
     local api = E.api()
     if api == nil then
@@ -137,6 +167,22 @@ function E.init()
             return failed(type(res) == "table" and tostring(res.error) .. ":" .. tostring(res.field) or "register_failed")
         end
     end
+    -- 閒置保險：Economy 能一次付多期才賣（rentalPeriods）；註冊失敗只關保險、付費名額照常
+    if api.CAPABILITIES.rentalPeriods == true then
+        local insured = true
+        for t = 1, MSH.MAX_TIER do
+            local okP, res = pcall(src.registerProduct, { id = E.insureProduct(t), nameKey = "IGUI_MSH_Product_insure" .. t,
+                instant = true, freezeWhenAbsent = canFreeze or nil, defaults = E.insureDefaults(t),
+                validatePurchase = E.validator })
+            if not okP or type(res) ~= "table" or res.ok ~= true then
+                insured = false
+                MSH.log("Economy insurance product insure" .. t .. " not registered: "
+                    .. tostring(okP and type(res) == "table" and res.error or res) .. ". Idle insurance disabled.")
+                break
+            end
+        end
+        E.insureReady = insured
+    end
     if type(src.onEntitlementChanged) == "function" then
         local okC, e = pcall(src.onEntitlementChanged, E.listener)
         if not okC then return failed(e) end
@@ -157,18 +203,22 @@ end
 
 local function count(v) return MSH.isInt(v) and v >= 0 end
 
--- 一個等級的 getEntitlement 回覆；只信 usable 是非負整數（VM-Econ:110-127）。失敗回 nil（每產品每分鐘最多一行 log）
-function E.read(owner, t)
+-- 一個產品的 getEntitlement 回覆；只信 usable 是非負整數（VM-Econ:110-127）。失敗回 nil（每產品每分鐘最多一行 log）
+function E.readProduct(owner, product)
     if E.status ~= "READY" or type(owner) ~= "string" then return nil end
-    local res = E.call("getEntitlement", owner, E.product(t))
+    local res = E.call("getEntitlement", owner, product)
     if res.ok == true and type(res.entitlement) == "table" and count(res.entitlement.usable) then return res end
     local now = getTimestampMs()
-    if E.readErrorAt[t] == nil or now - E.readErrorAt[t] >= 60000 then
-        E.readErrorAt[t] = now
-        MSH.log("Economy getEntitlement failed product=" .. E.product(t) .. " owner=" .. MSH.logSafe(owner)
+    if E.readErrorAt[product] == nil or now - E.readErrorAt[product] >= 60000 then
+        E.readErrorAt[product] = now
+        MSH.log("Economy getEntitlement failed product=" .. product .. " owner=" .. MSH.logSafe(owner)
             .. ": " .. tostring(res.error or "invalid_usable"))
     end
     return nil
+end
+
+function E.read(owner, t)
+    return E.readProduct(owner, E.product(t))
 end
 
 -- 一次到期的識別：租約 id＋paidUntil（續租後再到期是新的一次）。paidUntil 用整數十進位字串，不走 tostring（13 位數會變科學記號）
@@ -219,10 +269,55 @@ function E.offer(owner, t, cfg)
     return out
 end
 
+-- 閒置收回用（Idle.lua）：這位屋主這一級的付費名額 { rent = 租用中（含寬限）的名額, buy = 買斷名額 }。
+-- 讀不到、欄位不合或有結果未定的租約（待確認、系統暫停、凍結）回 nil：呼叫端當成不知道、不收
+function E.coverage(owner, t)
+    local res = E.read(owner, t)
+    local ent = res and res.entitlement
+    local l = ent and leases(ent)
+    if l == nil or l.hold or not count(ent.permanent) or not count(ent.rental) then return nil end
+    return { rent = ent.rental, buy = ent.permanent }
+end
+
+-- 保險租約的讀法（getEntitlement 回覆或 onEntitlementChanged 的快照）：{ ok, paidUntil?, lease?, plan? }；
+-- ok=false 讀不到，沒有租約時 paidUntil、lease 是 nil。方案 rentalLimit 1：同時最多一張，保險起見取最晚的 paidUntil
+function E.insuranceOf(res)
+    local ent = type(res) == "table" and res.entitlement or nil
+    if type(ent) ~= "table" or type(ent.rentals) ~= "table" then return { ok = false } end
+    local out = { ok = true, plan = type(res.plan) == "table" and res.plan or nil }
+    for _, x in ipairs(ent.rentals) do
+        if type(x) ~= "table" then return { ok = false } end
+        if MSH.isFinite(x.paidUntil) and (out.paidUntil == nil or x.paidUntil > out.paidUntil) then
+            out.paidUntil, out.lease = x.paidUntil, x.id ~= nil and tostring(x.id) or nil
+        end
+    end
+    return out
+end
+
+-- 這位屋主這一級的保險（現在讀一次）
+function E.insurance(owner, t)
+    if not E.insureReady then return { ok = false } end
+    return E.insuranceOf(E.readProduct(owner, E.insureProduct(t)))
+end
+
+-- detail 給屋主的購買資訊（idle.insure）；現在不能買回 nil。ins 是 E.insurance 的回覆
+function E.insureOffer(t, cfg, ins)
+    if not cfg.idleInsure or not E.insureReady or E.status ~= "READY" or not ins.ok then return nil end
+    local plan = ins.plan
+    if type(plan) ~= "table" or plan.rentalEnabled ~= true or not count(plan.rentalPrice) then return nil end
+    return { product = E.insureProduct(t), tier = t, price = plan.rentalPrice, currency = plan.rentalCurrency,
+        lease = ins.lease, maxDays = E.INSURE_MAX_DAYS }
+end
+
 -- ===== validatePurchase（§1.3 第 67 行）=====
 -- 等級啟用且該種開關開著 → 放行（不因已用完拒絕加購）。否則只放行付款後總數不超過該級付費間數（含 lapsed）：
--- 既有的屋能續租、能恢復，不能多買。不看 health：設定出錯時不能連自動續租也擋掉。
+-- 既有的屋能續租、能恢復，不能多買。不看 health：設定出錯時不能連自動續租也擋掉。保險產品交給 Idle.canInsure。
 function E.validatePurchase(username, productId, kind, quantity, projected)
+    local it = E.insureTierOf(productId)
+    if it ~= nil then
+        if MSH.Idle == nil or type(username) ~= "string" then return false, CODE.INSURE_CLOSED end
+        return MSH.Idle.canInsure(username, it, kind)
+    end
     local t = E.tierOf(productId)
     if t == nil or type(username) ~= "string" then return false, "TIER_DISABLED" end
     local cfg = MSH.Settings.get()
@@ -417,8 +512,14 @@ function E.sweep(now, all)
     end)
 end
 
--- Economy 在權益提交完成後通知（進入寬限、到期、租約移除也會）；在它的 commit 裡，不在這裡改紀錄
-function E.onChanged(username, productId)
+-- Economy 在權益提交完成後通知（進入寬限、到期、租約移除也會）；在它的 commit 裡，不在這裡改紀錄。
+-- 保險帶當下的快照給 Idle（照通知的順序套用：退回上一期之後馬上被移除的租約，上一期的結束時間才不會漏掉）
+function E.onChanged(username, productId, snap)
+    local it = E.insureTierOf(productId)
+    if it ~= nil then
+        if type(username) == "string" and MSH.Idle then MSH.Idle.noteInsurance(username, it, snap) end
+        return
+    end
     local t = E.tierOf(productId)
     if type(username) ~= "string" or t == nil then return end
     local p = type(E.pending[username]) == "table" and E.pending[username] or {}
@@ -439,7 +540,15 @@ function E.tick(now)
     end
 end
 
--- Tier<N>Buy／Rent 開著而方案那種販售關著 → setPlan 打開（開服與每分鐘；關掉開關不改回，§1.3 第 58 行）
+local function samePlan(a, b)
+    for _, k in ipairs(E.PLAN_FIELDS) do
+        if a[k] ~= b[k] then return false end
+    end
+    return true
+end
+
+-- Tier<N>Buy／Rent 開著而方案那種販售關著 → setPlan 打開（開服與每分鐘；關掉開關不改回，§1.3 第 58 行）。
+-- IdleInsure 開著時保險方案照固定欄位開賣；關掉也不改回（已買的照用，新的由 validatePurchase 擋）
 function E.syncSwitches()
     if E.status ~= "READY" then return end
     local cfg = MSH.Settings.get()
@@ -460,6 +569,23 @@ function E.syncSwitches()
                     MSH.Audit.throttled("PLAN_SWITCH|" .. t, 3600000, "PLAN_SWITCH_FAILED",
                         { code = E.product(t), detail = tostring(r.error) .. ":" .. tostring(r.field) }, getTimestampMs())
                 end
+            end
+        end
+    end
+    if not (cfg.idleInsure and E.insureReady) then return end
+    for t = 1, MSH.MAX_TIER do
+        local res = E.call("getPlan", E.insureProduct(t))
+        local plan = res.ok == true and type(res.plan) == "table" and res.plan or nil
+        local values = plan and E.insureFixed(E.planOf(plan))
+        if values then values.rentalEnabled = true end
+        if values and not samePlan(values, plan) then
+            local r = E.call("setPlan", E.insureProduct(t), values,
+                { actor = "source", origin = "source", reason = "IdleInsure switch" })
+            if r.ok == true then
+                MSH.Audit.write("PLAN_SWITCH", { actor = "source", code = E.insureProduct(t), detail = tostring(r.revision) })
+            else
+                MSH.Audit.throttled("PLAN_SWITCH|insure" .. t, 3600000, "PLAN_SWITCH_FAILED",
+                    { code = E.insureProduct(t), detail = tostring(r.error) .. ":" .. tostring(r.field) }, getTimestampMs())
             end
         end
     end
@@ -551,26 +677,46 @@ function E.enabledCurrencies()
 end
 
 function E.adminPlans()
-    local out = { economy = E.status, currencies = E.currencies, tiers = {} }
+    local out = { economy = E.status, currencies = E.currencies, tiers = {}, insureReady = false }
     if E.status ~= "READY" then return S.ok(out) end
     out.currencies = E.enabledCurrencies()
+    out.insureReady = E.insureReady == true
+    local function view(res)
+        local lc = res.lastChange
+        return { plan = E.planOf(res.plan), revision = res.plan.revision, provisional = res.plan.provisional == true,
+            lastChange = type(lc) == "table" and { actor = lc.actor, origin = lc.origin, at = lc.at, reason = lc.reason,
+                revision = lc.revision } or nil }
+    end
     for t = 1, MSH.MAX_TIER do
         local res = E.call("getPlan", E.product(t))
         if res.ok ~= true or type(res.plan) ~= "table" then return S.fail(CODE.ECONOMY_UNAVAILABLE) end
-        local lc = res.lastChange
-        out.tiers[#out.tiers + 1] = { tier = t, plan = E.planOf(res.plan), revision = res.plan.revision,
-            provisional = res.plan.provisional == true,
-            lastChange = type(lc) == "table" and { actor = lc.actor, origin = lc.origin, at = lc.at, reason = lc.reason,
-                revision = lc.revision } or nil }
+        local row = view(res)
+        row.tier = t
+        if out.insureReady then
+            local ri = E.call("getPlan", E.insureProduct(t))
+            if ri.ok ~= true or type(ri.plan) ~= "table" then return S.fail(CODE.ECONOMY_UNAVAILABLE) end
+            row.insure = view(ri)
+        end
+        out.tiers[#out.tiers + 1] = row
     end
     return S.ok(out)
 end
 
 -- 錯誤對應照 VM-PS:345-351
+-- product＝"insure"：保險方案只收每日價與幣別，開賣照 IdleInsure（syncSwitches），其餘欄位固定（E.insureFixed）
 function E.adminSetPlan(ctx)
     local a = ctx.args
     if E.status ~= "READY" then return S.fail(CODE.ECONOMY_UNAVAILABLE) end
-    local res = E.call("setPlan", E.product(a.tier), E.planOf(a.values),
+    local product, values = E.product(a.tier), E.planOf(a.values)
+    if a.product == "insure" then
+        if not E.insureReady then return S.fail(CODE.ECONOMY_UNAVAILABLE) end
+        product = E.insureProduct(a.tier)
+        local cur = E.call("getPlan", product)
+        if cur.ok ~= true or type(cur.plan) ~= "table" then return S.fail(CODE.ECONOMY_UNAVAILABLE) end
+        values.rentalEnabled = cur.plan.rentalEnabled == true
+        values = E.insureFixed(values)
+    end
+    local res = E.call("setPlan", product, values,
         { actor = ctx.who, origin = "admin", reason = a.reason, expectedRevision = a.expectedRevision })
     if res.ok ~= true then
         if res.error == "stale_revision" then return S.fail(CODE.STALE_REVISION) end
@@ -580,15 +726,16 @@ function E.adminSetPlan(ctx)
         return S.fail(CODE.ECONOMY_UNAVAILABLE)
     end
     local changed = type(res.changed) == "table" and res.changed or {}
-    MSH.Audit.write("ADMIN_PLAN", { actor = ctx.who, code = E.product(a.tier),
+    MSH.Audit.write("ADMIN_PLAN", { actor = ctx.who, code = product,
         detail = table.concat(changed, ",") .. " " .. tostring(a.reason or "-") })
-    return S.ok({ tier = a.tier, revision = res.revision, changed = changed })
+    return S.ok({ tier = a.tier, product = a.product or "tier", revision = res.revision, changed = changed })
 end
 
 S.define("slots", { kind = "query", cooldownMs = 500, fields = {}, run = function(ctx) return MSH.Economy.slots(ctx) end })
 S.define("adminPlans", { kind = "query", admin = true, fields = {}, run = function() return MSH.Economy.adminPlans() end })
+S.TYPES.productKind = function(v) return v == "tier" or v == "insure" end
 S.define("adminSetPlan", { kind = "mutation", admin = true, whenBlocked = true,
-    fields = { tier = "tier", values = "plan", expectedRevision = "revision", reason = "reason?" },
+    fields = { tier = "tier", values = "plan", expectedRevision = "revision", reason = "reason?", product = "productKind?" },
     run = function(ctx) return MSH.Economy.adminSetPlan(ctx) end })
 
 S.hook("serverStarted", "economy", function()

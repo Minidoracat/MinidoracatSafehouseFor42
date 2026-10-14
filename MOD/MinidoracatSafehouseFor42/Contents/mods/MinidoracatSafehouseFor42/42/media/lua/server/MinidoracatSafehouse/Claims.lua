@@ -679,6 +679,8 @@ function C.detail(ctx)
         grants = grants, factionShare = faction,
         limits = { maxShares = cfg.maxShares, allowFactionShare = cfg.allowFactionShare },
         economy = MSH.Economy and MSH.Economy.claimInfo and MSH.Economy.claimInfo(rec) or nil,
+        -- 閒置收回的倒數與保險（Idle.view；屋主另帶 insure 購買資訊）
+        idle = MSH.Idle and MSH.Idle.view(rec, ctx.who, ctx.now) or nil,
         -- 只給自己看的重生點狀態（Respawn.view：總開關、點在不在這間）
         respawn = MSH.Respawn and MSH.Respawn.view(rec, ctx.who) or nil,
         actions = {

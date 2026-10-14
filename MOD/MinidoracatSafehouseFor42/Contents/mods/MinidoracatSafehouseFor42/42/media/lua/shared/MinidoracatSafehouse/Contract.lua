@@ -96,6 +96,8 @@ MSH.CODE = {
     UNKNOWN_PLAYER = "UNKNOWN_PLAYER",
     -- Economy（M4，§1.3）
     ECONOMY_UNAVAILABLE = "ECONOMY_UNAVAILABLE", INVALID_PLAN = "INVALID_PLAN",
+    -- 閒置保險（2026-10-14）：validatePurchase 拒絕的原因（IdleInsure 關著或閒置收回整個關著；沒有那一級的安全屋）
+    INSURE_CLOSED = "INSURE_CLOSED", NOT_INSURABLE = "NOT_INSURABLE",
     -- 安全屋重生點（2026-10-14）：伺服器設定 SafehouseAllowRespawn 關著
     RESPAWN_DISABLED = "RESPAWN_DISABLED",
 }

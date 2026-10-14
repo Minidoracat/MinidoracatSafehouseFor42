@@ -32,6 +32,15 @@ option MinidoracatSafehouse.AllowFactionShare
 option MinidoracatSafehouse.LapseKeepDays
 {type = integer, min = 0, max = 365, default = 7, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_LapseKeepDays,}
 
+option MinidoracatSafehouse.IdleDays
+{type = integer, min = 0, max = 365, default = 14, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_IdleDays,}
+
+option MinidoracatSafehouse.IdleBuyDays
+{type = integer, min = 0, max = 365, default = 30, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_IdleBuyDays,}
+
+option MinidoracatSafehouse.IdleInsure
+{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_IdleInsure,}
+
 option MinidoracatSafehouse.RedrawMinutes
 {type = integer, min = 0, max = 1440, default = 30, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_RedrawMinutes,}
 

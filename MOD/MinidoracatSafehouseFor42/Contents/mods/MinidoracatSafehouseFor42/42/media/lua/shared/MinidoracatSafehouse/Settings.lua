@@ -50,6 +50,12 @@ local OPTIONS = {
     { key = "MaxShares", type = "int", min = 0, max = 32, default = 8 },
     { key = "AllowFactionShare", type = "bool", default = true },
     { key = "LapseKeepDays", type = "int", min = 0, max = 365, default = 7 },
+    -- 閒置收回（使用者 2026-10-14）：屋主或名單上的人多少天沒踩進範圍就收回，0＝不收。IdleDays 管免費與沒有付費名額
+    -- 保護的屋、IdleBuyDays 管買斷名額保護的屋；租用名額的屋照租期（Idle.lua）。IdleInsure：玩家能不能花錢買保險延長
+    -- （要 Economy 支援一次付多期；每日價格在管理員面板付費頁逐級設定）
+    { key = "IdleDays", type = "int", min = 0, max = 365, default = 14 },
+    { key = "IdleBuyDays", type = "int", min = 0, max = 365, default = 30 },
+    { key = "IdleInsure", type = "bool", default = false },
     { key = "RedrawMinutes", type = "int", min = 0, max = 1440, default = 30 },
     -- 每間在重新框選時限內最多重畫幾次（使用者 2026-10-11 同意改成沙盒選項；每次多一筆 tombstone 與兩次全服廣播）
     { key = "RedrawLimit", type = "int", min = 1, max = 20, default = 5 },
@@ -168,6 +174,9 @@ function S.get()
         maxShares = raw.MaxShares,
         allowFactionShare = raw.AllowFactionShare,
         lapseKeepDays = raw.LapseKeepDays,
+        idleDays = raw.IdleDays,
+        idleBuyDays = raw.IdleBuyDays,
+        idleInsure = raw.IdleInsure,
         redrawMinutes = raw.RedrawMinutes,
         rangesFaction = raw.RangesFaction,
         rangesOthers = raw.RangesOthers,

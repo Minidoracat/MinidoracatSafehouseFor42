@@ -22,6 +22,7 @@ return {
     { dir = "server", name = "MinidoracatSafehouse/Sharing" },
     { dir = "server", name = "MinidoracatSafehouse/Permissions" },
     { dir = "server", name = "MinidoracatSafehouse/Economy" },
+    { dir = "server", name = "MinidoracatSafehouse/Idle" },
     { dir = "server", name = "MinidoracatSafehouse/Respawn" },
     { dir = "client", name = "MinidoracatSafehouse/Mirror" },
     { dir = "client", name = "MinidoracatSafehouse/PublicApi" },

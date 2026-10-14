@@ -36,7 +36,7 @@ AP.QUERY_DEBOUNCE_MS = 650   -- Economy QUERY_DEBOUNCE_MS
 AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服器 cooldownMs = 500）
 AP.FILTERS = { "all", "owners", "overrides" }
 AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxArea", "FreeMaxSide", "ClaimGap", "MaxShares",
-    "AllowFactionShare", "LapseKeepDays", "RedrawMinutes", "RedrawLimit", "MaxPieces" }
+    "AllowFactionShare", "LapseKeepDays", "IdleDays", "IdleBuyDays", "IdleInsure", "RedrawMinutes", "RedrawLimit", "MaxPieces" }
 AP.RANGE_KEYS = { "RangesFaction", "RangesOthers" }
 AP.CRAFT_LEVELS = { [2] = "Easy", [3] = "Standard", [4] = "Strict" }
 -- Economy 方案 12 欄（entitlements-api.md；ECEntitlementPlans.lua:3-61）與付費頁可改欄位的範圍
@@ -44,7 +44,8 @@ AP.PLAN_FIELDS = { "permanentEnabled", "permanentCurrency", "permanentPrice", "p
     "rentalCurrency", "rentalPrice", "rentalLimit", "rentalDays", "graceHours", "reminderHours", "autoRenewAllowed" }
 AP.PLAN_SHARED = { "rentalDays", "graceHours", "reminderHours", "permanentLimit", "rentalLimit" }
 AP.PLAN_RANGE = { permanentPrice = { 1, 1e9 }, rentalPrice = { 1, 1e9 }, permanentLimit = { 0, 1000 },
-    rentalLimit = { 1, 1000 }, rentalDays = { 1, 365 }, graceHours = { 0, 168 }, reminderHours = { 0, 168 } }
+    rentalLimit = { 1, 1000 }, rentalDays = { 1, 365 }, graceHours = { 0, 168 }, reminderHours = { 0, 168 },
+    insurePrice = { 1, 1e9 } }
 
 -- ===== 純邏輯（harness 測） =====
 
@@ -215,6 +216,21 @@ function AP.planFieldError(field, v)
     local r = AP.PLAN_RANGE[field]
     if r and (type(v) ~= "number" or v ~= math.floor(v) or v < r[1] or v > r[2]) then return "OUT_OF_RANGE" end
     return nil
+end
+
+-- 閒置保險方案（insure<N>；固定欄位由伺服器強制）：只改每日價格（prices[tier]）與幣別（付費頁共用的幣別 chip），
+-- 回 planChanges 同形、多帶 product = "insure"（adminSetPlan）
+function AP.insureChanges(tiers, currency, prices)
+    local rows, per = {}, {}
+    for _, t in ipairs(tiers or {}) do
+        if type(t.insure) == "table" then
+            rows[#rows + 1] = { tier = t.tier, plan = t.insure.plan, revision = t.insure.revision }
+            per[t.tier] = { rentalPrice = prices[t.tier] }
+        end
+    end
+    local out = AP.planChanges(rows, { rentalCurrency = currency }, per)
+    for _, item in ipairs(out) do item.product = "insure" end
+    return out
 end
 
 -- ===== 文字 =====
@@ -1516,11 +1532,18 @@ function AP.layoutPaid(P, pg)
             local tl = F:label("pt" .. t.tier, getText("IGUI_MSH_Admin_TierN", t.tier))
             tl:setWidth(tw)
             local plan = t.plan or {}
-            F:row({ tl,
+            local row = { tl,
                 F:label("pp" .. t.tier .. "L", AP.planLabel("permanentPrice"), "textMuted"),
                 AP.planField(P, pg, "permanentPrice:" .. t.tier, plan.permanentPrice, AP.planFieldW("permanentPrice", 90)),
                 F:label("pr" .. t.tier .. "L", AP.planLabel("rentalPrice"), "textMuted"),
-                AP.planField(P, pg, "rentalPrice:" .. t.tier, plan.rentalPrice, AP.planFieldW("rentalPrice", 90)) })
+                AP.planField(P, pg, "rentalPrice:" .. t.tier, plan.rentalPrice, AP.planFieldW("rentalPrice", 90)) }
+            -- 閒置保險的每日價格（insure<N> 方案的 rentalPrice；伺服器回 insureReady 才有）
+            if plans.insureReady and type(t.insure) == "table" then
+                local ip = type(t.insure.plan) == "table" and t.insure.plan or {}
+                row[#row + 1] = F:label("pi" .. t.tier .. "L", AP.planLabel("insurePrice"), "textMuted")
+                row[#row + 1] = AP.planField(P, pg, "insurePrice:" .. t.tier, ip.rentalPrice, AP.planFieldW("insurePrice", 90))
+            end
+            F:row(row)
             if t.provisional then F:text("pv" .. t.tier, getText("IGUI_MSH_Admin_PlanProvisional"), "warning") end
             local te = pg.tierErrors and pg.tierErrors[t.tier]
             if te then F:text("pe" .. t.tier, te, "errorText") end
@@ -1565,7 +1588,7 @@ function AP.gatherPlans(P, pg)
     if st.autoRenew ~= (base.autoRenewAllowed == true) then shared.autoRenewAllowed = st.autoRenew end
     for _, t in ipairs(tiers) do
         local p = {}
-        for _, f in ipairs({ "permanentPrice", "rentalPrice" }) do
+        for _, f in ipairs({ "permanentPrice", "rentalPrice", "insurePrice" }) do
             local key = f .. ":" .. t.tier
             local el = F.pool["pl:" .. key]
             if el ~= nil and el.mshEnabled and el:isVisible() then   -- 沒列出的等級（還沒啟用）不讀
@@ -1592,7 +1615,13 @@ function AP.applyPlans(P)
         AP.layoutPage(P, "paid")
         return AP.say(P, getText("IGUI_MSH_Admin_PlanFix"), "errorText")
     end
+    -- 保險價格不是等級方案的欄位：拿出來另外組 insure<N> 的方案
+    local insure = {}
+    for tier, p in pairs(prices) do insure[tier], p.insurePrice = p.insurePrice, nil end
     local list = AP.planChanges(P.plans.tiers, shared, prices)
+    if P.plans.insureReady then
+        for _, item in ipairs(AP.insureChanges(P.plans.tiers, pg.plan.currency, insure)) do list[#list + 1] = item end
+    end
     if #list == 0 then return AP.say(P, getText("IGUI_MSH_Admin_NoChanges"), "textMuted") end
     AP.sendPlans(P, list, 1, 0)
 end
@@ -1614,13 +1643,17 @@ function AP.sendPlans(P, list, i, okCount)
         end)
         return
     end
-    local sent = AP.mutate(P, "adminSetPlan", { tier = item.tier, values = item.values, expectedRevision = item.expectedRevision },
+    local sent = AP.mutate(P, "adminSetPlan", { tier = item.tier, product = item.product, values = item.values,
+        expectedRevision = item.expectedRevision },
         function(res)
             if res.ok then
                 okCount = okCount + 1
             else
-                local where = res.field and getText("IGUI_MSH_Admin_PlanField", AP.planLabel(res.field)) or ""
-                pg.tierErrors[item.tier] = getText("IGUI_MSH_Admin_PlanTierError", item.tier, AP.codeText(res.code), where)
+                local field = item.product == "insure" and "insurePrice" or res.field
+                local where = field and getText("IGUI_MSH_Admin_PlanField", AP.planLabel(field)) or ""
+                local msg = getText("IGUI_MSH_Admin_PlanTierError", item.tier, AP.codeText(res.code), where)
+                local old = pg.tierErrors[item.tier]
+                pg.tierErrors[item.tier] = old and (old .. " " .. msg) or msg
             end
             AP.sendPlans(P, list, i + 1, okCount)
         end)

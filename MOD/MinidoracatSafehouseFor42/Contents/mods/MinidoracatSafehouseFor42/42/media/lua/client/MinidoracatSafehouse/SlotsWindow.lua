@@ -362,9 +362,14 @@ function SW.tierOf(w, tier)
     return nil
 end
 
+-- 付款流程（startQuote 到 onOrder）也給管理視窗的閒置保險用（ManagerWindow insurePayer）：w 可以帶 productId（產品 id，
+-- 沒有就 tier<N>）、ready(w)、relayout(w)、refresh(w)（報價變了、付款有結果時重抓）、texts（結果鍵換成自己的說法）
 function SW.canPurchase(w)
-    return w.busy == nil and w.order == nil and SW.ready(w)
+    return w.busy == nil and w.order == nil and (w.ready or SW.ready)(w)
 end
+
+function SW.relayout(w) return (w.relayout or SW.layout)(w) end
+function SW.reload(w) return (w.refresh or SW.refresh)(w) end
 
 function SW.layout(w)
     if w.flow == nil then return end
@@ -539,14 +544,15 @@ function SW.refuse(w, why)
     SW.say(w, SW.reasonText(why or "invalid_args", SW.api()), "errorText")
 end
 
-function SW.startQuote(w, tier, kind, quantity, expect, rental)
+function SW.startQuote(w, tier, kind, quantity, expect, rental, periods)
     local E = SW.api()
     if E == nil or not SW.canPurchase(w) then return end
-    w.busy, w.pay = "quote", { tier = tier, expect = expect }
+    local product = w.productId or SW.product(tier)
+    w.busy, w.pay = "quote", { tier = tier, product = product, expect = expect }
     SW.say(w, nil)
-    local rid, why = E.quote(SW.SRC, SW.product(tier), kind, quantity, function(res) SW.onQuote(w, res) end, rental)
+    local rid, why = E.quote(SW.SRC, product, kind, quantity, function(res) SW.onQuote(w, res) end, rental, periods)
     if rid == nil then SW.refuse(w, why) end
-    SW.layout(w)
+    SW.relayout(w)
 end
 
 -- 報價回來：金額、幣別等於確認頁的才付款；不同（方案剛改）不付、重抓摘要並說明新價格
@@ -557,27 +563,29 @@ function SW.onQuote(w, res)
         SW.say(w, getText("IGUI_MSH_Slots_QuoteNoAnswer"), "errorText")
     elseif not res.ok or type(res.quote) ~= "table" then
         SW.say(w, SW.reasonText(res.error, SW.api()), "errorText")
+        -- 管理視窗的保險：租約可能剛到期被移除（rental_unknown），重抓詳情拿新的租約 id；名額視窗照舊不重抓
+        if w.refresh then w.refresh(w) end
     elseif p ~= nil and not SW.quoteMatches(res.quote, p.expect) then
         SW.say(w, getText("IGUI_MSH_Slots_PriceChanged", SW.money(SW.api(), res.quote)), "warning")
-        SW.refresh(w)
+        SW.reload(w)
     elseif p ~= nil then
         return SW.purchase(w, res.quote)
     end
-    SW.layout(w)
+    SW.relayout(w)
 end
 
 -- 付款前先記下伺服器指定的 orderId；之後只查這一筆，不用其他訂單猜結果
 function SW.purchase(w, q)
     local E = SW.api()
-    if E == nil or not SW.canPurchase(w) then return SW.layout(w) end
+    if E == nil or not SW.canPurchase(w) then return SW.relayout(w) end
     w.busy = "purchase"
-    w.order = { quoteId = q.id, orderId = q.orderId, tier = w.pay and w.pay.tier }
+    w.order = { quoteId = q.id, orderId = q.orderId, tier = w.pay and w.pay.tier, product = w.pay and w.pay.product }
     local rid, why = E.purchase(SW.SRC, q.id, function(res) SW.onPurchase(w, res) end)
     if rid == nil then
         w.order = nil
         SW.refuse(w, why)
     end
-    SW.layout(w)
+    SW.relayout(w)
 end
 
 function SW.onPurchase(w, res)
@@ -593,13 +601,13 @@ function SW.onPurchase(w, res)
     else
         SW.finish(w, key)
     end
-    SW.layout(w)
+    SW.relayout(w)
 end
 
 function SW.finish(w, key)
     w.order = nil
-    SW.say(w, getText(key), "text")
-    SW.refresh(w)
+    SW.say(w, getText(w.texts and w.texts[key] or key), "text")
+    SW.reload(w)
     SW.requestState(w)
 end
 
@@ -611,9 +619,9 @@ function SW.onCheckOrder(w)
     local id = o.orderId or o.quoteId
     w.busy = "order"
     SW.say(w, nil)
-    local rid, why = E.getOrder(SW.SRC, SW.product(o.tier), id, function(res) SW.onOrder(w, res, id) end)
+    local rid, why = E.getOrder(SW.SRC, o.product or SW.product(o.tier), id, function(res) SW.onOrder(w, res, id) end)
     if rid == nil then SW.refuse(w, why) end
-    SW.layout(w)
+    SW.relayout(w)
 end
 
 function SW.onOrder(w, res, requestedId)
@@ -635,7 +643,7 @@ function SW.onOrder(w, res, requestedId)
             SW.say(w, getText("IGUI_MSH_Slots_NoAnswer"), "warning")
         end
     end
-    SW.layout(w)
+    SW.relayout(w)
 end
 
 -- 勾選只跟伺服器：點擊後先還原；關閉直接送，開啟先在確認框同意這張租約的續租條款

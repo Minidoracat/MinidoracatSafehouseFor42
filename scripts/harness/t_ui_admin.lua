@@ -746,6 +746,63 @@ return function(T)
     check(PP.current == "deeds", "〔到地契頁增減等級〕切到地契頁")
     AP.instance = nil
 
+    T.section("AdminPanel：閒置收回的規則與保險每日價格（使用者 2026-10-14）")
+    local at = {}
+    for i, k in ipairs(AP.RULE_KEYS) do at[k] = i end
+    check(at.IdleDays == at.LapseKeepDays + 1 and at.IdleBuyDays == at.IdleDays + 1 and at.IdleInsure == at.IdleBuyDays + 1,
+        "規則頁：LapseKeepDays 後面依序是 IdleDays、IdleBuyDays、IdleInsure")
+    local PI = AP.open({ tab = "paid" })
+    answer("adminOptions", { values = values, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
+    answer("adminPlans", { economy = "READY", currencies = { "survivor" }, tiers = { planRow(1, 3), planRow(2, 7) } })
+    local rp = PI.pages.rules.flow.pool
+    check(rp["f:IdleDays"]:isVisible() and rp["f:IdleDays"]:getText() == "14" and rp["f:IdleBuyDays"]:getText() == "30"
+        and rp["f:IdleInsure"]:isVisible() and not rp["f:IdleInsure"]:getChecked(), "規則頁排出三個欄位、顯示伺服器值")
+    check(PI.pages.paid.flow.pool["pl:insurePrice:1"] == nil, "伺服器沒回 insureReady：付費頁沒有保險價格欄")
+    AP.instance = nil
+    local function insRow(tier, rev, insRev)
+        local row = planRow(tier, rev)
+        row.insure = { revision = insRev, provisional = true, plan = { permanentEnabled = false, permanentCurrency = "survivor",
+            permanentPrice = 1, permanentLimit = 0, rentalEnabled = true, rentalCurrency = "survivor", rentalPrice = 50,
+            rentalLimit = 1, rentalDays = 1, graceHours = 0, reminderHours = 0, autoRenewAllowed = false } }
+        return row
+    end
+    local PJ = AP.open({ tab = "paid" })
+    answer("adminOptions", { values = values, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
+    answer("adminPlans", { economy = "READY", currencies = { "survivor", "gold" }, insureReady = true,
+        tiers = { insRow(1, 3, 11), insRow(2, 7, 12) } })
+    local jp = PJ.pages.paid.flow.pool
+    local ip2 = jp["pl:insurePrice:2"]
+    check(ip2 ~= nil and ip2:isVisible() and ip2:getText() == "50" and jp["pl:insurePrice:1"]:isVisible(),
+        "insureReady：每個啟用的等級多一格保險每日價格（顯示目前的 rentalPrice）")
+    local nPlan = countCmd("adminSetPlan")
+    ip2:setText("0")
+    fw.click(PJ.barFlow.pool.apply)
+    check(countCmd("adminSetPlan") == nPlan and PJ.pages.paid.errors["insurePrice:2"] ~= nil and ip2.invalid == true,
+        "保險價格 0：本機標錯、不送")
+    ip2:setText("80")
+    fw.click(PJ.barFlow.pool.apply)
+    local si = lastCmd("adminSetPlan")
+    local nf = 0
+    for _ in pairs(si.args.values) do nf = nf + 1 end
+    check(countCmd("adminSetPlan") == nPlan + 1 and si.args.product == "insure" and si.args.tier == 2
+        and si.args.expectedRevision == 12 and si.args.values.rentalPrice == 80 and si.args.values.rentalDays == 1 and nf == 12,
+        "改 2 級保險價格：只送 insure 方案（product＝insure、完整 12 欄、帶保險方案的 revision），等級方案不送")
+    answer("adminSetPlan", { ok = false, code = "STALE_REVISION" })
+    check(PJ.pages.paid.tierErrors[2] ~= nil and lastCmd("adminPlans") ~= nil, "保險方案回錯：寫在那一級底下、結束後重讀方案")
+    answer("adminPlans", { economy = "READY", currencies = { "survivor", "gold" }, insureReady = true,
+        tiers = { insRow(1, 3, 11), insRow(2, 7, 12) } })
+    fw.click(jp["cur:gold"])
+    fw.click(PJ.barFlow.pool.apply)
+    local sent2 = {}
+    for _ = 1, 4 do
+        local s = lastCmd("adminSetPlan")
+        sent2[#sent2 + 1] = (s.args.product or "tier") .. s.args.tier .. ":" .. tostring(s.args.values.rentalCurrency)
+        answer("adminSetPlan", {})
+    end
+    check(table.concat(sent2, ",") == "tier1:gold,tier2:gold,insure1:gold,insure2:gold",
+        "改共用幣別：等級方案與保險方案都改（" .. table.concat(sent2, ",") .. "）")
+    AP.instance = nil
+
     T.section("AdminPanel：伺服器狀態表（目前值、建議值）、〔修正伺服器設定〕與逐項〔套用〕")
     local W = { PlayerSafehouse = "false", AntiCheatSafeHouse = "3", AllowCoop = "false", ['War" /kick boss'] = "false",
         ChatStreams = "s,r,f", SaveWorldEveryMinutes = '10" /kick boss', SafehouseAllowRespawn = "false" }
