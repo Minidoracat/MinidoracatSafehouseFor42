@@ -375,8 +375,8 @@ function W:build()
         end,
         bindCell = function(_, cell, row, index) self:bindCell(cell, row, index) end,
         unbindCell = function(_, cell) cell.row, cell.tooltip = nil, nil end,
-        onSelect = function(_, row) if row then self:select(row.claimId) end end,
-        onHighlight = function(_, row) if row and not self.narrow then self:select(row.claimId) end end,
+        onSelect = function(_, row) if row then self:pick(row.claimId) end end,
+        onHighlight = function(_, row) if row and not self.narrow then self:pick(row.claimId) end end,
         colors = { thumb = c.textMuted, thumbHover = c.text, track = c.hover } })
     self.list:initialise()
     body:addChild(self.list)
@@ -554,6 +554,12 @@ function W:select(id, tab)
     self:layout()
 end
 
+-- 使用者在清單換選別間：底列上一個動作的結果講的是前一間，清掉
+function W:pick(id)
+    if id ~= self.selectedId then self:clearResult() end
+    self:select(id)
+end
+
 -- ===== 詳情 =====
 function W:loadDetail()
     local id = self.selectedId
@@ -649,6 +655,14 @@ end
 function W:say(text, token)
     self.msg, self.msgToken = text, token or "text"
     self:layout()
+end
+
+-- 底列是剛才那個動作的結果（例：「已放棄這間安全屋。」），重新開窗或換選別間就清掉，免得寫在別間底下
+-- （2026-10-14 玩家回報：放棄原版接管的那間、原地用地契建新屋後，新屋底下還留著這句）。
+-- 還在等結果的（送出中、結果待定、保險付款中或待查）保留：底列說明現在為什麼按鈕停用
+function W:clearResult()
+    if self.busy ~= nil or self.pendingRid ~= nil or self.ins.busy ~= nil or self.ins.order ~= nil then return end
+    self.msg = nil
 end
 
 -- ===== 繪製（Body:prerender；不配置，倒數每秒換一次標題字串）=====
@@ -1310,6 +1324,7 @@ end
 function W:show(opts)
     local p = getSpecificPlayer(0)
     self.me = p and p:getUsername() or nil
+    self:clearResult()
     if not self.added then
         self.added = true
         self.win:addToUIManager()

@@ -800,6 +800,27 @@ return function(T)
     lastCall("getOrder")[4]({ ok = true, known = true, order = { orderId = "O2", status = "paid" } })
     check(rw.ins.order == nil and rw.msg == "IGUI_MSH_Manager_InsurePaid" and details() == nDetail + 1
         and not rw.btnInsureCheck.visible, "查回已付款：解除鎖、寫保險已生效、重抓詳情")
+
+    T.section("ManagerWindow：底列是上一個動作的結果，重新開窗或在清單換選別間就清掉（2026-10-14 玩家回報）")
+    -- 玩家放棄原版接管的那間、在原地用地契建新屋後，新屋底下還寫著「已放棄這間安全屋。」
+    local fm = openWith(2, 860, 560)
+    fm:select(501)
+    fm:mutate("release", { claimId = 501, expectedRevision = 1 }, "IGUI_MSH_Manager_Released")
+    local rel = T.clientSent[#T.clientSent]
+    T.fire("OnServerCommand", MSH.MODULE, "result", { command = "release", requestId = rel.args.requestId, ok = true,
+        code = "OK" })
+    check(fm.msg == "IGUI_MSH_Manager_Released", "（前置）放棄成功：底列寫已放棄")
+    fm.win:close()                    -- 開建立面板時管理視窗先收起來（MW.openCreate）
+    MW.open({ claimId = 502 })        -- 建好後建立面板把管理視窗開到新的那間
+    check(fm.msg == nil, "重新開窗：上一個動作的結果不跟到新的那間")
+    fm:say("IGUI_MSH_Manager_Renamed")
+    fm.list.onSelect(fm.list, { claimId = 501 })
+    check(fm.msg == nil and fm.selectedId == 501, "在清單換選別間：講上一間的結果清掉")
+    fm:mutate("rename", { claimId = 501, expectedRevision = 1, title = "x" }, "IGUI_MSH_Manager_Renamed")
+    MW.open({})
+    check(fm.msg == "IGUI_MSH_Manager_Waiting", "還在等伺服器回覆：重新開窗照樣寫等待中")
+    fm:finishBusy()
+    MSH.Client.forget(MSH.Client.listRid)   -- 放棄後重抓的清單沒回：讓下一段的開窗照常送 list
     MinidoracatEconomy = savedEco
     UIv.Dialog.show, UIv.Date = realShow, nil
     getText = realGetText2
