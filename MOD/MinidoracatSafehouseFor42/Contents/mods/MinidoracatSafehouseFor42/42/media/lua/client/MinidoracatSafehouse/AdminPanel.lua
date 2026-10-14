@@ -35,7 +35,7 @@ AP.TABS = { "rules", "deeds", "exclusions", "players", "paid" }
 AP.QUERY_DEBOUNCE_MS = 650   -- Economy QUERY_DEBOUNCE_MS
 AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服器 cooldownMs = 500）
 AP.FILTERS = { "all", "owners", "overrides" }
-AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxArea", "FreeMaxSide", "ClaimGap", "MaxShares",
+AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxArea", "FreeMaxSide", "ClaimGap", "FactionClaimGap", "MaxShares",
     "AllowFactionShare", "LapseKeepDays", "IdleDays", "IdleBuyDays", "IdleInsure", "RedrawMinutes", "RedrawLimit", "MaxPieces" }
 AP.RANGE_KEYS = { "RangesFaction", "RangesOthers" }
 AP.CRAFT_LEVELS = { [2] = "Easy", [3] = "Standard", [4] = "Strict" }

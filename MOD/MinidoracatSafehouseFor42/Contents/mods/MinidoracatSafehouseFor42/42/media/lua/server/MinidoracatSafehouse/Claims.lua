@@ -176,19 +176,43 @@ function C.checkTitle(v)
 end
 
 -- 重疊：每塊對全部原生（含 foreign）＋全部佔位紀錄的每一塊（含 lapsed、quarantined），半開 AABB；
--- 同一屋主只禁止重疊、不套間距，其他人與 foreign 套 claimGap。不呼叫原生 SafeHouse.intersects（§7.3）。
--- detail 是對方那一塊的範圍（客戶端標紅）
+-- 同一屋主只禁止重疊、不套間距；屋主和我同一個陣營的套 factionClaimGap（使用者 2026-10-15，預設 0＝可以緊鄰），
+-- 看檢查當下的陣營；其他人與 foreign 套 claimGap。不呼叫原生 SafeHouse.intersects（§7.3）。
+-- detail 是對方那一塊的範圍（客戶端標紅）加上這次要隔的格數 gap（TOO_CLOSE 的原因句照它寫）
 function C.checkOverlap(v)
-    local gap, close = v.cfg.claimGap, nil
+    local cfg = v.cfg
+    -- 兩個間距一樣時不必分誰同陣營；身分沒過（預檢照樣跑完每一項）時沒有陣營。
+    -- Faction.getPlayerFaction(String)：Faction.java:123-138（一人只在一個陣營）
+    local faction = v.who ~= nil and cfg.factionClaimGap ~= cfg.claimGap and Faction.getPlayerFaction(v.who) or nil
+    local gaps = {}   -- owner → 要隔的格數（每位屋主只查一次陣營）
+    local function gapOf(owner)
+        if owner == nil then return cfg.claimGap end
+        local g = gaps[owner]
+        if g == nil then
+            if owner == v.who then
+                g = 0
+            elseif faction ~= nil and (faction:isOwner(owner) or faction:isMember(owner)) then   -- Faction.java:150、154
+                g = cfg.factionClaimGap
+            else
+                g = cfg.claimGap
+            end
+            gaps[owner] = g
+        end
+        return g
+    end
+    local close, closeGap = nil, nil
     local function hit(rect, owner)
         for _, p in ipairs(v.rects) do
             if Rect.overlaps(p, rect, 0) then return true end
         end
-        if close == nil and owner ~= v.who and gap > 0 then
-            for _, p in ipairs(v.rects) do
-                if Rect.overlaps(p, rect, gap) then
-                    close = rect
-                    break
+        if close == nil then
+            local gap = gapOf(owner)
+            if gap > 0 then
+                for _, p in ipairs(v.rects) do
+                    if Rect.overlaps(p, rect, gap) then
+                        close, closeGap = rect, gap
+                        break
+                    end
                 end
             end
         end
@@ -207,7 +231,11 @@ function C.checkOverlap(v)
             end
         end
     end
-    if close then return CODE.TOO_CLOSE, Rect.copy(close) end
+    if close then
+        local d = Rect.copy(close)
+        d.gap = closeGap
+        return CODE.TOO_CLOSE, d
+    end
     return nil
 end
 

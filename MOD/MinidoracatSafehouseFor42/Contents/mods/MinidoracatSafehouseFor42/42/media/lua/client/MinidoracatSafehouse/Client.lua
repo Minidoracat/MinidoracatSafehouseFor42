@@ -172,13 +172,15 @@ end
 -- 鍵：IGUI_MSH_Code_<CODE>（原因）、IGUI_MSH_CodeAction_<CODE>（動作，可沒有）；沒有原因鍵就用 IGUI_MSH_Code_Generic（%1＝碼）。
 -- getText 找不到鍵時回傳鍵本身（原版 Translator 行為）。
 -- 間距太近（TOO_CLOSE）寫出至少要隔幾格（使用者 2026-10-12：「可以增加顯示要格多少嗎? 可能要抓伺服器設定動態顯示」）：
--- 讀伺服器同步來的沙盒值（Settings.get；管理員面板改了會 sandboxSync），和伺服器判斷用的是同一個 ClaimGap
-function C.codeText(code)
+-- 伺服器在 detail 帶這次要隔的格數 gap（對方和你同陣營時是 FactionClaimGap，2026-10-15）；沒帶時讀伺服器同步來的
+-- ClaimGap（Settings.get；管理員面板改了會 sandboxSync）
+function C.codeText(code, detail)
     local c = tostring(code)
     local key = "IGUI_MSH_Code_" .. c
     local reason
     if c == MSH.CODE.TOO_CLOSE then
-        reason = getText(key, tostring(MSH.Settings.get().claimGap))
+        local gap = type(detail) == "table" and MSH.isInt(detail.gap) and detail.gap or MSH.Settings.get().claimGap
+        reason = getText(key, tostring(gap))
     else
         reason = getText(key)
     end

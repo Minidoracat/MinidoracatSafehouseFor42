@@ -357,6 +357,15 @@ return function(T)
     check(lineTok(closeLine .. "5") == "errorText" and lineTok(closeLine .. "2") == nil,
         "管理員把間距改成 5（sandboxSync）：重排後寫 5")
     T.sandbox("ClaimGap", 2)
+    -- 同陣營間距（使用者 2026-10-15）：伺服器在 TOO_CLOSE 帶這次要隔的格數 gap，照它寫，不看 ClaimGap
+    local closeRow
+    for _, c in ipairs(vm.checks) do if c.code == "TOO_CLOSE" then closeRow = c end end
+    closeRow.gap = 3
+    P.View.layout(v)
+    check(lineTok(closeLine .. "3") == "errorText" and lineTok(closeLine .. "2") == nil,
+        "伺服器帶 gap 3（對方同陣營）：寫 3、不寫 ClaimGap 的 2")
+    closeRow.gap = nil
+    P.View.layout(v)
     local gp, sp = steady()
     check(sp == 0 and gp < 1, "預檢畫面每幀不配置、不碰地板（200 幀增加 " .. string.format("%.2f", gp) .. " KB、重設 "
         .. sp .. " 格）")

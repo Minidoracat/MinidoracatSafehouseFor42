@@ -44,6 +44,8 @@ local OPTIONS = {
     { key = "FreeMaxArea", type = "int", min = 1, max = 9216, default = 576 },
     { key = "FreeMaxSide", type = "int", min = 1, max = 96, default = 48 },
     { key = "ClaimGap", type = "int", min = 0, max = 16, default = 2 },
+    -- 屋主和自己在同一個陣營的安全屋（使用者 2026-10-15：「幫我增加同陣營的間隔設定，預設0」）；0＝可以緊鄰、不能重疊
+    { key = "FactionClaimGap", type = "int", min = 0, max = 16, default = 0 },
     -- 一間最多幾塊矩形（使用者 2026-10-12：預設 4，管理員可調高）；每塊一個原生 SafeHouse，登入封包、全服名單額度與
     -- 客戶端切塊的成本都隨它成長，硬上限 LIMIT.MAX_PIECES 由 registry 與校正的容量預算決定
     { key = "MaxPieces", type = "int", min = 1, max = MSH.LIMIT.MAX_PIECES, default = 4 },
@@ -170,6 +172,7 @@ function S.get()
         freeMaxSide = raw.FreeMaxSide,
         freeMaxArea = math.min(raw.FreeMaxArea, raw.FreeMaxSide * raw.FreeMaxSide),
         claimGap = raw.ClaimGap,
+        factionClaimGap = raw.FactionClaimGap,
         maxPieces = raw.MaxPieces,
         maxShares = raw.MaxShares,
         allowFactionShare = raw.AllowFactionShare,

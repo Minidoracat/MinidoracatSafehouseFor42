@@ -124,6 +124,7 @@ Default chances once "Deeds drop as loot" is on:
 [h3]Distance to other safehouses[/h3]
 [list]
 [*] [b]Your own may touch[/b]: safehouses of the same owner only can't overlap.
+[*] [b]Your faction may touch by default[/b]: safehouses whose owner is in your faction can touch (not overlap) by default; admins can set a separate gap.
 [*] [b]Others need a gap[/b]: at least 2 tiles by default, per the server's setting.
 [/list]
 === 🧰 Failed checks
@@ -167,6 +168,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [*] [b]Not roads by default[/b]: gravel, sidewalks and plazas; admins can add them to "Ground that counts as road".
 [*] [b]Margin[/b]: no road within 1 tile outside the area either (adjustable).
 [*] [b]Your driveway[/b]: within a few tiles of a home and its detached garage or shed, only main roads and parking lots count, so you can enclose your own driveway.
+[*] [b]Inside buildings[/b]: floors inside the rooms of the map's own buildings never count as road (some houses have road asphalt in the garage); rooms that players wall in themselves are still judged by their ground.
 [*] [b]Parking data[/b]: comes from MiniMap; without it, only main roads block near homes.
 [/list]
 [h3]Resource sites (needs MiniMap)[/h3]
@@ -448,6 +450,7 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][td]Free mode max area / outline limit[/td][td]576 tiles (24 x 24) / 48[/td][/tr]
 [tr][td]Free safehouses per player[/td][td]1 (per player on the admin panel's Players tab)[/td][/tr]
 [tr][td]Gap to other safehouses[/td][td]2 tiles (0–16)[/td][/tr]
+[tr][td]Gap to faction safehouses[/td][td]0 tiles (0–16; 0 = may touch)[/td][/tr]
 [tr][td]Max pieces per safehouse[/td][td]4 (1–8)[/td][/tr]
 [tr][td]Shared players per safehouse[/td][td]8[/td][/tr]
 [tr][td]Allow faction sharing[/td][td]On[/td][/tr]

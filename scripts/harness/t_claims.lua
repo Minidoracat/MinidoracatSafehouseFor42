@@ -279,6 +279,39 @@ return function(T)
     res = T.cmd(gp, "create", { rects = { rect(3126, 3000, 5, 5) }, deedType = D1 })
     check(res.ok, "ClaimGap 16：差 16 格可以")
 
+    T.section("同陣營間距（FactionClaimGap，使用者 2026-10-15，預設 0）")
+    boot({ sandbox = { ClaimsPerPlayer = 5 } })
+    T.faction("wolves", "kim", { "fx" })
+    seed("kim", rect(3100, 3000, 10, 10))
+    local fx = T.player({ name = "fx", x = 3112, y = 3002, items = { D1, D1, D1 } })
+    res = T.cmd(fx, "create", { rects = { rect(3110, 3000, 5, 5) }, deedType = D1 })
+    check(res.ok, "預設 0：屋主是我陣營的領袖，緊鄰可以")
+    fx.x, fx.y = 3105, 3012
+    rejects(fx, { rects = { rect(3104, 3009, 5, 5) }, deedType = D1 }, "OVERLAP", "同陣營照樣不能重疊", D1)
+    local nx = T.player({ name = "nx", x = 3102, y = 2997, items = { D1 } })
+    res = rejects(nx, { rects = { rect(3100, 2995, 5, 5) }, deedType = D1 }, "TOO_CLOSE", "不同陣營照 ClaimGap：緊鄰太近", D1)
+    check(res.gap == 2, "TOO_CLOSE 帶要隔的格數（ClaimGap 2，實際 " .. tostring(res.gap) .. "）")
+    boot({ sandbox = { ClaimsPerPlayer = 5, FactionClaimGap = 3 } })
+    T.faction("wolves", "boss", { "kim", "fx" })
+    seed("kim", rect(3100, 3000, 10, 10))
+    fx = T.player({ name = "fx", x = 3114, y = 3002, items = { D1, D1 } })
+    res = rejects(fx, { rects = { rect(3112, 3000, 5, 5) }, deedType = D1 }, "TOO_CLOSE",
+        "FactionClaimGap 3：屋主是同陣營的成員，差 2 格太近", D1)
+    check(res.gap == 3, "TOO_CLOSE 帶同陣營的格數 3（實際 " .. tostring(res.gap) .. "）")
+    local pv = T.cmd(fx, "preview", { rects = { rect(3112, 3000, 5, 5) }, deedType = D1 })
+    local row
+    for _, c in ipairs(pv.checks or {}) do if c.name == "overlap" then row = c end end
+    check(row ~= nil and row.code == "TOO_CLOSE" and row.gap == 3 and row.x == 3100,
+        "預檢的間距項目也帶 gap 與對方範圍")
+    fx.x = 3115
+    res = T.cmd(fx, "create", { rects = { rect(3113, 3000, 5, 5) }, deedType = D1 })
+    check(res.ok, "FactionClaimGap 3：差 3 格可以")
+    T.disband(Faction.getPlayerFaction("kim"))
+    fx.x, fx.y = 3105, 3014
+    res = rejects(fx, { rects = { rect(3103, 3011, 5, 5) }, deedType = D1 }, "TOO_CLOSE",
+        "陣營解散後照 ClaimGap（差 1 格太近）", D1)
+    check(res.gap == 2, "解散後 TOO_CLOSE 帶 ClaimGap 2（實際 " .. tostring(res.gap) .. "）")
+
     T.section("malformed 紀錄不擋建立、清單、詳細")
     boot()
     R.md.claims[50] = { claimId = 50, lifecycle = "active", owner = "uma" }   -- 缺 rect 等欄位

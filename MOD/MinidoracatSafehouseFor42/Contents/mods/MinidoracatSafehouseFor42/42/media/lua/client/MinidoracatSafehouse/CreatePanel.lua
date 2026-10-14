@@ -468,14 +468,14 @@ local PAD, GAP, ICON = 12, 6, 16
 local W_MIN, W_MAX = 420, 560
 local FONT = UIFont and UIFont.Small
 
--- 原因碼 → 原因、動作（本地碼用自己的鍵，其餘照 Client.codeText）
-function P.reasonOf(code)
+-- 原因碼 → 原因、動作（本地碼用自己的鍵，其餘照 Client.codeText；detail＝伺服器的檢查項目或失敗結果）
+function P.reasonOf(code, detail)
     if P.LOCAL_CODES[code] then
         local akey = "IGUI_MSH_Create_Action_" .. code
         local action = getText(akey)
         return getText("IGUI_MSH_Create_Reason_" .. code), action ~= akey and action or nil
     end
-    return MSH.Client.codeText(code)
+    return MSH.Client.codeText(code, detail)
 end
 
 local function wrap(v, text, width)
@@ -493,8 +493,8 @@ local function para(v, text, token, icon, y)
     return y + 2
 end
 
-local function reasonLines(v, code, token, y)
-    local reason, action = P.reasonOf(code)
+local function reasonLines(v, code, token, y, detail)
+    local reason, action = P.reasonOf(code, detail)
     y = para(v, reason, token, "warning", y)
     if action ~= nil then y = para(v, action, "textMuted", nil, y) end
     return y
@@ -662,7 +662,7 @@ local function layoutPreview(v, y, list)
     y = areaLine(v, y)
     local pay = false
     if m.failCode ~= nil then
-        y = reasonLines(v, m.failCode, "errorText", y)
+        y = reasonLines(v, m.failCode, "errorText", y, m.failDetail)
         if m.failCode == CODE.QUOTA_FULL then y, pay = priceLines(v, m.failDetail or {}, y) end
     end
     if m.checks == nil then
@@ -673,7 +673,7 @@ local function layoutPreview(v, y, list)
             if c.ok then
                 y = para(v, label, "text", "check", y)
             else
-                local reason, action = P.reasonOf(c.code)
+                local reason, action = P.reasonOf(c.code, c)
                 y = para(v, getText("IGUI_MSH_Create_CheckFail", label, reason), "errorText", "warning", y)
                 if action ~= nil then y = para(v, action, "textMuted", nil, y) end
                 if c.code == CODE.QUOTA_FULL then

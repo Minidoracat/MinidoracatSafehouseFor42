@@ -342,7 +342,7 @@ function W:addWrapped(L, text, x, y, w, token, font)
 end
 
 local LABELS = { "Role", "Owner", "Location", "Source", "Slot", "Created", "Status", "ReleaseAt", "Idle", "Respawn", "Gap",
-    "Roads", "Resources", "Number" }
+    "FactionGap", "Roads", "Resources", "Number" }
 
 function W:build()
     local UI, win = self.UI, self.win
@@ -1092,6 +1092,8 @@ function W:layoutLand(d, cw)
     local vw = cw - vx
     local y = self:addWrapped(L, getText("IGUI_MSH_Manager_LandIntro"), 0, 0, cw, "textMuted") + GAP
     y = self:infoRow(L, "Gap", getText("IGUI_MSH_Manager_GapValue", cfg.claimGap), y, vx, vw)
+    y = self:infoRow(L, "FactionGap", cfg.factionClaimGap > 0 and getText("IGUI_MSH_Manager_FactionGapValue", cfg.factionClaimGap)
+        or getText("IGUI_MSH_Manager_FactionGapTouch"), y, vx, vw)
     local roads = getText("IGUI_MSH_Manager_Off")
     if cfg.avoidRoads then
         local names = {}
