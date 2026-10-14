@@ -34,7 +34,7 @@
 [*] [b]管理者パネル[/b]：権利書、除外、有料枠を含むすべてのルールをゲーム内で調整
 [*] [b]既存のセーフハウスを引き継ぎ[/b]：バニラや Better Safehouse のセーフハウスを自動で引き継ぎます
 [/list]
-📖 [b]サーバー設定、既存セーフハウスの引き継ぎ、既知の制限：[/b][url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse の詳しい説明（GitHub）[/url]（繁体字中国語）
+📖 [b]権利書、範囲の作成、共有、有料枠、サーバー設定：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336]Safehouse Mod Guide（英語）[/url]
 
 [h2]🔗 Minidoracat の MOD 一覧[/h2]
 すべての MOD を[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat 全シリーズ コレクション[/url]にまとめています。必要なものを選んでサブスクライブしてください。
@@ -51,5 +51,5 @@
 
 [b]#Minidoracat[/b]
 
-Workshop ID: 未割り当て
+Workshop ID: 3819478078
 Mod ID: MinidoracatSafehouseFor42

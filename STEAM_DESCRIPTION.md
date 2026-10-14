@@ -34,7 +34,7 @@
 [*] [b]管理員面板[/b]：在遊戲內調整所有規則，包括地契、排除與付費名額
 [*] [b]接手舊安全屋[/b]：自動接管原版與 Better Safehouse 安全屋
 [/list]
-📖 [b]伺服器設定、接手舊安全屋與已知限制：[/b][url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse 完整說明（GitHub）[/url]
+📖 [b]地契、框選、分享、付費名額與伺服器設定：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307]Safehouse 完整說明[/url]
 
 [h2]🔗 Minidoracat 全系列[/h2]
 其他作品都在[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat 全系列收藏[/url]，依需求自選訂閱。
@@ -51,5 +51,5 @@ MOD 永遠免費，原始碼公開在 GitHub。喜歡的話可以請我喝杯咖
 
 [b]#Minidoracat[/b]
 
-Workshop ID: 尚未指派
+Workshop ID: 3819478078
 Mod ID: MinidoracatSafehouseFor42

@@ -1,4 +1,5 @@
 version=1
+id=3819478078
 title=[B42] Safehouse by Minidoracat
 description=[h1]🏠 Minidoracat Safehouse[/h1]
 description=[h3]By Minidoracat[/h3]
@@ -36,7 +37,7 @@ description=[*] [b]Vanilla protection[/b]: non-members cannot enter or take item
 description=[*] [b]Admin panel[/b]: adjust every rule in game, including deeds, exclusions and paid slots
 description=[*] [b]Take over existing safehouses[/b]: vanilla and Better Safehouse safehouses are taken over automatically
 description=[/list]
-description=📖 [b]Server settings, taking over existing safehouses and known limits:[/b] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse full guide on GitHub[/url] (Traditional Chinese)
+description=📖 [b]Deeds, claiming, sharing, paid slots and server settings:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336]Safehouse Mod Guide[/url]
 description=
 description=[h2]🔗 More Minidoracat mods[/h2]
 description=All my mods are in the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url] — pick what you need.
@@ -53,7 +54,7 @@ description=[url=https://ko-fi.com/minidoracat][img]https://raw.githubuserconten
 description=
 description=[b]#Minidoracat[/b]
 description=
-description=Workshop ID: Not assigned
+description=Workshop ID: 3819478078
 description=Mod ID: MinidoracatSafehouseFor42
 tags=Build 42;Interface;Multiplayer
 visibility=public

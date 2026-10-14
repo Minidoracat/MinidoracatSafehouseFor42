@@ -34,7 +34,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [*] [b]Admin panel[/b]: adjust every rule in game, including deeds, exclusions and paid slots
 [*] [b]Take over existing safehouses[/b]: vanilla and Better Safehouse safehouses are taken over automatically
 [/list]
-📖 [b]Server settings, taking over existing safehouses and known limits:[/b] [url=https://github.com/Minidoracat/MinidoracatSafehouseFor42#readme]Safehouse full guide on GitHub[/url] (Traditional Chinese)
+📖 [b]Deeds, claiming, sharing, paid slots and server settings:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336]Safehouse Mod Guide[/url]
 
 [h2]🔗 More Minidoracat mods[/h2]
 All my mods are in the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url] — pick what you need.
@@ -51,5 +51,5 @@ The mod is free and always will be, and the source code is open on GitHub. If yo
 
 [b]#Minidoracat[/b]
 
-Workshop ID: Not assigned
+Workshop ID: 3819478078
 Mod ID: MinidoracatSafehouseFor42

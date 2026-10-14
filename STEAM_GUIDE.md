@@ -1,7 +1,12 @@
+<!-- 指南網址：https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307 -->
 <!-- Steam 指南稿源（繁中）：MOD 的完整說明以本指南為準，簡介只放摘要。格式與同步方式見 pz-family-docs/release.md「完整說明：Steam 指南」 -->
 <!-- 標題：📖 Safehouse MOD 完整說明：地契、框選、分享、付費名額與伺服器設定 -->
 <!-- 摘要：Minidoracat Safehouse MOD 的圖文說明：怎麼取得地契、框出安全屋範圍、預檢沒過怎麼改、分享與權限、管理視窗與地面範圍、付費名額，以及伺服器必要設定、管理員面板、沙盒選項、接手舊安全屋與移除前須知。 -->
 === 🚀 快速上手
+[b]English version:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336]Safehouse Mod Guide[/url]
+
+MOD 本體（Steam Workshop）：
+https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 {{img:01-overview-zh.jpg}}
 多人專用伺服器的安全屋系統：用地契自己框出安全屋範圍，自動避開道路與資源點，再分享給朋友或陣營、逐項授權。
 [olist]

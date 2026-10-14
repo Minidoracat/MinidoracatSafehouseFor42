@@ -1,7 +1,12 @@
+<!-- 指南網址：https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336 -->
 <!-- Steam guide source (English): the full reference for this mod; the Workshop description only summarizes. Format and sync: pz-family-docs/release.md「完整說明：Steam 指南」 -->
 <!-- 標題：📖 Safehouse Mod Guide: Deeds, Claiming, Sharing, Paid Slots & Server Setup -->
 <!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window and ground outlines, paid slots, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
 === 🚀 Quick start
+[b]繁體中文版：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307]Safehouse MOD 完整說明[/url]
+
+The mod on Steam Workshop:
+https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 {{img:01-overview-en.jpg}}
 A safehouse system for dedicated multiplayer servers: use a deed to mark your own safehouse area, which automatically stays off roads and resource sites, then share it with friends or your faction, one permission at a time.
 [olist]
