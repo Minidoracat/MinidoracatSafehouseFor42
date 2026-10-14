@@ -1,7 +1,7 @@
 <!-- 指南網址：https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307 -->
 <!-- Steam 指南稿源（繁中）：MOD 的完整說明以本指南為準，簡介只放摘要。格式與同步方式見 pz-family-docs/release.md「完整說明：Steam 指南」 -->
 <!-- 標題：📖 Safehouse MOD 完整說明：地契、框選、分享、付費名額與伺服器設定 -->
-<!-- 摘要：Minidoracat Safehouse MOD 的圖文說明：怎麼取得地契、框出安全屋範圍、預檢沒過怎麼改、分享與權限、管理視窗與地面範圍、付費名額，以及伺服器必要設定、管理員面板、沙盒選項、接手舊安全屋與移除前須知。 -->
+<!-- 摘要：Minidoracat Safehouse MOD 的圖文說明：怎麼取得地契、框出安全屋範圍、預檢沒過怎麼改、分享與權限、管理視窗、地面範圍與重生點、付費名額，以及伺服器必要設定、管理員面板、沙盒選項、接手舊安全屋與移除前須知。 -->
 === 🚀 快速上手
 [b]English version:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336]Safehouse Mod Guide[/url]
 
@@ -56,7 +56,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [/list]
 [h3]怎麼取得[/h3]
 [list]
-[*] [b]製作[/b]：每級可設不開放、寬鬆、標準、嚴格；預設只有 1 級開放，難度標準。
+[*] [b]製作[/b]：每級可設不開放、寬鬆、標準、嚴格；預設只有 1 級開放，難度標準。製作清單只列開放的那一種難度（原版製作視窗與 Neat Crafting 都一樣），管理員改難度後開著的視窗立刻更新。
 [*] [b]管理員發放[/b]：用原版 /additem 指令。
 [*] [b]商店[/b]：伺服器有 Economy 時，管理員可以把地契上架到商店。
 [*] [b]地契掉落[/b]（預設關）：管理員打開後，辦公桌、檔案櫃與保險箱第一次產生物品時，照各級機率出現地契。
@@ -249,7 +249,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [*] [b]開啟[/b]：User Panel 的「安全屋管理」按鈕，或家族工具列。
 [*] [b]兩組清單[/b]：「我的」與「分享給我的」；安全屋再多，清單也只是捲動。
 [*] [b]每間三個分頁[/b]：〔概覽〕、〔成員與分享〕、〔土地規則〕。
-[*] [b]能做的事[/b]：〔重新命名〕（1–40 字）、看狀態、管理分享、〔重新框選〕、〔放棄安全屋...〕。
+[*] [b]能做的事[/b]：〔重新命名〕（1–40 字）、看狀態、管理分享、〔設為重生點〕、〔重新框選〕、〔放棄安全屋...〕。
 [*] [b]其他按鈕[/b]：〔建立安全屋〕、〔名額〕。
 [*] [b]建立成功時[/b]：管理視窗直接停在新的那間。
 [*] [b]視窗縮小或字型放大[/b]：視窗會自己長高到放得下。
@@ -281,6 +281,15 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [tr][td]成員同步受干擾[/td][td]名單被原版操作改過，正在自動改回；一直出現的話請通知管理員。[/td][/tr]
 [tr][td]等待管理員處理、修復已暫停[/td][td]請管理員在管理員面板用編號處理。[/td][/tr]
 [/table]
+[h3]安全屋重生點[/h3]
+[list]
+[*] [b]設定[/b]：站在這間安全屋的範圍內（屋主或成員都可以），在〔概覽〕按〔設為重生點〕。
+[*] [b]重生[/b]：之後死亡、重新開始的新角色一律出現在設定時站的那一格，不論出生選單選哪裡；同一次連線中死亡時，選單只剩「安全屋」一項。
+[*] [b]樓上的點[/b]：伺服器當下確認不了那層地板還在時（那一帶沒有載入，或地板拆掉、燒掉了），改出生在同一格的地面層。
+[*] [b]每人一個[/b]：換一間設就取代舊的，也可以〔清除重生點〕。
+[*] [b]暫時失效[/b]：安全屋被放棄或停用、你被移出成員時，照原版方式出生；恢復後又能用。
+[*] [b]伺服器要開放[/b]：原版伺服器設定 SafehouseAllowRespawn 關著時不能設定，也不套用。
+[/list]
 === 🧰 付費名額（選用 Economy）
 [list]
 [*] [b]免費名額[/b]：每人前幾間免費（預設 1 間，管理員可以個別調整）。
@@ -338,9 +347,8 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 不符時管理員面板會顯示提醒，不會停用功能。
 [table]
 [tr][th]選項[/th][th]建議[/th][th]原因[/th][/tr]
-[tr][td]SaveWorldEveryMinutes[/td][td]10–15[/td][td]0（原版預設）或大於 30 時，伺服器崩潰可能讓剛建好的安全屋消失、地契卻已經扣掉[/td][/tr]
+[tr][td]SaveWorldEveryMinutes[/td][td]10–15[/td][td]0（原版預設）或大於 30 時，伺服器崩潰會讓上次世界存檔之後的分享、改名、放棄都回到存檔時的樣子（剛建好的安全屋會在重開時自動補回）[/td][/tr]
 [tr][td]AllowCoop[/td][td]false[/td][td]擋掉分割畫面玩家自己輸入名字冒用別人的路徑[/td][/tr]
-[tr][td]SafehouseAllowRespawn[/td][td]false[/td][td]本 MOD 不管理安全屋重生點[/td][/tr]
 [tr][td]ChatStreams[/td][td]拿掉 sh[/td][td]原版安全屋聊天的成員名單不會跟著本 MOD 的分享更新；陣營改用 /faction 聊天[/td][/tr]
 [/table]
 [h3]在遊戲內修正[/h3]
@@ -449,7 +457,8 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [*] [b]道路與資源點[/b]：壓到的舊安全屋也保留。
 [*] [b]重新框選[/b]：接管來的安全屋不能重新框選。
 [*] [b]名稱[/b]：超過 40 字的會截短。
-[*] [b]不搬的東西[/b]：安全屋重生點與安全屋聊天。
+[*] [b]重生點[/b]：原版或 Better Safehouse 的「在安全屋重生」勾選，會換成本 MOD 的重生點（那間安全屋中央）。
+[*] [b]不搬的東西[/b]：安全屋聊天。
 [*] [b]Better Safehouse 的資料[/b]：存在世界資料裡的記錄不讀也不改。
 [*] [b]Better Safehouse 的地契[/b]：它自己的地契物品（3.1.1 有 5 種）在它從 Mods= 拿掉後，第一次載入就會從玩家身上與容器裡消失，裝回來也找不回。
 [*] [b]補償[/b]：要補償的話，由管理員改發本 MOD 的地契；切換前先公告。
@@ -486,8 +495,9 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [tr][th]內容[/th][th]位置[/th][/tr]
 [tr][td]安全屋清單（範圍、屋主、分享、狀態）[/td][td]世界存檔的 global_mod_data.bin（公開讀取：不放 Steam 帳號與私人資料）[/td][/tr]
 [tr][td]原版安全屋本體[/td][td]世界存檔的 map_meta.bin[/td][/tr]
-[tr][td]帳號與 Steam 帳號的綁定、個人免費間數[/td][td]Zomboid/Lua/MinidoracatSafehouse/<伺服器名>/private.txt[/td][/tr]
+[tr][td]帳號與 Steam 帳號的綁定、個人免費間數、玩家的重生點[/td][td]Zomboid/Lua/MinidoracatSafehouse/<伺服器名>/private.txt[/td][/tr]
 [tr][td]接管舊安全屋的記錄[/td][td]同資料夾的 migration-completion.txt[/td][/tr]
+[tr][td]當機補回用的建立記錄[/td][td]同資料夾的 crash-journal.txt（開機時沒有要補的就清掉）[/td][/tr]
 [tr][td]稽核記錄[/td][td]Zomboid/Logs/*_MinidoracatSafehouse.txt（一個事件一行；拒絕類事件每分鐘彙總一行）[/td][/tr]
 [/table]
 [list]
@@ -503,7 +513,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [*] [b]安全屋資料是公開的[/b]：原版會把每間的範圍、屋主與成員名單送給每位登入的玩家，改過的客戶端看得到。
 [*] [b]成員把自己移出[/b]：成員用原版指令移除自己時會被傳送到屋外；名單下一輪會修回，位置不會。
 [*] [b]多塊的安全屋[/b]：每塊各是一個原版安全屋，被移出的玩家可能先落在同一間的另一塊，約 20 秒內會再被移出；塊數上限調得越高越常發生。
-[*] [b]伺服器崩潰[/b]：剛建好、還沒寫進世界存檔的安全屋會消失，地契可能已經扣掉（見 SaveWorldEveryMinutes 的建議）。
+[*] [b]伺服器崩潰[/b]：上次世界存檔之後的變更會回到存檔時的樣子。剛建好的安全屋例外：重開時自動補回，範圍、名稱、等級照建立時，之後加的分享要重新設定；放棄過的不會補回。建好後 3 分半內就當機的，地契可能已經回到屋主身上，這種會列在管理員面板的「需要處理的安全屋」（標示 CRASH_UNCONFIRMED）：先問屋主，地契還在就〔釋出〕，不在就〔重新綁定〕給原屋主。
 [*] [b]全服上限[/b]：最多 256 間（含接管來的）。
 [/list]
 [h3]玩家身分[/h3]
@@ -529,7 +539,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [*] 不做土地買賣。
 [*] 不會因屋主長期沒上線自動釋出。
 [*] 不做全服地圖瀏覽與傳送。
-[*] 不管理安全屋重生點，不保證原版安全屋聊天同步。
+[*] 不保證原版安全屋聊天同步。
 [*] 不能在遊戲內新增地契種類（最多 8 級）。
 [/list]
 === ❓ 常見問題

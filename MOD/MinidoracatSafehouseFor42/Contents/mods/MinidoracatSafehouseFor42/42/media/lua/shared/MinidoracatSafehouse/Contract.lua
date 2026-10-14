@@ -96,6 +96,8 @@ MSH.CODE = {
     UNKNOWN_PLAYER = "UNKNOWN_PLAYER",
     -- Economy（M4，§1.3）
     ECONOMY_UNAVAILABLE = "ECONOMY_UNAVAILABLE", INVALID_PLAN = "INVALID_PLAN",
+    -- 安全屋重生點（2026-10-14）：伺服器設定 SafehouseAllowRespawn 關著
+    RESPAWN_DISABLED = "RESPAWN_DISABLED",
 }
 
 -- ===== 小工具 =====

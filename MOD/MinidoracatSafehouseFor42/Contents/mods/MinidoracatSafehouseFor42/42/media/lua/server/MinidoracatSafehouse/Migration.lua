@@ -52,62 +52,15 @@ M.SKIP_REASONS = { "BAD_RECT", "BAD_OWNER", "DUPLICATE_RECT", "DUPLICATE_ID", "O
 M.REGISTRY_SHARE = 0.5
 M.NAMES_SHARE = 0.75
 
--- 與 R.privatePath() 同目錄（<cachedir>/Lua/MinidoracatSafehouse/<server>/）；.txt 在 getFileWriter 允許的副檔名內（LuaManager.java:1035）
+-- 與 R.privatePath() 同目錄（<cachedir>/Lua/MinidoracatSafehouse/<server>/）
 function M.manifestPath()
-    return (string.gsub(MSH.Registry.privatePath(), "private%.txt$", "migration-completion.txt"))
+    return MSH.Registry.privateFile("migration-completion.txt")
 end
 
--- getFileWriter(path, createIfNull, append)：LuaManager.java:6727（UTF-8）；writeln：LuaManager.java:12834
-local function appendLines(lines)
-    local writer
-    local opened = pcall(function() writer = getFileWriter(M.manifestPath(), true, true) end)
-    if not opened or writer == nil then return false end
-    local written = pcall(function()
-        for _, line in ipairs(lines) do writer:writeln(line) end
-    end)
-    local closed = pcall(function() writer:close() end)
-    return written and closed
-end
-
+local function appendLines(lines) return MSH.Registry.writeLines(M.manifestPath(), lines, true) end
 -- 回傳行陣列；檔案不存在回 nil；存在卻讀不開回 false
-local function readLines()
-    local path = M.manifestPath()
-    local reader
-    -- getFileReader 吞掉 IOException 回 nil（LuaManager.java:5936；UTF-8）；用 cacheFileExists（LuaManager.java:5544）分辨不存在與讀不開
-    local opened = pcall(function() reader = getFileReader(path, false) end)
-    if not opened or reader == nil then
-        local ok, exists = pcall(cacheFileExists, path)
-        if ok and not exists then return nil end
-        return false
-    end
-    local lines = {}
-    while #lines < 100000 do
-        local line = reader:readLine()
-        if line == nil then break end
-        lines[#lines + 1] = line
-    end
-    pcall(function() reader:close() end)
-    return lines
-end
-
--- 檔案欄位不能含 tab／換行
-local function field(v)
-    return (string.gsub(tostring(v), "%c", " "))
-end
-
--- 一行切成欄位（tab 分隔、保留空欄）
-local function split(line)
-    local out, pos = {}, 1
-    while true do
-        local s = string.find(line, "\t", pos, true)
-        if s == nil then
-            out[#out + 1] = string.sub(line, pos)
-            return out
-        end
-        out[#out + 1] = string.sub(line, pos, s - 1)
-        pos = s + 1
-    end
-end
+local function readLines() return MSH.Registry.readLines(M.manifestPath(), 100000) end
+local field, split = MSH.Registry.fileField, MSH.Registry.splitTabs
 
 -- 原生建立時間（毫秒，double）寫成整數字串；兩邊都用它比對，不比浮點數
 local function createdText(house)

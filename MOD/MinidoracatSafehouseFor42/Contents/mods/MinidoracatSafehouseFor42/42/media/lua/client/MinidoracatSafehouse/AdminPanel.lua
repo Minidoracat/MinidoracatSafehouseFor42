@@ -353,6 +353,7 @@ end
 function AP.loadClaims(P)
     MSH.Client.send("adminClaims", {}, function(res)
         P.claims = res.ok and res.claims or nil
+        P.crash = res.ok and res.crash or nil
         AP.layoutPage(P, "rules")
     end)
 end
@@ -858,13 +859,17 @@ function AP.layoutMigration(P, pg)
     end
 end
 
--- 非 active 的紀錄；quarantined 可重新綁定或釋出（§10.6 targeted recovery，不做地圖瀏覽與傳送）
+-- 非 active 的紀錄；quarantined 可重新綁定或釋出（§10.6 targeted recovery，不做地圖瀏覽與傳送）。
+-- 當機補回（Journal.lua）：這次開機自動補回的間數一行；CRASH_UNCONFIRMED 的列底下一行說明怎麼決定
 function AP.layoutRecovery(P, pg)
     local F = pg.flow
     F.y = F.y + K.GAP
     F:text("h:rec", getText("IGUI_MSH_Admin_RecoveryHead"), "text", UIFont.Medium)
+    local restored = P.crash and tonumber(P.crash.restored) or 0
+    if restored > 0 then F:text("cr:n", getText("IGUI_MSH_Admin_CrashRestored", restored), "textMuted") end
     if P.claims == nil then return F:text("rc", getText("IGUI_MSH_Admin_Loading"), "textMuted") end
     if #P.claims == 0 then return F:text("rc", getText("IGUI_MSH_Admin_RecoveryNone"), "textMuted") end
+    local unconfirmed = false
     for i, c in ipairs(P.claims) do
         local l = F:label("rc" .. i, getText("IGUI_MSH_Admin_RecoveryRow", c.claimId, AP.lifeText(c.lifecycle),
             tostring(c.quarantineReason or "-"), tostring(c.owner or "-")))
@@ -878,7 +883,9 @@ function AP.layoutRecovery(P, pg)
             row[2], row[3] = rb, rr
         end
         F:row(row)
+        if c.quarantineReason == "CRASH_UNCONFIRMED" then unconfirmed = true end
     end
+    if unconfirmed then F:text("cr:hint", getText("IGUI_MSH_Admin_CrashHint"), "textMuted") end
 end
 
 function AP.lifeText(lc) return getText("IGUI_MSH_Admin_Life_" .. tostring(lc)) end

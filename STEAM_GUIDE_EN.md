@@ -1,7 +1,7 @@
 <!-- 指南網址：https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336 -->
 <!-- Steam guide source (English): the full reference for this mod; the Workshop description only summarizes. Format and sync: pz-family-docs/release.md「完整說明：Steam 指南」 -->
 <!-- 標題：📖 Safehouse Mod Guide: Deeds, Claiming, Sharing, Paid Slots & Server Setup -->
-<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window and ground outlines, paid slots, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
+<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window, ground outlines and respawn points, paid slots, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
 === 🚀 Quick start
 [b]繁體中文版：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307]Safehouse MOD 完整說明[/url]
 
@@ -56,7 +56,7 @@ Admins choose how many tiers are enabled (3 by default, up to 8) and can change 
 [/list]
 [h3]Getting deeds[/h3]
 [list]
-[*] [b]Crafting[/b]: each tier can be Disabled, Easy, Standard or Strict; by default only tier 1 is craftable, on Standard.
+[*] [b]Crafting[/b]: each tier can be Disabled, Easy, Standard or Strict; by default only tier 1 is craftable, on Standard. The crafting list shows only the enabled difficulty (vanilla crafting window and Neat Crafting alike), and open windows update as soon as an admin changes it.
 [*] [b]From an admin[/b]: with the vanilla /additem command.
 [*] [b]Shop[/b]: with Economy on the server, admins can list deeds in the shop.
 [*] [b]Loot[/b] (off by default): once admins turn on "Deeds drop as loot", deeds can appear when an office desk, filing cabinet or safe generates its items for the first time, using each tier's chance.
@@ -249,7 +249,7 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [*] [b]Open it[/b]: the [b]Safehouse Manager[/b] button in the User Panel, or the family toolbar.
 [*] [b]Two lists[/b]: "Mine" and "Shared with me"; with many safehouses the list just scrolls.
 [*] [b]Three tabs per safehouse[/b]: "Overview", "Members & sharing", "Land rules".
-[*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Redraw", "Abandon safehouse...".
+[*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Set as respawn point", "Redraw", "Abandon safehouse...".
 [*] [b]Other buttons[/b]: "Create safehouse", "Slots".
 [*] [b]After creating[/b]: the window opens on the new safehouse.
 [*] [b]Small window or large font[/b]: the window grows taller to fit.
@@ -281,6 +281,15 @@ A switch under the list (on by default) outlines the safehouses near you on the 
 [tr][td]Member sync disrupted[/td][td]The member list was changed through vanilla actions and is being restored. Tell an admin if this keeps happening.[/td][/tr]
 [tr][td]Held for review, Repair paused[/td][td]Ask an admin to handle it by number in the admin panel.[/td][/tr]
 [/table]
+[h3]Safehouse respawn point[/h3]
+[list]
+[*] [b]Set it[/b]: stand inside this safehouse (owners and members alike) and press "Set as respawn point" on the Overview tab.
+[*] [b]Respawning[/b]: after you die, your next character always starts on the tile you stood on, whatever you pick in the spawn menu; if you die during the same session, the menu only offers "Safehouse".
+[*] [b]Upper floors[/b]: if the server can't confirm that floor is still there at that moment (the area isn't loaded, or the floor was dismantled or burned), you start on the same tile at ground level.
+[*] [b]One per player[/b]: setting it in another safehouse replaces it; you can also press "Clear respawn point".
+[*] [b]Paused[/b]: while the safehouse is released or suspended, or you've been removed as a member, you spawn the vanilla way; it works again once you have access back.
+[*] [b]Server must allow it[/b]: with the vanilla server option SafehouseAllowRespawn off, it can't be set and isn't used.
+[/list]
 === 🧰 Paid slots (optional Economy)
 [list]
 [*] [b]Free slots[/b]: each player's first safehouses are free (1 by default; admins can change it per player).
@@ -338,9 +347,8 @@ This mod never changes server settings itself. If any vanilla option below is wr
 The admin panel reminds you if these differ; nothing is disabled.
 [table]
 [tr][th]Option[/th][th]Suggested[/th][th]Why[/th][/tr]
-[tr][td]SaveWorldEveryMinutes[/td][td]10–15[/td][td]At 0 (vanilla default) or above 30, a server crash can lose a just-created safehouse after the deed was already used[/td][/tr]
+[tr][td]SaveWorldEveryMinutes[/td][td]10–15[/td][td]At 0 (vanilla default) or above 30, a server crash rolls sharing, renames and releases back to the last world save (a just-created safehouse is restored automatically on restart)[/td][/tr]
 [tr][td]AllowCoop[/td][td]false[/td][td]Stops split-screen players from typing someone else's name[/td][/tr]
-[tr][td]SafehouseAllowRespawn[/td][td]false[/td][td]This mod doesn't manage safehouse respawn points[/td][/tr]
 [tr][td]ChatStreams[/td][td]Remove sh[/td][td]Vanilla safehouse chat members don't follow this mod's sharing; factions can use /faction chat[/td][/tr]
 [/table]
 [h3]Fixing it in game[/h3]
@@ -449,7 +457,8 @@ If you install this mod mid-save, the safehouses already in the save (made by Be
 [*] [b]Roads and resource sites[/b]: old safehouses covering them are kept too.
 [*] [b]Redraw[/b]: taken-over safehouses can't be redrawn.
 [*] [b]Names[/b]: names over 40 characters are shortened.
-[*] [b]Not carried over[/b]: safehouse respawn points and safehouse chat.
+[*] [b]Respawn points[/b]: a vanilla or Better Safehouse "respawn in safehouse" tick becomes this mod's respawn point (the middle of that safehouse).
+[*] [b]Not carried over[/b]: safehouse chat.
 [*] [b]Better Safehouse data[/b]: its records in the world data are neither read nor changed.
 [*] [b]Better Safehouse deeds[/b]: its own deed items (5 kinds in 3.1.1) disappear from players and containers on the first load after it's removed from Mods=, and don't come back if it's re-added.
 [*] [b]Compensation[/b]: if you want to compensate players, hand out this mod's deeds instead; announce it before switching.
@@ -486,8 +495,9 @@ Server-side data:
 [tr][th]What[/th][th]Where[/th][/tr]
 [tr][td]Safehouse list (area, owner, sharing, status)[/td][td]global_mod_data.bin in the world save (readable by everyone: no Steam accounts or private data)[/td][/tr]
 [tr][td]The vanilla safehouses themselves[/td][td]map_meta.bin in the world save[/td][/tr]
-[tr][td]Account-to-Steam bindings, personal free safehouses[/td][td]Zomboid/Lua/MinidoracatSafehouse/<server name>/private.txt[/td][/tr]
+[tr][td]Account-to-Steam bindings, personal free safehouses, players' respawn points[/td][td]Zomboid/Lua/MinidoracatSafehouse/<server name>/private.txt[/td][/tr]
 [tr][td]Takeover records[/td][td]migration-completion.txt in the same folder[/td][/tr]
+[tr][td]Creation records for crash recovery[/td][td]crash-journal.txt in the same folder (cleared at start-up when there's nothing to restore)[/td][/tr]
 [tr][td]Audit log[/td][td]Zomboid/Logs/*_MinidoracatSafehouse.txt (one line per event; refusals summed up once a minute)[/td][/tr]
 [/table]
 [list]
@@ -503,7 +513,7 @@ Server-side data:
 [*] [b]Safehouse data is public[/b]: vanilla sends every safehouse's area, owner and members to every player who logs in, so modified clients can see it.
 [*] [b]Members removing themselves[/b]: a member who removes themselves with vanilla commands is teleported outside; the list is fixed on the next pass, the position isn't.
 [*] [b]Multi-piece safehouses[/b]: each piece is a separate vanilla safehouse, so a removed player may first land in another piece and is moved out again within about 20 seconds; the higher the piece limit, the more often.
-[*] [b]Server crashes[/b]: a just-created safehouse not yet in the world save is lost, and the deed may already be used (see the SaveWorldEveryMinutes suggestion).
+[*] [b]Server crashes[/b]: changes since the last world save roll back to the save. A just-created safehouse is the exception: it's restored on restart with the area, name and tier it was created with (sharing added later must be set again); released ones aren't restored. If the server crashed within 3½ minutes of creating it, the deed may have gone back to the owner, so it's listed under "Claims needing attention" in the admin panel (marked CRASH_UNCONFIRMED) instead: ask the owner, then press "Release…" if they still have the deed, or "Rebind" it to the original owner if they don't.
 [*] [b]Server-wide limit[/b]: 256 safehouses (taken-over ones included).
 [/list]
 [h3]Player identity[/h3]
@@ -529,7 +539,7 @@ Server-side data:
 [*] Buying and selling land.
 [*] Releasing safehouses of long-absent owners.
 [*] A server-wide map browser or teleporting.
-[*] Managing safehouse respawn points or keeping vanilla safehouse chat in sync.
+[*] Keeping vanilla safehouse chat in sync.
 [*] Adding new deed kinds in game (8 tiers max).
 [/list]
 === ❓ FAQ

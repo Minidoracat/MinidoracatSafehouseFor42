@@ -103,6 +103,17 @@ function MW.clock(ms)
     return string.format("%d:%02d", math.floor(s / 60), s % 60)
 end
 
+-- 重生點（使用者 2026-10-14）：〔設為重生點〕停用的原因鍵，可以設時回 nil。伺服器沒開放、或 0 號玩家不在這間的任一塊裡
+-- （客戶端只是先擋，伺服器用自己的座標再判一次，Respawn.lua）。prerender 每幀呼叫，不配置
+function MW.respawnBlock(d)
+    if not d.respawn.allowed then return "IGUI_MSH_Manager_RespawnOff" end
+    local p = getSpecificPlayer(0)
+    if p == nil or type(d.rects) ~= "table" or not MSH.Rect.listContains(d.rects, p:getX(), p:getY()) then
+        return "IGUI_MSH_Manager_RespawnStandInside"
+    end
+    return nil
+end
+
 -- 管理員面板只在 CanSetupSafehouses 顯示（伺服器才是防線）；api-sources.md「getRole():hasCapability」
 function MW.isAdmin()
     local p = getSpecificPlayer(0)
@@ -252,7 +263,7 @@ function W:addWrapped(L, text, x, y, w, token, font)
     return y + #lines * lh
 end
 
-local LABELS = { "Role", "Owner", "Location", "Source", "Slot", "Created", "Status", "ReleaseAt", "Gap", "Roads",
+local LABELS = { "Role", "Owner", "Location", "Source", "Slot", "Created", "Status", "ReleaseAt", "Respawn", "Gap", "Roads",
     "Resources", "Number" }
 
 function W:build()
@@ -327,7 +338,10 @@ function W:build()
     self.btnRedraw = self:button(self.scroll, "", W.onRedraw, self, nil, nil, 1)     -- 明示寬度：倒數不改寬
     self.btnRelease = self:button(self.scroll, getText("IGUI_MSH_Manager_Release"), W.onRelease, self, "danger")
     self.btnLeave = self:button(self.scroll, getText("IGUI_MSH_Manager_Leave"), W.onLeave, self, "danger")
-    self.overviewWidgets = { self.btnDetails, self.btnRedraw, self.btnRelease, self.btnLeave }
+    self.btnRespawnSet = self:button(self.scroll, getText("IGUI_MSH_Manager_RespawnSet"), W.onRespawnSet, self)
+    self.btnRespawnClear = self:button(self.scroll, getText("IGUI_MSH_Manager_RespawnClear"), W.onRespawnClear, self)
+    self.overviewWidgets = { self.btnDetails, self.btnRedraw, self.btnRelease, self.btnLeave, self.btnRespawnSet,
+        self.btnRespawnClear }
     self.share = MSH.SharingPage.new(self, self.scroll)
 
     self.btnQuery = self:button(body, getText("IGUI_MSH_Manager_QueryResult"), W.onQuery, self, "primary")
@@ -534,7 +548,8 @@ function W:onMutation(res)
     else
         local reason, action = MSH.Client.codeText(res.code)
         self:say(action and (reason .. " " .. action) or reason, "errorText")
-        if res.code == "NOT_FOUND" or res.code == "WRONG_LIFECYCLE" then self:reload() end
+        -- 伺服器剛關掉重生：重抓詳情，〔設為重生點〕跟著停用
+        if res.code == "NOT_FOUND" or res.code == "WRONG_LIFECYCLE" or res.code == "RESPAWN_DISABLED" then self:reload() end
     end
 end
 
@@ -554,6 +569,10 @@ function W:prerender(body)
     --   內容高、setYScroll 會先被夾住，所以每幀補；看得見時 scrollTo 不動）
     local ac = self.share.ac
     if ac:isOpen() then self.scroll:scrollTo(ac.list) end
+    -- 〔設為重生點〕照玩家走進、走出範圍即時換可用與原因
+    if self.btnRespawnSet:getIsVisible() and self.detail and MW.respawnBlock(self.detail) ~= self.respawnWhy then
+        self.dirty = true
+    end
     local deadline = self.redrawDeadline
     if deadline == nil or not self.btnRedraw:getIsVisible() then return end
     local left = deadline - getTimestampMs()
@@ -844,6 +863,15 @@ function W:layoutOverview(d, cw)
     if created then y = self:infoRow(L, "Created", created, y, vx, vw) end
     local releaseAt = eco and self:dateText(eco.releaseAt)
     if releaseAt then y = self:infoRow(L, "ReleaseAt", releaseAt, y, vx, vw, "warning") end
+    -- 重生點：自己的點在這間＝座標；active 才顯示「未設定／在別間」（不是 active 的不能設）
+    local rs = type(d.respawn) == "table" and d.respawn or nil
+    if rs and not (rs.here or d.lifecycle == LC.ACTIVE) then rs = nil end
+    if rs then
+        local h = rs.here
+        local text = h and getText("IGUI_MSH_Manager_RespawnHere", tostring(h.x), tostring(h.y), tostring(h.z))
+            or getText(rs.elsewhere and "IGUI_MSH_Manager_RespawnElsewhere" or "IGUI_MSH_Manager_RespawnNone")
+        y = self:infoRow(L, "Respawn", text, y, vx, vw)
+    end
 
     -- 狀態：已保護＝打勾＋文字（不用綠色）；其他＝警告圖示＋warning 色；下一步在下方
     local top, rest = MW.statusCodes(d)
@@ -882,7 +910,21 @@ function W:layoutOverview(d, cw)
         self.redrawShown = math.ceil(left / 1000)
         acts[#acts + 1] = self.btnRedraw
     end
-    if #acts > 0 then y = self:flow(acts, 0, y, cw) + GAP * 3 end
+    -- 重生點：點在這間給〔清除重生點〕，否則〔設為重生點〕（不能設時停用、底下寫原因）
+    self.respawnWhy = nil
+    if rs and rs.here then
+        self.btnRespawnClear:setEnabled(idle)
+        acts[#acts + 1] = self.btnRespawnClear
+    elseif rs then
+        self.respawnWhy = MW.respawnBlock(d)
+        self.btnRespawnSet:setEnabled(idle and self.respawnWhy == nil)
+        acts[#acts + 1] = self.btnRespawnSet
+    end
+    if #acts > 0 then
+        y = self:flow(acts, 0, y, cw) + GAP
+        if self.respawnWhy then y = self:addWrapped(L, getText(self.respawnWhy), 0, y, cw, "textMuted") end
+        y = y + GAP * 2
+    end
 
     -- 危險操作：屋主放棄；成員離開
     local danger = nil
@@ -1059,6 +1101,19 @@ function W.onLeave(self)
                 return nil
             end)
         end }))
+end
+
+-- 重生點：設在這間（點＝伺服器看到你站的那一格；有別間的點就取代）、清除（沒有確認框：隨時能再設）
+function W.onRespawnSet(self)
+    local d = self.detail
+    if d == nil or self.busy ~= nil then return end
+    self:mutate("setRespawn", { claimId = d.claimId, expectedRevision = d.revision },
+        getText("IGUI_MSH_Manager_RespawnSaved"))
+end
+
+function W.onRespawnClear(self)
+    if self.detail == nil or self.busy ~= nil then return end
+    self:mutate("clearRespawn", {}, getText("IGUI_MSH_Manager_RespawnCleared"))
 end
 
 -- 結果待定：同一 requestId 重送；伺服器 60 秒內回快取的原結果（Client.retry）

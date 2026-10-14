@@ -29,9 +29,18 @@ local function allowed(tier, code)
     return v == code
 end
 
+local DEEDS = {}   -- 配方名（scripts/MinidoracatSafehouse_Recipes.txt）→ { tier, code }
 for tier = 1, MSH.MAX_TIER do
     for level, code in pairs(LEVELS) do
         MSH_Recipe["deed" .. tier .. level] = function(item, character) return allowed(tier, code) end
         _G["MSH_menuDeed" .. tier .. level] = function(params) return allowed(tier, code) end
+        DEEDS["CraftMinidoracatSafehouseDeed" .. tier .. level] = { tier, code }
     end
+end
+
+-- 給不呼叫 OnAddToMenu 的製作 UI（CraftList.lua 包 Neat Crafting）：是本 MOD 的地契配方、而且照目前沙盒不開放才回 true；
+-- 其他配方一律 false。規則只在 allowed 一處。
+function MSH.deedRecipeHidden(name)
+    local d = DEEDS[name]
+    return d ~= nil and not allowed(d[1], d[2])
 end

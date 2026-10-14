@@ -124,6 +124,7 @@ end
 -- ===== 檔案（<cachedir>/Lua/ 下；getFileWriter 副檔名限制 LuaManager.java:1034，這裡不模擬）=====
 T.files = {}          -- path → { lines }
 T.failWrites = false
+T.silentWrites = false   -- 開得了、writeln／close 不丟錯，但什麼都沒寫進去（PrintWriter 吞掉 IOException，LuaManager.java:12834）
 T.unreadable = {}     -- path → true：檔案存在但讀不開
 function getFileWriter(path, createIfNull, append)
     if T.failWrites then return nil end
@@ -131,6 +132,9 @@ function getFileWriter(path, createIfNull, append)
     if f == nil or not append then
         f = { lines = {} }
         T.files[path] = f
+    end
+    if T.silentWrites then
+        return { writeln = function() end, write = function() end, close = function() end }
     end
     return {
         writeln = function(_, s) f.lines[#f.lines + 1] = s end,
@@ -312,6 +316,13 @@ function T.player(o)
     function p:getX() return self.x end
     function p:getY() return self.y end
     function p:getZ() return self.z end
+    -- IsoMovingObject.java:495-535、1408-1430（setX 也設 next；setZ 也設 lastZ）
+    function p:setX(v) self.x = v end
+    function p:setY(v) self.y = v end
+    function p:setZ(v) self.z = v; self.lz = v end
+    function p:setLastX(v) self.lx = v end
+    function p:setLastY(v) self.ly = v end
+    function p:setLastZ(v) self.lz = v end
     function p:isDead() return self.dead end
     function p:getHoursSurvived() return self.hours end
     function p:getInventory() return self.inv end
@@ -392,17 +403,36 @@ function T.house(x, y, w, h, owner)
     function hs:setOwner(o) self.players:remove(o) self.owner = o end
     function hs:getPlayers() return self.players end
     function hs:addPlayer(u) if not self.players:contains(u) then self.players:add(u) end end
-    function hs:removePlayer(u) self.players:remove(u) end
+    -- removePlayer 同時清原版重生旗標（SafeHouse.java:299-303）
+    function hs:removePlayer(u) self.players:remove(u) self.respawn:remove(u) end
     function hs:getTitle() return self.title end
     function hs:setTitle(t) self.title = t end
     function hs:getDatetimeCreated() return self.created end
     function hs:getLocation() return self.location end
     function hs:getOnlineID() return self.onlineId end
     function hs:playerAllowed(u) return self.players:contains(u) or self.owner == u end
+    -- 原版重生旗標（SafeHouse.java:648-650、759-771）
+    hs.respawn = T.javaList({})
+    function hs:getPlayersRespawn() return self.respawn end
+    function hs:isRespawnInSafehouse(u) return self.respawn:contains(u) end
+    function hs:setRespawnInSafehouse(b, u)
+        if b then
+            if not self.respawn:contains(u) then self.respawn:add(u) end
+        else
+            self.respawn:remove(u)
+        end
+    end
     return hs
 end
 SafeHouse = {
     getSafehouseList = function() return T.javaList(T.houses) end,
+    -- 照清單順序第一個名單有他或屋主是他的（SafeHouse.java:97-103）
+    hasSafehouse = function(u)
+        for _, hs in ipairs(T.houses) do
+            if hs.players:contains(u) or hs.owner == u then return hs end
+        end
+        return nil
+    end,
     -- 建構子把 owner 放進 players，接著 setOwner 又移掉（SafeHouse.java:68-85、581-590）
     addSafeHouse = function(x, y, w, h, owner)
         if T.failAdd then return nil end
@@ -487,6 +517,7 @@ Faction = {
 -- ===== 世界：地板與房間 =====
 T.floors = {}            -- "x,y" → 地板 sprite 名
 T.unloaded = {}          -- "x,y" → true：該格未載入（getGridSquare 回 nil，IsoCell.java:3190-3192）
+T.solid = {}             -- "x,y,z" → true：那格可站（IsoGridSquare.TreatAsSolidFloor，IsoGridSquare.java:7704）
 function T.floor(x, y, name) T.floors[x .. "," .. y] = name end
 function T.fillFloor(x0, y0, w, h, name)
     for x = x0, x0 + w - 1 do for y = y0, y0 + h - 1 do T.floors[x .. "," .. y] = name end end
@@ -502,6 +533,7 @@ function getCell()
             return {
                 getX = function() return x end,
                 getY = function() return y end,
+                TreatAsSolidFloor = function() return T.solid[key .. "," .. tostring(z or 0)] == true end,
                 getFloor = function()
                     if name == nil then return nil end
                     return { getSprite = function() return { getName = function() return name end } end }
@@ -743,7 +775,8 @@ local function resetWorld(opts)
     if not opts.keepFiles then T.files = {} end
     T.unreadable = {}
     T.failWrites, T.failRemove, T.failAdd, T.noLocation, T.failHouseRemove = false, false, false, false, false
-    T.floors, T.unloaded, T.rooms = {}, {}, {}
+    T.silentWrites = false
+    T.floors, T.unloaded, T.rooms, T.solid = {}, {}, {}, {}
     T.randQueue = {}
     T.factions = {}
     T.steam = opts.steam or false

@@ -282,8 +282,8 @@ return function(T)
     check(st.state == "done" and st.restored == 3 and owned(100, "alice") and owned(200, "bob") and owned(300, "carol")
         and T.logged("REGISTRY_LOST"), "接管過的照 imp 行還原、記 REGISTRY_LOST")
     local rec4 = R.get(4)
-    check(rec4 ~= nil and rec4.quarantineReason == "RECOVERED" and R.get(5).quarantineReason == "RECOVERED",
-        "玩家建的兩間交給 reconcile（RECOVERED，管理員面板處理）")
+    check(rec4 ~= nil and rec4.lifecycle == "active" and rec4.owner == "pa" and R.get(5).lifecycle == "active"
+        and R.get(5).owner == "pb", "玩家建的兩間：當機補回的紀錄檔知道屋主，照檔補回 active（Journal.lua）")
     again()
     check(houseAt(2500).owner == "zed" and markerDupes() == 0, "再開一次也不接管")
 

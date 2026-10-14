@@ -16,6 +16,7 @@ require "MinidoracatSafehouse/Native"
 require "MinidoracatSafehouse/Health"
 require "MinidoracatSafehouse/Lifecycle"
 require "MinidoracatSafehouse/Server"
+require "MinidoracatSafehouse/Journal"
 
 local MSH = MinidoracatSafehouse
 local A = MSH.Admin or {}
@@ -349,7 +350,7 @@ S.define("adminRecover", { kind = "mutation", admin = true, whenBlocked = true,
     end })
 
 -- 不是 active 的紀錄（quarantined 含 malformed／recovered、lapsed、releasing），給 targeted recovery 挑對象；
--- 筆數以 MAX_CLAIMS＋malformed 為上限，不分頁
+-- 筆數以 MAX_CLAIMS＋malformed 為上限，不分頁。crash＝這次開機當機補回的間數（Journal.lua）
 S.define("adminClaims", { kind = "query", admin = true, fields = {}, run = function()
     local rows = {}
     for _, rec in ipairs(MSH.Registry.listAll()) do
@@ -359,7 +360,7 @@ S.define("adminClaims", { kind = "query", admin = true, fields = {}, run = funct
                 candidates = rec.candidates }
         end
     end
-    return S.ok({ claims = rows })
+    return S.ok({ claims = rows, crash = MSH.Journal.status() })
 end })
 
 S.hook("startup", "adminSandboxSeen", function() A.seen = Settings.snapshot() end)

@@ -243,6 +243,30 @@ function E.renderTooltip(self, original)
     if bottom then E.appendBox(self, lines, bottom) end
 end
 
+-- ===== 死後重生選單（使用者 2026-10-14）=====
+-- 原版 getSafehouseSpawnRegion（MapSpawnSelect.lua:416-441）有原版旗標時回單一「安全屋」選項，出生選單因此略過
+-- （getSpawnRegions :448-450）。本 MOD 的點改在伺服器 OnNewGame 套用（Respawn.lua，真正的防線），這裡只讓選單照樣
+-- 只剩一個選項：死亡時向伺服器要自己目前有效的點，有就回單點，沒有（或還沒回覆、分割畫面次座位）就照原版。
+function E.onPlayerDeath(player)
+    if player == nil or player ~= getSpecificPlayer(0) then return end
+    E.respawn = nil
+    MSH.Client.send("myRespawn", {}, function(res)
+        local pt = res.ok and res.point or nil
+        if type(pt) == "table" and MSH.isInt(pt.x) and MSH.isInt(pt.y) and MSH.isInt(pt.z) then E.respawn = pt end
+    end)
+end
+
+-- 次座位（CoopCharacterCreation.playerIndex > 0）用的是 CoopUserName 的名字，不是這個帳號的點（原版同檔 :419-424）
+function E.spawnRegion(self, original)
+    local pt = E.respawn
+    local coop = CoopCharacterCreation and CoopCharacterCreation.instance
+    if pt == nil or (coop ~= nil and coop.playerIndex ~= nil and coop.playerIndex > 0) then return original(self) end
+    return { {
+        name = getText("UI_mapspawn_Safehouse"),
+        points = { unemployed = { { posX = pt.x, posY = pt.y, posZ = pt.z } } },
+    } }
+end
+
 -- ===== 安裝（OnGameStart：晚於所有 MOD 的檔案頂層，照地圖錶 MinidoracatWatch_Hud.lua:222 的查證；
 -- 地契說明因此包在最外層、畫在最下面，計畫 §10.8 deeds-ui-sp 實測）=====
 function E.install()
@@ -279,6 +303,13 @@ function E.install()
             return MSH.Entry.renderTooltip(self, tooltip)
         end
     end
+    -- CoopMapSpawnSelect 由 MapSpawnSelect:derive 而來、沒有自己的這個方法（CoopMapSpawnSelect.lua:3），包父類就兩邊都換
+    if MapSpawnSelect then
+        local region = MapSpawnSelect.getSafehouseSpawnRegion -- MapSpawnSelect.lua:416
+        function MapSpawnSelect:getSafehouseSpawnRegion()
+            return MSH.Entry.spawnRegion(self, region)
+        end
+    end
     E.registerDock()
 end
 
@@ -286,4 +317,5 @@ if first then
     MSH.Client.on("claims", "entry", function(claims) MSH.Entry.onClaims(claims) end)
     Events.OnGameStart.Add(function() MSH.Entry.install() end)
     Events.OnFillWorldObjectContextMenu.Add(function(p, ctx, wo, test) MSH.Entry.onFillWorldMenu(p, ctx, wo, test) end)
+    Events.OnPlayerDeath.Add(function(player) MSH.Entry.onPlayerDeath(player) end)
 end

@@ -212,6 +212,32 @@ return function(T)
     check(#draws == 2, "不是地契：只畫原版")
     getCore = savedCore
 
+    T.section("Entry：死後重生選單（使用者 2026-10-14）：有本 MOD 的點就只給一個「安全屋」選項，否則照原版")
+    local me = getSpecificPlayer(0)
+    local vanillaRegions = { { name = "vanilla" } }
+    local function vanillaRegion() return vanillaRegions end
+    E.respawn = nil
+    check(E.spawnRegion({}, vanillaRegion) == vanillaRegions, "還沒有點（沒死過或沒回覆）：照原版")
+    E.onPlayerDeath(T.player({ name = "bob", offline = true }))
+    check(T.clientSent[#T.clientSent] == nil or T.clientSent[#T.clientSent].command ~= "myRespawn", "別的玩家死亡：不問")
+    E.onPlayerDeath(me)
+    local ask = T.clientSent[#T.clientSent]
+    check(ask and ask.command == "myRespawn", "自己死亡：向伺服器要目前有效的點")
+    T.fire("OnServerCommand", MSH.MODULE, "result", { command = "myRespawn", requestId = ask.args.requestId, ok = true,
+        code = "OK", allowed = true, point = { x = 105, y = 109, z = 1 } })
+    local regions = E.spawnRegion({}, vanillaRegion)
+    local pt = regions and regions[1] and regions[1].points.unemployed[1]
+    check(#regions == 1 and regions[1].name == "UI_mapspawn_Safehouse" and pt.posX == 105 and pt.posY == 109 and pt.posZ == 1,
+        "有點：單一「安全屋」選項在點上")
+    CoopCharacterCreation = { instance = { playerIndex = 1 } }
+    check(E.spawnRegion({}, vanillaRegion) == vanillaRegions, "分割畫面次座位：照原版（點是主帳號的）")
+    CoopCharacterCreation = nil
+    E.onPlayerDeath(me)
+    ask = T.clientSent[#T.clientSent]
+    T.fire("OnServerCommand", MSH.MODULE, "result", { command = "myRespawn", requestId = ask.args.requestId, ok = true,
+        code = "OK", allowed = true })
+    check(E.respawn == nil and E.spawnRegion({}, vanillaRegion) == vanillaRegions, "再死一次、點已失效：清掉舊的、照原版")
+
     for k, v in pairs(saved) do _G[k] = v end
     MSH.ManagerWindow = nil
 end

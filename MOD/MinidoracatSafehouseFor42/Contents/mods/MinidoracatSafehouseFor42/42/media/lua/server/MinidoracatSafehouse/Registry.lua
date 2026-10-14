@@ -2,7 +2,7 @@
 -- registry 是 managed／legacy 安全屋的唯一真相，伺服器是唯一寫入者（計畫 §4.2）：
 --   任何已登入的客戶端都能 ModData.request 整張表（GlobalModData.java:180-197），所以只放刻意公開的資料；
 --   客戶端 transmit 同 tag 時 Java 只觸發 OnReceiveGlobalModData、不寫回（GlobalModDataPacket.java:45-55），本 MOD 不聽這個事件。
--- 私有資料（個人上限 overrides、身分綁定 bindings）不進 Global ModData 也不進沙盒，
+-- 私有資料（個人上限 overrides、身分綁定 bindings、重生點 spawns）不進 Global ModData 也不進沙盒，
 -- 照 Economy ECIdentity 的做法以 append-only 文字檔存在 <cachedir>/Lua/ 下（getFileWriter 不回報 I/O 錯誤，寫失敗就不改記憶體）。
 
 if isClient() then return end
@@ -387,6 +387,7 @@ function R.markReleased(rec, reason, now)
     R.md.claims[rec.claimId] = nil
     R.bumpGeneration()
     MSH.Audit.write("RELEASED", { actor = rec.owner, claimId = rec.claimId, code = reason })
+    if MSH.Journal then MSH.Journal.released(rec, reason) end   -- 當機補回不復活已放棄的屋（Journal.lua）
 end
 
 -- 撤回 released（同一次指令內的反序回滾用，例：重畫的新屋建不起來時把舊屋寫回 active）
@@ -429,10 +430,13 @@ end
 
 -- ===== 伺服器私有儲存 =====
 -- 每行：1<TAB>bind<TAB>名字<TAB>SteamID 十進位<TAB>來源<TAB>毫秒  或  1<TAB>over<TAB>名字<TAB>上限（-1＝刪除）
+--   或  1<TAB>spawn<TAB>名字<TAB>x<TAB>y<TAB>z（重生點，整數格）  或  1<TAB>spawn<TAB>名字<TAB>-（刪除重生點）
 -- 同一名字最後一行為準；壞行略過並計數。
 
 R.bindings = R.bindings or {}
 R.overrides = R.overrides or {}
+R.spawns = R.spawns or {}
+R.spawnSeen = R.spawnSeen or {}   -- 名字 → true：私有檔出現過這個名字的 spawn 行（含刪除行；Respawn.migrateLegacy 用）
 
 local function serverKey()
     local name = getServerName and getServerName() or nil
@@ -462,9 +466,27 @@ local function sidFromText(text)
     return n + 0.0
 end
 
-local function applyLine(line)
+-- spawn 行的欄位（已切好的 f）：回 名字, 點 或 名字, false（刪除行）；不合格回 nil
+local function parseSpawn(f)
+    if f[2] ~= "spawn" or not MSH.validUsername(f[3]) then return nil end
+    if #f == 4 then
+        if f[4] ~= "-" then return nil end
+        return f[3], false
+    end
+    if #f ~= 6 then return nil end
+    local x, y, z = tonumber(f[4]), tonumber(f[5]), tonumber(f[6])
+    if not (MSH.isInt(x) and MSH.isInt(y) and MSH.isInt(z)) then return nil end
+    return f[3], { x = x, y = y, z = z }
+end
+
+local function splitLine(line)
     local f = {}
     for part in string.gmatch(line, "[^\t]+") do f[#f + 1] = part end
+    return f
+end
+
+local function applyLine(line)
+    local f = splitLine(line)
     if f[1] ~= "1" then return false end
     if f[2] == "bind" and #f == 6 and MSH.validUsername(f[3]) then
         local sid, at = sidFromText(f[4]), tonumber(f[6])
@@ -476,47 +498,32 @@ local function applyLine(line)
         if not MSH.isInt(n) then return false end
         if n < 0 then R.overrides[f[3]] = nil else R.overrides[f[3]] = n end
         return true
+    elseif f[2] == "spawn" then
+        local name, pt = parseSpawn(f)
+        if name == nil then return false end
+        R.spawns[name] = pt or nil
+        R.spawnSeen[name] = true
+        return true
     end
     return false
 end
 
 -- 開服時讀一次；檔案存在卻讀不開就 fail closed（health blocked），不當成全新伺服器
 function R.loadPrivate()
-    R.bindings, R.overrides = {}, {}
+    R.bindings, R.overrides, R.spawns, R.spawnSeen = {}, {}, {}, {}
     R.privateUnreadable, R.privateBad = false, 0
-    local path = R.privatePath()
-    local reader
-    local opened = pcall(function() reader = getFileReader(path, false) end)
-    if not opened or reader == nil then
-        -- getFileReader 吞掉 IOException 回 nil（LuaManager.java:5949-5960）：用 cacheFileExists 分辨不存在與讀不開
-        local ok, exists = pcall(cacheFileExists, path)
-        if not ok or exists then
-            R.privateUnreadable = true
-            MSH.log("private store unreadable: " .. path)
-        end
+    local lines = R.readLines(R.privatePath(), 200000)
+    if lines == false then
+        R.privateUnreadable = true
+        MSH.log("private store unreadable: " .. R.privatePath())
         return
     end
-    local lines = 0
-    while true do
-        local line = reader:readLine()
-        if line == nil then break end
-        lines = lines + 1
-        if lines > 200000 then break end
+    for _, line in ipairs(lines or {}) do
         if not applyLine(line) then R.privateBad = R.privateBad + 1 end
     end
-    pcall(function() reader:close() end)
 end
 
-local function appendLines(lines)
-    local writer
-    local opened = pcall(function() writer = getFileWriter(R.privatePath(), true, true) end)
-    if not opened or writer == nil then return false end
-    local written = pcall(function()
-        for _, line in ipairs(lines) do writer:writeln(line) end
-    end)
-    local closed = pcall(function() writer:close() end)
-    return written and closed
-end
+local function appendLines(lines) return R.writeLines(R.privatePath(), lines, true) end
 
 function R.binding(name)
     return R.bindings[name]
@@ -545,4 +552,103 @@ function R.setOverride(name, n)
     R.overrides[name] = n
     R.namesVersion = (R.namesVersion or 0) + 1
     return true
+end
+
+-- 重生點 { x, y, z }（整數格；Respawn.lua）；沒有回 nil
+function R.spawn(name)
+    return R.spawns[name]
+end
+
+-- 私有檔出現過這個名字的 spawn 行（設過或刪過）
+function R.spawnKnown(name)
+    return R.spawnSeen[name] == true
+end
+
+-- 重新讀私有檔，回 名字 → 點（最後一行為準；刪除後是 false）；讀不到回 nil。只讀不改記憶體：
+-- getFileWriter 的 PrintWriter 寫失敗不丟錯（Respawn.migrateLegacy 用它確認真的寫進去了）
+function R.fileSpawns()
+    local lines = R.readLines(R.privatePath(), 200000)
+    if not lines then return nil end
+    local out = {}
+    for _, line in ipairs(lines) do
+        local f = splitLine(line)
+        if f[1] == "1" then
+            local name, pt = parseSpawn(f)
+            if name ~= nil then out[name] = pt end
+        end
+    end
+    return out
+end
+
+-- pt＝nil 刪除重生點；先寫檔、成功才改記憶體
+function R.setSpawn(name, pt)
+    if not MSH.validUsername(name) then return false end
+    local fields = { "1", "spawn", name, "-" }
+    if pt ~= nil then
+        if not (MSH.isInt(pt.x) and MSH.isInt(pt.y) and MSH.isInt(pt.z)) then return false end
+        fields = { "1", "spawn", name, tostring(pt.x), tostring(pt.y), tostring(pt.z) }
+    end
+    if not appendLines({ table.concat(fields, "\t") }) then return false end
+    R.spawns[name] = pt and { x = pt.x, y = pt.y, z = pt.z } or nil
+    R.spawnSeen[name] = true
+    return true
+end
+
+-- ===== 私有目錄的檔案讀寫（private.txt，以及同目錄遷移的 migration-completion.txt、當機補回的 crash-journal.txt）=====
+-- getFileWriter／getFileReader 只碰 <cachedir>/Lua/ 底下，副檔名要在白名單內（LuaManager.java:1035，.txt 可以）。
+
+function R.privateFile(name)
+    return (string.gsub(R.privatePath(), "private%.txt$", name))
+end
+
+-- getFileWriter(path, createIfNull, append)：LuaManager.java:6727（UTF-8）；writeln：LuaManager.java:12834。
+-- close() 才把內容交給作業系統（沒有 fsync）：伺服器程序當掉時，已 close 的行留在檔案裡
+function R.writeLines(path, lines, append)
+    local writer
+    local opened = pcall(function() writer = getFileWriter(path, true, append) end)
+    if not opened or writer == nil then return false end
+    local written = pcall(function()
+        for _, line in ipairs(lines) do writer:writeln(line) end
+    end)
+    local closed = pcall(function() writer:close() end)
+    return written and closed
+end
+
+-- 回傳行陣列（最多 max 行）；檔案不存在回 nil；存在卻讀不開回 false
+function R.readLines(path, max)
+    local reader
+    -- getFileReader 吞掉 IOException 回 nil（LuaManager.java:5936；UTF-8）；用 cacheFileExists（LuaManager.java:5544）分辨不存在與讀不開
+    local opened = pcall(function() reader = getFileReader(path, false) end)
+    if not opened or reader == nil then
+        local ok, exists = pcall(cacheFileExists, path)
+        if ok and not exists then return nil end
+        return false
+    end
+    local lines = {}
+    while #lines < max do
+        local line = reader:readLine()
+        if line == nil then break end
+        lines[#lines + 1] = line
+    end
+    pcall(function() reader:close() end)
+    return lines
+end
+
+-- 一行切成欄位（tab 分隔、保留空欄）
+function R.splitTabs(line)
+    local out, pos = {}, 1
+    while true do
+        local s = string.find(line, "\t", pos, true)
+        if s == nil then
+            out[#out + 1] = string.sub(line, pos)
+            return out
+        end
+        out[#out + 1] = string.sub(line, pos, s - 1)
+        pos = s + 1
+    end
+end
+
+-- 檔案欄位不能含 tab／換行
+function R.fileField(v)
+    return (string.gsub(tostring(v), "%c", " "))
 end

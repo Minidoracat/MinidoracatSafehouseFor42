@@ -607,6 +607,47 @@ return function(T)
     for _, k in ipairs(e.rangeChips) do eb = math.max(eb, k.y + k.height) end
     check(e.rangesBox.visible and eb <= footY,
         "沒有安全屋、最小大小：說明與〔建立安全屋〕底下的範圍那塊在頁尾上面（" .. eb .. " ≤ " .. footY .. "）")
+
+    T.section("ManagerWindow：重生點（使用者 2026-10-14）：〔設為重生點〕只在伺服器開放、站在這間裡時可按；點在這間給〔清除重生點〕")
+    local rw = openWith(1, 860, 560)
+    local me0 = getSpecificPlayer(0)
+    local function showRespawn(respawn, lifecycle)
+        if rw.selectedId ~= 501 then rw:select(501) end
+        rw:loadDetail()
+        local req = T.clientSent[#T.clientSent]
+        T.fire("OnServerCommand", MSH.MODULE, "result", { command = "detail", requestId = req.args.requestId, ok = true,
+            code = "OK", claimId = 501, revision = 3, title = "house 1", rects = { { x = 100, y = 100, w = 10, h = 10 } },
+            actorRole = "owner", bits = MSH.SHARE_ALL, lifecycle = lifecycle or "active", healthSummary = "PROTECTED",
+            source = "deed", deedTier = 1, actions = {}, respawn = respawn })
+    end
+    me0.x, me0.y = 50, 50
+    showRespawn({ allowed = true })
+    check(rw.btnRespawnSet.visible and not rw.btnRespawnSet:isEnabled() and not rw.btnRespawnClear.visible
+        and rw.respawnWhy == "IGUI_MSH_Manager_RespawnStandInside", "站在範圍外：〔設為重生點〕停用、寫原因")
+    me0.x, me0.y = 105.5, 109.9
+    rw.theme.fill = rw.theme.fill or function() end
+    rw:prerender(rw.body)
+    rw:prerender(rw.body)
+    check(rw.btnRespawnSet:isEnabled() and rw.respawnWhy == nil, "走進範圍：下一幀就可以按（不用重開視窗）")
+    local sentBefore = #T.clientSent
+    rw.btnRespawnSet.onClick(rw)
+    local sentSet = T.clientSent[#T.clientSent]
+    check(#T.clientSent == sentBefore + 1 and sentSet.command == "setRespawn" and sentSet.args.claimId == 501
+        and sentSet.args.expectedRevision == 3 and sentSet.args.x == nil, "按下：送 setRespawn（只帶 claimId 與 revision，不帶座標）")
+    rw:finishBusy()
+    showRespawn({ allowed = false })
+    check(rw.btnRespawnSet.visible and not rw.btnRespawnSet:isEnabled() and rw.respawnWhy == "IGUI_MSH_Manager_RespawnOff",
+        "伺服器沒開放：停用、寫原因")
+    showRespawn({ allowed = true, here = { x = 105, y = 109, z = 0 } })
+    check(rw.btnRespawnClear.visible and rw.btnRespawnClear:isEnabled() and not rw.btnRespawnSet.visible,
+        "點在這間：只有〔清除重生點〕")
+    rw.btnRespawnClear.onClick(rw)
+    check(T.clientSent[#T.clientSent].command == "clearRespawn", "按下：送 clearRespawn")
+    rw:finishBusy()
+    showRespawn({ allowed = true }, "lapsed")
+    check(not rw.btnRespawnSet.visible and not rw.btnRespawnClear.visible, "不是 active、點也不在這間：沒有重生點按鈕")
+    showRespawn(nil)
+    check(not rw.btnRespawnSet.visible and not rw.btnRespawnClear.visible, "舊伺服器沒有 respawn 欄位：不顯示")
     MW.instance, MSH.Client._theme = nil, nil
     for k, v in pairs(savedG) do _G[k] = v end
 

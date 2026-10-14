@@ -15,6 +15,7 @@ require "MinidoracatSafehouse/Health"
 require "MinidoracatSafehouse/Identity"
 require "MinidoracatSafehouse/Lifecycle"
 require "MinidoracatSafehouse/Server"
+require "MinidoracatSafehouse/Journal"
 
 local MSH = MinidoracatSafehouse
 local C = MSH.Claims or {}
@@ -380,6 +381,7 @@ function C.commitCreate(ctx, v)
         for _, h in ipairs(houses) do N.broadcast(h) end
     end)
     MSH.Audit.write("CREATE", { actor = ctx.who, claimId = id, code = rec.source, detail = Rect.listKey(rec.rects) })
+    MSH.Journal.created(rec, ctx.now)
     return S.ok({ claimId = id, revision = rec.revision, rects = Rect.copyList(rec.rects), title = rec.title,
         deedTier = rec.deedTier })
 end
@@ -524,6 +526,7 @@ function C.commitRedraw(ctx, v, old)
     end)
     MSH.Audit.write("REDRAW", { actor = ctx.who, claimId = id,
         detail = "from " .. tostring(old.claimId) .. " " .. Rect.listKey(rec.rects) })
+    MSH.Journal.redrawn(old, rec)
     return S.ok({ claimId = id, revision = rec.revision, rects = Rect.copyList(rec.rects), title = rec.title,
         deedTier = rec.deedTier, replaced = old.claimId })
 end
@@ -676,6 +679,8 @@ function C.detail(ctx)
         grants = grants, factionShare = faction,
         limits = { maxShares = cfg.maxShares, allowFactionShare = cfg.allowFactionShare },
         economy = MSH.Economy and MSH.Economy.claimInfo and MSH.Economy.claimInfo(rec) or nil,
+        -- 只給自己看的重生點狀態（Respawn.view：總開關、點在不在這間）
+        respawn = MSH.Respawn and MSH.Respawn.view(rec, ctx.who) or nil,
         actions = {
             canRelease = owner and RELEASABLE[rec.lifecycle] == true,
             canRename = owner and active,

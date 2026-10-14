@@ -26,8 +26,9 @@ H.BLOCKERS = {
     { option = "AntiCheatSafeHouse", anyOf = { ["1"] = true, ["2"] = true, ["3"] = true }, fix = "3" },
 }
 -- 建議項目要改成的值（管理員面板「建議值」欄與逐項〔套用〕，都是能直接送 /changeoption 的值）。存檔間隔建議 10–15 分鐘，
--- 取 10（當機時遺失的時間較短）；ChatStreams 是目前的值拿掉 sh（H.wants 照當下的值算）
-H.SUGGEST_WANT = { SafehouseAllowRespawn = "false", AllowCoop = "false", SaveWorldEveryMinutes = "10" }
+-- 取 10（當機時遺失的時間較短）；ChatStreams 是目前的值拿掉 sh（H.wants 照當下的值算）。
+-- SafehouseAllowRespawn 不再建議關掉：它是本 MOD 重生點的總開關（Respawn.lua，2026-10-14）
+H.SUGGEST_WANT = { AllowCoop = "false", SaveWorldEveryMinutes = "10" }
 
 H.state = H.state or { blocked = false, blockers = {}, warnings = {}, settingsWarnings = {}, key = "" }
 H.hostile = H.hostile or { active = false, since = nil, names = {} }
@@ -37,15 +38,16 @@ function H.dedicated()
     return isServer() == true and isClient() ~= true
 end
 
-local function optionValue(name)
+function H.optionValue(name)
     local ok, v = pcall(function() return getServerOptions():getOption(name) end)
     if not ok then return nil end
     return v ~= nil and tostring(v) or nil
 end
+local optionValue = H.optionValue
 
 local function warningsList()
     local w = {}
-    if optionValue("SafehouseAllowRespawn") == "true" then w[#w + 1] = "SafehouseAllowRespawn" end
+    -- SafehouseAllowRespawn 不在這裡：本 MOD 的重生點靠它開關（Respawn.lua）
     if optionValue("AllowCoop") == "true" then w[#w + 1] = "AllowCoop" end
     local save = tonumber(optionValue("SaveWorldEveryMinutes") or "")
     if save == nil or save == 0 or save > 30 then w[#w + 1] = "SaveWorldEveryMinutes" end

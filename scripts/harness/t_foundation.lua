@@ -126,7 +126,8 @@ return function(T)
     for _, b in ipairs(H.BLOCKERS) do T.serverOptions[b.option] = wants[b.option] end
     H.evaluate(T.now)
     check(blockedBefore == #H.BLOCKERS and not H.blocked(), "wants：每個必要設定改成面板給的值後通過檢查")
-    -- 建議表逐項〔套用〕：每個建議項目改成 wants 的值後警告消失；ChatStreams 只拿掉 sh、其他串流照原順序
+    -- 建議表逐項〔套用〕：每個建議項目改成 wants 的值後警告消失；ChatStreams 只拿掉 sh、其他串流照原順序。
+    -- SafehouseAllowRespawn=true 不是建議項目（本 MOD 重生點的總開關，Respawn.lua）
     T.serverOptions.SafehouseAllowRespawn, T.serverOptions.AllowCoop = "true", "true"
     T.serverOptions.SaveWorldEveryMinutes, T.serverOptions.ChatStreams = "45", "s, r,sh,f"
     H.evaluate(T.now)
@@ -135,9 +136,10 @@ return function(T)
     wants = H.wants()
     for _, k in ipairs(H.state.warnings) do T.serverOptions[k] = wants[k] end
     H.evaluate(T.now)
-    check(warned == 4 and #H.state.warnings == 0 and wants.ChatStreams == "s,r,f" and now.ChatStreams == "s, r,sh,f"
-        and now.SaveWorldEveryMinutes == "45" and now.PlayerSafehouse == T.serverOptions.PlayerSafehouse,
-        "wants：每個建議項目改成面板給的值後警告消失；current 是各項目前的值")
+    check(warned == 3 and #H.state.warnings == 0 and wants.ChatStreams == "s,r,f" and now.ChatStreams == "s, r,sh,f"
+        and now.SaveWorldEveryMinutes == "45" and now.PlayerSafehouse == T.serverOptions.PlayerSafehouse
+        and wants.SafehouseAllowRespawn == nil and T.serverOptions.SafehouseAllowRespawn == "true",
+        "wants：每個建議項目改成面板給的值後警告消失；current 是各項目前的值；開著重生不算建議項目")
 
     -- 管理員面板逐項顯示 IGUI_MSH_Admin_Need_<項目>／Suggest_<項目>；缺譯文會直接秀出鍵名（verify 只比各語言鍵集合一致）
     for _, b in ipairs(H.BLOCKERS) do
@@ -163,7 +165,7 @@ return function(T)
             end
         end
     end
-    check(#H.state.blockers == #H.BLOCKERS + 3 and #H.state.warnings == 4 and #missing == 0,
+    check(#H.state.blockers == #H.BLOCKERS + 3 and #H.state.warnings == 3 and #missing == 0,
         "每個必要設定與建議都有逐項說明（缺 " .. table.concat(missing, ",") .. "）")
 
     T.section("Identity：principal、綁定、改名證據、身分異常")
