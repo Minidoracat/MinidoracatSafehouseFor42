@@ -519,11 +519,17 @@ Faction = {
 
 -- ===== 世界：地板與房間 =====
 T.floors = {}            -- "x,y" → 地板 sprite 名
+T.floorMods = {}         -- "x,y" → 地板物件的 modData（IsoObject:hasModData／getModData）
 T.unloaded = {}          -- "x,y" → true：該格未載入（getGridSquare 回 nil，IsoCell.java:3190-3192）
 T.solid = {}             -- "x,y,z" → true：那格可站（IsoGridSquare.TreatAsSolidFloor，IsoGridSquare.java:7704）
 function T.floor(x, y, name) T.floors[x .. "," .. y] = name end
 function T.fillFloor(x0, y0, w, h, name)
     for x = x0, x0 + w - 1 do for y = y0, y0 + h - 1 do T.floors[x .. "," .. y] = name end end
+end
+-- 倒土／沙（ISNaturalFloor:create）：地板換成 name，原地板圖塊記在新地板 modData 的 shovelledSprites（ISNaturalFloor.lua:7-13）
+function T.pour(x, y, name, original)
+    T.floors[x .. "," .. y] = name
+    T.floorMods[x .. "," .. y] = { shovelledSprites = { original } }
 end
 T.squareReads = 0
 function getCell()
@@ -539,7 +545,10 @@ function getCell()
                 TreatAsSolidFloor = function() return T.solid[key .. "," .. tostring(z or 0)] == true end,
                 getFloor = function()
                     if name == nil then return nil end
-                    return { getSprite = function() return { getName = function() return name end } end }
+                    local mod = T.floorMods[key]
+                    return { getSprite = function() return { getName = function() return name end } end,
+                        hasModData = function() return mod ~= nil end,
+                        getModData = function() return mod end }
                 end,
             }
         end,
@@ -656,6 +665,10 @@ function T.building(x, y, w, h, roomNames)
         function r:getY() return self.y end
         function r:getW() return self.w end
         function r:getH() return self.h end
+        -- RoomDef.java:83-91（半開）、355-357（不分大小寫比 "emptyoutside"）、474-476（玩家圍出來的房間）
+        function r:contains(px, py) return px >= self.x and py >= self.y and px < self.x + self.w and py < self.y + self.h end
+        function r:isEmptyOutside() return string.lower(self.name) == "emptyoutside" end
+        function r:isUserDefined() return self.userDefined == true end
         b.rooms[#b.rooms + 1] = r
         T.rooms[#T.rooms + 1] = r
     end
@@ -779,7 +792,7 @@ local function resetWorld(opts)
     T.unreadable = {}
     T.failWrites, T.failRemove, T.failAdd, T.noLocation, T.failHouseRemove = false, false, false, false, false
     T.silentWrites = false
-    T.floors, T.unloaded, T.rooms, T.solid = {}, {}, {}, {}
+    T.floors, T.floorMods, T.unloaded, T.rooms, T.solid = {}, {}, {}, {}, {}
     T.randQueue = {}
     T.factions = {}
     T.steam = opts.steam or false

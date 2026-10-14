@@ -1,11 +1,12 @@
 -- MinidoracatSafehouse/Exclusions.lua：道路／資源點排除，建立確認當下判定一次（計畫 §8.1–8.3）。
--- 道路＝地面層地板圖塊（只看 getFloor，路緣、標線等覆蓋圖掛在 attachedAnimSprite、不看：CellLoader.java:256-264）；
+-- 道路＝地面層地板圖塊（只看 getFloor，路緣、標線等覆蓋圖掛在 attachedAnimSprite、不看：CellLoader.java:256-264），
+-- 倒土蓋掉的原地板照樣算（floorKind）；地圖房間裡的格子不算路（mapRooms；兩條都是使用者 2026-10-14 裁定）；
 -- 自家車道放寬（使用者 2026-10-10 裁定 driveway、parkingsrc）：住宅外框＋roadMargin＋2 格內只有主要道路與 MiniMap 停車場算路；
 -- 住宅的獨立車庫等附屬建築也有近區（和住宅合起來的外框＋同樣格數，見 addOutbuilding）。
 -- 資源點＝MiniMap `MinidoracatMiniMapResourceAPI.buildingsIn`；MiniMap 缺席或版本不符＝不擋、設定隱藏（§8.2）。
 -- 成本（§12.4）：每塊範圍（含邊界）每格讀一次，相鄰塊的邊界帶會重疊多讀幾格；道路違規時照樣掃完（和通過時一樣多），
 -- 違規格合併成矩形回給客戶端標紅（使用者 2026-10-11 裁定預檢標紅）；配置只隨請求（住宅數、附屬建築數（各多查一次
--- RoomDef）、停車區數、道路矩形數）成長，不逐格建表。範圍是一間的各塊（rects，使用者 2026-10-11 裁定多塊）。
+-- RoomDef）、地圖房間數、停車區數、道路矩形數）成長，不逐格建表。範圍是一間的各塊（rects，使用者 2026-10-11 裁定多塊）。
 -- 回傳一律 nil（通過）或 code, detail：ROAD { x, y, kind, areas }（第一格與它的類別；areas＝全部違規格的矩形，
 -- 扁平 x, y, w, h, ...）、NOT_LOADED { x, y }、RESOURCE { cat, x, y, w, h }、RESOURCE_PENDING、RESOURCE_ERROR。
 
@@ -160,6 +161,50 @@ local function parkingLots(scan)
     return boxes
 end
 
+-- 這格算哪一類路（只回勾選的類別）：現在的地板，加上倒土前的地板。倒土／沙等（ISNaturalFloor:create → addFloor）會換掉
+-- 原地板，原本的圖塊記在新地板 modData 的 shovelledSprites[1]（ISNaturalFloor.lua:7-13；鏟回去時 ISShovelGround.lua:60-76
+-- 用它還原）。B42 蓋的地板疊在原地板後面（ISBuildIsoEntity.lua:733 AddSpecialObject），getFloor 本來就讀到原地板。
+-- 兩個都算路時取主要道路（它不吃住宅近區放寬）
+local function floorKind(floor, kinds)
+    local sprite = floor:getSprite()                       -- IsoObject.java:1999
+    local kind = sprite and E.classify(sprite:getName())  -- IsoSprite.java:1980
+    if kind and not kinds[kind] then kind = nil end
+    if kind ~= "main" and floor:hasModData() then         -- 沒有 modData 時不呼叫 getModData（會建一張空表）
+        local old = floor:getModData().shovelledSprites
+        local k = type(old) == "table" and E.classify(old[1]) or nil
+        if k and kinds[k] and (kind == nil or k == "main") then kind = k end
+    end
+    return kind
+end
+
+-- 掃描範圍（各塊含邊界）碰到的地圖房間：lotheader 的 RoomDef，z=0，不含 emptyoutside（院子等戶外區）與 userDefined。
+-- B42 會把玩家圍起來的房子轉成 userDefined 的 RoomDef（WorldRegionToMetaGrid.java:275），格子的 getRoom 還優先回它
+-- （IsoMetaChunk.java:282-299），所以不用 sq:getRoom()：在路上圍牆不會讓路變成房間。每次 roads 最多查一次
+local function mapRooms(rects, margin)
+    local out, seen = {}, {}
+    for _, rect in ipairs(rects) do
+        local s = Rect.expand(rect, margin)
+        local list = ArrayList.new()
+        getWorld():getMetaGrid():getRoomsIntersecting(s.x, s.y, s.w, s.h, list)   -- IsoMetaGrid.java:430-441
+        for i = 0, list:size() - 1 do
+            local r = list:get(i)
+            if not seen[r] then
+                seen[r] = true
+                -- RoomDef.java:253-255（getZ）、355-357（isEmptyOutside）、474-476（isUserDefined）
+                if r:getZ() == 0 and not r:isEmptyOutside() and not r:isUserDefined() then out[#out + 1] = r end
+            end
+        end
+    end
+    return out
+end
+
+local function inRoom(rooms, x, y)
+    for i = 1, #rooms do
+        if rooms[i]:contains(x, y) then return true end   -- RoomDef.java:83-91（逐個 RoomRect，半開）
+    end
+    return false
+end
+
 -- ===== 道路（§8.1）=====
 E.MAX_ROAD_AREAS = 128   -- 回給客戶端標紅的矩形上限（封包大小與每幀繪製數）；滿了就停掃，結果照樣是 ROAD
 
@@ -184,6 +229,7 @@ function E.roads(rects, cfg)
     local kinds = cfg.roadKinds
     local cell = getCell()
     local near, lots   -- 第一次遇到非主要道路的勾選類別才查（每次 roads 最多一次）
+    local rooms        -- 第一次遇到道路格才查
     local hit, st      -- 第一個違規格（回傳的 detail）與合併矩形的狀態
     for _, rect in ipairs(rects) do
         local scan = Rect.expand(rect, cfg.roadMargin)
@@ -195,10 +241,12 @@ function E.roads(rects, cfg)
                 -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路
                 local sq = cell:getGridSquare(x, y, 0)
                 if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
-                local floor = sq and sq:getFloor()        -- IsoGridSquare.java:4652（solidfloor 物件）
-                local sprite = floor and floor:getSprite()   -- IsoObject.java:1999
-                local kind = sprite and E.classify(sprite:getName())   -- IsoSprite.java:1980
-                if kind and not kinds[kind] then kind = nil end
+                local floor = sq and sq:getFloor()        -- IsoGridSquare.java:4652（第一個 solidfloor 物件）
+                local kind = floor and floorKind(floor, kinds)
+                if kind then
+                    rooms = rooms or mapRooms(rects, cfg.roadMargin)
+                    if inRoom(rooms, x, y) then kind = nil end
+                end
                 if kind and kind ~= "main" then
                     if near == nil then
                         near = nearZones(rects, cfg.roadMargin + 2)

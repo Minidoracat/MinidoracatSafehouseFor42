@@ -271,6 +271,63 @@ return function(T)
     code = roads()
     check(code == C.ROAD and calls == 0, "沒有住宅：街道照擋、不查停車場")
 
+    T.section("Exclusions：倒土蓋掉的路、地圖房間裡的路")
+    MSH = T.boot()
+    E = MSH.Exclusions
+    cfg = MSH.Settings.get()
+    MinidoracatMiniMapResourceAPI = nil
+    rect = { x = 100, y = 100, w = 10, h = 10 }
+    -- 倒土／沙（ISNaturalFloor）換掉原地板，原圖塊記在新地板的 modData：照原圖塊算
+    T.pour(105, 105, "blends_natural_01_64", "blends_street_01_80")
+    code, d = roads()
+    check(code == C.ROAD and d.x == 105 and d.y == 105 and d.kind == "main", "主要道路倒了土：照原圖塊擋（main）")
+    T.pour(105, 105, "blends_natural_01_64", "blends_street_01_96")
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "street", "街道倒了土：照原圖塊擋（street）")
+    T.pour(105, 105, "blends_natural_01_64", "blends_street_01_32")
+    check(roads() == nil, "倒土前是碎石地：預設 main;street 不擋")
+    T.pour(105, 105, "blends_natural_01_64", "blends_natural_01_21")
+    check(roads() == nil, "倒土前是自然地面：不擋")
+    T.floorMods["105,105"] = {}
+    check(roads() == nil, "地板有 modData、沒有倒土紀錄：只看現在的地板")
+    T.floor(105, 105, nil)
+    T.floorMods["105,105"] = nil
+    -- 住宅近區放寬街道、不放寬主要道路：現在的地板與倒土前的都算路時取主要道路
+    T.building(120, 100, 10, 10, { "bedroom" })
+    rect = { x = 112, y = 100, w = 10, h = 10 }
+    T.pour(118, 105, "blends_street_01_96", "blends_street_01_80")
+    code, d = roads()
+    check(code == C.ROAD and d.x == 118 and d.kind == "main", "近區內：街道底下原本是主要道路→照擋（main）")
+    T.pour(118, 105, "blends_natural_01_64", "blends_street_01_96")
+    check(roads() == nil, "近區內：倒土前是街道→和街道一樣放寬")
+
+    -- 地圖房間裡的格子不算路（使用者 2026-10-14）：Fallas Lake 那種住宅的車庫地板是主要道路圖塊
+    MSH = T.boot()
+    E = MSH.Exclusions
+    cfg = MSH.Settings.get()
+    rect = { x = 400, y = 400, w = 10, h = 10 }
+    local garage = T.building(402, 402, 6, 4, { "garagestorage" })   -- 沒有臥室：沒有住宅近區放寬
+    T.fillFloor(402, 402, 6, 4, "blends_street_01_80")
+    check(roads() == nil, "地圖房間裡的主要道路地板不擋")
+    T.floor(409, 405, "blends_street_01_80")
+    code, d = roads()
+    check(code == C.ROAD and d.x == 409 and d.y == 405 and sameAreas(d.areas, { 409, 405, 1, 1 }),
+        "房間外的主要道路照擋；房間裡的格子不標")
+    T.floor(409, 405, nil)
+    local room = garage.rooms[1]
+    room.userDefined = true
+    code, d = roads()
+    check(code == C.ROAD and d.x == 402 and d.y == 402, "玩家圍出來的房間（userDefined）不算：照擋")
+    room.userDefined = nil
+    room.z = 1
+    check(roads() == C.ROAD, "只有樓上的房間：地面那層照擋")
+    room.z = 0
+    room.name = "emptyoutside"
+    check(roads() == C.ROAD, "emptyoutside（院子等戶外區）不算房間：照擋")
+    room.name = "garagestorage"
+    T.pour(404, 403, "blends_natural_01_64", "blends_street_01_80")
+    check(roads() == nil, "地圖房間裡倒過土：照樣不擋")
+
     T.section("Exclusions：資源點（MiniMap §3.19）")
     MSH = T.boot()
     E = MSH.Exclusions
