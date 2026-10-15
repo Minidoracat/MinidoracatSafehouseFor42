@@ -57,6 +57,18 @@ function C.theme(UI)
     return C._theme
 end
 
+-- 一句提示：框架 Toast（toast capability）；框架缺席退回角色頭上的紅字（HaloTextHelper.java:139，ISWorldObjectContextMenu.lua:1038）。
+-- 單行會截掉長字（2026-10-11 法文實機「Vous n'avez pas la permission « Cu…」）；maxLines 自 rev 5（框架 ARCHITECTURE §3.4）
+function C.toast(text, player)
+    local UI = C.ui({ "toast" }, 1)
+    if UI ~= nil then
+        UI.Toast.show({ message = text, maxLines = 3 })
+        return
+    end
+    player = player or getSpecificPlayer(0)
+    if player ~= nil then HaloTextHelper.addBadText(player, text) end
+end
+
 -- ===== 事件（視窗之間互相通知；同一 key 重複登記會覆蓋，熱重載不會疊加）=====
 function C.on(event, key, fn)
     local l = C.listeners[event]

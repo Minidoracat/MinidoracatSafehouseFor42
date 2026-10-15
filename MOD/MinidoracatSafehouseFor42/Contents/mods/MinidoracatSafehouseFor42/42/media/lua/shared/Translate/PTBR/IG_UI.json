@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "Compartilhamento da facção encerrado.",
     "IGUI_MSH_Share_Resumed": "Compartilhamento da facção retomado.",
     "IGUI_MSH_Perm_Denied": "Você não tem a permissão \"%1\" nesta base.",
+    "IGUI_MSH_Vehicle_Blocked": "Você não pode entrar nesta base, nem de veículo.",
+    "IGUI_MSH_Vehicle_BlockedRider": "Alguém neste veículo não pode entrar nesta base, então o veículo não pode entrar.",
     "IGUI_MSH_Code_Generic": "O servidor recusou o pedido (%1).",
     "IGUI_MSH_Code_OK": "Feito.",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "A versão do seu mod Safehouse não é a mesma do servidor.",

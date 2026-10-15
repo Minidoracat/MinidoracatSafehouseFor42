@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "Fraktionsfreigabe beendet.",
     "IGUI_MSH_Share_Resumed": "Fraktionsfreigabe fortgesetzt.",
     "IGUI_MSH_Perm_Denied": "Du hast in diesem Safehouse nicht das Recht „%1“.",
+    "IGUI_MSH_Vehicle_Blocked": "Du darfst dieses Safehouse nicht betreten – auch nicht mit dem Fahrzeug.",
+    "IGUI_MSH_Vehicle_BlockedRider": "Jemand in diesem Fahrzeug darf dieses Safehouse nicht betreten, deshalb kommt das Fahrzeug nicht hinein.",
     "IGUI_MSH_Code_Generic": "Der Server hat die Anfrage abgelehnt (%1).",
     "IGUI_MSH_Code_OK": "Erledigt.",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "Deine Version der Safehouse-Mod passt nicht zu der des Servers.",

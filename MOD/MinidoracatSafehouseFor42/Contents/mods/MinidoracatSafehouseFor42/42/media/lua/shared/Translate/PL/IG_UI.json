@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "Zakończono udostępnianie frakcji.",
     "IGUI_MSH_Share_Resumed": "Wznowiono udostępnianie frakcji.",
     "IGUI_MSH_Perm_Denied": "Nie masz uprawnienia „%1” w tym schronieniu.",
+    "IGUI_MSH_Vehicle_Blocked": "Nie możesz wejść do tego schronienia, więc nie wjedziesz też pojazdem.",
+    "IGUI_MSH_Vehicle_BlockedRider": "Ktoś w tym pojeździe nie może wejść do tego schronienia, więc pojazd nie może wjechać.",
     "IGUI_MSH_Code_Generic": "Serwer odrzucił żądanie (%1).",
     "IGUI_MSH_Code_OK": "Gotowe.",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "Twoja wersja moda Safehouse nie zgadza się z wersją serwera.",

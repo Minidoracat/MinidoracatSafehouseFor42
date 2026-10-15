@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "Faction sharing stopped.",
     "IGUI_MSH_Share_Resumed": "Faction sharing resumed.",
     "IGUI_MSH_Perm_Denied": "You don't have the \"%1\" permission in this safehouse.",
+    "IGUI_MSH_Vehicle_Blocked": "You can't enter this safehouse, so you can't drive in either.",
+    "IGUI_MSH_Vehicle_BlockedRider": "Someone in this vehicle can't enter this safehouse, so the vehicle can't go in.",
     "IGUI_MSH_Code_Generic": "The server refused the request (%1).",
     "IGUI_MSH_Code_OK": "Done.",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "Your Safehouse mod version doesn't match the server's.",

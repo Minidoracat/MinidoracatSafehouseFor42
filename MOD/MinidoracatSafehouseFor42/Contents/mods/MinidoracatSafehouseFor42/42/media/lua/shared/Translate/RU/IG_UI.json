@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "Доступ фракции закрыт.",
     "IGUI_MSH_Share_Resumed": "Доступ фракции возобновлён.",
     "IGUI_MSH_Perm_Denied": "У вас нет права «%1» в этом убежище.",
+    "IGUI_MSH_Vehicle_Blocked": "Вам нельзя в это убежище — на машине тоже.",
+    "IGUI_MSH_Vehicle_BlockedRider": "Кому-то в этой машине нельзя в это убежище, поэтому машина туда не проедет.",
     "IGUI_MSH_Code_Generic": "Сервер отклонил запрос (%1).",
     "IGUI_MSH_Code_OK": "Готово.",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "Версия мода Safehouse у вас не совпадает с серверной.",

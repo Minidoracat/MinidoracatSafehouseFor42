@@ -237,7 +237,8 @@ function N.broadcast(house)
     return ok
 end
 
--- 撤銷名單用：先移除再廣播，人在屋內就立即傳出（只給 manager 撤銷用，收斂路徑不得對真實玩家呼叫，§6.2）
+-- 先移除名單再廣播，人在屋內就立即傳出（坐在車上的先下車）。只給 manager 撤銷與擋車保底（Vehicles.lua）用，
+-- 收斂路徑不得對真實玩家呼叫（§6.2）
 function N.revoke(house, username)
     local ok, err = pcall(function() SafeHouse.kickUserFromSafehouse(house, username) end)
     if not ok then MSH.log("revoke failed: " .. tostring(err)) end

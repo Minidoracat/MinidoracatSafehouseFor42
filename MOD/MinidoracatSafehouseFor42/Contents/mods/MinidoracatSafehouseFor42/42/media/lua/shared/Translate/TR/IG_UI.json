@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "Grup paylaşımı durduruldu.",
     "IGUI_MSH_Share_Resumed": "Grup paylaşımı sürdürüldü.",
     "IGUI_MSH_Perm_Denied": "Bu güvenli evde \"%1\" izniniz yok.",
+    "IGUI_MSH_Vehicle_Blocked": "Bu güvenli eve giremezsiniz, araçla da giremezsiniz.",
+    "IGUI_MSH_Vehicle_BlockedRider": "Araçtaki birisi bu güvenli eve giremiyor, bu yüzden araç içeri giremez.",
     "IGUI_MSH_Code_Generic": "Sunucu isteği reddetti (%1).",
     "IGUI_MSH_Code_OK": "Tamamlandı.",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "Safehouse modunuzun sürümü sunucununkiyle uyuşmuyor.",

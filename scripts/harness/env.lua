@@ -182,7 +182,8 @@ function isValidUserName(user)
     return string.sub(string.lower(trimmed), 1, 5) ~= "admin"
 end
 
-Capability = { CanSetupSafehouses = "CanSetupSafehouses", ChangeAndReloadServerOptions = "ChangeAndReloadServerOptions" }
+Capability = { CanSetupSafehouses = "CanSetupSafehouses", ChangeAndReloadServerOptions = "ChangeAndReloadServerOptions",
+    CanGoInsideSafehouses = "CanGoInsideSafehouses" }
 
 -- ===== 沙盒（SandboxOptions.java:572-582 set、279-285 toLua、683-685 saveServerLuaFile）=====
 T.sbox = { values = {}, saveOk = true, saves = 0, sets = 0 }
@@ -327,11 +328,13 @@ function T.player(o)
     function p:getHoursSurvived() return self.hours end
     function p:getInventory() return self.inv end
     function p:isAsleep() return self.asleep end
-    -- 管理員有安全屋權限；canOptions＝也能改伺服器設定（原版 /changeoption 要的權限）
+    function p:getVehicle() return self.vehicle end   -- T.car 讓人上車
+    -- 管理員有安全屋權限（建立、進出別人的）；canOptions＝也能改伺服器設定（原版 /changeoption 要的權限）
     function p:getRole()
         local admin, canOptions = self.admin, self.canOptions
         return { hasCapability = function(_, cap)
-            return admin and (cap == Capability.CanSetupSafehouses or (canOptions and cap == Capability.ChangeAndReloadServerOptions))
+            return admin and (cap == Capability.CanSetupSafehouses or cap == Capability.CanGoInsideSafehouses
+                or (canOptions and cap == Capability.ChangeAndReloadServerOptions))
         end }
     end
     if not o.offline then T.online[#T.online + 1] = p end
@@ -427,6 +430,14 @@ function T.house(x, y, w, h, owner)
     end
     return hs
 end
+-- 清單裡第一間包住那格的（SafeHouse.findSafeHouse，SafeHouse.java:144-155）
+local function findHouse(sq)
+    local x, y = sq:getX(), sq:getY()
+    for _, hs in ipairs(T.houses) do
+        if x >= hs.x and x < hs.x + hs.w and y >= hs.y and y < hs.y + hs.h then return hs end
+    end
+    return nil
+end
 SafeHouse = {
     getSafehouseList = function() return T.javaList(T.houses) end,
     -- 照清單順序第一個名單有他或屋主是他的（SafeHouse.java:97-103）
@@ -464,11 +475,22 @@ SafeHouse = {
             end
         end
     end,
+    -- getSafeHouse(格子)＝包住那格的（:157-159、201-217，username nil）；getSafeHouse(x, y, w, h)＝範圍完全相同的（:171-179）
     getSafeHouse = function(x, y, w, h)
+        if type(x) == "table" then return findHouse(x) end
         for _, hs in ipairs(T.houses) do
             if hs.x == x and hs.y == y and hs.w == w and hs.h == h then return hs end
         end
         return nil
+    end,
+    -- 走路與擋車共用的判定（SafeHouse.java:224-243；戰爭不模擬，hs.connected＝在線成員數）
+    isSafehouseAllowTrepass = function(sq, p)
+        if sq == nil or p == nil then return true end
+        local hs = findHouse(sq)
+        if hs == nil or p:getRole():hasCapability(Capability.CanGoInsideSafehouses) then return true end
+        if T.serverOptions.SafehouseAllowTrepass == "true" then return true end
+        if T.serverOptions.DisableSafehouseWhenOwnerConnected == "true" and (hs.connected or 0) > 0 then return true end
+        return hs:playerAllowed(p:getUsername())
     end,
     getOnlineID = function(x, y) return T.onlineId(x, y) end,
     -- SafeHouse.java:852-859
@@ -478,6 +500,62 @@ SafeHouse = {
         return days > 0 and p.hours < days * 24
     end,
 }
+
+-- ===== 載具（vehicles/BaseVehicle.java，42.21.0）=====
+-- Vector3f／Transform 只模擬用到的方法。Bullet 座標 (x, 高, z) 的 z＝世界 y：getLinearVelocity 回 (vx, 0, vy)
+-- （:4326-4328）；getWorldPos 回世界 (x, y, 高)（:1874-1893），車身座標 z＝往前、x＝往右。
+Vector3f = { new = function(x, y, z)
+    local v = { _x = x or 0, _y = y or 0, _z = z or 0 }
+    function v:x() return self._x end
+    function v:y() return self._y end
+    function v:z() return self._z end
+    function v:set(a, b, c) self._x, self._y, self._z = a, b, c return self end
+    return v
+end }
+Transform = { new = function() return {} end }
+-- 平地上的車：中心 (x, y)、朝向單位向量 (fx, fy)、長 len、寬 wid、速度 (vx, vy) 公尺／秒。o.driver 坐 0 號座位、
+-- o.riders 依序坐後面（getCharacter:1851-1854）；上車的人 getVehicle 回這台。記下呼叫：brakes＝setForceBrake 次數、
+-- impulses＝applyImpulseFromHitPlant 的 mul（物件是車自己，:5556-5565）、snaps＝setWorldTransform 次數。
+-- 物理不模擬：位置與速度由測試直接設。
+T.nextVehicleId = 0
+function T.car(o)
+    local c = { __class = "BaseVehicle", x = o.x, y = o.y, fx = o.fx or 0, fy = o.fy or 1, len = o.len or 4.5,
+        wid = o.wid or 2, vx = o.vx or 0, vy = o.vy or 0, mass = 1000, seats = {}, brakes = 0, impulses = {}, snaps = 0 }
+    T.nextVehicleId = T.nextVehicleId + 1
+    c.id = T.nextVehicleId
+    if o.driver then
+        c.seats[0] = o.driver
+        o.driver.vehicle = c
+    end
+    for i, p in ipairs(o.riders or {}) do
+        c.seats[i] = p
+        p.vehicle = c
+    end
+    local script = { getExtents = function() return Vector3f.new(c.wid, 1.5, c.len) end,
+        getCenterOfMassOffset = function() return Vector3f.new(0, 0, 0) end }
+    function c:getScript() return script end
+    function c:getId() return self.id end
+    function c:getX() return self.x end
+    function c:getY() return self.y end
+    function c:getWorldPos(lx, _, lz, out)
+        return out:set(self.x + lz * self.fx - lx * self.fy, self.y + lz * self.fy + lx * self.fx, 0)
+    end
+    function c:getLinearVelocity(out) return out:set(self.vx, 0, self.vy) end
+    function c:getMaxPassengers() return 4 end
+    function c:getCharacter(i) return self.seats[i] end
+    function c:isDriver(p) return self.seats[0] == p end
+    function c:getVehicleTowing() return self.towing end
+    function c:getMass() return self.mass end
+    function c:getFudgedMass() return self.mass end
+    function c:setForceBrake() self.brakes = self.brakes + 1 end
+    function c:applyImpulseFromHitPlant(obj, mul)
+        assert(obj == self, "applyImpulseFromHitPlant 的物件要是車自己（relPos 0）")
+        self.impulses[#self.impulses + 1] = mul
+    end
+    function c:getWorldTransform(out) out.x, out.y, out.fx, out.fy = self.x, self.y, self.fx, self.fy return out end
+    function c:setWorldTransform(t) self.x, self.y, self.fx, self.fy = t.x, t.y, t.fx, t.fy self.snaps = self.snaps + 1 end
+    return c
+end
 
 -- ===== 陣營（characters/Faction.java，42.21.0）=====
 -- 每次 T.faction 都是新物件：同名重建時物件不同（照真的 Faction；VM factionRefs 靠這點判斷同進程重建）

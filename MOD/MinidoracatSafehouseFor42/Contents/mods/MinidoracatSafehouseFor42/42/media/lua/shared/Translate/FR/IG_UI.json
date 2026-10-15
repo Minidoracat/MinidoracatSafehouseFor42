@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "Partage de faction arrêté.",
     "IGUI_MSH_Share_Resumed": "Partage de faction repris.",
     "IGUI_MSH_Perm_Denied": "Vous n'avez pas la permission « %1 » dans cet abri.",
+    "IGUI_MSH_Vehicle_Blocked": "Vous ne pouvez pas entrer dans cet abri, même en véhicule.",
+    "IGUI_MSH_Vehicle_BlockedRider": "Quelqu'un dans ce véhicule ne peut pas entrer dans cet abri : le véhicule ne peut pas y aller.",
     "IGUI_MSH_Code_Generic": "Le serveur a refusé la demande (%1).",
     "IGUI_MSH_Code_OK": "Terminé.",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "Votre version du mod Safehouse ne correspond pas à celle du serveur.",

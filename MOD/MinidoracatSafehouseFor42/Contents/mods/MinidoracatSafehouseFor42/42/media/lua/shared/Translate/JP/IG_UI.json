@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "派閥への共有を停止しました。",
     "IGUI_MSH_Share_Resumed": "派閥への共有を再開しました。",
     "IGUI_MSH_Perm_Denied": "このセーフハウスでは「%1」の権限がありません。",
+    "IGUI_MSH_Vehicle_Blocked": "このセーフハウスには入れないため、車でも入れません。",
+    "IGUI_MSH_Vehicle_BlockedRider": "乗っている人の中にこのセーフハウスに入れない人がいるため、車で入れません。",
     "IGUI_MSH_Code_Generic": "サーバーがリクエストを拒否しました（%1）。",
     "IGUI_MSH_Code_OK": "完了しました。",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "セーフハウスMODのバージョンがサーバーと一致しません。",

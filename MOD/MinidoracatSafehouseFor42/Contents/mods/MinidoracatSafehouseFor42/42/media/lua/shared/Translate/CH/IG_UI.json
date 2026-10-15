@@ -500,6 +500,8 @@
     "IGUI_MSH_Share_FactionStopped": "已停止陣營分享。",
     "IGUI_MSH_Share_Resumed": "已恢復陣營分享。",
     "IGUI_MSH_Perm_Denied": "你在這間安全屋沒有「%1」權限。",
+    "IGUI_MSH_Vehicle_Blocked": "你不能進這間安全屋，開車也進不去。",
+    "IGUI_MSH_Vehicle_BlockedRider": "車上有人不能進這間安全屋，車子開不進去。",
     "IGUI_MSH_Code_Generic": "伺服器拒絕了這個請求（%1）。",
     "IGUI_MSH_Code_OK": "完成。",
     "IGUI_MSH_Code_PROTOCOL_MISMATCH": "你的安全屋 MOD 版本和伺服器不一致。",

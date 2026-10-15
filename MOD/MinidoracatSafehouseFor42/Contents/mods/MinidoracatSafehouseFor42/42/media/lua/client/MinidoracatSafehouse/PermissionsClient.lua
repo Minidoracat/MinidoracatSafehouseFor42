@@ -5,8 +5,7 @@
 --      ISContextMenu.lua:1038-1044），不比文字，換語系照樣對得上。子選單都登記在根選單的 instanceMap（:1199-1231）。
 --   2) 爐子／微波爐設定面板：沒有 USE 時藏掉 OK 鈕並擋 onClick（ISOvenUI.lua:157-171、ISMicrowaveUI.lua:31-37）；
 --      開面板的選單項目（onStoveSetting／onMicrowaveSetting）也照 1) 藏。
---   3) 伺服器推 denied：框架 Toast（toast capability），沒有框架就原版 HaloTextHelper.addBadText
---      （characters/HaloTextHelper.java:139；用例 ISWorldObjectContextMenu.lua:1038）。
+--   3) 伺服器推 denied：MSH.Client.toast（框架 Toast，沒有框架就頭上紅字）說缺哪個權限。
 -- 位元來自 MSH.Client.bitsAt(x, y)（nil＝不是 managed → 照原版；只有 0 號玩家有清單）。
 
 if not isClient() then return end
@@ -155,15 +154,7 @@ function PC.deniedText(args)
 end
 
 function PC.onDenied(args)
-    local text = PC.deniedText(args)
-    local UI = MSH.Client.ui({ "toast" }, 1)
-    if UI ~= nil then
-        -- 單行會截掉權限名（2026-10-11 法文實機「Vous n'avez pas la permission « Cu…」）；maxLines 自 rev 5（框架 ARCHITECTURE §3.4）
-        UI.Toast.show({ message = text, maxLines = 3 })
-        return
-    end
-    local player = getSpecificPlayer(0)
-    if player ~= nil then HaloTextHelper.addBadText(player, text) end
+    MSH.Client.toast(PC.deniedText(args))
 end
 
 MSH.Client.on("denied", "permissions", function(args) MSH.PermissionsClient.onDenied(args) end)

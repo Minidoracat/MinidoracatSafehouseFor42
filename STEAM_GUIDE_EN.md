@@ -28,7 +28,7 @@ A safehouse system for dedicated multiplayer servers: use a deed to mark your ow
 [*] [b]Split-screen[/b]: players 2–4 can't create safehouses.
 [*] [b]Server admins[/b]: change a few vanilla safehouse settings first; see "Server settings".
 [*] [b]Adding mid-save[/b]: safehouses already in the save (vanilla or Better Safehouse) are taken over automatically at server start; see "Taking over existing safehouses".
-[*] [b]Protection[/b]: uses vanilla safehouses, so non-members can't enter or take items; zombies can still spawn inside.
+[*] [b]Protection[/b]: uses vanilla safehouses, so non-members can't enter or take items; a vehicle with anyone aboard who can't enter can't drive in either (see "Vehicles can't drive in"); zombies can still spawn inside.
 [/list]
 === 🧰 Deeds
 {{img:02-deed-tooltip-en.jpg}}
@@ -309,6 +309,13 @@ Find out whether a house you built counts as indoors on a multiplayer server (wa
 [*] [b]Rechecks by itself[/b]: while the window is open, it checks again when walls or floors nearby change; once you close it, nothing is checked in the background.
 [*] [b]Limits[/b]: only tiles within 40 tiles of you; up to 12 rooms per building, and for a very large building only the part nearest the checked spot; the map's own buildings count the vanilla way; self-built rooms underground never count as indoors.
 [/list]
+=== 🧰 Vehicles can't drive in
+[list]
+[*] [b]Who gets stopped[/b]: if anyone in the vehicle can't enter that safehouse (passengers included), the vehicle stops before the edge; a towed trailer is stopped too.
+[*] [b]Message[/b]: tells you whether it's you or someone aboard who can't enter.
+[*] [b]Already parked inside[/b]: you can drive it out, just not further in.
+[*] [b]Still allowed in[/b]: owners, people on the share list and admins. This applies to every safehouse, including ones this mod didn't create.
+[/list]
 === 🧰 Paid slots (optional Economy)
 [list]
 [*] [b]Free slots[/b]: each player's first safehouses are free (1 by default; admins can change it per player).
@@ -570,7 +577,7 @@ Server-side data:
 === ⚠️ Known limitations
 [list]
 [*] [b]Zombies can still spawn inside[/b]: vanilla safehouses don't stop it, and neither does this mod.
-[*] [b]Vanilla protection[/b]: the server stops vanilla clients, but modified clients may get around protection that's only checked client-side; the fine-grained permissions (Use appliances, Move furniture, Build, Farm) are only reliable against vanilla clients.
+[*] [b]Vanilla protection[/b]: the server stops vanilla clients, but modified clients may get around protection that's only checked client-side; the fine-grained permissions (Use appliances, Move furniture, Build, Farm) are only reliable against vanilla clients. Vehicles too: a modified client may drive in, and the server then takes anyone aboard who can't enter out of the vehicle and outside, leaving the vehicle where it is.
 [*] [b]No door or window permission[/b]: the server can't stop opening doors with E or toggling windows directly; whether non-members can open doors follows vanilla.
 [*] [b]No visitors[/b]: "Member" covers both entering and container access, so there's no "enter but don't take" role.
 [*] [b]Safehouse data is public[/b]: vanilla sends every safehouse's area, owner and members to every player who logs in, so modified clients can see it.
@@ -598,7 +605,7 @@ Server-side data:
 [/list]
 [h3]Not included[/h3]
 [list]
-[*] Blocking zombies or vehicles.
+[*] Blocking zombies.
 [*] Moving or expanding a safehouse (only redrawing right after creation).
 [*] Buying and selling land.
 [*] A server-wide map browser or teleporting.
