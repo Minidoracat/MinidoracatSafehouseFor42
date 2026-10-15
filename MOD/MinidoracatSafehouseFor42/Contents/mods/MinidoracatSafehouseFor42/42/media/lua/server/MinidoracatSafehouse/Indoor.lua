@@ -11,6 +11,8 @@
 --   外面走不進來的沒屋頂格子也算房子（缺屋頂）；從房子不穿牆走出去的邊＝缺牆（OPEN）。封閉但屋頂不到一半的（例如圍籬
 --   圍起來的院子裡的棚子、屋頂才蓋一角的房間）回 PART_ROOF：那些邊在圍起來的範圍裡面，隔牆或把屋頂蓋滿都行。
 --   起點 NEAR 步內沒有屋頂＝室外（OUTSIDE）。
+--   缺口那條邊上有門的另外列（doors）：引擎只把有牆屬性（cutN／cutW）或門框型別的邊算牆，原版綠、白車庫門開著時的門片
+--   沒有牆屬性，Knox Pass 的模型門關著也沒有（使用者 2026-10-15 正式服回報車庫門被列成缺牆）。客戶端照開著／關著寫原因。
 -- 同一棟（使用者 2026-10-15：「每一層都分析」）：同一層從起點沿著有屋頂的格子往外找（不看牆、不進地圖房間），每碰到
 -- 一個新的 region 就照上面分析一次；樓上、樓下從相鄰那一層走過的格子裡、這一層有地板而且頭上有屋頂的格子開始找。
 -- 單層房子屋頂上的平台（上面沒再蓋一層）沒有這種格子，不算一層。
@@ -145,10 +147,12 @@ local function newCtx(x, y, z)
 end
 
 -- 一間的結果：verdict、z（哪一層）、size（格數）、roofs（有屋頂的格數）、walls（房子邊上有牆的邊數）、x, y（分析的
--- 起點；起點沒有屋頂時是 NEAR 步內最近的有屋頂格子）、gaps（缺牆：x, y, side 三個一組）、holes（缺屋頂：x, y 兩個
--- 一組）、gapCount／holeCount（全部的數量；清單最多 MAX_MARKS 筆）
+-- 起點；起點沒有屋頂時是 NEAR 步內最近的有屋頂格子）、gaps（缺牆：x, y, side 三個一組）、doors（缺口那條邊上有門：
+-- x, y, side, 開著 1／關著 0 四個一組）、holes（缺屋頂：x, y 兩個一組）、gapCount（缺牆加上有門的缺口）／doorCount／
+-- holeCount（全部的數量；各清單最多 MAX_MARKS 筆）
 local function newRoom(x, y, z)
-    return { x = x, y = y, z = z, size = 0, roofs = 0, walls = 0, gaps = {}, gapCount = 0, holes = {}, holeCount = 0 }
+    return { x = x, y = y, z = z, size = 0, roofs = 0, walls = 0, gaps = {}, gapCount = 0, doors = {}, doorCount = 0,
+        holes = {}, holeCount = 0 }
 end
 
 local function addHole(r, ctx, x, y)
@@ -160,14 +164,35 @@ local function addHole(r, ctx, x, y)
     h[#h + 1] = y
 end
 
-local function addGap(r, x, y, d)
+-- 缺口那條邊上的門（引擎照缺口算的門：原版綠、白車庫門開著時沒有牆的屬性，Knox Pass 的模型門關著也沒有；一般的門
+-- 裝在門框裡，門框本身就算牆，不會走到這裡）。回 true＝開著、false＝關著，沒有門回 nil
+local function doorOn(cell, x, y, z, side)
+    local sq = cell:getGridSquare(x, y, z)
+    if sq == nil then return nil end
+    local objs = sq:getSpecialObjects()
+    for i = 0, objs:size() - 1 do
+        local o = objs:get(i)
+        if (instanceof(o, "IsoDoor") or (instanceof(o, "IsoThumpable") and o:isDoor())) and o:getNorth() == (side == 1) then
+            return o:IsOpen()
+        end
+    end
+    return nil
+end
+
+local function addGap(r, ctx, x, y, d)
     r.gapCount = r.gapCount + 1
-    if r.gapCount > I.MAX_MARKS then return end
     local ex, ey, side = edgeOf(x, y, d)
-    local g = r.gaps
-    g[#g + 1] = ex
-    g[#g + 1] = ey
-    g[#g + 1] = side
+    local open = doorOn(ctx.cell, ex, ey, r.z, side)
+    if open == nil then
+        if r.gapCount - r.doorCount > I.MAX_MARKS then return end
+        local g, n = r.gaps, #r.gaps
+        g[n + 1], g[n + 2], g[n + 3] = ex, ey, side
+        return
+    end
+    r.doorCount = r.doorCount + 1
+    if r.doorCount > I.MAX_MARKS then return end
+    local g, n = r.doors, #r.doors
+    g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, open and 1 or 0
 end
 
 -- 封閉而且屋頂至少一半：整個 region 走一遍。格數與屋頂數照引擎（走到上限時清單只有一部分；判定不受影響）
@@ -340,7 +365,7 @@ local function openRoom(r, z, ctx)
         local x, y = list[i], list[i + 1]
         for d = 0, 3 do
             if inside[key(x + DX[d], y + DY[d])] == nil then
-                if canMove(x, y, z, d) then addGap(r, x, y, d) else r.walls = r.walls + 1 end
+                if canMove(x, y, z, d) then addGap(r, ctx, x, y, d) else r.walls = r.walls + 1 end
             end
         end
     end

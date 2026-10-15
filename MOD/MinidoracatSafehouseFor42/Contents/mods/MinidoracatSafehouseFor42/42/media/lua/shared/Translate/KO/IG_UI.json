@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "이 방 · %1타일 · 지붕 %2/%3",
     "IGUI_MSH_Indoor_Gap": "벽 없음 · %1타일",
     "IGUI_MSH_Indoor_GapFix": "벽, 문틀, 창틀 중 하나를 지으세요.",
+    "IGUI_MSH_Indoor_DoorOpen": "열린 문 · %1타일",
+    "IGUI_MSH_Indoor_DoorOpenFix": "열려 있으면 벽이 아닙니다. 닫고 다시 검사하세요.",
+    "IGUI_MSH_Indoor_DoorShut": "벽으로 치지 않는 문 · %1타일",
+    "IGUI_MSH_Indoor_DoorShutFix": "닫혀 있어도 틈으로 계산됩니다. 벽으로 치지 않는 문도 있고, 여닫는 방법에 따라 다시 판정하지 않기도 합니다.",
     "IGUI_MSH_Indoor_SplitFix": "여기에 벽을 세워 지붕이 있는 부분을 막으세요.",
     "IGUI_MSH_Indoor_Hole": "지붕 없음 · %1타일",
     "IGUI_MSH_Indoor_HoleFix": "바로 위층에 바닥을 까세요.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "실내 아님",
     "IGUI_MSH_Indoor_RoofOnly": "지붕만 있음",
     "IGUI_MSH_Indoor_ShowMarks": "지면에 위치 표시",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "바닥이 조금 어두워진 곳은 검사한 범위, 빨간 바닥은 지붕이 없는 타일, 빨간 벽 윤곽은 벽이 없는 곳입니다. 이 창을 닫으면 사라집니다.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "바닥이 조금 어두워진 곳은 검사한 범위, 빨간 바닥은 지붕이 없는 타일, 밝은 빨간 벽은 벽이 없는 곳입니다. 이 창을 닫으면 사라집니다.",
     "IGUI_MSH_Indoor_Recheck": "다시 검사",
     "IGUI_MSH_Indoor_Checking": "검사 중...",
     "IGUI_MSH_Indoor_Partial": "건물이 너무 커서 검사한 위치에서 가장 가까운 부분만 검사했습니다.",
-    "IGUI_MSH_Indoor_Note": "벽, 문틀, 창틀, 울타리는 모두 벽으로 칩니다. 문이 열려 있거나 유리를 떼어 내도 마찬가지입니다. 지붕은 바로 위층의 바닥입니다."
+    "IGUI_MSH_Indoor_Note": "벽, 문틀, 창틀, 울타리는 모두 벽으로 칩니다. 문틀에 단 문이 열려 있거나 유리를 떼어 내도 마찬가지입니다. 주택 차고 문은 열려 있으면 벽으로 치지 않습니다. 지붕은 바로 위층의 바닥입니다."
 }

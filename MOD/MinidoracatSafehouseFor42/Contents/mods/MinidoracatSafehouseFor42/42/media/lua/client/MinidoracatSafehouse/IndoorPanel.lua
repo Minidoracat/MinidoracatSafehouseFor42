@@ -8,8 +8,10 @@
 --   在背景執行緒重算）；同時只送一筆，上一筆回覆後滿 GAP_MS 才送下一筆（伺服器冷卻 1 秒，client-ui.md「冷卻間隔從回覆算」）。
 -- 地上標示（標在目前看的那一間所在的那一層）：這一層這次檢查到的範圍用 FloorTint 圖層 "indoorArea" 把地板稍微壓暗
 --   （使用者 2026-10-15：「可以」在地上淡淡標出檢查到的整棟範圍）；缺屋頂的格子用圖層 "indoor"（地板染色，只染畫面裡的）；
---   缺牆照原版建造游標的畫法，把牆的貼圖用 RenderGhostTileColor 半透明疊上（RenderOpaqueObjectsInWorld 裡 renderIsoLine
---   畫不出來，sh-indoor-1015c），只在玩家站在那一層時畫（疊色不測深度，會蓋過樓上）。
+--   缺牆在 RenderOpaqueObjectsInWorld 疊一面亮紅色的牆影（RenderGhostTileColor，原版建造游標的畫法；renderIsoLine 在這裡
+--   畫不出來，sh-indoor-1015c）：貼圖是本 MOD 的白色牆面（實心外框＋半透明面，WallGhost{N,W}2x.png），不用原版木牆
+--   （使用者 2026-10-15：「應該明顯一點的亮紅色，然後不應該是用那個木板牆的樣子」）。只在玩家站在那一層時畫（疊色不測
+--   深度，會蓋過樓上）。缺口那條邊上有門（車庫門開著、遊戲不算牆的門）另外列一種列，寫「開著的門」而不是「補上牆」。
 -- 同一棟每一層都分析（使用者 2026-10-15：「每一層都分析」）：結果有不只一層時，房間列與房間那一行前面寫第幾樓；目前看的
 --   那間不在玩家這一層時，問題列右邊寫第幾樓、不寫距離。
 -- 屋簷下（OPEN 而且沒圍起來的邊不少於有牆的邊：比牆多出一圈的屋頂、門廊、車棚）只說結論、不列缺口：那些邊本來就沒要圍。
@@ -33,12 +35,16 @@ P.NEAR = 4            -- 物件落在檢查範圍外框外幾格內才重查（�
 P.DIST_MS = 500       -- 多久更新一次「離你 N 格」
 P.ROWS, P.ROOM_ROWS = 5, 3   -- 問題、同一棟其他房間各最多同時顯示幾列（再多就捲動）
 P.TINT, P.TINT_SEL = 0.75, 1   -- 缺屋頂格子的染色強度（選中的那一組較強；0.45 在草地上只看得出一點褐色，sh-indoor-1015f）
-P.GHOST, P.GHOST_SEL = 0.5, 0.9   -- 缺牆的牆影
+-- 缺牆的牆影：亮紅色（不用主題的 errorText，太暗）；選中那一組不透明。貼圖自己帶半透明的面與實心的外框
+P.GHOST_COLOR = { r = 1, g = 0.12, b = 0.12 }
+P.GHOST, P.GHOST_SEL = 0.85, 1
 -- 檢查到的範圍：把地板壓暗一點。染色是把地板的光照色往顏色拉（FloorTint 檔頭），白天往白色拉看不出來（sh-indoor-1015i
 -- 用主題的 text 色，截圖上幾乎沒變）；黑色 0.3 草地暗了約四成五（sh-indoor-1015k），比「淡淡標出」重，取 0.2。
 -- 兩張表都交給 FloorTint.setRects 拿參照比對有沒有變，不要換新表
 P.AREA_COLOR, P.AREA = { r = 0, g = 0, b = 0 }, { 0.2 }
-P.SPRITES = { "walls_exterior_wooden_01_45", "walls_exterior_wooden_01_44" }   -- 牆影：[1]＝北邊、[2]＝西邊（原版木牆）
+-- 牆影貼圖：[1]＝北邊、[2]＝西邊（輪廓取原版 walls_exterior_house_01_1／_0，白色、外框 3 px 實心、面 alpha 140）。
+-- ponytail: 只放 2x，同 FloorTint；哪天恢復 1x 要補 64×128 的
+P.GHOST_TEX = { "media/textures/MinidoracatSafehouse/WallGhostN2x.png", "media/textures/MinidoracatSafehouse/WallGhostW2x.png" }
 P.CAPS = { "window", "controls", "virtualList" }
 if P.marksOn == nil then P.marksOn = true end   -- 「在地上標出位置」，這次遊戲記住
 
@@ -104,9 +110,9 @@ function P.blobs(holes)
     return rows
 end
 
--- 這一組離 (px, py) 最近幾格（棋盤距離；缺牆用存那條邊的格子）
+-- 這一組離 (px, py) 最近幾格（棋盤距離；缺牆、門用存那條邊的格子）
 function P.dist(row, px, py)
-    local flat, step, best = row.flat, row.kind == "gap" and 3 or 2, nil
+    local flat, step, best = row.flat, row.kind == "hole" and 2 or 3, nil
     for i = 1, #flat, step do
         local d = math.max(math.abs(flat[i] - px), math.abs(flat[i + 1] - py))
         if best == nil or d < best then best = d end
@@ -114,15 +120,35 @@ function P.dist(row, px, py)
     return best or 0
 end
 
+-- 缺口那條邊上有門（伺服器的 doors：x, y, side, 開著 1／關著 0 四個一組）：開著的、關著的各自併段，列成 kind = "door"
+function P.doorRows(doors)
+    local open, shut, rows = {}, {}, {}
+    for i = 1, #doors, 4 do
+        local t = doors[i + 3] == 1 and open or shut
+        local n = #t
+        t[n + 1], t[n + 2], t[n + 3] = doors[i], doors[i + 1], doors[i + 2]
+    end
+    for _, row in ipairs(P.segments(open)) do
+        row.kind, row.open = "door", true
+        rows[#rows + 1] = row
+    end
+    for _, row in ipairs(P.segments(shut)) do
+        row.kind, row.open = "door", false
+        rows[#rows + 1] = row
+    end
+    return rows
+end
+
 -- 屋簷下：沒圍起來的邊不少於有牆的邊（比牆多出一圈的屋頂、門廊、車棚、院子裡的棚子）
 function P.eaves(room)
     return room ~= nil and (room.verdict == "OPEN" or room.verdict == "PART_ROOF") and room.gapCount >= room.walls
 end
 
--- 這一間要列的問題：缺牆的段、缺屋頂的塊，近的在前；屋簷下（OPEN）不列
+-- 這一間要列的問題：缺牆的段、有門的缺口、缺屋頂的塊，近的在前；屋簷下（OPEN）不列
 function P.issues(room, px, py)
     if room == nil or (room.verdict == "OPEN" and P.eaves(room)) then return {} end
     local rows = P.segments(room.gaps or EMPTY)
+    for _, d in ipairs(P.doorRows(room.doors or EMPTY)) do rows[#rows + 1] = d end
     for _, b in ipairs(P.blobs(room.holes or EMPTY)) do rows[#rows + 1] = b end
     for _, row in ipairs(rows) do row.dist = P.dist(row, px, py) end
     MSH.sortSafe(rows, function(a, b) return a.dist < b.dist end)
@@ -323,7 +349,7 @@ function P.render(playerIndex)
     local p = getSpecificPlayer(0)
     local z = m.markZ or m.z
     if p == nil or math.floor(p:getZ()) ~= z then return end
-    local c, s = m.view.colors.errorText, P.sprites
+    local c, s = P.GHOST_COLOR, P.ghostSprites
     for i = 1, #l, 4 do
         local spr = s[l[i + 2]]
         if spr ~= nil then spr:RenderGhostTileColor(l[i], l[i + 1], z, c.r, c.g, c.b, l[i + 3]) end
@@ -482,16 +508,18 @@ function P.bindCell(v, cell, item, index)
         cell.token = good and "text" or (eaves and "textMuted" or "errorText")
         cell.subToken, cell.chevron = cell.token, true
     else
-        local hole = item.kind == "hole"
-        title = getText(hole and "IGUI_MSH_Indoor_Hole" or "IGUI_MSH_Indoor_Gap", item.n)
         local room = P.room(v.m)
-        local fix = "IGUI_MSH_Indoor_GapFix"
-        if hole then
-            fix = "IGUI_MSH_Indoor_HoleFix"
+        local key, fix = "IGUI_MSH_Indoor_Gap", "IGUI_MSH_Indoor_GapFix"
+        if item.kind == "hole" then
+            key, fix = "IGUI_MSH_Indoor_Hole", "IGUI_MSH_Indoor_HoleFix"
+        elseif item.kind == "door" and item.open then
+            key, fix = "IGUI_MSH_Indoor_DoorOpen", "IGUI_MSH_Indoor_DoorOpenFix"   -- 開著的車庫門：關上就好
+        elseif item.kind == "door" then
+            key, fix = "IGUI_MSH_Indoor_DoorShut", "IGUI_MSH_Indoor_DoorShutFix"   -- 關著也不算牆（Knox Pass 模型門等）
         elseif room ~= nil and room.verdict == "PART_ROOF" then
             fix = "IGUI_MSH_Indoor_SplitFix"   -- 圍起來的範圍裡面：隔一道牆就好
         end
-        sub = getText(fix)
+        title, sub = getText(key, item.n), getText(fix)
         -- 那一間不在玩家這一層：寫第幾樓（同一格的距離在別層沒有意義）
         if room ~= nil and room.z ~= v.m.pz then
             cell.right = P.floorText(room.z)
@@ -685,7 +713,14 @@ local function openUnsafe(opts)
     else
         MSH.log("indoor panel: MinidoracatUI missing or too old; answering with halo text")
     end
-    P.sprites = P.sprites or { getSprite(P.SPRITES[1]), getSprite(P.SPRITES[2]) }
+    if P.ghostSprites == nil then
+        P.ghostSprites = {}
+        for i, tex in ipairs(P.GHOST_TEX) do
+            local s = IsoSprite.new()   -- 同 FloorTint 的疊色（原版 ISBuildingObject.getFloorCursorSprite）
+            s:LoadSingleTexture(tex)
+            P.ghostSprites[i] = s
+        end
+    end
     hook(true)
     ask(m, 0)
     P.pump(m, getTimestampMs())

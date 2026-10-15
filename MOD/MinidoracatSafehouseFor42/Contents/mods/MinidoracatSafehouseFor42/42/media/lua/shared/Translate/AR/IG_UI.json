@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "Esta habitación · casillas: %1 · con techo: %2/%3",
     "IGUI_MSH_Indoor_Gap": "Falta pared · casillas: %1",
     "IGUI_MSH_Indoor_GapFix": "Pon una pared, un marco de puerta o un marco de ventana.",
+    "IGUI_MSH_Indoor_DoorOpen": "Puerta abierta · casillas: %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Abierta no es pared: ciérrala y vuelve a comprobar.",
+    "IGUI_MSH_Indoor_DoorShut": "Puerta que no cuenta como pared · casillas: %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Cuenta como hueco aunque esté cerrada: algunas puertas nunca cuentan como pared y algunas formas de abrirlas o cerrarlas no hacen que el juego vuelva a comprobar.",
     "IGUI_MSH_Indoor_SplitFix": "Pon una pared aquí para cerrar la parte que tiene techo.",
     "IGUI_MSH_Indoor_Hole": "Falta techo · casillas: %1",
     "IGUI_MSH_Indoor_HoleFix": "Pon suelo en el nivel justo de arriba.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "No cuenta como interior",
     "IGUI_MSH_Indoor_RoofOnly": "Solo techo",
     "IGUI_MSH_Indoor_ShowMarks": "Marcar los lugares en el suelo",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Un suelo algo más oscuro muestra la zona comprobada; los suelos rojos son casillas sin techo y los contornos rojos de pared son paredes que faltan. Las marcas desaparecen al cerrar esta ventana.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Un suelo algo más oscuro muestra la zona comprobada; los suelos rojos son casillas sin techo y las paredes rojo vivo son paredes que faltan. Las marcas desaparecen al cerrar esta ventana.",
     "IGUI_MSH_Indoor_Recheck": "Volver a comprobar",
     "IGUI_MSH_Indoor_Checking": "Comprobando...",
     "IGUI_MSH_Indoor_Partial": "El edificio es demasiado grande. Solo se comprobó la parte más cercana al punto comprobado.",
-    "IGUI_MSH_Indoor_Note": "Las paredes, los marcos de puerta, los marcos de ventana y las vallas cuentan como paredes, aunque la puerta esté abierta o falte el vidrio. El techo es el suelo del nivel justo de arriba."
+    "IGUI_MSH_Indoor_Note": "Las paredes, los marcos de puerta, los marcos de ventana y las vallas cuentan como paredes, aunque la puerta de su marco esté abierta o falte el vidrio; la puerta de garaje de una casa no cuenta mientras esté abierta. El techo es el suelo del nivel justo de arriba."
 }

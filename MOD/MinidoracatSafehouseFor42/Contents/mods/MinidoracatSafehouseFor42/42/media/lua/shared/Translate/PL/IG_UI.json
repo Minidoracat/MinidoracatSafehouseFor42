@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "To pomieszczenie · pola: %1 · z dachem: %2/%3",
     "IGUI_MSH_Indoor_Gap": "Brak ściany · pola: %1",
     "IGUI_MSH_Indoor_GapFix": "Postaw ścianę, framugę lub ramę okna.",
+    "IGUI_MSH_Indoor_DoorOpen": "Otwarte drzwi · pola: %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Otwarte to nie ściana: zamknij i sprawdź ponownie.",
+    "IGUI_MSH_Indoor_DoorShut": "Drzwi, które nie liczą się jako ściana · pola: %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Liczy się jako luka nawet po zamknięciu: niektóre drzwi nigdy nie liczą się jako ściana, a przy niektórych sposobach otwierania lub zamykania gra nie sprawdza ponownie.",
     "IGUI_MSH_Indoor_SplitFix": "Postaw tu ścianę, aby oddzielić część z dachem.",
     "IGUI_MSH_Indoor_Hole": "Brak dachu · pola: %1",
     "IGUI_MSH_Indoor_HoleFix": "Połóż podłogę na poziomie tuż powyżej.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "Nie liczy się jako wnętrze",
     "IGUI_MSH_Indoor_RoofOnly": "Tylko dach",
     "IGUI_MSH_Indoor_ShowMarks": "Zaznacz miejsca na ziemi",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Lekko przyciemniona podłoga pokazuje sprawdzony obszar; czerwone podłogi to pola bez dachu, a czerwone obrysy ścian to brakujące ściany. Oznaczenia znikają po zamknięciu tego okna.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Lekko przyciemniona podłoga pokazuje sprawdzony obszar; czerwone podłogi to pola bez dachu, a jaskrawoczerwone ściany to brakujące ściany. Oznaczenia znikają po zamknięciu tego okna.",
     "IGUI_MSH_Indoor_Recheck": "Sprawdź ponownie",
     "IGUI_MSH_Indoor_Checking": "Sprawdzanie...",
     "IGUI_MSH_Indoor_Partial": "Budynek jest za duży. Sprawdzono tylko część najbliższą sprawdzanego miejsca.",
-    "IGUI_MSH_Indoor_Note": "Za ściany uznaje się ściany, framugi, ramy okien i ogrodzenia, nawet przy otwartych drzwiach lub wyjętej szybie. Dach to podłoga na poziomie tuż powyżej."
+    "IGUI_MSH_Indoor_Note": "Za ściany uznaje się ściany, framugi, ramy okien i ogrodzenia, nawet przy otwartych drzwiach we framudze lub wyjętej szybie; brama garażowa domu nie liczy się, gdy jest otwarta. Dach to podłoga na poziomie tuż powyżej."
 }

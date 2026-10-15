@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "この部屋 · %1マス · 屋根 %2/%3",
     "IGUI_MSH_Indoor_Gap": "壁の不足 · %1マス",
     "IGUI_MSH_Indoor_GapFix": "壁、ドア枠、窓枠のどれかを建ててください。",
+    "IGUI_MSH_Indoor_DoorOpen": "開いたドア · %1マス",
+    "IGUI_MSH_Indoor_DoorOpenFix": "開いていると壁扱いされません。閉めて再チェック。",
+    "IGUI_MSH_Indoor_DoorShut": "壁扱いされないドア · %1マス",
+    "IGUI_MSH_Indoor_DoorShutFix": "閉めてもすき間として数えられます。壁扱いされないドアもあり、開け閉めの方法によっては再判定されません。",
     "IGUI_MSH_Indoor_SplitFix": "ここに壁を建てて、屋根のある部分を仕切ってください。",
     "IGUI_MSH_Indoor_Hole": "屋根の不足 · %1マス",
     "IGUI_MSH_Indoor_HoleFix": "すぐ上の階に床を敷いてください。",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "屋内扱いではない",
     "IGUI_MSH_Indoor_RoofOnly": "屋根のみ",
     "IGUI_MSH_Indoor_ShowMarks": "地面に場所を表示",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "床が少し暗くなっているのはチェックした範囲、赤い床は屋根が足りないマス、赤い壁の輪郭は壁が足りない場所です。このウィンドウを閉じると消えます。",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "床が少し暗くなっているのはチェックした範囲、赤い床は屋根が足りないマス、明るい赤の壁は壁が足りない場所です。このウィンドウを閉じると消えます。",
     "IGUI_MSH_Indoor_Recheck": "再チェック",
     "IGUI_MSH_Indoor_Checking": "チェック中...",
     "IGUI_MSH_Indoor_Partial": "建物が大きすぎるため、チェックした地点に最も近い部分だけをチェックしました。",
-    "IGUI_MSH_Indoor_Note": "壁、ドア枠、窓枠、フェンスはすべて壁として扱われます。ドアが開いていても、ガラスが外れていても同じです。屋根とは、すぐ上の階の床のことです。"
+    "IGUI_MSH_Indoor_Note": "壁、ドア枠、窓枠、フェンスはすべて壁として扱われます。枠に付いたドアが開いていても、ガラスが外れていても同じです。住宅のガレージドアは開いている間は壁扱いされません。屋根とは、すぐ上の階の床のことです。"
 }

@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "這個房間 · %1 格 · 屋頂 %2／%3",
     "IGUI_MSH_Indoor_Gap": "牆缺 %1 格",
     "IGUI_MSH_Indoor_GapFix": "補上牆、門框或窗框。",
+    "IGUI_MSH_Indoor_DoorOpen": "開著的門 %1 格",
+    "IGUI_MSH_Indoor_DoorOpenFix": "開著時不算牆，關上後按〔重新檢查〕。",
+    "IGUI_MSH_Indoor_DoorShut": "不算牆的門 %1 格",
+    "IGUI_MSH_Indoor_DoorShutFix": "關著也照缺口算：有些門不算牆，有些開關方式遊戲不會重算。",
     "IGUI_MSH_Indoor_SplitFix": "在這裡隔一道牆，把有屋頂的地方圍起來。",
     "IGUI_MSH_Indoor_Hole": "屋頂缺 %1 格",
     "IGUI_MSH_Indoor_HoleFix": "在正上方那一層鋪地板。",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "不算室內",
     "IGUI_MSH_Indoor_RoofOnly": "只有屋頂",
     "IGUI_MSH_Indoor_ShowMarks": "在地上標出位置",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "地板稍微變暗的是這次檢查到的範圍；紅色地板是缺屋頂的格子，紅色牆影是缺牆的地方。關掉這個視窗就收起來。",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "地板稍微變暗的是這次檢查到的範圍；紅色地板是缺屋頂的格子，亮紅色的牆是缺牆的地方。關掉這個視窗就收起來。",
     "IGUI_MSH_Indoor_Recheck": "重新檢查",
     "IGUI_MSH_Indoor_Checking": "檢查中...",
     "IGUI_MSH_Indoor_Partial": "房子太大，只檢查了離查的位置最近的一部分。",
-    "IGUI_MSH_Indoor_Note": "牆、門框、窗框、圍籬都算牆；門開著、玻璃拆了也算。屋頂是正上方一層的地板。"
+    "IGUI_MSH_Indoor_Note": "牆、門框、窗框、圍籬都算牆；門框裡的門開著、玻璃拆了也算；住宅的車庫門開著時不算。屋頂是正上方一層的地板。"
 }

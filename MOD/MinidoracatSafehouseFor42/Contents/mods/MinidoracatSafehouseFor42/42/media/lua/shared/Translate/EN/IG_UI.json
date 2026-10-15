@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "This room · tiles: %1 · roofed: %2/%3",
     "IGUI_MSH_Indoor_Gap": "Missing wall · tiles: %1",
     "IGUI_MSH_Indoor_GapFix": "Add a wall, door frame or window frame.",
+    "IGUI_MSH_Indoor_DoorOpen": "Open door · tiles: %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Not a wall while open: close it and check again.",
+    "IGUI_MSH_Indoor_DoorShut": "Door that isn't a wall · tiles: %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Counted as a gap even when closed: some doors never count as walls, and some ways of opening or closing don't make the game recheck.",
     "IGUI_MSH_Indoor_SplitFix": "Put a wall here to close off the part with a roof.",
     "IGUI_MSH_Indoor_Hole": "Missing roof · tiles: %1",
     "IGUI_MSH_Indoor_HoleFix": "Lay a floor on the level right above.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "Doesn't count as indoors",
     "IGUI_MSH_Indoor_RoofOnly": "Roof only",
     "IGUI_MSH_Indoor_ShowMarks": "Mark the spots on the ground",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "A slightly darker floor shows the area that was checked; red floors are missing roof tiles and red wall outlines are missing walls. They go away when you close this window.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "A slightly darker floor shows the area that was checked; red floors are missing roof tiles and bright red walls are missing walls. They go away when you close this window.",
     "IGUI_MSH_Indoor_Recheck": "Check again",
     "IGUI_MSH_Indoor_Checking": "Checking...",
     "IGUI_MSH_Indoor_Partial": "The building is too big. Only the part nearest the checked spot was checked.",
-    "IGUI_MSH_Indoor_Note": "Walls, door frames, window frames and fences all count as walls, even with the door open or the glass removed. The roof is the floor on the level right above."
+    "IGUI_MSH_Indoor_Note": "Walls, door frames, window frames and fences all count as walls, even with a door in its frame left open or the glass removed; a house garage door doesn't count while it's open. The roof is the floor on the level right above."
 }

@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "Cette pièce · cases : %1 · avec toit : %2/%3",
     "IGUI_MSH_Indoor_Gap": "Mur manquant · cases : %1",
     "IGUI_MSH_Indoor_GapFix": "Ajoutez un mur, un cadre de porte ou un cadre de fenêtre.",
+    "IGUI_MSH_Indoor_DoorOpen": "Porte ouverte · cases : %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Ouverte, ce n'est pas un mur : fermez-la et revérifiez.",
+    "IGUI_MSH_Indoor_DoorShut": "Porte qui ne compte pas comme un mur · cases : %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Comptée comme une brèche même fermée : certaines portes ne comptent jamais comme un mur, et certaines façons de l'ouvrir ou de la fermer ne relancent pas la vérification du jeu.",
     "IGUI_MSH_Indoor_SplitFix": "Placez un mur ici pour isoler la partie qui a un toit.",
     "IGUI_MSH_Indoor_Hole": "Toit manquant · cases : %1",
     "IGUI_MSH_Indoor_HoleFix": "Posez un sol au niveau juste au-dessus.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "Ne compte pas comme intérieur",
     "IGUI_MSH_Indoor_RoofOnly": "Toit seulement",
     "IGUI_MSH_Indoor_ShowMarks": "Marquer les endroits au sol",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Un sol légèrement assombri montre la zone vérifiée ; les sols rouges sont les cases sans toit et les contours de mur rouges sont les murs manquants. Les marques disparaissent quand vous fermez cette fenêtre.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Un sol légèrement assombri montre la zone vérifiée ; les sols rouges sont les cases sans toit et les murs rouge vif sont les murs manquants. Les marques disparaissent quand vous fermez cette fenêtre.",
     "IGUI_MSH_Indoor_Recheck": "Revérifier",
     "IGUI_MSH_Indoor_Checking": "Vérification...",
     "IGUI_MSH_Indoor_Partial": "Le bâtiment est trop grand. Seule la partie la plus proche de l'endroit vérifié a été vérifiée.",
-    "IGUI_MSH_Indoor_Note": "Murs, cadres de porte, cadres de fenêtre et clôtures comptent tous comme des murs, même porte ouverte ou vitre retirée. Le toit est le sol du niveau juste au-dessus."
+    "IGUI_MSH_Indoor_Note": "Murs, cadres de porte, cadres de fenêtre et clôtures comptent tous comme des murs, même si la porte de son cadre est ouverte ou la vitre retirée ; une porte de garage de maison ne compte pas tant qu'elle est ouverte. Le toit est le sol du niveau juste au-dessus."
 }

@@ -9,7 +9,7 @@ return function(T)
 
     -- 假 IsoRegions（getSquareFlags／getIsoWorldRegion／getChunkRegion）：flags["x,y,z"]＝位元和，沒有＝-1（沒資料）。
     -- region 照引擎：同一層不穿牆相連的格子；有一條走得過去的邊通到沒資料的格子＝不封閉；屋頂數＝正上方一層有地板的格數
-    local W = { flags = {}, map = {}, regions = nil }
+    local W = { flags = {}, map = {}, doors = {}, regions = nil }
     local function k3(x, y, z) return x .. "," .. y .. "," .. z end
     local function fl(x, y, z) return W.flags[k3(x, y, z)] or -1 end
     local function bit(f, b) return f >= 0 and math.floor(f / b) % 2 == 1 end
@@ -105,16 +105,29 @@ return function(T)
             return r and r.chunk or nil
         end,
     }
-    -- 伺服器的格子：只用到地圖房間（getRoom 不是 nil、不是 user-defined）
+    -- 伺服器的格子：地圖房間（getRoom 不是 nil、不是 user-defined）與缺口上的門（getSpecialObjects）
+    local NO_OBJECTS = {}
     getCell = function()
         return { getGridSquare = function(_, x, y, z)
-            local inMap = W.map[k3(x, y, z)]
-            return { getRoom = function() return inMap and {} or nil end, isUserDefinedRoom = function() return false end }
+            local k = k3(x, y, z)
+            local inMap, objs = W.map[k], W.doors[k] or NO_OBJECTS
+            return { getRoom = function() return inMap and {} or nil end, isUserDefinedRoom = function() return false end,
+                getSpecialObjects = function()
+                    return { size = function() return #objs end, get = function(_, i) return objs[i + 1] end }
+                end }
         end }
     end
     local function fresh()
-        W.flags, W.map, W.regions = {}, {}, nil
+        W.flags, W.map, W.doors, W.regions = {}, {}, {}, nil
         ground(0, 0, 40, 40, 0)
+    end
+    -- 在 (x, y) 放一扇門：north＝北邊的門；class 預設 IsoDoor（IsoThumpable 用 isDoor 分辨，isDoor＝false＝不是門的物件）
+    local function door(x, y, north, open, class, isDoor)
+        local o = { __class = class or "IsoDoor" }
+        function o.getNorth() return north end
+        function o.IsOpen() return open end
+        function o.isDoor() return isDoor ~= false end
+        W.doors[k3(x, y, 0)] = { o }
     end
     -- 清單換成集合字串比較："x,y" 或 "x,yN"／"x,yW"（排序後以空白相接）
     local function sorted(list)
@@ -131,6 +144,13 @@ return function(T)
     local function gaps(r)
         local out = {}
         for i = 1, #r.gaps, 3 do out[#out + 1] = r.gaps[i] .. "," .. r.gaps[i + 1] .. (r.gaps[i + 2] == 1 and "N" or "W") end
+        return sorted(out)
+    end
+    local function doors(r)
+        local out = {}
+        for i = 1, #r.doors, 4 do
+            out[#out + 1] = r.doors[i] .. "," .. r.doors[i + 1] .. (r.doors[i + 2] == 1 and "N" or "W") .. r.doors[i + 3]
+        end
         return sorted(out)
     end
     local function runs(lv)
@@ -265,6 +285,34 @@ return function(T)
         and ring.gapCount == 24 and ring.holeCount == 0,
         "屋頂比牆多出一圈：屋簷下另算一間（沒圍起來的邊多過有牆的邊，客戶端照這個分辨屋簷下）")
 
+    T.section("室內檢查：缺口上的門（使用者 2026-10-15：正式服開著的車庫門被列成缺牆）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 11, 13 do
+        wall(10, y, WALL_W, false)    -- 開著的車庫門片沒有牆的屬性：引擎照缺口算
+        door(10, y, false, true)
+    end
+    wall(12, 10, WALL_N, false)
+    door(12, 10, false, false)        -- 西邊的門放在北牆缺口那格：不是這條邊的門
+    wall(13, 10, WALL_N, false)
+    door(13, 10, true, false, "IsoThumpable", false)   -- 北邊、但不是門（自建的牆之類）
+    res = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(r.verdict == "OPEN" and r.gapCount == 5 and r.doorCount == 3 and doors(r) == "10,11W1 10,12W1 10,13W1"
+        and gaps(r) == "12,10N 13,10N",
+        "缺口上有開著的門：另列 doors（開著＝1），gapCount 照算全部；方向不合的門、不是門的物件照缺牆列")
+    for y = 11, 13 do door(10, y, false, false, "IsoThumpable") end
+    r = I.check(11, 11, 0).rooms[1]
+    check(r.doorCount == 3 and doors(r) == "10,11W0 10,12W0 10,13W0",
+        "關著也照缺口算的門（Knox Pass 模型門是 IsoThumpable）：關著＝0")
+    local marks0 = I.MAX_MARKS
+    I.MAX_MARKS = 2
+    r = I.check(11, 11, 0).rooms[1]
+    check(r.doorCount == 3 and #r.doors == 8 and #r.gaps == 6 and r.gapCount == 5,
+        "門與缺牆各自最多 MAX_MARKS 筆，數量照實數")
+    I.MAX_MARKS = marks0
+
     T.section("室內檢查：同一棟每一層（使用者 2026-10-15：「每一層都分析」）")
     fresh()
     box(10, 10, 13, 13)
@@ -330,7 +378,7 @@ return function(T)
     getCell, IsoRegions = saved.getCell, saved.IsoRegions
 
     -- ===== 客戶端面板 =====
-    local G = { "MinidoracatUI", "ISPanel", "ISButton", "getCore", "getTextManager", "UIFont", "getText", "getSprite",
+    local G = { "MinidoracatUI", "ISPanel", "ISButton", "getCore", "getTextManager", "UIFont", "getText", "IsoSprite",
         "HaloTextHelper", "ISWorldObjectContextMenu" }
     local savedG = {}
     for _, k in ipairs(G) do savedG[k] = _G[k] end
@@ -338,12 +386,18 @@ return function(T)
         local a = { ... }
         return #a == 0 and k or (k .. "|" .. table.concat(a, ","))
     end
-    local ghosts, quiet = {}, false   -- quiet：量配置時不記（記錄本身會配置字串）
-    getSprite = function(name)
-        return { RenderGhostTileColor = function(_, x, y, z, r, g, b, a)
-            if not quiet then ghosts[#ghosts + 1] = name .. "@" .. x .. "," .. y .. "," .. z .. "/" .. a end
-        end }
-    end
+    -- 牆影：面板第一次開時建貼圖（之後 tintWorld 換掉 IsoSprite 也不影響），記「貼圖@x,y,z/透明度」與最後一次的顏色
+    local ghosts, ghostColor, quiet = {}, nil, false   -- quiet：量配置時不記（記錄本身會配置字串）
+    IsoSprite = { new = function()
+        local s = {}
+        function s:LoadSingleTexture(path) self.tex = path end
+        function s:RenderGhostTileColor(x, y, z, r, g, b, a)
+            if quiet then return end
+            ghosts[#ghosts + 1] = self.tex .. "@" .. x .. "," .. y .. "," .. z .. "/" .. a
+            ghostColor = r .. "/" .. g .. "/" .. b
+        end
+        return s
+    end }
     local halo = {}
     HaloTextHelper = {
         addGoodText = function(_, t) halo[#halo + 1] = "good:" .. t end,
@@ -530,11 +584,12 @@ return function(T)
         "缺屋頂的兩格染紅（圖層 indoor），這一層這次檢查到的範圍壓暗一點（圖層 indoorArea）")
     ghosts = {}
     T.fire("RenderOpaqueObjectsInWorld", 0)
-    check(#ghosts == 2 and ghosts[1] == P.SPRITES[2] .. "@10,11,0/" .. P.GHOST, "缺牆的兩條邊畫牆影（西邊用西牆貼圖）")
+    check(#ghosts == 2 and ghosts[1] == P.GHOST_TEX[2] .. "@10,11,0/" .. P.GHOST and ghostColor == "1/0.12/0.12",
+        "缺牆的兩條邊畫亮紅色的牆影（西邊用西邊的牆面貼圖）")
     P.select(m, 1)
     ghosts = {}
     T.fire("RenderOpaqueObjectsInWorld", 0)
-    check(ghosts[1] == P.SPRITES[2] .. "@10,11,0/" .. P.GHOST_SEL, "選中那一列：那一組標得較強")
+    check(ghosts[1] == P.GHOST_TEX[2] .. "@10,11,0/" .. P.GHOST_SEL, "選中那一列：那一組標得較強")
     me.z = 1
     ghosts = {}
     T.fire("RenderOpaqueObjectsInWorld", 0)
@@ -594,6 +649,25 @@ return function(T)
     P.onObject(obj(12, 12, 2))
     check(m.want, "2 樓的屋頂（第 3 層的地板）有增減：照樣重查")
     m.want = false
+
+    T.section("室內檢查面板：缺口上的門（使用者 2026-10-15：正式服開著的車庫門被列成缺牆）")
+    local DOORS = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,
+        partial = false, levels = { { z = 0, runs = RUNS44 } },
+        rooms = { { verdict = "OPEN", z = 0, x = 11, y = 11, size = 16, roofs = 16, walls = 12, gapCount = 4, doorCount = 4,
+            holeCount = 0, gaps = {}, holes = {}, doors = { 10, 12, 2, 1, 10, 11, 2, 1, 10, 13, 2, 1, 13, 10, 1, 0 } } } }
+    T.advance(P.GAP_MS)
+    P.recheck(m)
+    T.tick(1)
+    reply(DOORS)
+    check(m.cur == 1 and #m.issues == 2 and m.issues[1].kind == "door" and m.issues[1].open and m.issues[1].n == 3
+        and m.issues[2].kind == "door" and not m.issues[2].open and m.issues[2].n == 1,
+        "有門的缺口：開著的、關著的各自併段，不列成缺牆")
+    check(v.issues.pool[1].title == "IGUI_MSH_Indoor_DoorOpen|3" and v.issues.pool[1].sub == "IGUI_MSH_Indoor_DoorOpenFix"
+        and v.issues.pool[2].title == "IGUI_MSH_Indoor_DoorShut|1" and v.issues.pool[2].sub == "IGUI_MSH_Indoor_DoorShutFix",
+        "門那列：開著的叫你關上再查，關著也不算牆的照實說，都不叫你補牆")
+    ghosts = {}
+    T.fire("RenderOpaqueObjectsInWorld", 0)
+    check(#ghosts == 4, "有門的缺口一樣畫牆影")
 
     T.section("室內檢查面板：太遠、換查別格、關窗")
     T.advance(P.GAP_MS)

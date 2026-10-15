@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "Bu oda · kare: %1 · çatılı: %2/%3",
     "IGUI_MSH_Indoor_Gap": "Eksik duvar · kare: %1",
     "IGUI_MSH_Indoor_GapFix": "Duvar, kapı çerçevesi veya pencere çerçevesi ekleyin.",
+    "IGUI_MSH_Indoor_DoorOpen": "Açık kapı · kare: %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Açıkken duvar değil: kapatıp tekrar kontrol edin.",
+    "IGUI_MSH_Indoor_DoorShut": "Duvar sayılmayan kapı · kare: %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Kapalıyken de boşluk sayılır: bazı kapılar hiçbir zaman duvar sayılmaz, bazı açma kapama yöntemlerinde de oyun yeniden kontrol etmez.",
     "IGUI_MSH_Indoor_SplitFix": "Çatılı kısmı ayırmak için buraya bir duvar yapın.",
     "IGUI_MSH_Indoor_Hole": "Eksik çatı · kare: %1",
     "IGUI_MSH_Indoor_HoleFix": "Hemen üstteki kata zemin döşeyin.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "İç mekan sayılmaz",
     "IGUI_MSH_Indoor_RoofOnly": "Sadece çatı",
     "IGUI_MSH_Indoor_ShowMarks": "Yerleri zeminde işaretle",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Biraz kararmış zemin kontrol edilen alanı gösterir; kırmızı zeminler çatısı eksik kareler, kırmızı duvar hatları eksik duvarlardır. Bu pencereyi kapatınca işaretler kaybolur.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Biraz kararmış zemin kontrol edilen alanı gösterir; kırmızı zeminler çatısı eksik kareler, parlak kırmızı duvarlar eksik duvarlardır. Bu pencereyi kapatınca işaretler kaybolur.",
     "IGUI_MSH_Indoor_Recheck": "Tekrar kontrol et",
     "IGUI_MSH_Indoor_Checking": "Kontrol ediliyor...",
     "IGUI_MSH_Indoor_Partial": "Bina çok büyük. Sadece kontrol edilen noktaya en yakın kısım kontrol edildi.",
-    "IGUI_MSH_Indoor_Note": "Duvarlar, kapı çerçeveleri, pencere çerçeveleri ve çitlerin hepsi duvar sayılır; kapı açık olsa veya camı sökülmüş olsa bile. Çatı, hemen üstteki kattaki zemindir."
+    "IGUI_MSH_Indoor_Note": "Duvarlar, kapı çerçeveleri, pencere çerçeveleri ve çitlerin hepsi duvar sayılır; çerçevedeki kapı açık olsa veya camı sökülmüş olsa bile; bir evin garaj kapısı açıkken duvar sayılmaz. Çatı, hemen üstteki kattaki zemindir."
 }

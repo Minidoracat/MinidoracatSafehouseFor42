@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "Dieser Raum · Kacheln: %1 · überdacht: %2/%3",
     "IGUI_MSH_Indoor_Gap": "Fehlende Wand · Kacheln: %1",
     "IGUI_MSH_Indoor_GapFix": "Baue eine Wand, einen Türrahmen oder einen Fensterrahmen.",
+    "IGUI_MSH_Indoor_DoorOpen": "Offene Tür · Kacheln: %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Offen keine Wand: schließen und erneut prüfen.",
+    "IGUI_MSH_Indoor_DoorShut": "Tür, die nicht als Wand zählt · Kacheln: %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Zählt auch geschlossen als Lücke: Manche Türen zählen nie als Wand, und bei manchen Arten des Öffnens oder Schließens prüft das Spiel nicht neu.",
     "IGUI_MSH_Indoor_SplitFix": "Baue hier eine Wand, um den überdachten Teil abzutrennen.",
     "IGUI_MSH_Indoor_Hole": "Fehlendes Dach · Kacheln: %1",
     "IGUI_MSH_Indoor_HoleFix": "Lege einen Boden auf der Ebene direkt darüber.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "Zählt nicht als Innenraum",
     "IGUI_MSH_Indoor_RoofOnly": "Nur Dach",
     "IGUI_MSH_Indoor_ShowMarks": "Stellen am Boden markieren",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Ein leicht abgedunkelter Boden zeigt den geprüften Bereich; rote Böden sind fehlende Dachkacheln und rote Wandumrisse sind fehlende Wände. Die Markierungen verschwinden, wenn du dieses Fenster schließt.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Ein leicht abgedunkelter Boden zeigt den geprüften Bereich; rote Böden sind fehlende Dachkacheln und leuchtend rote Wände sind fehlende Wände. Die Markierungen verschwinden, wenn du dieses Fenster schließt.",
     "IGUI_MSH_Indoor_Recheck": "Erneut prüfen",
     "IGUI_MSH_Indoor_Checking": "Wird geprüft...",
     "IGUI_MSH_Indoor_Partial": "Das Gebäude ist zu groß. Nur der Teil, der der geprüften Stelle am nächsten liegt, wurde geprüft.",
-    "IGUI_MSH_Indoor_Note": "Wände, Türrahmen, Fensterrahmen und Zäune zählen alle als Wände, auch bei offener Tür oder entferntem Glas. Das Dach ist der Boden auf der Ebene direkt darüber."
+    "IGUI_MSH_Indoor_Note": "Wände, Türrahmen, Fensterrahmen und Zäune zählen alle als Wände, auch wenn die Tür im Rahmen offen ist oder das Glas fehlt; ein Garagentor eines Hauses zählt nicht, solange es offen ist. Das Dach ist der Boden auf der Ebene direkt darüber."
 }

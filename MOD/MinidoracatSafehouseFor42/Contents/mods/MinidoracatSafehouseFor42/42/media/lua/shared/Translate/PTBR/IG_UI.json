@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "Este cômodo · quadrados: %1 · com telhado: %2/%3",
     "IGUI_MSH_Indoor_Gap": "Parede faltando · quadrados: %1",
     "IGUI_MSH_Indoor_GapFix": "Construa uma parede, um batente de porta ou um batente de janela.",
+    "IGUI_MSH_Indoor_DoorOpen": "Porta aberta · quadrados: %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Aberta não é parede: feche e verifique de novo.",
+    "IGUI_MSH_Indoor_DoorShut": "Porta que não conta como parede · quadrados: %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Conta como abertura mesmo fechada: algumas portas nunca contam como parede e alguns jeitos de abrir ou fechar não fazem o jogo verificar de novo.",
     "IGUI_MSH_Indoor_SplitFix": "Construa uma parede aqui para fechar a parte com telhado.",
     "IGUI_MSH_Indoor_Hole": "Telhado faltando · quadrados: %1",
     "IGUI_MSH_Indoor_HoleFix": "Coloque piso no andar logo acima.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "Não conta como interior",
     "IGUI_MSH_Indoor_RoofOnly": "Só telhado",
     "IGUI_MSH_Indoor_ShowMarks": "Marcar os locais no chão",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Um piso um pouco mais escuro mostra a área verificada; pisos vermelhos são quadrados sem telhado e contornos vermelhos de parede são paredes faltando. As marcas somem quando você fecha esta janela.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Um piso um pouco mais escuro mostra a área verificada; pisos vermelhos são quadrados sem telhado e paredes vermelho vivo são paredes faltando. As marcas somem quando você fecha esta janela.",
     "IGUI_MSH_Indoor_Recheck": "Verificar de novo",
     "IGUI_MSH_Indoor_Checking": "Verificando...",
     "IGUI_MSH_Indoor_Partial": "O prédio é grande demais. Só foi verificada a parte mais perto do ponto verificado.",
-    "IGUI_MSH_Indoor_Note": "Paredes, batentes de porta, batentes de janela e cercas contam como paredes, mesmo com a porta aberta ou sem o vidro. O telhado é o piso do andar logo acima."
+    "IGUI_MSH_Indoor_Note": "Paredes, batentes de porta, batentes de janela e cercas contam como paredes, mesmo com a porta do batente aberta ou sem o vidro; o portão de garagem de uma casa não conta enquanto estiver aberto. O telhado é o piso do andar logo acima."
 }

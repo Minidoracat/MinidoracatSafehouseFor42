@@ -646,6 +646,10 @@
     "IGUI_MSH_Indoor_RoomLine": "Esta divisão · quadrados: %1 · com telhado: %2/%3",
     "IGUI_MSH_Indoor_Gap": "Parede em falta · quadrados: %1",
     "IGUI_MSH_Indoor_GapFix": "Construa uma parede, um vão de porta ou um vão de janela.",
+    "IGUI_MSH_Indoor_DoorOpen": "Porta aberta · quadrados: %1",
+    "IGUI_MSH_Indoor_DoorOpenFix": "Aberta não é parede: feche-a e verifique de novo.",
+    "IGUI_MSH_Indoor_DoorShut": "Porta que não conta como parede · quadrados: %1",
+    "IGUI_MSH_Indoor_DoorShutFix": "Conta como abertura mesmo fechada: algumas portas nunca contam como parede e algumas formas de as abrir ou fechar não fazem o jogo verificar de novo.",
     "IGUI_MSH_Indoor_SplitFix": "Construa uma parede aqui para fechar a parte com telhado.",
     "IGUI_MSH_Indoor_Hole": "Telhado em falta · quadrados: %1",
     "IGUI_MSH_Indoor_HoleFix": "Coloque chão no piso imediatamente acima.",
@@ -661,9 +665,9 @@
     "IGUI_MSH_Indoor_NotIndoor": "Não conta como interior",
     "IGUI_MSH_Indoor_RoofOnly": "Só telhado",
     "IGUI_MSH_Indoor_ShowMarks": "Marcar os locais no chão",
-    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Um chão ligeiramente mais escuro mostra a área verificada; o chão vermelho marca os quadrados sem telhado e os contornos vermelhos de parede marcam as paredes em falta. As marcas desaparecem quando fechar esta janela.",
+    "IGUI_MSH_Indoor_ShowMarks_tooltip": "Um chão ligeiramente mais escuro mostra a área verificada; o chão vermelho marca os quadrados sem telhado e as paredes vermelho vivo marcam as paredes em falta. As marcas desaparecem quando fechar esta janela.",
     "IGUI_MSH_Indoor_Recheck": "Verificar de novo",
     "IGUI_MSH_Indoor_Checking": "A verificar...",
     "IGUI_MSH_Indoor_Partial": "O edifício é demasiado grande. Só foi verificada a parte mais próxima do ponto verificado.",
-    "IGUI_MSH_Indoor_Note": "Paredes, vãos de porta, vãos de janela e vedações contam todas como paredes, mesmo com a porta aberta ou sem o vidro. O telhado é o chão do piso imediatamente acima."
+    "IGUI_MSH_Indoor_Note": "Paredes, vãos de porta, vãos de janela e vedações contam todas como paredes, mesmo com a porta do vão aberta ou sem o vidro; o portão de garagem de uma casa não conta enquanto estiver aberto. O telhado é o chão do piso imediatamente acima."
 }
