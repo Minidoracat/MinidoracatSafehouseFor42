@@ -6,9 +6,12 @@
 --   開窗、按〔重新檢查〕、檢查範圍外框 NEAR 格內有物件增減時查（OnObjectAdded／OnObjectAboutToBeRemoved：伺服器改了東西、
 --   客戶端收到封包時觸發，AddItemToMapPacket、RemoveItemFromSquarePacket）。物件增減後等 SETTLE_MS（伺服器的 IsoRegions
 --   在背景執行緒重算）；同時只送一筆，上一筆回覆後滿 GAP_MS 才送下一筆（伺服器冷卻 1 秒，client-ui.md「冷卻間隔從回覆算」）。
--- 地上標示：缺屋頂的格子用 FloorTint 圖層 "indoor"（地板染色，只染畫面裡的）；缺牆照原版建造游標的畫法，把牆的貼圖用
---   RenderGhostTileColor 半透明疊上（RenderOpaqueObjectsInWorld 裡 renderIsoLine 畫不出來，sh-indoor-1015c），只在玩家
---   站在那一層時畫（疊色不測深度，會蓋過樓上）。
+-- 地上標示（標在目前看的那一間所在的那一層）：這一層這次檢查到的範圍用 FloorTint 圖層 "indoorArea" 把地板稍微壓暗
+--   （使用者 2026-10-15：「可以」在地上淡淡標出檢查到的整棟範圍）；缺屋頂的格子用圖層 "indoor"（地板染色，只染畫面裡的）；
+--   缺牆照原版建造游標的畫法，把牆的貼圖用 RenderGhostTileColor 半透明疊上（RenderOpaqueObjectsInWorld 裡 renderIsoLine
+--   畫不出來，sh-indoor-1015c），只在玩家站在那一層時畫（疊色不測深度，會蓋過樓上）。
+-- 同一棟每一層都分析（使用者 2026-10-15：「每一層都分析」）：結果有不只一層時，房間列與房間那一行前面寫第幾樓；目前看的
+--   那間不在玩家這一層時，問題列右邊寫第幾樓、不寫距離。
 -- 屋簷下（OPEN 而且沒圍起來的邊不少於有牆的邊：比牆多出一圈的屋頂、門廊、車棚）只說結論、不列缺口：那些邊本來就沒要圍。
 -- 框架缺席：不開視窗，查完用頭上文字（HaloTextHelper）說結論（AGENTS.md 鐵則：不報錯、不消失）。
 -- 載入時不碰 ISPanel、框架或 getPlayer（harness T.bootClient 會載入本檔）；ISPanel 子類在第一次開窗時才建。
@@ -28,9 +31,13 @@ P.GAP_MS = 1100       -- 伺服器冷卻 1000 ms＋餘裕，從回覆算
 P.SETTLE_MS = 700     -- 物件增減後多久才查（伺服器重算 IsoRegions；送到客戶端實測 101-206 ms，sh-indoor-1015e）
 P.NEAR = 4            -- 物件落在檢查範圍外框外幾格內才重查（和伺服器找屋頂的 NEAR 一樣）
 P.DIST_MS = 500       -- 多久更新一次「離你 N 格」
-P.ROWS, P.ROOM_ROWS = 5, 3   -- 問題、同一個屋頂下的房間各最多同時顯示幾列（再多就捲動）
+P.ROWS, P.ROOM_ROWS = 5, 3   -- 問題、同一棟其他房間各最多同時顯示幾列（再多就捲動）
 P.TINT, P.TINT_SEL = 0.75, 1   -- 缺屋頂格子的染色強度（選中的那一組較強；0.45 在草地上只看得出一點褐色，sh-indoor-1015f）
 P.GHOST, P.GHOST_SEL = 0.5, 0.9   -- 缺牆的牆影
+-- 檢查到的範圍：把地板壓暗一點。染色是把地板的光照色往顏色拉（FloorTint 檔頭），白天往白色拉看不出來（sh-indoor-1015i
+-- 用主題的 text 色，截圖上幾乎沒變）；黑色 0.3 草地暗了約四成五（sh-indoor-1015k），比「淡淡標出」重，取 0.2。
+-- 兩張表都交給 FloorTint.setRects 拿參照比對有沒有變，不要換新表
+P.AREA_COLOR, P.AREA = { r = 0, g = 0, b = 0 }, { 0.2 }
 P.SPRITES = { "walls_exterior_wooden_01_45", "walls_exterior_wooden_01_44" }   -- 牆影：[1]＝北邊、[2]＝西邊（原版木牆）
 P.CAPS = { "window", "controls", "virtualList" }
 if P.marksOn == nil then P.marksOn = true end   -- 「在地上標出位置」，這次遊戲記住
@@ -141,13 +148,30 @@ function P.room(m)
     return m.res ~= nil and m.res.rooms[m.cur] or nil
 end
 
--- 同一個屋頂下的其他房間（清單列）
+-- 同一棟的其他房間（清單列）
 function P.others(m)
     local out = {}
     for i, r in ipairs(m.res ~= nil and m.res.rooms or EMPTY) do
         if i ~= m.cur then out[#out + 1] = { kind = "room", index = i, room = r } end
     end
     return out
+end
+
+-- 結果有不只一層時，列與房間那一行前面寫第幾樓（z＝0 是 1 樓）
+function P.multiFloor(m)
+    return m.res ~= nil and #m.res.levels > 1
+end
+
+function P.floorText(z)
+    return getText("IGUI_MSH_Indoor_Floor", z + 1)
+end
+
+-- 那一層這次檢查到的範圍（伺服器的 levels：x, y, 寬 三個一組），沒有回 nil
+function P.levelRuns(res, z)
+    for _, lv in ipairs(res.levels) do
+        if lv.z == z then return lv.runs end
+    end
+    return nil
 end
 
 -- ===== 查詢 =====
@@ -185,8 +209,8 @@ end
 -- 這一間的問題列、距離、地上標示照目前的結果重算（換了結果或換看別間時）
 function P.refresh(m)
     local p = getSpecificPlayer(0)
-    m.px, m.py = m.x, m.y
-    if p ~= nil then m.px, m.py = math.floor(p:getX()), math.floor(p:getY()) end
+    m.px, m.py, m.pz = m.x, m.y, m.z
+    if p ~= nil then m.px, m.py, m.pz = math.floor(p:getX()), math.floor(p:getY()), math.floor(p:getZ()) end
     m.issues = P.issues(P.room(m), m.px, m.py)
     m.sel = nil
     P.mark(m)
@@ -210,9 +234,12 @@ function P.onReply(m, seq, res)
     P.changed(m)
 end
 
--- 地上要標的：缺屋頂的格子（FloorTint 的矩形與強度）、缺牆（x, y, side, 強度 每 4 個一筆）。選中的那一組較強
+-- 地上要標的（目前看的那一間所在的那一層 markZ）：這一層檢查到的範圍與缺屋頂的格子（FloorTint 的矩形與強度）、缺牆
+-- （x, y, side, 強度 每 4 個一筆）。選中的那一組較強
 function P.mark(m)
-    local holes, alphas, walls = {}, {}, {}
+    local holes, alphas, walls, area = {}, {}, {}, {}
+    local room = P.room(m)
+    m.markZ = room ~= nil and room.z or m.z
     if P.marksOn and m.view ~= nil then
         for i, row in ipairs(m.issues) do
             local f = row.flat
@@ -231,16 +258,21 @@ function P.mark(m)
                 end
             end
         end
+        local runs = room ~= nil and P.levelRuns(m.res, room.z) or EMPTY
+        for j = 1, #runs, 3 do
+            local n = #area
+            area[n + 1], area[n + 2], area[n + 3], area[n + 4] = runs[j], runs[j + 1], runs[j + 2], 1
+        end
     end
-    m.holeFlat, m.holeAlphas, m.walls = holes, alphas, walls
+    m.holeFlat, m.holeAlphas, m.walls, m.areaFlat = holes, alphas, walls, area
 end
 
--- 物件增減落在檢查範圍附近（同一層或樓上）：等 SETTLE_MS 再查。地上的物品不算
+-- 物件增減落在檢查範圍附近（檢查到的最低那層或更高）：等 SETTLE_MS 再查。地上的物品不算
 function P.onObject(obj)
     local m = P.model
     if m == nil or obj == nil or instanceof(obj, "IsoWorldInventoryObject") then return end
     local sq = obj:getSquare()
-    if sq == nil or sq:getZ() < m.z then return end
+    if sq == nil or sq:getZ() < (m.res ~= nil and m.res.minZ or m.z) then return end
     local x, y, n, res = sq:getX(), sq:getY(), P.NEAR, m.res
     local x0, y0, x1, y1 = m.x, m.y, m.x, m.y
     if res ~= nil then x0, y0, x1, y1 = res.minX, res.minY, res.maxX, res.maxY end
@@ -250,14 +282,14 @@ function P.onObject(obj)
     if not was then P.changed(m) end
 end
 
--- 「離你 N 格」：玩家換了格子才重算，有變才重綁清單列
+-- 「離你 N 格」：玩家換了格子或樓層才重算，有變才重綁清單列（樓層變了右邊要在距離與第幾樓之間切換）
 function P.updateDist(m)
     local p = getSpecificPlayer(0)
     if p == nil then return end
-    local px, py = math.floor(p:getX()), math.floor(p:getY())
-    if px == m.px and py == m.py then return end
-    m.px, m.py = px, py
-    local changed = false
+    local px, py, pz = math.floor(p:getX()), math.floor(p:getY()), math.floor(p:getZ())
+    if px == m.px and py == m.py and pz == m.pz then return end
+    local changed = pz ~= m.pz
+    m.px, m.py, m.pz = px, py, pz
     for _, row in ipairs(m.issues) do
         local d = P.dist(row, px, py)
         if d ~= row.dist then row.dist, changed = d, true end
@@ -277,7 +309,9 @@ function P.tick()
         m.distAt = now + P.DIST_MS
         P.updateDist(m)
     end
-    MSH.FloorTint.setRects("indoor", m.holeFlat or EMPTY, v.colors.errorText, m.holeAlphas or EMPTY, m.z)
+    local z = m.markZ or m.z
+    MSH.FloorTint.setRects("indoor", m.holeFlat or EMPTY, v.colors.errorText, m.holeAlphas or EMPTY, z)
+    MSH.FloorTint.setRects("indoorArea", m.areaFlat or EMPTY, P.AREA_COLOR, P.AREA, z)
 end
 
 -- RenderOpaqueObjectsInWorld（只在開著時掛）：缺牆的牆影，每幀不配置
@@ -287,11 +321,12 @@ function P.render(playerIndex)
     local l = m.walls
     if l == nil or #l == 0 then return end
     local p = getSpecificPlayer(0)
-    if p == nil or math.floor(p:getZ()) ~= m.z then return end
+    local z = m.markZ or m.z
+    if p == nil or math.floor(p:getZ()) ~= z then return end
     local c, s = m.view.colors.errorText, P.sprites
     for i = 1, #l, 4 do
         local spr = s[l[i + 2]]
-        if spr ~= nil then spr:RenderGhostTileColor(l[i], l[i + 1], m.z, c.r, c.g, c.b, l[i + 3]) end
+        if spr ~= nil then spr:RenderGhostTileColor(l[i], l[i + 1], z, c.r, c.g, c.b, l[i + 3]) end
     end
 end
 
@@ -394,7 +429,9 @@ function P.layout(v)
         y = para(v, head, token, icon, y)
         y = para(v, sub, "textMuted", nil, y)
         if room ~= nil and not P.eaves(room) then
-            y = para(v, getText("IGUI_MSH_Indoor_RoomLine", room.size, room.roofs, room.size), "textMuted", nil, y + 2)
+            local line = getText("IGUI_MSH_Indoor_RoomLine", room.size, room.roofs, room.size)
+            if P.multiFloor(m) then line = getText("IGUI_MSH_Indoor_OnFloor", room.z + 1, line) end
+            y = para(v, line, "textMuted", nil, y + 2)
         end
     end
     y = placeList(v, v.issues, m.issues, P.ROWS, m.sel, y + 2)
@@ -439,6 +476,7 @@ function P.bindCell(v, cell, item, index)
         else
             title = getText(eaves and "IGUI_MSH_Indoor_Eaves" or "IGUI_MSH_Indoor_OtherRoom", r.size)
         end
+        if P.multiFloor(v.m) then title = getText("IGUI_MSH_Indoor_OnFloor", r.z + 1, title) end
         sub = getText(good and "IGUI_MSH_Indoor_IsIndoor" or (eaves and "IGUI_MSH_Indoor_RoofOnly" or "IGUI_MSH_Indoor_NotIndoor"))
         cell.icon = good and "check" or "warning"
         cell.token = good and "text" or (eaves and "textMuted" or "errorText")
@@ -454,7 +492,12 @@ function P.bindCell(v, cell, item, index)
             fix = "IGUI_MSH_Indoor_SplitFix"   -- 圍起來的範圍裡面：隔一道牆就好
         end
         sub = getText(fix)
-        cell.right = item.dist <= 1 and getText("IGUI_MSH_Indoor_Here") or getText("IGUI_MSH_Indoor_Dist", item.dist)
+        -- 那一間不在玩家這一層：寫第幾樓（同一格的距離在別層沒有意義）
+        if room ~= nil and room.z ~= v.m.pz then
+            cell.right = P.floorText(room.z)
+        else
+            cell.right = item.dist <= 1 and getText("IGUI_MSH_Indoor_Here") or getText("IGUI_MSH_Indoor_Dist", item.dist)
+        end
         cell.rightW = getTextManager():MeasureStringX(FONT, cell.right)
         cell.icon, cell.token, cell.subToken = "warning", "errorText", "textMuted"
     end
@@ -598,6 +641,7 @@ function P.close(m)
     if P.model == m then P.model = nil end
     hook(false)
     MSH.FloorTint.clear("indoor")
+    MSH.FloorTint.clear("indoorArea")
     m.walls = nil
     local v = m.view
     m.view = nil

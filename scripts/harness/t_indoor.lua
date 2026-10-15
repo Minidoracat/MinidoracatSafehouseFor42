@@ -25,21 +25,22 @@ return function(T)
             for y = y0, y1 do setBit(x, y, z or 0, FLOOR, true) end
         end
     end
-    local function roof(x0, y0, x1, y1) ground(x0, y0, x1, y1, 1) end
-    local function unroof(x, y)
-        W.flags[k3(x, y, 1)] = nil
+    -- 屋頂＝正上方一層的地板；z 省略＝地面層
+    local function roof(x0, y0, x1, y1, z) ground(x0, y0, x1, y1, (z or 0) + 1) end
+    local function unroof(x, y, z)
+        W.flags[k3(x, y, (z or 0) + 1)] = nil
         W.regions = nil
     end
-    local function wall(x, y, b, on) setBit(x, y, 0, b, on ~= false) end
+    local function wall(x, y, b, on, z) setBit(x, y, z or 0, b, on ~= false) end
     -- 圍一圈牆：裡面是 x0..x1, y0..y1
-    local function box(x0, y0, x1, y1)
+    local function box(x0, y0, x1, y1, z)
         for x = x0, x1 do
-            wall(x, y0, WALL_N)
-            wall(x, y1 + 1, WALL_N)
+            wall(x, y0, WALL_N, true, z)
+            wall(x, y1 + 1, WALL_N, true, z)
         end
         for y = y0, y1 do
-            wall(x0, y, WALL_W)
-            wall(x1 + 1, y, WALL_W)
+            wall(x0, y, WALL_W, true, z)
+            wall(x1 + 1, y, WALL_W, true, z)
         end
     end
     local DX, DY = { [0] = 0, -1, 0, 1 }, { [0] = -1, 0, 1, 0 }
@@ -132,6 +133,11 @@ return function(T)
         for i = 1, #r.gaps, 3 do out[#out + 1] = r.gaps[i] .. "," .. r.gaps[i + 1] .. (r.gaps[i + 2] == 1 and "N" or "W") end
         return sorted(out)
     end
+    local function runs(lv)
+        local out = {}
+        for i = 1, #lv.runs, 3 do out[#out + 1] = lv.runs[i] .. "," .. lv.runs[i + 1] .. "," .. lv.runs[i + 2] end
+        return table.concat(out, " ")
+    end
 
     local MSH = T.boot()
     local I = MSH.Indoor
@@ -147,6 +153,9 @@ return function(T)
         "蓋好的 4×4：算室內，沒有缺口；同一個屋頂下沒有別間")
     check(res.minX == 10 and res.minY == 10 and res.maxX == 13 and res.maxY == 13 and res.partial == false,
         "回走過的外框（客戶端照它判斷附近的物件變動）")
+    check(#res.levels == 1 and res.levels[1].z == 0 and runs(res.levels[1]) == "10,10,4 10,11,4 10,12,4 10,13,4"
+        and r.z == 0 and res.minZ == 0 and res.maxZ == 0,
+        "單層房子：只有地面這一層（屋頂就是上面那層的地板，上面沒再蓋不算一層），範圍每列壓成一段")
 
     unroof(11, 12)
     res = I.check(11, 11, 0)
@@ -256,6 +265,31 @@ return function(T)
         and ring.gapCount == 24 and ring.holeCount == 0,
         "屋頂比牆多出一圈：屋簷下另算一間（沒圍起來的邊多過有牆的邊，客戶端照這個分辨屋簷下）")
 
+    T.section("室內檢查：同一棟每一層（使用者 2026-10-15：「每一層都分析」）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)          -- 1 樓的屋頂＝2 樓的地板
+    box(10, 10, 13, 13, 1)        -- 2 樓的牆
+    roof(10, 10, 13, 13, 1)       -- 2 樓的屋頂
+    res = I.check(11, 11, 0)
+    check(#res.rooms == 2 and res.rooms[1].z == 0 and res.rooms[1].verdict == "ROOM" and res.rooms[2].z == 1
+        and res.rooms[2].verdict == "ROOM" and res.rooms[2].size == 16 and #res.levels == 2 and res.levels[2].z == 1
+        and runs(res.levels[2]) == "10,10,4 10,11,4 10,12,4 10,13,4" and res.minZ == 0 and res.maxZ == 1,
+        "兩層樓、站在 1 樓查：往上沿樓板找到 2 樓那間，兩層各回範圍")
+    unroof(12, 12, 1)
+    res = I.check(11, 11, 0)
+    check(res.verdict == "ROOM" and res.rooms[2].z == 1 and res.rooms[2].verdict == "NEED_ROOF"
+        and holes(res.rooms[2]) == "12,12", "2 樓缺一格屋頂：1 樓照樣算室內，2 樓那間標出缺的那格")
+    res = I.check(11, 11, 1)
+    check(res.verdict == "NEED_ROOF" and res.rooms[1].z == 1 and res.rooms[2] ~= nil and res.rooms[2].z == 0
+        and res.rooms[2].verdict == "ROOM", "站在 2 樓查：先分析 2 樓，再往下找到 1 樓")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    box(10, 10, 13, 13, 1)        -- 屋頂平台圍了欄杆，上面沒再蓋
+    res = I.check(11, 11, 0)
+    check(#res.rooms == 1 and #res.levels == 1, "屋頂平台圍了欄杆、上面沒屋頂：不算一層，不列出來")
+
     T.section("室內檢查：上限")
     local limit, marks = I.LIMIT, I.MAX_MARKS
     I.LIMIT = 10
@@ -343,9 +377,11 @@ return function(T)
         local sq = { getX = function() return x end, getY = function() return y end, getZ = function() return z or 0 end }
         return { __class = class or "IsoObject", getSquare = function() return sq end }
     end
-    local ROOM = { verdict = "ROOM", x = 11, y = 11, z = 0, minX = 10, minY = 10, maxX = 13, maxY = 13, partial = false,
-        rooms = { { verdict = "ROOM", x = 11, y = 11, size = 16, roofs = 16, walls = 16, gaps = {}, gapCount = 0, holes = {},
-            holeCount = 0 } } }
+    local RUNS44 = { 10, 10, 4, 10, 11, 4, 10, 12, 4, 10, 13, 4 }
+    local ROOM = { verdict = "ROOM", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,
+        partial = false, levels = { { z = 0, runs = RUNS44 } },
+        rooms = { { verdict = "ROOM", z = 0, x = 11, y = 11, size = 16, roofs = 16, walls = 16, gaps = {}, gapCount = 0,
+            holes = {}, holeCount = 0 } } }
 
     T.section("室內檢查面板：關著時零成本（使用者 2026-10-15：「平常不用一直掃」）")
     check(not hooked(), "沒開面板：OnTick、物件增減、畫牆影的事件都沒掛")
@@ -466,10 +502,11 @@ return function(T)
 
     T.section("室內檢查面板：問題列與地上標示")
     -- 缺牆故意從那段中間那條列起（併段要先往回找起點）；屋簷那間帶幾條缺牆（不該列出來）
-    local OPEN = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, maxX = 13, maxY = 13, partial = false,
-        rooms = { { verdict = "OPEN", x = 11, y = 11, size = 16, roofs = 14, walls = 14, gapCount = 2, holeCount = 2,
+    local OPEN = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 9, minY = 9, minZ = 0, maxX = 14, maxY = 14, maxZ = 0,
+        partial = false, levels = { { z = 0, runs = { 9, 9, 6, 9, 10, 6, 9, 11, 6, 9, 12, 6, 9, 13, 6, 9, 14, 6 } } },
+        rooms = { { verdict = "OPEN", z = 0, x = 11, y = 11, size = 16, roofs = 14, walls = 14, gapCount = 2, holeCount = 2,
             gaps = { 10, 12, 2, 10, 11, 2 }, holes = { 12, 12, 12, 13 } },
-            { verdict = "OPEN", x = 9, y = 9, size = 20, roofs = 20, walls = 16, gapCount = 24, holeCount = 0,
+            { verdict = "OPEN", z = 0, x = 9, y = 9, size = 20, roofs = 20, walls = 16, gapCount = 24, holeCount = 0,
                 gaps = { 9, 9, 1, 10, 9, 1, 11, 9, 1 }, holes = {} } } }
     T.advance(P.GAP_MS)
     P.recheck(m)
@@ -487,8 +524,10 @@ return function(T)
     check(rcell.title == "IGUI_MSH_Indoor_Eaves|20" and rcell.sub == "IGUI_MSH_Indoor_RoofOnly" and rcell.chevron,
         "同一個屋頂下：沒圍起來的邊多過有牆的邊，列成「屋簷下」")
     T.tick(1)
-    local lit = tw.lit(0)
-    check(lit["12,12"] and lit["12,13"] and not lit["11,11"], "缺屋頂的兩格染色（FloorTint 圖層 indoor）")
+    local lit, col, alpha = tw.lit(0)
+    check(col["12,12"] == "0.5/0/0" and col["12,13"] == "0.5/0/0" and col["11,11"] == "0/0/0"
+        and alpha["11,11"] == P.AREA[1] and col["9,14"] == "0/0/0" and not lit["8,8"] and not lit["15,15"],
+        "缺屋頂的兩格染紅（圖層 indoor），這一層這次檢查到的範圍壓暗一點（圖層 indoorArea）")
     ghosts = {}
     T.fire("RenderOpaqueObjectsInWorld", 0)
     check(#ghosts == 2 and ghosts[1] == P.SPRITES[2] .. "@10,11,0/" .. P.GHOST, "缺牆的兩條邊畫牆影（西邊用西牆貼圖）")
@@ -502,6 +541,8 @@ return function(T)
     check(#ghosts == 0, "玩家在別層：不畫牆影（疊色不測深度，會蓋過樓上）")
     me.z = 0
     quiet = true
+    P.render(0)   -- 先暖一次：選中那列後標示重算，第一個 tick 要把新的格子交給 FloorTint（只在變了的那一次配置）
+    P.tick()
     collectgarbage("collect")
     collectgarbage("stop")
     local kb = collectgarbage("count")
@@ -524,6 +565,36 @@ return function(T)
         and v.rooms.pool[1].title == "IGUI_MSH_Indoor_ThisRoom|16",
         "換看屋簷下那間：結論是屋簷下、不列缺口；清單裡原本那間寫「你查的那間」")
 
+    T.section("室內檢查面板：同一棟每一層（使用者 2026-10-15）")
+    local FLOORS = { verdict = "ROOM", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 1,
+        partial = false, levels = { { z = 0, runs = RUNS44 }, { z = 1, runs = RUNS44 } },
+        rooms = { { verdict = "ROOM", z = 0, x = 11, y = 11, size = 16, roofs = 16, walls = 0, gaps = {}, gapCount = 0,
+            holes = {}, holeCount = 0 },
+            { verdict = "NEED_ROOF", z = 1, x = 10, y = 10, size = 16, roofs = 15, walls = 0, gaps = {}, gapCount = 0,
+                holes = { 12, 12 }, holeCount = 1 } } }
+    T.advance(P.GAP_MS)
+    P.recheck(m)
+    T.tick(1)
+    reply(FLOORS)
+    check(m.cur == 2 and lineOf("IGUI_MSH_Indoor_OnFloor|2,IGUI_MSH_Indoor_RoomLine|16,15,16") ~= nil
+        and v.rooms.pool[1].title == "IGUI_MSH_Indoor_OnFloor|1,IGUI_MSH_Indoor_ThisRoom|16",
+        "結果有兩層：房間那一行、同一棟的其他房間前面寫第幾樓（還在看第 2 間：2 樓那間）")
+    check(v.issues.pool[1].right == "IGUI_MSH_Indoor_Floor|2", "那間不在玩家這一層：問題列右邊寫第幾樓，不寫距離")
+    T.tick(1)
+    local lit1, col1 = tw.lit(1)
+    check(col1["12,12"] == "0.5/0/0" and col1["10,10"] == "0/0/0" and next((tw.lit(0))) == nil,
+        "標示跟著那間的樓層：2 樓的缺屋頂與範圍染在 2 樓，1 樓的收掉")
+    P.pick(m, 1)
+    T.tick(1)
+    check(tw.lit(0)["10,10"] and next((tw.lit(1))) == nil, "換看 1 樓那間：範圍改染 1 樓")
+    me.z = 1
+    P.pick(m, 2)
+    check(v.issues.pool[1].right == "IGUI_MSH_Indoor_Here", "玩家走上 2 樓：同一層的照樣寫距離")
+    me.z = 0
+    P.onObject(obj(12, 12, 2))
+    check(m.want, "2 樓的屋頂（第 3 層的地板）有增減：照樣重查")
+    m.want = false
+
     T.section("室內檢查面板：太遠、換查別格、關窗")
     T.advance(P.GAP_MS)
     me.x = 11.5 + C.LIMIT.INDOOR_REACH + 1
@@ -545,6 +616,9 @@ return function(T)
     T.tick(1)
     local _, last = sends()
     check(last.x == 20 and last.y == 21, "間隔滿了送新的那格")
+    reply(ROOM)
+    T.tick(1)
+    check(next((tw.lit(0))) ~= nil, "新的那格回來：這一層的範圍又染上")
     local opened = {}
     C.ManagerWindow = { open = function(o) opened[#opened + 1] = o end }
     m.fromManager = true

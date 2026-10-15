@@ -1,6 +1,6 @@
 -- MinidoracatSafehouse/Indoor.lua：室內檢查（使用者 2026-10-15：「判斷自己蓋的房子有沒有算室內，以及方便找出沒成為室內
--- 的原因」）。查詢 indoor { x, y, z }：那一格所在的房間、同一個屋頂下的其他房間算不算室內，不算的話缺哪幾條牆、哪幾格
--- 屋頂。客戶端面板（client/…/IndoorPanel.lua）只顯示與標示。設計與使用者裁定見 decisions.md（2026-10-15）。
+-- 的原因」）。查詢 indoor { x, y, z }：那一格所在的房間、同一棟每一層的其他房間算不算室內，不算的話缺哪幾條牆、哪幾格
+-- 屋頂，另回每一層走過的範圍。客戶端面板（client/…/IndoorPanel.lua）只顯示與標示。設計與使用者裁定見 decisions.md。
 -- 在伺服器算：MP 的體溫在伺服器算（BodyDamage.Update 在客戶端對活著的玩家直接返回）；客戶端的 IsoRegions 會過期
 -- （IsoRegionWorker 倒序送出，舊快照最後到），isInARoom 也不準（客戶端封閉且屋頂過半就建 user-defined RoomDef）。
 -- 判定照引擎（IsoWorldRegion.isPlayerRoom）：一個房間＝一個 IsoWorldRegion，封閉（isEnclosed）而且每格頭上都有屋頂
@@ -11,10 +11,12 @@
 --   外面走不進來的沒屋頂格子也算房子（缺屋頂）；從房子不穿牆走出去的邊＝缺牆（OPEN）。封閉但屋頂不到一半的（例如圍籬
 --   圍起來的院子裡的棚子、屋頂才蓋一角的房間）回 PART_ROOF：那些邊在圍起來的範圍裡面，隔牆或把屋頂蓋滿都行。
 --   起點 NEAR 步內沒有屋頂＝室外（OUTSIDE）。
--- 同一個屋頂下：從起點沿著有屋頂的格子往外找（不看牆、不進地圖房間），每碰到一個新的 region 就照上面分析一次。
+-- 同一棟（使用者 2026-10-15：「每一層都分析」）：同一層從起點沿著有屋頂的格子往外找（不看牆、不進地圖房間），每碰到
+-- 一個新的 region 就照上面分析一次；樓上、樓下從相鄰那一層走過的格子裡、這一層有地板而且頭上有屋頂的格子開始找。
+-- 單層房子屋頂上的平台（上面沒再蓋一層）沒有這種格子，不算一層。
 -- 效能（使用者 2026-10-15：「只有需要查的時候才查，平常不用一直掃」）：只在客戶端送查詢時算（面板開著才會送），
--- 同一人 1 秒冷卻、只查 LIMIT.INDOOR_REACH 格內，一次最多走 I.LIMIT 格。實測（sh-indoor-1015h）：4x4 的房子平均 0.3 ms，
--- 16x16（256 格）平均 3 ms、最慢 5 ms。
+-- 同一人 1 秒冷卻、只查 LIMIT.INDOOR_REACH 格內，一次最多走 I.LIMIT 格。實測（sh-indoor-1015i～k，每一層都分析之後）：
+-- 兩層的測試屋（三間、40 格）平均 0.6 ms，16x16（256 格）平均 4 ms、最慢 6 ms。
 
 if isClient() then return end
 
@@ -29,7 +31,8 @@ local CODE = MSH.CODE
 
 I.LIMIT = 4096        -- 一次查詢最多走幾格（房子加上各房間）
 I.NEAR = 4            -- 站的那格沒有屋頂時，往外找有屋頂的格子最多幾步
-I.MAX_ROOMS = 12      -- 同一個屋頂下最多分析幾間
+I.MAX_ROOMS = 12      -- 同一棟最多分析幾間（各層合計）
+I.MAX_RUNS = 512      -- 每一層的範圍最多回幾段（同一列連續的格子算一段）
 I.MAX_MARKS = 256     -- 每間最多回幾條缺牆、幾格缺屋頂（封包大小；count 照實數）
 I.BOX_MAX = 16384     -- 找外面走不進來的格子時，外框面積超過就略過（斜著長的屋頂外框很大）
 I.SLOW_MS = 50        -- 一次查詢超過就記 log
@@ -96,39 +99,60 @@ local function mapRoom(cell, x, y, z)
     return sq ~= nil and sq:getRoom() ~= nil and not sq:isUserDefinedRoom()
 end
 
--- 查詢共用的狀態：剩幾格可走、走過的外框（客戶端照它判斷附近的物件變動要不要重查）、這層的屋頂快取、找到的缺屋頂格子
--- （找同一個屋頂下的房間時可以穿過）
-local function grow(ctx, x, y)
+-- 查詢共用的狀態：剩幾格可走、走過的外框（客戶端照它判斷附近的物件變動要不要重查）、各層的屋頂快取、找到的缺屋頂格子
+-- （找同一棟的房間時可以穿過）、各層走過的格子（範圍）與分析過的 region。z 為鍵的表用 at 取
+local function at(t, z)
+    local v = t[z]
+    if v == nil then
+        v = {}
+        t[z] = v
+    end
+    return v
+end
+
+-- 這一格是這一棟的一部分：記進那一層的範圍、撐大外框
+local function visit(ctx, x, y, z)
+    local k = key(x, y)
+    local foot = at(ctx.foot, z)
+    if foot[k] then return end
+    foot[k] = true
+    local list = at(ctx.footList, z)
+    list[#list + 1] = x
+    list[#list + 1] = y
     if x < ctx.minX then ctx.minX = x end
     if x > ctx.maxX then ctx.maxX = x end
     if y < ctx.minY then ctx.minY = y end
     if y > ctx.maxY then ctx.maxY = y end
+    if z < ctx.minZ then ctx.minZ = z end
+    if z > ctx.maxZ then ctx.maxZ = z end
 end
 
 local function newCtx(x, y, z)
     local cache = {}
-    local ctx = { left = I.LIMIT, cell = getCell(), minX = x, minY = y, maxX = x, maxY = y, partial = false, holes = {} }
-    function ctx.roofed(rx, ry)
+    local ctx = { left = I.LIMIT, cell = getCell(), minX = x, minY = y, minZ = z, maxX = x, maxY = y, maxZ = z,
+        partial = false, holes = {}, foot = {}, footList = {}, regions = {} }
+    function ctx.roofed(rx, ry, rz)
+        local c = at(cache, rz)
         local k = key(rx, ry)
-        local v = cache[k]
+        local v = c[k]
         if v == nil then
-            v = roofed(rx, ry, z)
-            cache[k] = v
+            v = roofed(rx, ry, rz)
+            c[k] = v
         end
         return v
     end
     return ctx
 end
 
--- 一間的結果：verdict、size（格數）、roofs（有屋頂的格數）、walls（房子邊上有牆的邊數）、x, y（分析的起點；起點沒有
--- 屋頂時是 NEAR 步內最近的有屋頂格子）、gaps（缺牆：x, y, side 三個一組）、holes（缺屋頂：x, y 兩個一組）、
--- gapCount／holeCount（全部的數量；清單最多 MAX_MARKS 筆）
-local function newRoom(x, y)
-    return { x = x, y = y, size = 0, roofs = 0, walls = 0, gaps = {}, gapCount = 0, holes = {}, holeCount = 0 }
+-- 一間的結果：verdict、z（哪一層）、size（格數）、roofs（有屋頂的格數）、walls（房子邊上有牆的邊數）、x, y（分析的
+-- 起點；起點沒有屋頂時是 NEAR 步內最近的有屋頂格子）、gaps（缺牆：x, y, side 三個一組）、holes（缺屋頂：x, y 兩個
+-- 一組）、gapCount／holeCount（全部的數量；清單最多 MAX_MARKS 筆）
+local function newRoom(x, y, z)
+    return { x = x, y = y, z = z, size = 0, roofs = 0, walls = 0, gaps = {}, gapCount = 0, holes = {}, holeCount = 0 }
 end
 
 local function addHole(r, ctx, x, y)
-    ctx.holes[key(x, y)] = true
+    at(ctx.holes, r.z)[key(x, y)] = true
     r.holeCount = r.holeCount + 1
     if r.holeCount > I.MAX_MARKS then return end
     local h = r.holes
@@ -153,8 +177,8 @@ local function closedRoom(r, wr, z, ctx)
         local x, y = q[qi], q[qi + 1]
         qi = qi + 2
         ctx.left = ctx.left - 1
-        grow(ctx, x, y)
-        if not ctx.roofed(x, y) then addHole(r, ctx, x, y) end
+        visit(ctx, x, y, z)
+        if not ctx.roofed(x, y, z) then addHole(r, ctx, x, y) end
         for d = 0, 3 do
             if canMove(x, y, z, d) then
                 local nx, ny = x + DX[d], y + DY[d]
@@ -179,12 +203,12 @@ end
 
 -- 起點沒有屋頂時：NEAR 步內（不穿牆）最近的有屋頂格子，沒有回 nil
 local function roofedNear(x0, y0, z, ctx)
-    if ctx.roofed(x0, y0) then return x0, y0 end
+    if ctx.roofed(x0, y0, z) then return x0, y0 end
     local seen, q, qi = { [key(x0, y0)] = true }, { x0, y0 }, 1
     while qi <= #q do
         local x, y = q[qi], q[qi + 1]
         qi = qi + 2
-        if ctx.roofed(x, y) then return x, y end
+        if ctx.roofed(x, y, z) then return x, y end
         for d = 0, 3 do
             local nx, ny = x + DX[d], y + DY[d]
             local k = key(nx, ny)
@@ -215,7 +239,7 @@ local function openRoom(r, z, ctx)
         list[#list + 1] = y
         r.size = r.size + 1
         ctx.left = ctx.left - 1
-        grow(ctx, x, y)
+        visit(ctx, x, y, z)
         if not roof then
             addHole(r, ctx, x, y)
             return
@@ -241,7 +265,7 @@ local function openRoom(r, z, ctx)
                     local nx, ny = x + DX[d], y + DY[d]
                     local k = key(nx, ny)
                     if inside[k] == nil and flags(nx, ny, z) >= 0 then
-                        if ctx.roofed(nx, ny) then
+                        if ctx.roofed(nx, ny, z) then
                             add(nx, ny, true)
                         elseif not cand[k] then
                             cand[k] = true
@@ -324,7 +348,7 @@ local function openRoom(r, z, ctx)
 end
 
 local function analyze(wr, x, y, z, ctx)
-    local r = newRoom(x, y)
+    local r = newRoom(x, y, z)
     if not wr:isEnclosed() then
         openRoom(r, z, ctx)
     elseif wr:getRoofCnt() * 2 >= wr:getSquareSize() then
@@ -336,15 +360,24 @@ local function analyze(wr, x, y, z, ctx)
     return r
 end
 
--- 同一個屋頂下的其他房間：從 (sx, sy) 沿著有屋頂的格子往外找（不看牆、不進地圖房間），新的 region 各分析一次
-local function others(res, z, sx, sy, startId, ctx)
-    local seenRegion = { [startId] = true }
-    local seen, q, qi = { [key(sx, sy)] = true }, { sx, sy }, 1
+-- 同一棟在 z 這一層的房間：從 seeds（x, y 兩個一組）沿著有屋頂的格子（和找到的缺屋頂格子）往外找，不看牆、不進地圖
+-- 房間；新的 region 各分析一次。走過的格子記進這一層的範圍
+local function level(res, z, seeds, ctx)
+    local seenRegion, holes = at(ctx.regions, z), at(ctx.holes, z)
+    local seen, q, qi = {}, {}, 1
+    for i = 1, #seeds, 2 do
+        local k = key(seeds[i], seeds[i + 1])
+        if not seen[k] then
+            seen[k] = true
+            q[#q + 1] = seeds[i]
+            q[#q + 1] = seeds[i + 1]
+        end
+    end
     while qi <= #q and ctx.left > 0 do
         local x, y = q[qi], q[qi + 1]
         qi = qi + 2
         ctx.left = ctx.left - 1
-        grow(ctx, x, y)
+        visit(ctx, x, y, z)
         local wr = IsoRegions.getIsoWorldRegion(x, y, z)
         if wr ~= nil and not seenRegion[wr:getID()] then
             seenRegion[wr:getID()] = true
@@ -357,7 +390,7 @@ local function others(res, z, sx, sy, startId, ctx)
         for d = 0, 3 do
             local nx, ny = x + DX[d], y + DY[d]
             local k = key(nx, ny)
-            if not seen[k] and flags(nx, ny, z) >= 0 and (ctx.roofed(nx, ny) or ctx.holes[k])
+            if not seen[k] and flags(nx, ny, z) >= 0 and (ctx.roofed(nx, ny, z) or holes[k])
                 and not mapRoom(ctx.cell, nx, ny, z) then
                 seen[k] = true
                 q[#q + 1] = nx
@@ -368,11 +401,69 @@ local function others(res, z, sx, sy, startId, ctx)
     if qi <= #q then ctx.partial = true end
 end
 
--- 查一格：{ verdict, x, y, z, rooms, minX, minY, maxX, maxY, partial }。rooms[1] 是那一格所在的房間（MAP_ROOM、
--- BASEMENT、OUTSIDE 沒有 rooms）；partial＝走到上限，有房間或缺口沒列到。地圖的地下室有 RoomDef（Basements），先看
--- 地圖房間；其他地下（z < 0）不進 IsoRegions（IsoRegionWorker 只收 z >= 0），遊戲永遠不算室內
+-- z 這一層的起點：相鄰那一層（from）走過的格子裡，z 這一層有資料、頭上有屋頂、不是地圖房間的
+local function seedsFrom(ctx, from, z)
+    local list, seeds = ctx.footList[from] or {}, {}
+    for i = 1, #list, 2 do
+        local x, y = list[i], list[i + 1]
+        if flags(x, y, z) >= 0 and ctx.roofed(x, y, z) and not mapRoom(ctx.cell, x, y, z) then
+            seeds[#seeds + 1] = x
+            seeds[#seeds + 1] = y
+        end
+    end
+    return seeds
+end
+
+-- 從起點那一層往上一層一層找，再往下（地下不進 IsoRegions，到 0 為止）；哪一層找不到起點就不再往那個方向
+local function floors(res, z0, ctx)
+    for dir = 1, -1, -2 do
+        local from, z = z0, z0 + dir
+        while z >= 0 and z <= 31 and ctx.left > 0 do
+            local seeds = seedsFrom(ctx, from, z)
+            if #seeds == 0 then break end
+            level(res, z, seeds, ctx)
+            from, z = z, z + dir
+        end
+    end
+end
+
+-- 一層走過的格子壓成同一列連續的一段（x, y, 寬 三個一組，由北到南、由西到東），最多 MAX_RUNS 段；第二個回傳值＝有截掉
+local function runsOf(list)
+    local rows, ys = {}, {}
+    for i = 1, #list, 2 do
+        local x, y = list[i], list[i + 1]
+        local row = rows[y]
+        if row == nil then
+            row = {}
+            rows[y] = row
+            ys[#ys + 1] = y
+        end
+        row[#row + 1] = x
+    end
+    local function less(a, b) return a < b end
+    MSH.sortSafe(ys, less)
+    local out, n = {}, 0
+    for _, y in ipairs(ys) do
+        local xs = MSH.sortSafe(rows[y], less)
+        local i = 1
+        while i <= #xs do
+            local j = i
+            while j < #xs and xs[j + 1] == xs[j] + 1 do j = j + 1 end
+            if n >= I.MAX_RUNS then return out, true end
+            out[3 * n + 1], out[3 * n + 2], out[3 * n + 3] = xs[i], y, xs[j] - xs[i] + 1
+            n = n + 1
+            i = j + 1
+        end
+    end
+    return out, false
+end
+
+-- 查一格：{ verdict, x, y, z, rooms, levels, minX, minY, minZ, maxX, maxY, maxZ, partial }。rooms[1] 是那一格所在的
+-- 房間，之後是同一層、樓上、樓下的其他房間（MAP_ROOM、BASEMENT、OUTSIDE 沒有 rooms）；levels＝各層走過的範圍
+-- { z, runs }（由低到高）；partial＝走到上限，有房間或缺口沒列到。地圖的地下室有 RoomDef（Basements），先看地圖房間；
+-- 其他地下（z < 0）不進 IsoRegions（IsoRegionWorker 只收 z >= 0），遊戲永遠不算室內
 function I.check(x, y, z)
-    local res = { x = x, y = y, z = z, rooms = {} }
+    local res = { x = x, y = y, z = z, rooms = {}, levels = {} }
     local ctx = newCtx(x, y, z)
     if mapRoom(ctx.cell, x, y, z) then
         res.verdict = "MAP_ROOM"
@@ -384,10 +475,21 @@ function I.check(x, y, z)
         res.verdict = r and r.verdict or "OUTSIDE"
         if r ~= nil and r.verdict ~= "OUTSIDE" then
             res.rooms[1] = r
-            others(res, z, r.x, r.y, wr:getID(), ctx)
+            at(ctx.regions, z)[wr:getID()] = true
+            level(res, z, { r.x, r.y }, ctx)
+            floors(res, z, ctx)
         end
     end
-    res.minX, res.minY, res.maxX, res.maxY, res.partial = ctx.minX, ctx.minY, ctx.maxX, ctx.maxY, ctx.partial
+    for lz = ctx.minZ, ctx.maxZ do
+        local list = ctx.footList[lz]
+        if list ~= nil then
+            local runs, cut = runsOf(list)
+            if cut then ctx.partial = true end
+            res.levels[#res.levels + 1] = { z = lz, runs = runs }
+        end
+    end
+    res.minX, res.minY, res.minZ = ctx.minX, ctx.minY, ctx.minZ
+    res.maxX, res.maxY, res.maxZ, res.partial = ctx.maxX, ctx.maxY, ctx.maxZ, ctx.partial
     return res
 end
 

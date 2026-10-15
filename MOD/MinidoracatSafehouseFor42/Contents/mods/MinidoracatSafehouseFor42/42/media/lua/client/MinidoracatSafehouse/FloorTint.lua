@@ -26,7 +26,7 @@ local first = MSH.FloorTint == nil
 local F = MSH.FloorTint or {}
 MSH.FloorTint = F
 
-F.ORDER = { "marks", "indoor", "pending", "shape", "ranges" }   -- 前面的蓋過後面的
+F.ORDER = { "marks", "indoor", "indoorArea", "pending", "shape", "ranges" }   -- 前面的蓋過後面的
 F.MARGIN = 4
 F.SCAN_MS = 500
 -- 被房子擋住：每層樓（牆）在畫面上 OCC_ROWS 列高，屋頂再 OCC_ROOF 列（sh-rangesov-1013c 一層樓：後面第 4 列被屋頂蓋住、
