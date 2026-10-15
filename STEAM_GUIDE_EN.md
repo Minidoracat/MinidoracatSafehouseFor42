@@ -293,11 +293,16 @@ A switch under the list (on by default) outlines the safehouses near you on the 
 [*] [b]Paused[/b]: while the safehouse is released or suspended, or you've been removed as a member, you spawn the vanilla way; it works again once you have access back.
 [*] [b]Server must allow it[/b]: with the vanilla server option SafehouseAllowRespawn off, it can't be set and isn't used.
 [/list]
-[h3]Indoor check[/h3]
+=== 🧰 Indoor check
+{{img:11-indoor-en.jpg}}
+Find out whether a house you built counts as indoors on a multiplayer server (warmth, shelter from the wind, body temperature), and where it falls short when it doesn't.
 [list]
 [*] [b]Open it[/b]: right-click the floor and choose "Check if this counts as indoors" (checks the tile you clicked), or press "Indoor check" in the Safehouse Manager (checks the tile you stand on).
 [*] [b]Result[/b]: counts as indoors, gap in the walls, roof isn't finished, only part of it has a roof, only under a roof, or outdoors.
 [*] [b]What counts[/b]: the room must be closed in on all sides (walls, door frames, window frames and fences all count, even with the door open or the glass removed), and every tile needs a floor on the level right above. With one roof tile missing, body temperature and wind chill follow the outdoors for the whole room.
+[/list]
+{{img:12-indoor-gap-en.jpg}}
+[list]
 [*] [b]Finding the cause[/b]: it lists the missing wall and roof tiles and how far away they are; with "Mark the spots on the ground" on, the floor of the area that was checked turns slightly darker, missing roof tiles turn the floor red and missing walls show as red wall outlines.
 [*] [b]The same building[/b]: the other rooms are listed too; click one to look at it. On the same floor it follows the connected roof, and up and down it follows the floors, so every floor is checked; with more than one floor, each row says which floor, and the marks on the ground move to the floor of the room you're looking at. A flat roof with nothing built on top doesn't count as a floor; a roof that sticks out past the walls, or a porch, shows as "Under the eaves".
 [*] [b]Rechecks by itself[/b]: while the window is open, it checks again when walls or floors nearby change; once you close it, nothing is checked in the background.
