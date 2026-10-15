@@ -1,15 +1,12 @@
 VERSION = 1,
 
-/* 沙盒選項 81 個：單一定義在 lua/shared/MinidoracatSafehouse/Settings.lua 的 OPTIONS（順序、型別、範圍、預設），
+/* 沙盒選項 80 個：單一定義在 lua/shared/MinidoracatSafehouse/Settings.lua 的 OPTIONS（順序、型別、範圍、預設），
    改這裡要一起改 Settings.lua 與 Sandbox.json；scripts/harness/t_deeds.lua 逐項比對兩邊。
    清單型字串選項 default 留空、預設清單寫在 Lua（ScriptParser 拿逗號當欄位分隔，pitfalls.md「Sandbox 選項」；
    空字串是合法的 string default：CustomStringSandboxOption.java:13-19）。 */
 
 option MinidoracatSafehouse.CreateMode
 {type = enum, numValues = 2, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_CreateMode, valueTranslation = MinidoracatSafehouse_CreateMode,}
-
-option MinidoracatSafehouse.ClaimsPerPlayer
-{type = integer, min = 0, max = 100, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_ClaimsPerPlayer,}
 
 option MinidoracatSafehouse.FreeMaxArea
 {type = integer, min = 1, max = 9216, default = 576, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_FreeMaxArea,}
@@ -83,17 +80,11 @@ option MinidoracatSafehouse.Tier1Area
 option MinidoracatSafehouse.Tier1Side
 {type = integer, min = 1, max = 96, default = 48, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Side,}
 
-option MinidoracatSafehouse.Tier1PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1PerPlayer,}
-
 option MinidoracatSafehouse.Tier2Area
 {type = integer, min = 1, max = 9216, default = 1024, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Area,}
 
 option MinidoracatSafehouse.Tier2Side
 {type = integer, min = 1, max = 96, default = 64, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Side,}
-
-option MinidoracatSafehouse.Tier2PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2PerPlayer,}
 
 option MinidoracatSafehouse.Tier3Area
 {type = integer, min = 1, max = 9216, default = 1600, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Area,}
@@ -101,17 +92,11 @@ option MinidoracatSafehouse.Tier3Area
 option MinidoracatSafehouse.Tier3Side
 {type = integer, min = 1, max = 96, default = 80, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Side,}
 
-option MinidoracatSafehouse.Tier3PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3PerPlayer,}
-
 option MinidoracatSafehouse.Tier4Area
 {type = integer, min = 1, max = 9216, default = 2304, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Area,}
 
 option MinidoracatSafehouse.Tier4Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Side,}
-
-option MinidoracatSafehouse.Tier4PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4PerPlayer,}
 
 option MinidoracatSafehouse.Tier5Area
 {type = integer, min = 1, max = 9216, default = 3136, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Area,}
@@ -119,17 +104,11 @@ option MinidoracatSafehouse.Tier5Area
 option MinidoracatSafehouse.Tier5Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Side,}
 
-option MinidoracatSafehouse.Tier5PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5PerPlayer,}
-
 option MinidoracatSafehouse.Tier6Area
 {type = integer, min = 1, max = 9216, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Area,}
 
 option MinidoracatSafehouse.Tier6Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Side,}
-
-option MinidoracatSafehouse.Tier6PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6PerPlayer,}
 
 option MinidoracatSafehouse.Tier7Area
 {type = integer, min = 1, max = 9216, default = 6400, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Area,}
@@ -137,89 +116,83 @@ option MinidoracatSafehouse.Tier7Area
 option MinidoracatSafehouse.Tier7Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Side,}
 
-option MinidoracatSafehouse.Tier7PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7PerPlayer,}
-
 option MinidoracatSafehouse.Tier8Area
 {type = integer, min = 1, max = 9216, default = 9216, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Area,}
 
 option MinidoracatSafehouse.Tier8Side
 {type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Side,}
 
-option MinidoracatSafehouse.Tier8PerPlayer
-{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8PerPlayer,}
+option MinidoracatSafehouse.Tier1FreeSlots
+{type = integer, min = 0, max = 100, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1FreeSlots,}
 
-option MinidoracatSafehouse.Tier1Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Free,}
+option MinidoracatSafehouse.Tier1BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1BuySlots,}
 
-option MinidoracatSafehouse.Tier1Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Buy,}
+option MinidoracatSafehouse.Tier1RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1RentSlots,}
 
-option MinidoracatSafehouse.Tier1Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Rent,}
+option MinidoracatSafehouse.Tier2FreeSlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2FreeSlots,}
 
-option MinidoracatSafehouse.Tier2Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Free,}
+option MinidoracatSafehouse.Tier2BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2BuySlots,}
 
-option MinidoracatSafehouse.Tier2Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Buy,}
+option MinidoracatSafehouse.Tier2RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2RentSlots,}
 
-option MinidoracatSafehouse.Tier2Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Rent,}
+option MinidoracatSafehouse.Tier3FreeSlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3FreeSlots,}
 
-option MinidoracatSafehouse.Tier3Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Free,}
+option MinidoracatSafehouse.Tier3BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3BuySlots,}
 
-option MinidoracatSafehouse.Tier3Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Buy,}
+option MinidoracatSafehouse.Tier3RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3RentSlots,}
 
-option MinidoracatSafehouse.Tier3Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Rent,}
+option MinidoracatSafehouse.Tier4FreeSlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4FreeSlots,}
 
-option MinidoracatSafehouse.Tier4Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Free,}
+option MinidoracatSafehouse.Tier4BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4BuySlots,}
 
-option MinidoracatSafehouse.Tier4Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Buy,}
+option MinidoracatSafehouse.Tier4RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4RentSlots,}
 
-option MinidoracatSafehouse.Tier4Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Rent,}
+option MinidoracatSafehouse.Tier5FreeSlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5FreeSlots,}
 
-option MinidoracatSafehouse.Tier5Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Free,}
+option MinidoracatSafehouse.Tier5BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5BuySlots,}
 
-option MinidoracatSafehouse.Tier5Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Buy,}
+option MinidoracatSafehouse.Tier5RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5RentSlots,}
 
-option MinidoracatSafehouse.Tier5Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Rent,}
+option MinidoracatSafehouse.Tier6FreeSlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6FreeSlots,}
 
-option MinidoracatSafehouse.Tier6Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Free,}
+option MinidoracatSafehouse.Tier6BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6BuySlots,}
 
-option MinidoracatSafehouse.Tier6Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Buy,}
+option MinidoracatSafehouse.Tier6RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6RentSlots,}
 
-option MinidoracatSafehouse.Tier6Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Rent,}
+option MinidoracatSafehouse.Tier7FreeSlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7FreeSlots,}
 
-option MinidoracatSafehouse.Tier7Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Free,}
+option MinidoracatSafehouse.Tier7BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7BuySlots,}
 
-option MinidoracatSafehouse.Tier7Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Buy,}
+option MinidoracatSafehouse.Tier7RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7RentSlots,}
 
-option MinidoracatSafehouse.Tier7Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Rent,}
+option MinidoracatSafehouse.Tier8FreeSlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8FreeSlots,}
 
-option MinidoracatSafehouse.Tier8Free
-{type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Free,}
+option MinidoracatSafehouse.Tier8BuySlots
+{type = integer, min = 0, max = 100, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8BuySlots,}
 
-option MinidoracatSafehouse.Tier8Buy
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Buy,}
-
-option MinidoracatSafehouse.Tier8Rent
-{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Rent,}
+option MinidoracatSafehouse.Tier8RentSlots
+{type = integer, min = 0, max = 10, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8RentSlots,}
 
 option MinidoracatSafehouse.DeedLoot
 {type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_DeedLoot,}

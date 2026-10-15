@@ -80,27 +80,29 @@ return function(T)
     for _ in pairs(T.econ.listeners) do listeners = listeners + 1 end
     check(listeners == 1, "onEntitlementChanged 監聽一個")
 
-    T.section("名額：免費位 → 付費名額（寬限中不能建新的）、QUOTA_FULL 只帶開著的價格")
+    T.section("名額：免費名額 → 付費名額（寬限中不能建新的）；可買可租都到上限 TIER_FULL，QUOTA_FULL 只帶還能買的價格")
     boot()
     local a1 = seed("alice", rect(100, 100, 5, 5), 1)
     local alice = T.player({ name = "alice", items = { D1, D1, D1, D1 } })
     local q = create(alice, 200, 200)
-    check(q.code == "QUOTA_FULL" and q.tier == 1 and q.buy == nil and q.rent == nil, "販售都關：QUOTA_FULL 不帶價格")
-    T.sandbox("Tier1Buy", true)
-    T.sandbox("Tier1Rent", true)
+    check(q.code == "TIER_FULL" and q.tier == 1 and q.limit == 1,
+        "預設只有免費 1 個：用完就 TIER_FULL（付錢也沒用，不顯示〔前往付費〕）")
+    T.sandbox("Tier1BuySlots", 5)
+    T.sandbox("Tier1RentSlots", 2)
     minute()
     local p1 = T.econ.plans.tier1
     local last = T.econ.setPlans[#T.econ.setPlans]
-    check(p1.values.permanentEnabled == true and p1.values.rentalEnabled == true and last.opts.origin == "source",
-        "Tier1Buy／Rent 打開：每分鐘檢查以 setPlan 打開兩種販售（origin＝source）")
+    check(p1.values.permanentEnabled == true and p1.values.rentalEnabled == true and last.opts.origin == "source"
+        and p1.values.permanentLimit == E.PERMANENT_CEIL and p1.values.rentalLimit == E.RENTAL_CEIL,
+        "可買、可租大於 0：每分鐘檢查以 setPlan 打開兩種販售、方案上限拉到天花板（origin＝source）")
     q = create(alice, 200, 200)
     check(q.code == "QUOTA_FULL" and q.buy and q.buy.amount == 1200 and q.buy.currency == "survivor"
         and q.rent and q.rent.amount == 100 and q.rent.days == 30, "QUOTA_FULL 帶該級買斷與月租價格")
-    T.sandbox("Tier1Rent", false)
+    T.sandbox("Tier1RentSlots", 0)
     q = create(alice, 200, 200)
-    check(q.code == "QUOTA_FULL" and q.buy ~= nil and q.rent == nil, "Tier1Rent 關：只帶買斷價")
+    check(q.code == "QUOTA_FULL" and q.buy ~= nil and q.rent == nil, "可租改成 0：只帶買斷價")
     minute()
-    check(T.econ.plans.tier1.values.rentalEnabled == true, "開關關掉不把方案改回 false")
+    check(T.econ.plans.tier1.values.rentalEnabled == true, "可租改成 0 不把方案改回 false")
     T.econSet("alice", 1, 0, { lease("L1", 1, "grace", T.now + HOUR) })
     q = create(alice, 200, 200)
     check(q.code == "QUOTA_FULL", "寬限中的租用名額不能拿來建新的")
@@ -117,12 +119,14 @@ return function(T)
     local a4 = seed("alice", rect(400, 400, 5, 5), 2)
     T.econSet("alice", 2, 1, {})
 
-    T.section("validatePurchase：開著放行；關掉或停用只到既有付費間數")
-    check(validate("bob", "tier1", "permanent", { permanent = 5, rental = 0 }) == true, "等級啟用＋Tier1Buy 開：放行（不因用完擋加購）")
-    local ok, why = validate("alice", "tier1", "rental", { permanent = 0, rental = 2 })
-    check(ok == true, "Tier1Rent 關：付款後總數 ≤ 既有付費間數（續租）放行")
+    T.section("validatePurchase：照每級上限；續租與恢復停用的屋不受上限；停用等級只到既有付費間數")
+    check(validate("bob", "tier1", "permanent", { permanent = 5, rental = 0 }) == true, "可買 5：買到第 5 個放行")
+    local ok, why = validate("bob", "tier1", "permanent", { permanent = 6, rental = 0 })
+    check(ok == false and why == "TIER_FULL", "可買 5：第 6 個 → TIER_FULL")
+    ok, why = validate("alice", "tier1", "rental", { permanent = 0, rental = 2 })
+    check(ok == true, "可租 0：付款後總數 ≤ 既有付費間數（續租）放行")
     ok, why = validate("alice", "tier1", "rental", { permanent = 0, rental = 3 })
-    check(ok == false and why == "KIND_CLOSED", "Tier1Rent 關：超過既有付費間數 → KIND_CLOSED")
+    check(ok == false and why == "KIND_CLOSED", "可租 0：超過既有付費間數 → KIND_CLOSED")
     ok, why = validate("alice", "tier4", "permanent", { permanent = 1, rental = 0 })
     check(ok == false and why == "TIER_DISABLED", "等級未啟用（TiersEnabled＝3）→ TIER_DISABLED")
     local a5 = seed("alice", rect(500, 500, 5, 5), 4)   -- 停用等級的既有付費屋（例：管理員調低 TiersEnabled 之前建的）
@@ -131,21 +135,56 @@ return function(T)
     ok, why = validate("alice", "tier4", "rental", { permanent = 0, rental = 2 })
     check(ok == false and why == "TIER_DISABLED", "停用等級：不能多買")
 
-    T.section("slots：免費位、各啟用等級的名額與價格；關閉的等級有付費屋才列出")
+    T.section("slots：每一級的免費、可買、可租與價格；關閉的等級有付費屋才列出")
     T.advance(1000)
     local sl = T.cmd(alice, "slots", {})
     local row1, row2, row4 = sl.tiers[1], sl.tiers[2], sl.tiers[4]
-    check(sl.ok and sl.economy == "READY" and sl.blocked == nil and sl.free.n == 1 and sl.free.used == 1
-        and #sl.free.titles == 1 and sl.free.titles[1] == a1.title and #sl.tiers == 4,
-        "slots：免費位、3 個啟用等級，加上 alice 還有付費屋的關閉等級（5–8 級不列）")
-    check(row1.tier == 1 and row1.enabled == true and row1.paid == 2 and row1.usable == 2 and row1.grace == 0
-        and row1.buy == true and row1.rent == false and row1.buyPrice.amount == 1200 and row1.rentPrice == nil,
-        "tier1：付費 2、可用 2、只有買斷價")
-    check(row2.paid == 1 and row2.usable == 1 and row2.buyPrice == nil and row2.rentPrice == nil, "tier2：販售關著沒有價格")
-    check(row4.tier == 4 and row4.enabled == false and row4.paid == 1 and row4.buyPrice == nil and row4.rentPrice == nil,
-        "關閉的 4 級：列出來讓玩家續租既有付費屋，沒有價格（不能買新的）")
+    check(sl.ok and sl.economy == "READY" and sl.blocked == nil and #sl.tiers == 4,
+        "slots：3 個啟用等級，加上 alice 還有付費屋的關閉等級（5–8 級不列）")
+    check(row1.tier == 1 and row1.enabled == true and row1.free.n == 1 and row1.free.used == 1 and row1.paid == 2
+        and row1.usable == 2 and row1.grace == 0 and row1.buy.n == 5 and row1.buy.have == 0 and row1.buy.open == true
+        and row1.rent.n == 0 and row1.rent.have == 2 and row1.rent.open == false and row1.full == false
+        and row1.owned == 3 and row1.max == 1 + 5 + 2 and row1.buyPrice.amount == 1200 and row1.rentPrice == nil,
+        "tier1：免費 1／1、買斷 0（上限 5）、租用 2（上限 0，調低前租的照算）、已有 3 間／最多 8 間、只有買斷價")
+    check(row2.free.n == 0 and row2.paid == 1 and row2.usable == 1 and row2.buy.have == 1 and row2.owned == 1 and row2.max == 1
+        and row2.full == true and row2.buyPrice == nil and row2.rentPrice == nil,
+        "tier2：不賣、沒有價格；之前買的 1 個照算（最多 1 間）")
+    check(row4.tier == 4 and row4.enabled == false and row4.paid == 1 and row4.buyPrice == nil and row4.rentPrice == nil
+        and row4.owned == 1 and row4.max == 1,
+        "關閉的 4 級：列出來讓玩家續租既有付費屋，沒有價格（不能買新的），最多＝已有的間數")
     local cara = T.player({ name = "cara" })
     check(#T.cmd(cara, "slots", {}).tiers == 3, "沒有關閉等級付費屋的玩家：只列 3 個啟用等級")
+
+    T.section("每級上限（使用者 2026-10-15）：到上限不能再買或租；上限調低前多租的照用、照續租")
+    T.sandbox("Tier1BuySlots", 0)
+    T.sandbox("Tier1RentSlots", 1)
+    local tsu = T.player({ name = "tsu", items = { D1, D1 } })
+    seed("tsu", rect(600, 600, 5, 5), 1)   -- 免費那間
+    T.econSet("tsu", 1, 0, { lease("T1", 1, "active") })
+    check(create(tsu, 700, 700).ok == true, "租約那間")
+    ok, why = validate("tsu", "tier1", "rental", { permanent = 0, rental = 2, usable = 1 })
+    check(ok == false and why == "TIER_FULL", "可租 1、已租 1：再租一張 → TIER_FULL")
+    ok = validate("tsu", "tier1", "rental", { permanent = 0, rental = 1, usable = 1 })
+    check(ok == true, "續租那張（張數不變）：放行")
+    ok, why = validate("tsu", "tier1", "permanent", { permanent = 1, rental = 1, usable = 1 })
+    check(ok == false and why == "KIND_CLOSED", "可買 0：買斷 → KIND_CLOSED")
+    T.advance(1000)
+    local r1 = T.cmd(tsu, "slots", {}).tiers[1]
+    check(r1.owned == 2 and r1.max == 2 and r1.rent.have == 1 and r1.rent.open == false and r1.full == true
+        and r1.rentPrice ~= nil and r1.buyPrice == nil,
+        "slots：已有 2 間／最多 2 間、租用 1（上限 1）；到上限仍帶租金（名額視窗畫停用的按鈕）")
+    q = create(tsu, 800, 800)
+    check(q.code == "TIER_FULL" and q.tier == 1 and q.limit == 2, "免費與租約都用完、可買可租都到上限：TIER_FULL")
+    -- 上限 1 之前多租的第二張（2026-10-15 帳本的情況）
+    T.econSet("tsu", 1, 0, { lease("T1", 1, "active"), lease("T2", 1, "active") })
+    ok = validate("tsu", "tier1", "rental", { permanent = 0, rental = 2, usable = 2 })
+    check(ok == true, "多租的那張續租：放行")
+    T.advance(1000)
+    r1 = T.cmd(tsu, "slots", {}).tiers[1]
+    check(r1.max == 3 and r1.rent.have == 2 and r1.usable - r1.paid == 1, "slots：最多 3 間、付費名額還能再建 1 間")
+    check(create(tsu, 800, 800).ok == true, "多租的那張可以建第三間")
+    T.sandbox("Tier1BuySlots", 5)
+    T.sandbox("Tier1RentSlots", 0)
 
     T.section("停用：只有寬限結束造成的超額，停該級最新一間")
     T.econSet("alice", 1, 0, { lease("L1", 1, "active"), lease("L2", 1, "grace", T.now + HOUR) })
@@ -241,10 +280,13 @@ return function(T)
     check(plans.ok and plans.economy == "READY" and #plans.tiers == 8 and plans.tiers[2].revision == 1
         and plans.tiers[2].plan.rentalPrice == 300 and #plans.currencies == 2, "adminPlans：8 級方案、revision、幣別")
     local values = plans.tiers[2].plan
-    values.rentalPrice = 350
+    values.rentalPrice, values.permanentLimit, values.rentalLimit = 350, 1, 1   -- 舊客戶端還會送每人上限
     res = T.cmd(root, "adminSetPlan", { tier = 2, values = values, expectedRevision = 1, reason = "調價" })
+    local saved = T.econ.plans.tier2.values
     check(res.ok and res.tier == 2 and res.revision == 2 and #res.changed == 1 and res.changed[1] == "rentalPrice"
-        and T.econ.setPlans[#T.econ.setPlans].opts.origin == "admin", "adminSetPlan：改價、revision＋1、changed")
+        and saved.permanentLimit == E.PERMANENT_CEIL and saved.rentalLimit == E.RENTAL_CEIL
+        and T.econ.setPlans[#T.econ.setPlans].opts.origin == "admin",
+        "adminSetPlan：改價、revision＋1、changed；送來的每人上限拉回天花板（上限由本 MOD 每級判）")
     values.rentalPrice = 400
     res = T.cmd(root, "adminSetPlan", { tier = 2, values = values, expectedRevision = 1 })
     check(res.code == "STALE_REVISION", "舊 revision → STALE_REVISION")
@@ -282,10 +324,10 @@ return function(T)
         "ABSENT：adminSetPlan → ECONOMY_UNAVAILABLE、adminPlans 沒有方案")
 
     T.section("Tier 開關：開服就打開方案、免費建立模式只有 1 級")
-    boot({ sandbox = { Tier2Rent = true } })
+    boot({ sandbox = { Tier2RentSlots = 1 } })
     check(T.econ.plans.tier2.values.rentalEnabled == true and T.econ.plans.tier2.values.permanentEnabled == false,
-        "開服：Tier2Rent 開 → 方案 rentalEnabled 打開，買斷不動")
-    boot({ sandbox = { CreateMode = 2, Tier2Buy = true } })
+        "開服：2 級可租 1 → 方案 rentalEnabled 打開，買斷不動")
+    boot({ sandbox = { CreateMode = 2, Tier2BuySlots = 1 } })
     ok, why = validate("zed", "tier2", "permanent", { permanent = 1, rental = 0 })
     check(ok == false and why == "TIER_DISABLED", "免費建立模式：2 級以上算未啟用")
 

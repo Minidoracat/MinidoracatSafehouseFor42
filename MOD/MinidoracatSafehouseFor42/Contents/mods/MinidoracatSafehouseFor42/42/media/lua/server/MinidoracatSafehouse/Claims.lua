@@ -110,19 +110,20 @@ function C.checkOnlineId(v)
     return nil
 end
 
--- 免費位分配（§1.3）：legacy 先佔（grandfathered，不看 TierNFree、超出也不必付費），
--- 其餘照 createdAt 由舊到新，只分給 TierNFree 開著的等級。回傳 { free, used, ids = { [claimId] = true } }
+-- 免費名額每一級各自計（§1.3；使用者 2026-10-15 選 B）：這一級 Tier<N>FreeSlots 間，玩家頁的個人上限只改 1 級。
+-- legacy 先佔（grandfathered：legacy 都記 1 級，超出也不必付費），其餘照 createdAt 由舊到新、只佔自己那一級的。
+-- 回傳 { tiers = { [t] = { n, used } }, ids = { [claimId] = true } }
 function C.slots(owner, cfg)
-    local free = R.override(owner) or cfg.claimsPerPlayer
-    local out = { free = free, used = 0, ids = {} }
+    local out = { tiers = {}, ids = {} }
+    for t = 1, MSH.MAX_TIER do out.tiers[t] = { n = cfg.tiers[t].freeSlots, used = 0 } end
+    local o = R.override(owner)
+    if o ~= nil then out.tiers[1].n = o end
     local mine = R.byOwner(owner)
     for pass = 1, 2 do
         for _, rec in ipairs(mine) do
-            local legacy = rec.source == SRC.LEGACY
-            local t = cfg.tiers[rec.deedTier]
-            local eligible = (pass == 1 and legacy) or (pass == 2 and not legacy and t ~= nil and t.free)
-            if eligible and out.used < free then
-                out.used = out.used + 1
+            local f = out.tiers[rec.deedTier]
+            if f ~= nil and (pass == 1) == (rec.source == SRC.LEGACY) and f.used < f.n then
+                f.used = f.used + 1
                 out.ids[rec.claimId] = true
             end
         end
@@ -144,27 +145,27 @@ function C.paidClaims(owner, cfg)
     return by, s
 end
 
--- 全服上限 → 每級每人上限 → 名額（付錢也解決不了的先回，免得客戶端顯示〔前往付費〕）。
--- tombstone 軟上限重畫也要看：每次重畫都多一筆 tombstone（審查 HIGH：重畫洗滿 registry）
+-- 全服上限 → 免費名額 → 付費名額。付錢也解決不了（可買、可租都到上限）時回 TIER_FULL，免得客戶端顯示〔前往付費〕。
+-- 這一級每人最多幾間＝免費＋可買＋可租（使用者 2026-10-15）：沒有另外的間數上限，付費名額本身就封住了；
+-- 調低前已經買或租的名額照常可用。tombstone 軟上限重畫也要看：每次重畫都多一筆 tombstone（審查 HIGH：重畫洗滿 registry）
 function C.checkQuota(v)
     if R.tombstoneCount() >= LIMIT.TOMBSTONE_SOFT then return CODE.SERVER_FULL end
     if v.old then return nil end
     if R.liveCount() >= LIMIT.MAX_CLAIMS then return CODE.SERVER_FULL end
-    local t = v.cfg.tiers[v.tier]
-    if t.perPlayer > 0 then
-        local n = 0
-        for _, rec in ipairs(R.byOwner(v.who)) do
-            if rec.deedTier == v.tier then n = n + 1 end
-        end
-        if n >= t.perPlayer then return CODE.TIER_FULL, { tier = v.tier, limit = t.perPlayer } end
-    end
     local by, s = C.paidClaims(v.who, v.cfg)
-    if t.free and s.used < s.free then return nil end
+    local f = s.tiers[v.tier]
+    if f ~= nil and f.used < f.n then return nil end
     -- 付費名額：該級付費間數 < usable − 寬限中（寬限中的租用不能拿來建新的，§1.3 第 59 行）；
-    -- QUOTA_FULL 只帶開著的那種價格（Economy 不可用時兩種都沒有）
+    -- QUOTA_FULL 只帶還能買的那種價格（Economy 不可用時兩種都沒有）
     local E = MSH.Economy
     local o = E and E.offer(v.who, v.tier, v.cfg) or { usable = 0, grace = 0 }
     if #(by[v.tier] or {}) < o.usable - o.grace then return nil end
+    if o.full then
+        -- 上限＝名額視窗的「最多」：調低前已經買、租超過的照實算
+        local t = v.cfg.tiers[v.tier]
+        return CODE.TIER_FULL, { tier = v.tier,
+            limit = (f and f.n or 0) + math.max(t.buySlots, o.bought) + math.max(t.rentSlots, o.rented) }
+    end
     return CODE.QUOTA_FULL, { tier = v.tier, buy = o.buy, rent = o.rent }
 end
 
@@ -658,16 +659,24 @@ function C.roleOf(rec, who)
     return nil
 end
 
--- 「我的」與「分享給我的」（含只靠陣營的）；分享給我的另帶屋主名字
+-- 「我的」與「分享給我的」（含只靠陣營的）；分享給我的另帶屋主名字。自己的另帶等級與名額種類（free／paid／legacy），
+-- 清單才分得出名稱一樣的幾間（使用者 2026-10-15）
 function C.list(ctx)
     local rows = {}
+    local mine = nil
     for _, rec in ipairs(R.list()) do
         local role, bits = nil, nil
         if R.isLive(rec) then role, bits = C.roleOf(rec, ctx.who) end
         if role then
-            rows[#rows + 1] = { claimId = rec.claimId, revision = rec.revision, title = rec.title, actorRole = role,
+            local row = { claimId = rec.claimId, revision = rec.revision, title = rec.title, actorRole = role,
                 bits = bits, lifecycle = rec.lifecycle, healthSummary = C.healthSummary(rec),
                 owner = role == "member" and rec.owner or nil }
+            if role == "owner" then
+                mine = mine or C.slots(ctx.who, MSH.Settings.get())
+                row.deedTier = rec.deedTier
+                row.slot = rec.source == SRC.LEGACY and "legacy" or (mine.ids[rec.claimId] and "free" or "paid")
+            end
+            rows[#rows + 1] = row
         end
     end
     return S.ok({ claims = rows })

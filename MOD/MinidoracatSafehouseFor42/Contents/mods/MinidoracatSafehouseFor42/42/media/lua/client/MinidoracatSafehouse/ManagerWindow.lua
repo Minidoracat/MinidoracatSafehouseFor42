@@ -457,10 +457,21 @@ function W:bindCell(cell, row, index)
     local text = MW.statusText(top)
     if row.actorRole == "member" then
         text = getText("IGUI_MSH_Manager_RowMember", text, MSH.SharingPage.bitsText(row.bits or 0))
+    else
+        local slot = MW.slotText(row.slot, row.deedTier)
+        if slot then text = getText("IGUI_MSH_Manager_RowSlot", text, slot) end
     end
     local ok = top == "PROTECTED"
     cell.icon, cell.token = ok and "check" or "warning", ok and "textMuted" or "warning"
     cell.sub = self:fit(text, w - self.iconW)
+end
+
+-- 自己的房子用哪種名額（list 的 slot，使用者 2026-10-15：同名的房子要分得出來）；不認得或沒有回 nil
+function MW.slotText(slot, tier)
+    if slot == "legacy" then return getText("IGUI_MSH_Manager_SourceLegacy") end
+    if slot == "free" then return getText("IGUI_MSH_Manager_SlotFree", tier or "-") end
+    if slot == "paid" then return getText("IGUI_MSH_Manager_SlotPaid", tier or "-") end
+    return nil
 end
 
 function W:fillList()
@@ -936,12 +947,7 @@ function W:infoRow(L, labelKey, value, y, vx, vw, token)
     return self:addWrapped(L, value, vx, y, vw, token or "text") + 4
 end
 
-function W:dateText(ms)
-    local D = self.UI.Date
-    if not (MSH.isFinite(ms) and D and D.fromMs and D.format) then return nil end
-    local yy, mm, dd = D.fromMs(ms, D.localOffsetMinutes and D.localOffsetMinutes() or 0)
-    return D.format(yy, mm, dd)
-end
+function W:dateText(ms) return MSH.SlotsWindow.dateText(self.UI, ms) end
 
 -- 概覽（§10.3 版面稿、§10.3「概覽」點）：角色、位置與面積、等級、canonical createdAt、狀態＋〔詳細〕、
 --   〔重新框選 · 剩 m:ss〕、危險操作
@@ -974,7 +980,11 @@ function W:layoutOverview(d, cw)
         y = self:infoRow(L, "Source", getText("IGUI_MSH_Manager_SourceFree"), y, vx, vw)
     end
     local eco = type(d.economy) == "table" and d.economy or nil
-    if eco and eco.paid then y = self:infoRow(L, "Slot", getText("IGUI_MSH_Manager_SlotPaid", eco.tier or "-"), y, vx, vw) end
+    if eco and eco.paid then
+        y = self:infoRow(L, "Slot", getText("IGUI_MSH_Manager_SlotPaid", eco.tier or "-"), y, vx, vw)
+    elseif eco and d.source ~= SRC.LEGACY then
+        y = self:infoRow(L, "Slot", getText("IGUI_MSH_Manager_SlotFree", eco.tier or "-"), y, vx, vw)
+    end
     local created = self:dateText(d.createdAt)
     if created then y = self:infoRow(L, "Created", created, y, vx, vw) end
     local releaseAt = eco and self:dateText(eco.releaseAt)

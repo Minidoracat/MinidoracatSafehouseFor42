@@ -115,16 +115,16 @@ function P.tierSlots(m)
     return nil
 end
 
--- 名額已滿：照伺服器 checkQuota 的順序——免費位（該級 TierNFree 開著且已用 < 上限）→ 付費（usable > 已用 paid）。
--- 沒有 slots 資料就不判斷（預檢與建立仍由伺服器把關）
-function P.quotaFull(m)
-    local s = m.slots
-    if m.mode ~= "create" or type(s) ~= "table" or type(s.free) ~= "table" then return false end
+-- 名額已滿：照伺服器 checkQuota 的順序——這一級的免費名額（已用 < 免費數）→ 付費名額（usable − 寬限中 > 付費間數）；
+-- 都沒有時，可買、可租都到上限（full）回 TIER_FULL，不然 QUOTA_FULL。沒有 slots 資料就不判斷（預檢與建立仍由伺服器把關）
+function P.quotaGate(m)
+    if m.mode ~= "create" then return nil end
     local t = P.tierSlots(m)
-    if t == nil then return false end
-    local freeLeft = t.free == true and (s.free.used or 0) < (s.free.n or 0)
-    local paidLeft = (t.usable or 0) > (t.paid or 0)
-    return not freeLeft and not paidLeft
+    if t == nil then return nil end
+    local f = t.free or {}
+    if (f.used or 0) < (f.n or 0) then return nil end
+    if (t.usable or 0) - (t.grace or 0) > (t.paid or 0) then return nil end
+    return t.full and CODE.TIER_FULL or CODE.QUOTA_FULL
 end
 
 -- idle 的閘門：回第一個擋住框選的碼或 nil（§10.4 idle 列）
@@ -139,8 +139,7 @@ function P.gate(m)
         if m.tier == nil then return CODE.NO_DEED end
         if not MSH.Settings.get().tiers[m.tier].enabled then return CODE.TIER_DISABLED end
     end
-    if P.quotaFull(m) then return CODE.QUOTA_FULL end
-    return nil
+    return P.quotaGate(m)
 end
 
 -- 名額與伺服器閘門（slots：Economy 代理的查詢；blocked＝HEALTH_BLOCKED／NOT_SURVIVED）。和名額視窗共用 Client.refreshSlots
@@ -500,11 +499,11 @@ local function reasonLines(v, code, token, y, detail)
     return y
 end
 
--- 名額不足時的價格（detail 來自 QUOTA_FULL；沒有就用 slots 的該級價格）；回 y, 是否有可買的
+-- 名額不足時的價格（detail 來自 QUOTA_FULL；沒有就用 slots 的該級還能買的那種價格）；回 y, 是否有可買的
 local function priceLines(v, detail, y)
     local t = P.tierSlots(v.m)
-    local buy = type(detail.buy) == "table" and detail.buy or (t and t.buyPrice)
-    local rent = type(detail.rent) == "table" and detail.rent or (t and t.rentPrice)
+    local buy = type(detail.buy) == "table" and detail.buy or (t and t.buy and t.buy.open and t.buyPrice)
+    local rent = type(detail.rent) == "table" and detail.rent or (t and t.rent and t.rent.open and t.rentPrice)
     if type(buy) == "table" then
         y = para(v, getText("IGUI_MSH_Create_PriceBuy", tostring(buy.amount), tostring(buy.currency)), "textMuted", nil, y)
     end
@@ -556,13 +555,12 @@ local function layoutIdle(v, y, list)
         y = para(v, getText("IGUI_MSH_Create_Limit", tostring(v.maxSide), tostring(v.maxArea),
             MSH.Client.areaSquare(v.maxArea)), "textMuted", nil, y)
     end
-    local s, t = m.slots, P.tierSlots(m)
-    if m.mode == "create" and type(s) == "table" and type(s.free) == "table" then
-        y = para(v, getText("IGUI_MSH_Create_QuotaFree", tostring(s.free.used or 0), tostring(s.free.n or 0)), "textMuted", nil, y)
-        if t ~= nil and (t.usable or 0) > 0 then
-            y = para(v, getText("IGUI_MSH_Create_QuotaPaid", tostring(m.tier), tostring(t.paid or 0), tostring(t.usable)),
-                "textMuted", nil, y)
-        end
+    local t = P.tierSlots(m)
+    if m.mode == "create" and t ~= nil then
+        y = para(v, getText("IGUI_MSH_Create_QuotaTier", tostring(m.tier), tostring(t.owned or 0), tostring(t.max or 0)),
+            "textMuted", nil, y)
+        local parts = MSH.SlotsWindow and MSH.SlotsWindow.parts(t) or ""
+        if parts ~= "" then y = para(v, parts, "textMuted", nil, y) end
     end
     if m.source == SRC.DEED and m.mode == "create" and #m.held > 1 then
         y = para(v, getText("IGUI_MSH_Create_ChooseDeed"), "text", nil, y)

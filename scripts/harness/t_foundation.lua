@@ -35,7 +35,7 @@ return function(T)
     T.section("Settings：讀取夾值、面板整批驗證")
     local Settings = MSH.Settings
     local cfg, warn = Settings.get()
-    check(#warn == 0 and cfg.claimsPerPlayer == 1 and cfg.tiersEnabled == 3, "預設值讀出無警告")
+    check(#warn == 0 and cfg.tiersEnabled == 3, "預設值讀出無警告")
     check(cfg.redrawLimit == 5, "重新框選次數上限預設 5")
     check(cfg.maxPieces == 4, "每間最多塊數預設 4（使用者 2026-10-12）")
     check(cfg.roadKinds.main and cfg.roadKinds.street and not cfg.roadKinds.gravel, "道路類別預設 main;street")
@@ -46,8 +46,13 @@ return function(T)
     end
     check(sizesOk, "各級預設大小：邊長 24–96 的正方形格數（576…9,216），外框上限是同面積正方形邊長的 2 倍、最多 96"
         .. "（使用者 2026-10-13 採用建議表）")
-    check(cfg.tiers[1].craft == 3 and cfg.tiers[2].craft == 1 and cfg.tiers[1].free and not cfg.tiers[1].buy,
-        "製作與名額開關預設")
+    local slotsOk = cfg.tiers[1].freeSlots == 1 and cfg.tiers[1].free and not cfg.tiers[1].buy and not cfg.tiers[1].rent
+    for n = 2, MSH.MAX_TIER do
+        local t = cfg.tiers[n]
+        slotsOk = slotsOk and t.freeSlots == 0 and t.buySlots == 0 and t.rentSlots == 0 and not (t.free or t.buy or t.rent)
+    end
+    check(cfg.tiers[1].craft == 3 and cfg.tiers[2].craft == 1 and slotsOk,
+        "製作與名額預設：只有 1 級免費 1 個，其餘免費、可買、可租都是 0（使用者 2026-10-15）")
     T.sandbox("ClaimGap", 99)
     T.sandbox("Tier1Area", 9000)
     T.sandbox("RoadKinds", "main;lava")

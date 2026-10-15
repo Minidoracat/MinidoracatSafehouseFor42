@@ -47,6 +47,10 @@ E.RENT_DEFAULT = { 100, 300, 700 }   -- 月租預設照各級預設面積比例�
 -- 閒置保險每日價預設＝月租 ÷ 10（保險比租名額貴；管理員在付費頁逐級改）；4–8 級同 3 級
 E.INSURE_DEFAULT = { 10, 30, 70 }
 E.INSURE_MAX_DAYS = 365   -- 一次最多買幾天＝Economy RENTAL_PERIODS_MAX
+-- 經濟中心方案的每人上限只當天花板：每級可買、可租幾個由本 MOD 判（validatePurchase，沙盒 Tier<N>BuySlots／RentSlots），
+-- 所以方案的 permanentLimit／rentalLimit 固定拉到這兩個選項的最大值（租用 10＝經濟中心每帳號每產品最多 10 張租約）
+E.PERMANENT_CEIL = MSH.Settings.BY_KEY.Tier1BuySlots.max
+E.RENTAL_CEIL = MSH.Settings.BY_KEY.Tier1RentSlots.max
 
 E.currencies = E.currencies or {}
 E.pending = E.pending or {}     -- onEntitlementChanged 排隊：owner → { [tier] = true }（下個 tick 持鎖處理）
@@ -86,8 +90,8 @@ end
 function E.defaults(t)
     local rent = E.RENT_DEFAULT[t] or E.RENT_DEFAULT[3]
     return {
-        permanentEnabled = false, permanentCurrency = "survivor", permanentPrice = rent * 12, permanentLimit = 10,
-        rentalEnabled = false, rentalCurrency = "survivor", rentalPrice = rent, rentalLimit = 10, rentalDays = 30,
+        permanentEnabled = false, permanentCurrency = "survivor", permanentPrice = rent * 12, permanentLimit = E.PERMANENT_CEIL,
+        rentalEnabled = false, rentalCurrency = "survivor", rentalPrice = rent, rentalLimit = E.RENTAL_CEIL, rentalDays = 30,
         graceHours = 24, reminderHours = 24, autoRenewAllowed = true,
     }
 end
@@ -250,20 +254,30 @@ local function leases(ent)
     return l
 end
 
--- 這位屋主這一級能拿來建新屋的名額與開著的價格。不是 READY、查詢失敗或租約欄位不合＝0、沒有價格
+-- 這位屋主這一級能拿來建新屋的名額、已買與已租幾個，以及價格（使用者 2026-10-15：每級可買、可租各有上限）。
+-- buyPrice／rentPrice＝這一級有在賣就帶（名額視窗畫停用的按鈕）；buy／rent＝還沒到上限才帶（QUOTA_FULL 與〔前往付費〕）；
+-- full＝讀得到權益、而且可買與可租都到上限（上限 0 也算）。不是 READY、查詢失敗或租約欄位不合＝0、沒有價格、沒有 full
 function E.offer(owner, t, cfg)
-    local out = { usable = 0, grace = 0 }
+    local out = { usable = 0, grace = 0, bought = 0, rented = 0 }
     local res = E.read(owner, t)
     local l = res and leases(res.entitlement)
     if l == nil then return out end
-    out.usable, out.grace = res.entitlement.usable, l.grace
-    local plan, tc = res.plan, cfg.tiers[t]
+    local ent, tc = res.entitlement, cfg.tiers[t]
+    out.usable, out.grace = ent.usable, l.grace
+    out.bought = count(ent.permanent) and ent.permanent or 0
+    -- 付款待確認的租約也算（rentalCommitted），付款還沒完成時再按一次也不會超過上限
+    out.rented = count(ent.rentalCommitted) and ent.rentalCommitted or (count(ent.rental) and ent.rental or 0)
+    local canBuy, canRent = out.bought < tc.buySlots, out.rented < tc.rentSlots
+    out.full = not canBuy and not canRent
+    local plan = res.plan
     if type(plan) == "table" and E.tierEnabled(cfg, t) then
         if tc.buy and plan.permanentEnabled == true then
-            out.buy = { amount = plan.permanentPrice, currency = plan.permanentCurrency }
+            out.buyPrice = { amount = plan.permanentPrice, currency = plan.permanentCurrency }
+            if canBuy then out.buy = out.buyPrice end
         end
         if tc.rent and plan.rentalEnabled == true then
-            out.rent = { amount = plan.rentalPrice, currency = plan.rentalCurrency, days = plan.rentalDays }
+            out.rentPrice = { amount = plan.rentalPrice, currency = plan.rentalCurrency, days = plan.rentalDays }
+            if canRent then out.rent = out.rentPrice end
         end
     end
     return out
@@ -309,9 +323,10 @@ function E.insureOffer(t, cfg, ins)
         lease = ins.lease, maxDays = E.INSURE_MAX_DAYS }
 end
 
--- ===== validatePurchase（§1.3 第 67 行）=====
--- 等級啟用且該種開關開著 → 放行（不因已用完拒絕加購）。否則只放行付款後總數不超過該級付費間數（含 lapsed）：
--- 既有的屋能續租、能恢復，不能多買。不看 health：設定出錯時不能連自動續租也擋掉。保險產品交給 Idle.canInsure。
+-- ===== validatePurchase（§1.3 第 67 行；使用者 2026-10-15 改成每級上限）=====
+-- 名額數不變（續租仍有效的租約）或付款後總數不超過該級付費間數（含 lapsed，恢復停用的屋）→ 放行；其餘照該級可買、
+-- 可租的上限（Tier<N>BuySlots／RentSlots），上限是 0＝這種不賣。調低上限前已經買、租的照常可用與續租，只擋新的。
+-- 不看 health：設定出錯時不能連自動續租也擋掉。保險產品交給 Idle.canInsure。
 function E.validatePurchase(username, productId, kind, quantity, projected)
     local it = E.insureTierOf(productId)
     if it ~= nil then
@@ -322,14 +337,17 @@ function E.validatePurchase(username, productId, kind, quantity, projected)
     if t == nil or type(username) ~= "string" then return false, "TIER_DISABLED" end
     local cfg = MSH.Settings.get()
     local tc = cfg.tiers[t]
-    local enabled = E.tierEnabled(cfg, t)
-    local open = (kind == "permanent" and tc.buy) or (kind == "rental" and tc.rent)
-    if enabled and open then return true end
     local p = type(projected) == "table" and projected or {}
-    local total = (count(p.permanent) and p.permanent or 0) + (count(p.rental) and p.rental or 0)
+    local perm = count(p.permanent) and p.permanent or 0
+    local rent = count(p.rental) and p.rental or 0
+    -- 續租還有效的租約時名額數不變：projection 的 usable 是付款前的（ECEntitlements.lua:850-858）
+    if count(p.usable) and perm + rent <= p.usable then return true end
     local by = MSH.Claims.paidClaims(username, cfg)
-    if total <= #(by[t] or {}) then return true end
-    return false, enabled and CODE.KIND_CLOSED or CODE.TIER_DISABLED
+    if perm + rent <= #(by[t] or {}) then return true end
+    if not E.tierEnabled(cfg, t) then return false, CODE.TIER_DISABLED end
+    local cap = kind == "permanent" and tc.buySlots or tc.rentSlots
+    if cap > 0 and (kind == "permanent" and perm or rent) <= cap then return true end
+    return false, cap > 0 and CODE.TIER_FULL or CODE.KIND_CLOSED
 end
 
 -- ===== 停用、恢復、釋出 =====
@@ -547,8 +565,10 @@ local function samePlan(a, b)
     return true
 end
 
--- Tier<N>Buy／Rent 開著而方案那種販售關著 → setPlan 打開（開服與每分鐘；關掉開關不改回，§1.3 第 58 行）。
--- IdleInsure 開著時保險方案照固定欄位開賣；關掉也不改回（已買的照用，新的由 validatePurchase 擋）
+-- 可買／可租大於 0 而方案那種販售關著 → setPlan 打開（開服與每分鐘；改回 0 不關，§1.3 第 58 行），同時把方案的
+-- permanentLimit／rentalLimit 拉到天花板：每級上限由本 MOD 判，經濟中心的上限只往上調（調低會讓已經超過的人連續租都被擋，
+-- entitlements-api.md「調低 rentalLimit」）。IdleInsure 開著時保險方案照固定欄位開賣；關掉也不改回（已買的照用，新的由
+-- validatePurchase 擋）
 function E.syncSwitches()
     if E.status ~= "READY" then return end
     local cfg = MSH.Settings.get()
@@ -557,12 +577,15 @@ function E.syncSwitches()
         if tc.buy or tc.rent then
             local res = E.call("getPlan", E.product(t))
             local plan = res.ok == true and type(res.plan) == "table" and res.plan or nil
-            if plan and ((tc.buy and plan.permanentEnabled ~= true) or (tc.rent and plan.rentalEnabled ~= true)) then
+            local low = plan and ((plan.permanentLimit or 0) < E.PERMANENT_CEIL or (plan.rentalLimit or 0) < E.RENTAL_CEIL)
+            if plan and (low or (tc.buy and plan.permanentEnabled ~= true) or (tc.rent and plan.rentalEnabled ~= true)) then
                 local values = E.planOf(plan)
                 if tc.buy then values.permanentEnabled = true end
                 if tc.rent then values.rentalEnabled = true end
+                values.permanentLimit = math.max(values.permanentLimit or 0, E.PERMANENT_CEIL)
+                values.rentalLimit = math.max(values.rentalLimit or 0, E.RENTAL_CEIL)
                 local r = E.call("setPlan", E.product(t), values,
-                    { actor = "source", origin = "source", reason = "Tier" .. t .. " Buy/Rent switch" })
+                    { actor = "source", origin = "source", reason = "Tier" .. t .. " slots" })
                 if r.ok == true then
                     MSH.Audit.write("PLAN_SWITCH", { actor = "source", code = E.product(t), detail = tostring(r.revision) })
                 else
@@ -635,29 +658,32 @@ local function blockedCode(player)
     return nil
 end
 
+-- 名額視窗與建立面板的摘要，每一級一筆（使用者 2026-10-15）：免費 n／used、可買與可租的上限和已有幾個、佔名額的間數
+-- （owned＝免費＋付費）與最多幾間（max＝免費＋可買＋可租；之前已買、已租超過上限的照實算）。
+-- 關閉的等級（TiersEnabled 調低、改成免費建立）還有付費屋時照樣列出：validatePurchase 放行續租，名額視窗是玩家
+-- 唯一能續租、開關自動續租的地方，不列出來租約就只能到期（2026-10-12 使用者問移除等級的影響時查到）。
+-- 這種等級 offer 不帶價格，畫面上沒有買斷／租用新名額的按鈕；不能再建新的，最多就是已有的間數
 function E.slots(ctx)
     local cfg = MSH.Settings.get()
     local by, s = MSH.Claims.paidClaims(ctx.who, cfg)
-    local titles = {}
-    for _, rec in ipairs(MSH.Registry.byOwner(ctx.who)) do
-        if s.ids[rec.claimId] then titles[#titles + 1] = rec.title end
-    end
-    -- 關閉的等級（TiersEnabled 調低、改成免費建立）還有付費屋時照樣列出：validatePurchase 放行續租，名額視窗是玩家
-    -- 唯一能續租、開關自動續租的地方，不列出來租約就只能到期（2026-10-12 使用者問移除等級的影響時查到）。
-    -- 這種等級 offer 不帶價格，畫面上沒有買斷／租用新名額的按鈕
     local tiers = {}
     for t = 1, MSH.MAX_TIER do
         local enabled, paid = E.tierEnabled(cfg, t), #(by[t] or {})
         if enabled or paid > 0 then
-            local tc = cfg.tiers[t]
+            local tc, f = cfg.tiers[t], s.tiers[t]
             local o = E.offer(ctx.who, t, cfg)
-            tiers[#tiers + 1] = { tier = t, enabled = enabled, free = tc.free, buy = tc.buy, rent = tc.rent,
-                perPlayer = tc.perPlayer, usable = o.usable, paid = paid, grace = o.grace,
-                buyPrice = o.buy, rentPrice = o.rent }
+            tiers[#tiers + 1] = { tier = t, enabled = enabled,
+                free = { n = f.n, used = f.used },
+                buy = { n = tc.buySlots, have = o.bought, open = o.buy ~= nil },
+                rent = { n = tc.rentSlots, have = o.rented, open = o.rent ~= nil },
+                owned = f.used + paid,
+                max = enabled and (f.n + math.max(tc.buySlots, o.bought) + math.max(tc.rentSlots, o.rented))
+                    or (f.used + paid),
+                usable = o.usable, paid = paid, grace = o.grace, full = o.full == true,
+                buyPrice = o.buyPrice, rentPrice = o.rentPrice }
         end
     end
-    return S.ok({ economy = E.status, blocked = blockedCode(ctx.player),
-        free = { n = s.free, used = s.used, titles = titles }, tiers = tiers })
+    return S.ok({ economy = E.status, blocked = blockedCode(ctx.player), tiers = tiers })
 end
 
 -- 付費頁只列 Economy 啟用中的幣別（使用者 2026-10-11）：停用的幣別付款會被拒（currency_disabled，Economy
@@ -708,6 +734,9 @@ function E.adminSetPlan(ctx)
     local a = ctx.args
     if E.status ~= "READY" then return S.fail(CODE.ECONOMY_UNAVAILABLE) end
     local product, values = E.product(a.tier), E.planOf(a.values)
+    -- 每人上限由本 MOD 判，方案的上限固定是天花板（付費頁不再給改；舊客戶端送來小的也拉回去）
+    values.permanentLimit = math.max(MSH.isFinite(values.permanentLimit) and values.permanentLimit or 0, E.PERMANENT_CEIL)
+    values.rentalLimit = math.max(MSH.isFinite(values.rentalLimit) and values.rentalLimit or 0, E.RENTAL_CEIL)
     if a.product == "insure" then
         if not E.insureReady then return S.fail(CODE.ECONOMY_UNAVAILABLE) end
         product = E.insureProduct(a.tier)

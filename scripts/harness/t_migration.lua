@@ -2,7 +2,7 @@
 -- 一次開服就接管、玩家不被擋；有問題與超過上限的留原版；前置條件不符等下次開服；三種當機組合自動修好；已有紀錄的伺服器不進入。
 return function(T)
     local check = T.check
-    local SBOX = { ClaimsPerPlayer = 1, CreateMode = 2 }
+    local SBOX = { CreateMode = 2 }
     local KEEP = { keepGmd = true, keepFiles = true, keepHouses = true, sandbox = SBOX }
     local SECRETS = { "alice", "bob", "carol", "dan", "eve", "fay", "gus", "x.y", "100", "200", "300", "700", "800" }
     local MSH, R, Mg

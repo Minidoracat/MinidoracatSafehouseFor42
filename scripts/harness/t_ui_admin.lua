@@ -83,7 +83,8 @@ local function fakeUI()
     local colors = {}
     for _, t in ipairs({ "text", "textMuted", "textDisabled", "warning", "errorText" }) do colors[t] = { r = 1, g = 1, b = 1, a = 1 } end
     local caps = {}
-    for _, c in ipairs({ "window", "controls", "dialog", "scrollPanel", "textWrap", "textFieldInvalid" }) do caps[c] = true end
+    for _, c in ipairs({ "window", "controls", "dialog", "scrollPanel", "textWrap", "textFieldInvalid", "toast" }) do caps[c] = true end
+    fw.toasts = {}
     MinidoracatUI = { v1 = { API_MAJOR = 1, API_REVISION = 17, CAPABILITIES = caps,
         Theme = { defaultPalette = function() return {} end, create = function() return { colors = colors } end },
         Text = { fit = function(s) return s end, wrap = function(s) return { s } end },
@@ -94,6 +95,7 @@ local function fakeUI()
         TextField = { new = function(o) return make(Field, o, 22) end },
         Checkbox = { new = function(o) return make(Check, o, 20) end },
         Dialog = { show = function(o) fw.dialog = o return o end },
+        Toast = { show = function(o) fw.toasts[#fw.toasts + 1] = o.message end },
     } }
     function fw.click(b)
         if b.enabled ~= false and b.onClick then b.onClick(b.target, b) end
@@ -136,10 +138,10 @@ return function(T)
     check(AP.serverErrors({ ok = false, code = "SAVE_FAILED" }) == nil, "不是欄位錯誤就不標欄位")
 
     T.section("AdminPanel：這一級沒人建得了")
-    check(not AP.nobodyCanBuild(true, false, false, false), "免費開著：建得了")
-    check(AP.nobodyCanBuild(false, false, false, true), "三個都關：警告")
-    check(AP.nobodyCanBuild(false, true, true, false), "只開買斷／租用而 Economy 不可用：警告")
-    check(not AP.nobodyCanBuild(false, false, true, true), "只開租用且 Economy 可用：建得了")
+    check(not AP.nobodyCanBuild(1, 0, 0, false), "免費 1：建得了（沒有 Economy 也行）")
+    check(AP.nobodyCanBuild(0, 0, 0, true), "三個都是 0：警告")
+    check(AP.nobodyCanBuild(0, 2, 1, false), "只有可買／可租而 Economy 不可用：警告")
+    check(not AP.nobodyCanBuild(0, 0, 1, true), "只有可租且 Economy 可用：建得了")
 
     T.section("AdminPanel：玩家分頁")
     local p = AP.pager()
@@ -286,8 +288,9 @@ return function(T)
         and rules["mr#1"] == nil, "遷移區：等待原因、已接管、依原因略過、清單檔位置；沒有修補就不顯示")
     local deeds = P.pages.deeds.flow.pool
     local function shown(key) return deeds[key] ~= nil and deeds[key]:isVisible() end
-    check(shown("f:Tier1Side") and shown("f:Tier3Rent") and not shown("f:Tier4Side") and deeds["warn2#1"] == nil,
-        "地契頁只列啟用的 3 級（預設）、沒有警告")
+    check(shown("f:Tier1Side") and shown("f:Tier3RentSlots") and not shown("f:Tier4Side") and not shown("warn1#1")
+        and shown("warn2#1") and shown("warn3#1") and deeds.mx1.text == "1" and deeds.mx2.text == "0",
+        "地契頁只列啟用的 3 級（預設）；只有 1 級免費 1 個，2、3 級三個數都是 0 → 那兩列警告、每人最多 0")
     -- 地契掉落總開關（使用者 2026-10-13：預設關）：關著時掉落欄反灰，勾起來不用存檔就能改
     check(shown("f:DeedLoot") and not deeds["f:DeedLoot"]:getChecked() and deeds["f:Tier1LootChance"].enabled == false
         and deeds["f:Tier3LootChance"].enabled == false and deeds["f:Tier1Area"].enabled ~= false,
@@ -303,7 +306,7 @@ return function(T)
     fw.click(deeds.tierRemove)
     check(tiers.value == 3 and not shown("f:Tier4Side"), "〔移除第 4 級〕：那一列收起")
     for _ = 1, 6 do fw.click(deeds.tierAdd) end
-    check(tiers.value == 8 and shown("f:Tier8Rent") and deeds.tierAdd.enabled == false and deeds.tierRemove.enabled ~= false,
+    check(tiers.value == 8 and shown("f:Tier8RentSlots") and deeds.tierAdd.enabled == false and deeds.tierRemove.enabled ~= false,
         "加到上限 8 級：〔新增〕停用")
     for _ = 1, 8 do fw.click(deeds.tierRemove) end
     check(tiers.value == 1 and not shown("f:Tier2Side") and deeds.tierRemove.enabled == false and deeds.tierAdd.enabled ~= false,
@@ -337,9 +340,16 @@ return function(T)
     typeArea(area1Text)
 
     deeds["f:Tier1Side"]:setText("30")
-    local free2 = deeds["f:Tier2Free"]
-    free2:setChecked(false)
-    check(deeds["warn2#1"] ~= nil and deeds["warn2#1"]:isVisible(), "2 級免費、買斷、租用都關：該列警告")
+    local buy2 = deeds["f:Tier2BuySlots"]
+    buy2:setText("2")
+    buy2.onChange(buy2, "2")
+    check(not shown("warn2#1") and shown("warn3#1") and deeds.mx2.text == "2",
+        "2 級可買打成 2（Economy 可用）：那列警告消失、每人最多跟著變 2；3 級照舊警告")
+    buy2:setText("x")
+    buy2.onChange(buy2, "x")
+    check(shown("warn2#1") and deeds.mx2.text == "0", "不是數字：當 0 算（警告回來）")
+    buy2:setText("2")
+    buy2.onChange(buy2, "2")
     local craft = deeds["f:Tier1Craft"]
     craft:onMouseMove(0, 0)
     check(tips[#tips] == "CraftMinidoracatSafehouseDeed1Standard", "滑鼠移到製作格：預覽選中難度的配方")
@@ -355,7 +365,7 @@ return function(T)
     local sent = lastCmd("adminSetOptions")
     local keys = {}
     for k in pairs(sent and sent.args.changes or {}) do keys[#keys + 1] = k end
-    check(sent ~= nil and #keys == 3 and sent.args.changes.Tier1Side == 30 and sent.args.changes.Tier2Free == false
+    check(sent ~= nil and #keys == 3 and sent.args.changes.Tier1Side == 30 and sent.args.changes.Tier2BuySlots == 2
         and sent.args.changes.Tier1Craft == 4,
         "套用：只送地契頁改過的三個鍵；加回原數的等級數、移除那級改過的欄位不送（實際 " .. table.concat(keys, ",") .. "）")
     answer("adminSetOptions", { ok = false, code = "BAD_OPTION", key = "Tier1Side", reason = "OUT_OF_RANGE" })
@@ -420,11 +430,20 @@ return function(T)
         return nil
     end
     local w = SW.open({ tier = 2 })
-    local slotsData = { economy = "READY", free = { n = 1, used = 1, titles = { "home" } }, tiers = {
-        { tier = 1, enabled = true, free = true, buy = false, rent = false, usable = 0, paid = 0 },
-        { tier = 2, enabled = true, free = false, buy = true, rent = true, usable = 1, paid = 1,
-            buyPrice = { amount = 3600, currency = "survivor" }, rentPrice = { amount = 300, currency = "survivor", days = 30 } },
-        { tier = 4, enabled = false, free = true, buy = false, rent = true, usable = 1, paid = 1 } } }
+    -- 名額 B（使用者 2026-10-15）：每一級免費、可買、可租三個數
+    local function tierRow(t, extra)
+        local r = { tier = t, enabled = true, free = { n = 0, used = 0 }, buy = { n = 0, have = 0, open = false },
+            rent = { n = 0, have = 0, open = false }, owned = 0, max = 0, usable = 0, paid = 0, grace = 0, full = true }
+        for k, v in pairs(extra or {}) do r[k] = v end
+        return r
+    end
+    local slotsData = { economy = "READY", tiers = {
+        tierRow(1, { free = { n = 1, used = 1 }, owned = 1, max = 1 }),
+        tierRow(2, { buy = { n = 5, have = 0, open = true }, rent = { n = 2, have = 1, open = true }, owned = 1, max = 7,
+            usable = 1, paid = 1, full = false, buyPrice = { amount = 3600, currency = "survivor" },
+            rentPrice = { amount = 300, currency = "survivor", days = 30 } }),
+        tierRow(3),
+        tierRow(4, { enabled = false, rent = { n = 0, have = 1, open = false }, owned = 1, max = 1, usable = 1, paid = 1 }) } }
     local function countCmd(command)
         local c = 0
         for _, s in ipairs(T.clientSent) do if s.command == command then c = c + 1 end end
@@ -432,7 +451,9 @@ return function(T)
     end
     answer("slots", slotsData)
     local sp = w.flow.pool
-    check(sp.buy1 == nil and sp.buy2 ~= nil and sp.rent2 ~= nil, "販售關閉的等級不顯示買斷／租用鈕")
+    check(sp.buy1 == nil and sp.buy2 ~= nil and sp.rent2 ~= nil and sp["cap1#1"] == nil,
+        "不賣的等級不顯示買斷／租用鈕，也不寫「已達上限」")
+    check(sp["t3#1"] == nil and sp["t2#1"] ~= nil, "三個數都是 0、也沒有房子的等級不列")
     check(sp["off4#1"] ~= nil and sp["off4#1"]:isVisible() and sp.rent4 == nil and sp.x4 ~= nil and sp.x4:isVisible(),
         "關閉但還有付費屋的等級：寫明只能續租、沒有租用新名額的鈕、可以展開租約")
     check(lastCall("requestState") ~= nil and lastCall("requestState")[2] == "tier2", "只對預選（展開）的那一級讀 Economy 狀態")
@@ -451,15 +472,18 @@ return function(T)
     local pc = lastCall("purchase")
     check(pc ~= nil and pc[2] == "Q2", "金額一致：用同一張報價付款")
     pc[3]({ ok = false, unknown = true, error = "timeout" })
-    check(w.order ~= nil and sp.check ~= nil and sp.check:isVisible() and sp.buy2.enabled == false,
-        "付款逾時：保留付款鎖、只給〔查詢購買結果〕")
-    fw.click(sp.check)
+    check(w.order ~= nil and sp.check2 ~= nil and sp.check2:isVisible() and sp.buy2.enabled == false
+        and sp["status2#1"] ~= nil and sp["status2#1"]:isVisible() and not (sp["status#1"] and sp["status#1"]:isVisible()),
+        "付款逾時：保留付款鎖、只給〔查詢購買結果〕；說明和按鈕都在 2 級底下，不在視窗最底")
+    fw.click(sp.check2)
     local go = lastCall("getOrder")
     check(go ~= nil and go[3] == "O2" and lastCall("purchase") == pc, "查詢只讀同一筆訂單，不重送付款")
     nSlots = countCmd("slots")
     T.advance(MSH.Client.SLOTS_GAP_MS)
     go[4]({ ok = true, known = true, order = { orderId = "O2", status = "paid" } })
     check(w.order == nil and countCmd("slots") == nSlots + 1, "查回最終結果才解除，並重抓摘要")
+    check(fw.toasts[#fw.toasts] == "IGUI_MSH_Slots_PaidDone" and sp["status2#1"]:isVisible(),
+        "付款完成：跳通知，結果也寫在 2 級底下")
     answer("slots", slotsData)
     local box = sp["l2:1a"]
     box:setChecked(true)
@@ -467,6 +491,21 @@ return function(T)
     fw.dialog.onResult(true)
     local ar = lastCall("setAutoRenew")
     check(ar ~= nil and ar[3] == true and ar[4] == 2 and ar[5] == 5 and ar[7] == "L1", "送出該張租約的自動續租（帶版本與條款版本）")
+    check(sp["lr2#1"] ~= nil and sp["lr2#1"]:isVisible(), "展開的租約最後寫租約和房子的關係")
+
+    -- 2026-10-15 帳本：同一級在可租 1 時多租了第二張。到上限：〔租用〕停用並寫原因、伺服器那邊也擋（t_economy）
+    T.advance(MSH.Client.SLOTS_GAP_MS)
+    SW.refresh(w)
+    answer("slots", { economy = "READY", tiers = { tierRow(2, { rent = { n = 1, have = 2, open = false }, owned = 1, max = 2,
+        usable = 2, paid = 1, rentPrice = { amount = 300, currency = "survivor", days = 30 } }) } })
+    local quotes = 0
+    for _, c in ipairs(calls) do if c.name == "quote" then quotes = quotes + 1 end end
+    fw.click(sp.rent2)
+    local after = 0
+    for _, c in ipairs(calls) do if c.name == "quote" then after = after + 1 end end
+    check(sp.rent2:isVisible() and sp.rent2.enabled == false and sp["cap2#1"] ~= nil and sp["cap2#1"]:isVisible()
+        and after == quotes, "可租 1、已租 2：〔租用〕停用、寫「已達這一級的上限」，按了也不報價")
+    check(sp["sp2#1"] ~= nil and sp["sp2#1"]:isVisible(), "多租的那張還沒用來建屋：寫還能用付費名額再建幾間")
 
     T.section("SlotsWindow：什麼時候重抓名額摘要（Economy 推送、自己的清單、沙盒；自己讀狀態不算）")
     -- 假 Economy 照 ECEntitlementClient：每個 requestState 回覆先通知 onChanged（版本相同也通知），再呼叫回呼；
@@ -574,10 +613,10 @@ return function(T)
     -- 量測模型：fakeUI 的 MeasureStringX＝字數 × 7。放法文／俄文長度等級的譯文，placeholder 比原本固定欄寬 52 長
     local realGetText = getText
     local long = {
-        IGUI_MSH_Admin_Unlimited = "Sans limite du tout", IGUI_MSH_Admin_Col_Tier = "Niveau", IGUI_MSH_Admin_Col_Side = "Cote",
-        IGUI_MSH_Admin_Col_Area = "Surface", IGUI_MSH_Admin_Col_PerPlayer = "Par joueur", IGUI_MSH_Admin_Col_Loot = "Chance de butin",
+        IGUI_MSH_Admin_Col_Tier = "Niveau", IGUI_MSH_Admin_Col_Side = "Cote",
+        IGUI_MSH_Admin_Col_Area = "Surface", IGUI_MSH_Admin_Col_Loot = "Chance de butin",
         IGUI_MSH_Admin_Col_Craft = "Fabrication", IGUI_MSH_Admin_Col_Free = "Gratuit", IGUI_MSH_Admin_Col_Buy = "Achat",
-        IGUI_MSH_Admin_Col_Rent = "Location", IGUI_MSH_Admin_TierN = "Niveau %1",
+        IGUI_MSH_Admin_Col_Rent = "Location", IGUI_MSH_Admin_Col_Max = "Max par joueur", IGUI_MSH_Admin_TierN = "Niveau %1",
         Sandbox_MinidoracatSafehouse_CraftLevel_option1 = "Desactivee", Sandbox_MinidoracatSafehouse_CraftLevel_option2 = "Facile",
         Sandbox_MinidoracatSafehouse_CraftLevel_option3 = "Standard", Sandbox_MinidoracatSafehouse_CraftLevel_option4 = "Stricte",
         IGUI_MSH_Admin_SetLimit = "Limite gratuite par joueur...",
@@ -593,14 +632,11 @@ return function(T)
     local PL = AP.open({ tab = "deeds" })
     answer("adminOptions", { values = values, health = {}, settingsWarnings = {}, resourceApi = false, parkingApi = false })
     local dp = PL.pages.deeds
-    local pf = dp.flow.pool["f:Tier1PerPlayer"]
-    local xs, right = AP.deedColumns()
-    check(pf.width >= measure(long.IGUI_MSH_Admin_Unlimited) + 16 and xs.Loot >= pf.x + pf.width,
-        "每人上限輸入框寬 ≥ 量到的「不限」＋內距，且不壓到下一欄（輸入框 " .. pf.width .. "）")
+    local _, right = AP.deedColumns()
     check(right > AP.PANEL_W - 10 - AP.SCROLL_GUTTER and right + 10 <= dp.sp:contentWidth() and PL.win.width <= 1260,
         "表格比預設寬還寬時面板跟著變寬，表格右緣不超出面板（右緣 " .. right .. "、面板 " .. PL.win.width .. "）")
-    local rentBox = dp.flow.pool["f:Tier1Rent"]
-    check(rentBox.x + rentBox.width <= dp.sp:contentWidth(), "最右一欄的開關也在面板內")
+    local mx = dp.flow.pool.mx1
+    check(mx.x + mx.width <= dp.sp:contentWidth(), "最右一欄（每人最多）也在面板內")
     AP.select(PL, "players")
     T.advance(1000)
     AP.onTick()
@@ -613,7 +649,7 @@ return function(T)
 
     T.section("AdminPanel：放大字型時數字框寬依最寬合法值量測")
     -- 繁中 200% 字型：每字寬加倍；標籤用短字（中文標籤短），數字欄的寬度由值決定
-    local short = { IGUI_MSH_Admin_Unlimited = "No lim", IGUI_MSH_Admin_TierN = "Lv %1",
+    local short = { IGUI_MSH_Admin_TierN = "Lv %1",
         Sandbox_MinidoracatSafehouse_CraftLevel_option1 = "Off", Sandbox_MinidoracatSafehouse_CraftLevel_option2 = "Easy",
         Sandbox_MinidoracatSafehouse_CraftLevel_option3 = "Std", Sandbox_MinidoracatSafehouse_CraftLevel_option4 = "Hard" }
     getText = function(key, a)
@@ -630,14 +666,14 @@ return function(T)
     local deedPool = PB.pages.deeds.flow.pool
     local narrow = {}
     for _, s in ipairs({ { "Tier1Side", "96" }, { "Tier1Area", "9216" }, { "Tier1Area", "9999" }, { "Tier3Area", "9999" },
-        { "Tier1PerPlayer", "100" }, { "Tier1LootChance", "100.00" } }) do
+        { "Tier1FreeSlots", "100" }, { "Tier1BuySlots", "100" }, { "Tier1RentSlots", "10" }, { "Tier1LootChance", "100.00" } }) do
         if not fits(deedPool["f:" .. s[1]], s[2]) then narrow[#narrow + 1] = s[1] .. "=" .. tostring(deedPool["f:" .. s[1]] and deedPool["f:" .. s[1]].width) end
     end
     check(#narrow == 0, "地契頁每個數字框寬 ≥ 量到的最寬合法值＋內距（太窄：" .. table.concat(narrow, ",") .. "）")
     local xs2, right2 = AP.deedColumns()
     local area1 = deedPool["f:Tier1Area"]
-    check(xs2.PerPlayer >= area1.x + area1.width and right2 + 10 <= PB.pages.deeds.sp:contentWidth()
-        and deedPool["f:Tier1Rent"].x + deedPool["f:Tier1Rent"].width <= PB.pages.deeds.sp:contentWidth(),
+    check(xs2.Side >= area1.x + area1.width and right2 + 10 <= PB.pages.deeds.sp:contentWidth()
+        and deedPool.mx1.x + deedPool.mx1.width <= PB.pages.deeds.sp:contentWidth(),
         "欄寬跟著重算、表格右緣在面板內（右緣 " .. right2 .. "、面板 " .. PB.win.width .. "）")
     narrow = {}
     local rulesPool = PB.pages.rules.flow.pool

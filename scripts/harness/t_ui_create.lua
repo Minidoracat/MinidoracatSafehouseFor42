@@ -55,18 +55,30 @@ return function(T)
     -- 名額摘要同時一筆、間隔 SLOTS_GAP_MS（Client.refreshSlots）：每次重抓前先等過間隔；結果由 "slots" 事件交給開著的面板
     local gap = MSH.Client.SLOTS_GAP_MS
     P.model = m
-    T.advance(gap)
-    P.refreshSlots(m)
-    reply(lastSent(), { blocked = "HEALTH_BLOCKED", free = { n = 1, used = 0 }, tiers = {} })
+    local function slots(res)
+        T.advance(gap)
+        P.refreshSlots(m)
+        reply(lastSent(), res)
+    end
+    -- 2 級（m 用 2 級地契）：免費 0、付費名額 1 個已經用掉、還能買
+    local function tier2(extra)
+        local t = { tier = 2, free = { n = 0, used = 0 }, buy = { n = 1, have = 0, open = true },
+            rent = { n = 0, have = 0, open = false }, usable = 1, paid = 1, grace = 0, full = false }
+        for k, v in pairs(extra or {}) do t[k] = v end
+        return t
+    end
+    slots({ blocked = "HEALTH_BLOCKED", tiers = {} })
     check(P.gate(m) == "HEALTH_BLOCKED" and not P.startSelect(m, Sel.WALK), "伺服器閘門（slots.blocked）擋住框選")
-    T.advance(gap)
-    P.refreshSlots(m)
-    reply(lastSent(), { free = { n = 1, used = 1 }, tiers = { { tier = 2, free = true, usable = 1, paid = 1 } } })
-    check(P.gate(m) == MSH.CODE.QUOTA_FULL, "免費位與付費位都用完：QUOTA_FULL")
-    T.advance(gap)
-    P.refreshSlots(m)
-    reply(lastSent(), { free = { n = 1, used = 1 }, tiers = { { tier = 2, free = true, usable = 2, paid = 1 } } })
-    check(P.gate(m) == nil, "還有付費位：可以建")
+    slots({ tiers = { { tier = 1, free = { n = 1, used = 0 } }, tier2() } })
+    check(P.gate(m) == MSH.CODE.QUOTA_FULL, "這一級免費 0、付費名額用完（1 級還有免費也不算）：QUOTA_FULL")
+    slots({ tiers = { tier2({ full = true }) } })
+    check(P.gate(m) == MSH.CODE.TIER_FULL, "可買可租都到上限：TIER_FULL（不顯示〔前往付費〕）")
+    slots({ tiers = { tier2({ usable = 2, grace = 1 }) } })
+    check(P.gate(m) == MSH.CODE.QUOTA_FULL, "多的那個名額在寬限中：不能建")
+    slots({ tiers = { tier2({ usable = 2 }) } })
+    check(P.gate(m) == nil, "還有付費名額：可以建")
+    slots({ tiers = { tier2({ free = { n = 1, used = 0 } }) } })
+    check(P.gate(m) == nil, "這一級還有免費名額：可以建")
     T.advance(gap)
     P.refreshSlots(m)
     T.fire("OnServerCommand", MSH.MODULE, "result",

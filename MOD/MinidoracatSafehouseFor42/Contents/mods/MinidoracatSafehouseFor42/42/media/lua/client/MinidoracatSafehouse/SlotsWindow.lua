@@ -386,64 +386,111 @@ function SW.layout(w)
         F:row({ F:button("refresh", getText("IGUI_MSH_Slots_Refresh"), w, SW.onRefresh) })
         return F:finish()
     end
-    local free = s.free or {}
-    F:text("free", getText("IGUI_MSH_Slots_Free", free.n or 0, free.used or 0), "text", UIFont.Medium)
-    if type(free.titles) == "table" and #free.titles > 0 then
-        F:text("freeTitles", getText("IGUI_MSH_Slots_FreeTitles", table.concat(free.titles, getText("IGUI_MSH_Slots_ListSep"))),
-            "textMuted")
-    end
     local blocker = SW.blocker(s, E ~= nil)
     if blocker then F:text("blocker", getText(blocker), "warning") end
-    for _, t in ipairs(s.tiers or {}) do SW.layoutTier(w, F, t, E, blocker) end
     -- 重抓失敗時畫面上是上一次的數字：說出來，不讓舊值看起來像最新的
     if w.loadError then F:text("loadErr", (MSH.Client.codeText(w.loadError)), "warning") end
-    if w.busy then
-        F:text("status", getText("IGUI_MSH_Slots_Busy"), "textMuted")
-    elseif w.message then
-        F:text("status", w.message, w.messageToken)
+    if w.msgTier == nil then SW.layoutStatus(w, F, "status") end
+    local shown = false
+    for _, t in ipairs(s.tiers or {}) do
+        if SW.tierShown(t) then
+            SW.layoutTier(w, F, t, E, blocker)
+            shown = true
+        end
     end
+    if not shown then F:text("none", getText("IGUI_MSH_Slots_NoTiers"), "textMuted") end
     local bottom = {}
-    if w.order ~= nil then bottom[#bottom + 1] = F:button("check", getText("IGUI_MSH_Slots_CheckOrder"), w, SW.onCheckOrder, "primary") end
+    if w.order ~= nil and w.msgTier == nil then
+        bottom[1] = F:button("check", getText("IGUI_MSH_Slots_CheckOrder"), w, SW.onCheckOrder, "primary")
+    end
     bottom[#bottom + 1] = F:button("refresh", getText("IGUI_MSH_Slots_Refresh"), w, SW.onRefresh)
     F:row(bottom)
     F:finish()
 end
 
--- 一級：「N 級 · 名額 usable／使用 paid」、限制說明、〔買斷〕〔租用〕（該種販售關閉就不顯示）、〔租約〕展開。
+-- 處理中／結果那一行：寫在按下按鈕的那一級底下（w.msgTier），沒有等級的寫在最上面。之前寫在整頁最底下，
+-- 視窗不夠高時要捲到底才看得到（2026-10-15 帳本：有玩家同一分鐘租了同一級兩次）
+function SW.layoutStatus(w, F, key)
+    if w.busy then
+        F:text(key, getText("IGUI_MSH_Slots_Busy"), "textMuted")
+    elseif w.message then
+        F:text(key, w.message, w.messageToken)
+    end
+end
+
+-- 這一級要不要列出來：最多 0 間而且沒有房子、沒有付費名額的不列（例：管理員把 2 級的三個數字都設成 0）
+function SW.tierShown(t)
+    return (t.max or 0) > 0 or (t.owned or 0) > 0 or (t.usable or 0) > 0
+end
+
+-- 「免費 1／1 · 租用 2（上限 1）」：免費寫用了幾個／共幾個，買斷、租用寫已有幾個與上限；三種都是 0 的不寫
+function SW.parts(t)
+    local out = {}
+    local f, b, r = t.free or {}, t.buy or {}, t.rent or {}
+    if (f.n or 0) > 0 or (f.used or 0) > 0 then out[#out + 1] = getText("IGUI_MSH_Slots_PartFree", f.used or 0, f.n or 0) end
+    if (b.n or 0) > 0 or (b.have or 0) > 0 then out[#out + 1] = getText("IGUI_MSH_Slots_PartBuy", b.have or 0, b.n or 0) end
+    if (r.n or 0) > 0 or (r.have or 0) > 0 then out[#out + 1] = getText("IGUI_MSH_Slots_PartRent", r.have or 0, r.n or 0) end
+    return table.concat(out, getText("IGUI_MSH_Slots_PartSep"))
+end
+
+-- 付費名額還能再建幾間（寬限中的不算，同伺服器 checkQuota）
+function SW.spare(t)
+    return math.max(0, (t.usable or 0) - (t.grace or 0) - (t.paid or 0))
+end
+
+-- 一級（使用者 2026-10-15）：「N 級 · 已有 owned 間／最多 max 間」、免費／買斷／租用各自的數字、付費名額還能建幾間、
+-- 〔買斷〕〔租用〕（這一級有價格才有；到上限停用並寫原因）、〔租約〕展開、這一級的付款結果。
 -- 關閉的等級只在還有付費屋時列出（伺服器 E.slots）：沒有價格、不能買新的，只能展開租約續租
 function SW.layoutTier(w, F, t, E, blocker)
     local n = t.tier
     F.y = F.y + K.GAP
-    F:text("t" .. n, getText("IGUI_MSH_Slots_Tier", n, t.usable or 0, t.paid or 0), "text", UIFont.Medium)
+    F:text("t" .. n, getText("IGUI_MSH_Slots_Tier", n, t.owned or 0, t.max or 0), "text", UIFont.Medium)
+    local parts = SW.parts(t)
+    if parts ~= "" then F:text("p" .. n, parts, "textMuted") end
     if t.enabled == false then F:text("off" .. n, getText("IGUI_MSH_Slots_Reason_TIER_DISABLED"), "warning") end
     if (t.grace or 0) > 0 then F:text("g" .. n, getText("IGUI_MSH_Slots_Grace", t.grace), "warning") end
-    if not t.free then F:text("nf" .. n, getText("IGUI_MSH_Slots_NoFree"), "textMuted") end
-    if (t.perPlayer or 0) > 0 then F:text("pp" .. n, getText("IGUI_MSH_Slots_PerPlayer", t.perPlayer), "textMuted") end
-    if blocker then return end
-    local can = SW.canPurchase(w)
-    local ctrls = {}
-    if t.buy and t.buyPrice then
-        local b = F:button("buy" .. n, getText("IGUI_MSH_Slots_Buy", SW.money(E, t.buyPrice)), w, SW.onBuy, "primary")
-        b.internal = n
-        b:setEnabled(can)
-        ctrls[#ctrls + 1] = b
+    local spare = SW.spare(t)
+    if spare > 0 then F:text("sp" .. n, getText("IGUI_MSH_Slots_Spare", spare), "text") end
+    if not blocker then
+        local can = SW.canPurchase(w)
+        local ctrls = {}
+        if t.buyPrice then
+            local b = F:button("buy" .. n, getText("IGUI_MSH_Slots_Buy", SW.money(E, t.buyPrice)), w, SW.onBuy, "primary")
+            b.internal = n
+            b:setEnabled(can and t.buy ~= nil and t.buy.open == true)
+            ctrls[#ctrls + 1] = b
+        end
+        if t.rentPrice then
+            local b = F:button("rent" .. n, getText("IGUI_MSH_Slots_Rent", SW.money(E, t.rentPrice), t.rentPrice.days or 0), w,
+                SW.onRent, "primary")
+            b.internal = n
+            b:setEnabled(can and t.rent ~= nil and t.rent.open == true)
+            ctrls[#ctrls + 1] = b
+        end
+        local open = w.expanded == n
+        local x = F:button("x" .. n, getText(open and "IGUI_MSH_Slots_HideLeases" or "IGUI_MSH_Slots_ShowLeases"), w, SW.onExpand)
+        x.internal = n
+        ctrls[#ctrls + 1] = x
+        F:row(ctrls)
+        -- 有在賣、但可買可租都到上限才寫原因（這一級根本不賣時 full 也是 true，數字列已經說了）
+        if t.full and #ctrls > 1 then F:text("cap" .. n, getText("IGUI_MSH_Slots_Reason_TIER_FULL"), "textMuted") end
     end
-    if t.rent and t.rentPrice then
-        local b = F:button("rent" .. n, getText("IGUI_MSH_Slots_Rent", SW.money(E, t.rentPrice), t.rentPrice.days or 0), w,
-            SW.onRent, "primary")
-        b.internal = n
-        b:setEnabled(can)
-        ctrls[#ctrls + 1] = b
+    if w.msgTier == n then
+        SW.layoutStatus(w, F, "status" .. n)
+        if w.order ~= nil then F:row({ F:button("check" .. n, getText("IGUI_MSH_Slots_CheckOrder"), w, SW.onCheckOrder, "primary") }) end
     end
-    local open = w.expanded == n
-    local x = F:button("x" .. n, getText(open and "IGUI_MSH_Slots_HideLeases" or "IGUI_MSH_Slots_ShowLeases"), w, SW.onExpand)
-    x.internal = n
-    ctrls[#ctrls + 1] = x
-    F:row(ctrls)
-    if open then SW.layoutLeases(w, F, n, E) end
+    if not blocker and w.expanded == n then SW.layoutLeases(w, F, n, E) end
 end
 
--- 展開那一級的租約：逐張「剩多久」＋自動續租開關；寬限中或到期前可續租
+-- 日期（框架 UI.Date；沒有就 nil）
+function SW.dateText(UI, ms)
+    local D = UI and UI.Date
+    if not (MSH.isFinite(ms) and D and D.fromMs and D.format) then return nil end
+    local yy, mm, dd = D.fromMs(ms, D.localOffsetMinutes and D.localOffsetMinutes() or 0)
+    return D.format(yy, mm, dd)
+end
+
+-- 展開那一級的租約：逐張「到哪天（剩多久）」＋自動續租開關；寬限中或到期前可續租。最後寫租約和房子的關係
 function SW.layoutLeases(w, F, n, E)
     local env = E.getState(SW.SRC, SW.product(n))
     if w.stateError then return F:text("le" .. n, w.stateError, "errorText") end
@@ -458,7 +505,8 @@ function SW.layoutLeases(w, F, n, E)
         if r.state == "grace" and type(r.graceUntil) == "number" then
             line = getText("IGUI_MSH_Slots_LeaseGrace", i, r.quantity or 0, E.remainingText(r.graceUntil - now))
         elseif r.state == "active" and type(r.paidUntil) == "number" then
-            line = getText("IGUI_MSH_Slots_Lease", i, r.quantity or 0, E.remainingText(r.paidUntil - now))
+            line = getText("IGUI_MSH_Slots_Lease", i, r.quantity or 0, SW.dateText(w.UI, r.paidUntil) or "-",
+                E.remainingText(r.paidUntil - now))
         else
             line = getText("IGUI_MSH_Slots_LeaseState", i, r.quantity or 0, E.stateText(r.state))
         end
@@ -478,10 +526,12 @@ function SW.layoutLeases(w, F, n, E)
         end
         F:row(ctrls, K.PAD + 12)
     end
+    F:text("lr" .. n, getText("IGUI_MSH_Slots_LeaseRule"), "textMuted")
 end
 
 function SW.onRefresh(w)
     SW.say(w, nil)
+    w.msgTier = nil
     SW.refresh(w)
     SW.requestState(w)
     SW.layout(w)
@@ -502,7 +552,7 @@ end
 
 function SW.onBuy(w, btn)
     local t = SW.tierOf(w, btn.internal)
-    if t == nil or t.buyPrice == nil or not SW.canPurchase(w) then return end
+    if t == nil or t.buyPrice == nil or not (t.buy and t.buy.open) or not SW.canPurchase(w) then return end
     local price = t.buyPrice
     SW.confirm(w, getText("IGUI_MSH_Slots_ConfirmBuy", t.tier, SW.money(SW.api(), price)), function()
         SW.startQuote(w, t.tier, "permanent", 1, { amount = price.amount, currency = price.currency })
@@ -511,7 +561,7 @@ end
 
 function SW.onRent(w, btn)
     local t = SW.tierOf(w, btn.internal)
-    if t == nil or t.rentPrice == nil or not SW.canPurchase(w) then return end
+    if t == nil or t.rentPrice == nil or not (t.rent and t.rent.open) or not SW.canPurchase(w) then return end
     local price = t.rentPrice
     SW.confirm(w, getText("IGUI_MSH_Slots_ConfirmRent", t.tier, SW.money(SW.api(), price), price.days or 0), function()
         SW.startQuote(w, t.tier, "rental", 1, { amount = price.amount, currency = price.currency })
@@ -549,6 +599,7 @@ function SW.startQuote(w, tier, kind, quantity, expect, rental, periods)
     if E == nil or not SW.canPurchase(w) then return end
     local product = w.productId or SW.product(tier)
     w.busy, w.pay = "quote", { tier = tier, product = product, expect = expect }
+    w.msgTier = tier
     SW.say(w, nil)
     local rid, why = E.quote(SW.SRC, product, kind, quantity, function(res) SW.onQuote(w, res) end, rental, periods)
     if rid == nil then SW.refuse(w, why) end
@@ -604,9 +655,12 @@ function SW.onPurchase(w, res)
     SW.relayout(w)
 end
 
+-- 付款有結果：結果寫在那一級底下，同時跳通知（視窗外也看得到）
 function SW.finish(w, key)
     w.order = nil
-    SW.say(w, getText(w.texts and w.texts[key] or key), "text")
+    local text = getText(w.texts and w.texts[key] or key)
+    SW.say(w, text, "text")
+    MSH.Client.toast(text)
     SW.reload(w)
     SW.requestState(w)
 end
@@ -670,6 +724,7 @@ function SW.sendAutoRenew(w, tier, enabled, revision, termsRevision, rental)
     local E = SW.api()
     if E == nil or w.busy then return end
     w.busy = "auto"
+    w.msgTier = tier
     SW.say(w, nil)
     local rid, why = E.setAutoRenew(SW.SRC, SW.product(tier), enabled, revision, termsRevision, function(res)
         w.busy = nil

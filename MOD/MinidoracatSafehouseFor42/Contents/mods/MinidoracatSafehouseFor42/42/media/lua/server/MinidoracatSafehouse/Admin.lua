@@ -214,7 +214,7 @@ S.define("adminPlayers", { kind = "query", admin = true, cooldownMs = 500,
         for i = (page - 1) * A.PAGE_ROWS + 1, math.min(total, page * A.PAGE_ROWS) do
             local e = hits[i]
             local o = R.override(e.name)
-            rows[#rows + 1] = { name = e.name, used = ix.used[e.name] or 0, free = o or cfg.claimsPerPlayer, override = o or -1,
+            rows[#rows + 1] = { name = e.name, used = ix.used[e.name] or 0, free = o or cfg.tiers[1].freeSlots, override = o or -1,
                 claims = ix.owned[e.name] or {} }
         end
         return S.ok({ rows = rows, page = page, pages = pages, total = total })

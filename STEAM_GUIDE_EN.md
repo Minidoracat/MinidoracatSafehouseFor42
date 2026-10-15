@@ -50,7 +50,7 @@ Admins choose how many tiers are enabled (3 by default, up to 8) and can change 
 [*] [b]Outline limit[/b]: the rectangle around the whole safehouse can't be wider or longer than this; by default it's twice the side of a square of the same area, and never more than 96 x 96.
 [*] [b]How big is tier 1[/b]: about one house with its yard.
 [*] [b]Large areas[/b]: town roads cut the land into small plots, so tier 3 and up mostly fit in the countryside.
-[*] [b]Per-player limit[/b]: admins can cap how many safehouses of each tier one player may own.
+[*] [b]Slots[/b]: each tier has three numbers, free, buyable and rentable slots; a player's maximum for the tier is the three added together. See "Paid slots".
 [*] [b]Icons[/b]: each tier has its own wax seal color, stamped with the tier number.
 [*] [b]Hover a deed[/b]: shows that tier's max area and outline limit on this server, and whether it's enabled.
 [/list]
@@ -78,6 +78,7 @@ Default chances once "Deeds drop as loot" is on:
 [*] [b]No deed[/b]: when the server sets "Creation mode" to "Free", you can create a safehouse without a deed.
 [*] [b]Size[/b]: up to 576 tiles (24 x 24) with a 48-tile outline by default.
 [*] [b]Deeds in your inventory[/b]: can't be used to create in free mode.
+[*] [b]Slots[/b]: counted as tier 1.
 [/list]
 [h3]When an admin removes a tier[/h3]
 [list]
@@ -90,7 +91,7 @@ Default chances once "Deeds drop as loot" is on:
 [list]
 [*] [b]With a deed[/b]: right-click it in your inventory → "Use deed".
 [*] [b]From the manager window[/b]: press "Create safehouse"; the manager window hides and comes back when you close the create panel.
-[*] [b]The panel shows[/b]: the deed in use, its limits and your slots.
+[*] [b]The panel shows[/b]: the deed in use, its limits and your slots for that tier: how many safehouses you have, the maximum, and how many free, bought and rented slots are used.
 [*] [b]Panel position[/b]: drag it elsewhere and it reopens there for the rest of this session.
 [/list]
 [h3]Three ways to mark[/h3]
@@ -134,7 +135,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [*] [b]What's checked[/b]: Character, Your position, Deed, Size, Distance and overlap, Slots, Name, Other players, Roads, Resource points.
 [*] [b]Red on the ground[/b]: road tiles, resource buildings or other safehouses in the way are marked red.
 [*] [b]After fixing[/b]: press "Edit area" to adjust, or "Check again".
-[*] [b]No slot left[/b]: the panel shows "Get a slot", which opens the slots window with that tier selected.
+[*] [b]No slot left[/b]: while the tier can still be bought or rented, the panel shows "Get a slot", which opens the slots window with that tier selected.
 [/list]
 [h3]Common messages[/h3]
 [table]
@@ -229,7 +230,7 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [list]
 [*] [b]Suggestions[/b]: online players and people you've shared with, matching any part of the name regardless of case; click one to fill it in.
 [*] [b]Offline players[/b]: only appear once you type the full name (case-sensitive); you can't list every player on the server by keyword.
-[*] [b]The server must know them[/b]: online, logged in on a Steam server after this mod was installed, given a personal limit by an admin, or already an owner or member of some safehouse.
+[*] [b]The server must know them[/b]: online, logged in on a Steam server after this mod was installed, given a personal tier 1 free slot count by an admin, or already an owner or member of some safehouse.
 [*] [b]Non-Steam servers[/b]: there are no login records, so the player must be online or already tied to a safehouse.
 [*] [b]Player limit[/b]: up to 8 players per safehouse by default (admins can set 0–32).
 [/list]
@@ -250,6 +251,7 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [list]
 [*] [b]Open it[/b]: the [b]Safehouse Manager[/b] button in the User Panel, or the family toolbar.
 [*] [b]Two lists[/b]: "Mine" and "Shared with me"; with many safehouses the list just scrolls.
+[*] [b]Second line in the list[/b]: in "Mine", the status is followed by the slot that safehouse uses: a free or paid slot with its tier, or "Migrated safehouse" for taken-over ones.
 [*] [b]Three tabs per safehouse[/b]: "Overview", "Members & sharing", "Land rules".
 [*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Set as respawn point", "Redraw", "Abandon safehouse...".
 [*] [b]Other buttons[/b]: "Create safehouse", "Indoor check", "Slots".
@@ -318,10 +320,12 @@ Find out whether a house you built counts as indoors on a multiplayer server (wa
 [/list]
 === 🧰 Paid slots (optional Economy)
 [list]
-[*] [b]Free slots[/b]: each player's first safehouses are free (1 by default; admins can change it per player).
-[*] [b]Paid slots[/b]: each one after that needs a slot of its deed tier, bought outright or rented monthly (30-day periods).
+[*] [b]Three numbers per tier[/b]: admins set, for each tier, how many safehouses each player can build for free, how many slots they can buy, and how many they can rent at the same time; a player's maximum for the tier is the three added together.
+[*] [b]Free slots[/b]: by default only tier 1 has 1; admins can change the tier 1 number for one player.
+[*] [b]Paid slots[/b]: once the free slots are used, each extra safehouse needs a slot of its deed tier, bought outright or rented monthly (30-day periods).
 [*] [b]Without Economy[/b]: free slots only; everything else works.
-[*] [b]Not sold by default[/b]: admins turn on each tier's Buy / Rent switches on the Deeds tab to start selling.
+[*] [b]Not sold by default[/b]: admins set each tier's Buy / Rent to 1 or more on the Deeds tab to start selling.
+[*] [b]Lowering the numbers[/b]: only blocks new purchases; slots already bought or rented keep working and can still be renewed.
 [/list]
 Default prices (set per tier by admins):
 [table]
@@ -333,17 +337,21 @@ Default prices (set per tier by admins):
 [h3]Slots window[/h3]
 {{img:08-slots-en.jpg}}
 [list]
-[*] [b]Open it[/b]: "Slots" in the manager window; when you're out of slots, "Get a slot" in the create panel opens it with that tier selected.
-[*] [b]It shows[/b]: each tier's slots, safehouses in use and every lease; buy, rent, renew, or toggle "Auto-renew".
-[*] [b]Live updates[/b]: after a payment, renewal, expiry, creating or abandoning a safehouse, or an admin changing limits, an open slots window and create panel update themselves.
+[*] [b]Open it[/b]: "Slots" in the manager window; when you're out of slots and the tier can still be bought or rented, "Get a slot" in the create panel opens it with that tier selected.
+[*] [b]Each tier[/b]: the heading shows how many safehouses you have and the maximum; the next line shows the free, bought and rented slots used and their limits; with paid slots to spare, it says how many more you can build.
+[*] [b]Buy and rent[/b]: the buttons are disabled at the limit, with "This tier is at its limit: you can't buy or rent more." underneath.
+[*] [b]Payment results[/b]: shown under the tier you paid for, both while working and when done; a notification also pops up once the payment has a result.
+[*] [b]Leases[/b]: expand to see every lease, renew it or toggle "Auto-renew"; the last line reads "Leases are not tied to a specific safehouse. When a lease ends and this tier has fewer paid slots than safehouses using them, the newest one loses protection first and gets it back once you have a slot for it again."
+[*] [b]Nothing to show[/b]: it says "This server offers no slots."
+[*] [b]Live updates[/b]: after a payment, renewal, expiry, creating or abandoning a safehouse, or an admin changing slot numbers, an open slots window and create panel update themselves.
 [/list]
 [h3]When a lease ends[/h3]
 [list]
 [*] [b]Grace[/b]: an expired lease enters grace first; slots in grace can't be used for new safehouses.
-[*] [b]Suspended[/b]: if you're still over the limit for that tier after grace, your newest safehouse of that tier is suspended: protection pauses and the area is kept for 7 days (adjustable).
-[*] [b]Restore[/b]: renewing restores protection; the area is released only after the keep period.
+[*] [b]Suspended[/b]: if you're still over the limit for that tier after grace, your newest paid-slot safehouses of that tier are suspended (never more than the number of slots that ended): protection pauses and the area is kept for 7 days (adjustable).
+[*] [b]Restore[/b]: renewing, or getting a slot back for it, restores protection; the area is released only after the keep period.
 [*] [b]Other tiers[/b]: not affected.
-[*] [b]Refunds or an admin lowering limits[/b]: the excess doesn't suspend anything, it only blocks new safehouses.
+[*] [b]Refunds or an admin lowering the numbers (free slots included)[/b]: the excess doesn't suspend anything, it only blocks new safehouses.
 [/list]
 [h3]When a tier closes or Economy is removed[/h3]
 [list]
@@ -437,20 +445,21 @@ The admin panel reminds you if these differ; nothing is disabled.
 [h3]Five tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, free safehouses, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, and which other safehouses players see on the ground; also the server settings status, takeover results and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, and which other safehouses players see on the ground; also the server settings status, takeover results and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
-[*] Each tier's max area (with its "same as" size, updating as you type), outline limit, per-player limit and loot chance.
+[*] Each tier's max area (with its "same as" size, updating as you type), outline limit and loot chance.
 [*] Crafting difficulty: hover the Crafting cell to preview the recipe.
-[*] Each tier's Free / Buy / Rent switches.
+[*] The slot columns "Free", "Buy" and "Rent" take numbers (free safehouses per player, max bought, max rented at the same time); "Max/player" shows the three added together.
 [*] With a supported Economy, an extra "List in the Economy shop" button.
 [/list]
 [*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod).
-[*] [b]Players[/b]: server-side paged search (50 per page); change a player's free safehouses, view, or release on their behalf (logged to the audit log).
-[*] [b]Paid slots[/b] (with Economy available): buy price, rent per period and insurance per day for each enabled tier, plus shared currency, period, grace, reminder, auto-renew and limits.
+[*] [b]Players[/b]: server-side paged search (50 per page); "Tier 1 free slots…" changes one player's tier 1 free slots (tier 1 only; leave it empty to use the server default), view, or release on their behalf (logged to the audit log).
+[*] [b]Paid slots[/b] (with Economy available): buy price, rent per period and insurance per day for each enabled tier, plus shared currency, period, grace, reminder and auto-renew.
 [list]
 [*] Only currencies enabled in the Economy are listed; you're warned if the current one gets disabled.
+[*] How many slots each player can buy or rent is set on the Deeds tab; this tab says "Whether a tier is sold, and how many slots each player can buy or rent, is set by Buy and Rent on the Deeds tab."
 [/list]
 [/list]
 [h3]Safehouses needing attention[/h3]
@@ -471,7 +480,6 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][th]Option[/th][th]Default[/th][/tr]
 [tr][td]Creation mode[/td][td]Deed required (can be Free)[/td][/tr]
 [tr][td]Free mode max area / outline limit[/td][td]576 tiles (24 x 24) / 48[/td][/tr]
-[tr][td]Free safehouses per player[/td][td]1 (per player on the admin panel's Players tab)[/td][/tr]
 [tr][td]Gap to other safehouses[/td][td]2 tiles (0–16)[/td][/tr]
 [tr][td]Gap to faction safehouses[/td][td]0 tiles (0–16; 0 = may touch)[/td][/tr]
 [tr][td]Max pieces per safehouse[/td][td]4 (1–8)[/td][/tr]
@@ -491,10 +499,23 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][td]Show faction / other players' safehouse ranges[/td][td]On / Off[/td][/tr]
 [tr][td]Enabled deed tiers[/td][td]3 (1–8)[/td][/tr]
 [tr][td]Each tier's max area and outline limit[/td][td]See "Deeds"[/td][/tr]
-[tr][td]Each tier can use free slots / can be bought / can be rented[/td][td]On / Off / Off[/td][/tr]
+[tr][td]Each tier's free slots (Tier<N>FreeSlots)[/td][td]Tier 1: 1, others 0 (0–100; how many safehouses of that tier each player can build for free; tier 1 can be changed per player on the admin panel's Players tab)[/td][/tr]
+[tr][td]Each tier's buyable slots (Tier<N>BuySlots, needs Economy)[/td][td]0 (0–100; how many each player can buy, 0 = not sold)[/td][/tr]
+[tr][td]Each tier's rentable slots (Tier<N>RentSlots, needs Economy)[/td][td]0 (0–10; how many each player can rent at the same time, 0 = not rented)[/td][/tr]
 [tr][td]Each tier's deed crafting[/td][td]Tier 1 Standard, tiers 2–8 Disabled[/td][/tr]
 [tr][td]Deeds drop as loot[/td][td]Off (chances per tier in "Deeds")[/td][/tr]
 [/table]
+[list]
+[*] [b]Max per player[/b]: a player's maximum for a tier is free + buyable + rentable; the "Max/player" column on the admin panel's Deeds tab works it out for you.
+[*] [b]Lowering buyable or rentable[/b]: only blocks new purchases; slots already bought or rented keep working and can still be renewed.
+[/list]
+[h3]Updating from an older version: set the slots again[/h3]
+[list]
+[*] [b]Old settings aren't carried over[/b]: the old ClaimsPerPlayer, Tier<N>Free, Tier<N>Buy, Tier<N>Rent and Tier<N>PerPlayer aren't moved to the new settings.
+[*] [b]What to do[/b]: after updating, open the admin panel's Deeds tab, set each tier's "Free", "Buy" and "Rent" numbers again, then press "Apply changes".
+[*] [b]Until then[/b]: each player only gets 1 free tier 1 safehouse and no new slots can be bought; slots already bought or rented keep working and can still be renewed.
+[*] [b]Per-player numbers[/b]: numbers set on the Players tab are kept, and now only count as tier 1 free slots.
+[/list]
 [h3]Before raising "Max pieces per safehouse"[/h3]
 Each piece is a separate vanilla safehouse in the game, so a higher limit means:
 [list]
@@ -523,7 +544,7 @@ If you install this mod mid-save, the safehouses already in the save (made by Be
 [h3]After the takeover[/h3]
 [list]
 [*] [b]Members[/b]: existing members (including Better Safehouse co-managers) become regular shares with Member, Use appliances, Move furniture, Build and Farm, without Invite or Manage; the owner can adjust them later.
-[*] [b]Limits[/b]: old safehouses over slot or per-tier limits are all kept; their owners just can't create new ones. No paid slots are needed.
+[*] [b]Slots[/b]: taken-over safehouses all count as tier 1 and use the owner's tier 1 free slots first; any beyond that are kept too and need no paid slots, but to build another tier 1 safehouse the owner needs a free slot to open up or a paid slot.
 [*] [b]Roads and resource sites[/b]: old safehouses covering them are kept too.
 [*] [b]Redraw[/b]: taken-over safehouses can't be redrawn.
 [*] [b]Names[/b]: names over 40 characters are shortened.
@@ -565,7 +586,7 @@ Server-side data:
 [tr][th]What[/th][th]Where[/th][/tr]
 [tr][td]Safehouse list (area, owner, sharing, status)[/td][td]global_mod_data.bin in the world save (readable by everyone: no Steam accounts or private data)[/td][/tr]
 [tr][td]The vanilla safehouses themselves[/td][td]map_meta.bin in the world save[/td][/tr]
-[tr][td]Account-to-Steam bindings, personal free safehouses, players' respawn points[/td][td]Zomboid/Lua/MinidoracatSafehouse/<server name>/private.txt[/td][/tr]
+[tr][td]Account-to-Steam bindings, personal tier 1 free slots, players' respawn points[/td][td]Zomboid/Lua/MinidoracatSafehouse/<server name>/private.txt[/td][/tr]
 [tr][td]Takeover records[/td][td]migration-completion.txt in the same folder[/td][/tr]
 [tr][td]Creation records for crash recovery[/td][td]crash-journal.txt in the same folder (cleared at start-up when there's nothing to restore)[/td][/tr]
 [tr][td]Audit log[/td][td]Zomboid/Logs/*_MinidoracatSafehouse.txt (one line per event; refusals summed up once a minute)[/td][/tr]

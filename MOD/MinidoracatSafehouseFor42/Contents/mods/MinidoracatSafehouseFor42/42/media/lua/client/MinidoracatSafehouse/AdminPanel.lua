@@ -35,17 +35,17 @@ AP.TABS = { "rules", "deeds", "exclusions", "players", "paid" }
 AP.QUERY_DEBOUNCE_MS = 650   -- Economy QUERY_DEBOUNCE_MS
 AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服器 cooldownMs = 500）
 AP.FILTERS = { "all", "owners", "overrides" }
-AP.RULE_KEYS = { "CreateMode", "ClaimsPerPlayer", "FreeMaxArea", "FreeMaxSide", "ClaimGap", "FactionClaimGap", "MaxShares",
+AP.RULE_KEYS = { "CreateMode", "FreeMaxArea", "FreeMaxSide", "ClaimGap", "FactionClaimGap", "MaxShares",
     "AllowFactionShare", "LapseKeepDays", "IdleDays", "IdleBuyDays", "IdleInsure", "RedrawMinutes", "RedrawLimit", "MaxPieces" }
 AP.RANGE_KEYS = { "RangesFaction", "RangesOthers" }
 AP.CRAFT_LEVELS = { [2] = "Easy", [3] = "Standard", [4] = "Strict" }
--- Economy 方案 12 欄（entitlements-api.md；ECEntitlementPlans.lua:3-61）與付費頁可改欄位的範圍
+-- Economy 方案 12 欄（entitlements-api.md；ECEntitlementPlans.lua:3-61）與付費頁可改欄位的範圍。每人買斷／租用上限不在這裡：
+-- 改在地契頁逐級設（沙盒 Tier<N>BuySlots／RentSlots，使用者 2026-10-15），方案的上限由伺服器固定拉到天花板
 AP.PLAN_FIELDS = { "permanentEnabled", "permanentCurrency", "permanentPrice", "permanentLimit", "rentalEnabled",
     "rentalCurrency", "rentalPrice", "rentalLimit", "rentalDays", "graceHours", "reminderHours", "autoRenewAllowed" }
-AP.PLAN_SHARED = { "rentalDays", "graceHours", "reminderHours", "permanentLimit", "rentalLimit" }
-AP.PLAN_RANGE = { permanentPrice = { 1, 1e9 }, rentalPrice = { 1, 1e9 }, permanentLimit = { 0, 1000 },
-    rentalLimit = { 1, 1000 }, rentalDays = { 1, 365 }, graceHours = { 0, 168 }, reminderHours = { 0, 168 },
-    insurePrice = { 1, 1e9 } }
+AP.PLAN_SHARED = { "rentalDays", "graceHours", "reminderHours" }
+AP.PLAN_RANGE = { permanentPrice = { 1, 1e9 }, rentalPrice = { 1, 1e9 }, rentalDays = { 1, 365 }, graceHours = { 0, 168 },
+    reminderHours = { 0, 168 }, insurePrice = { 1, 1e9 } }
 
 -- ===== 純邏輯（harness 測） =====
 
@@ -128,9 +128,15 @@ function AP.serverErrors(res)
     return nil
 end
 
--- 這一級有沒有人建得了：免費位關著，而買斷、租用都關，或 Economy 不可用（§10.6 地契頁警告）
+-- 這一級有沒有人建得了：免費 0，而可買、可租都是 0，或 Economy 不可用（§10.6 地契頁警告）。三個參數是數字
 function AP.nobodyCanBuild(free, buy, rent, economyReady)
-    return not free and (not (buy or rent) or not economyReady)
+    return free <= 0 and (buy + rent <= 0 or not economyReady)
+end
+
+-- 地契頁一格名額數字（免費／可買／可租）：輸入框目前的字，不是非負整數就當 0（只拿來算「每人最多」與警告，送出仍照原字檢查）
+function AP.slotNum(pg, key)
+    local v = tonumber(MSH.trim(pg.fields[key].el:getText()))
+    return (v ~= nil and v >= 0 and v == math.floor(v)) and v or 0
 end
 
 -- 玩家分頁狀態（伺服器分頁；Economy ECAdminIdentity 的做法）
@@ -456,7 +462,7 @@ function AP.mutate(P, command, args, done)
 end
 
 -- ===== 欄位（設定頁） =====
--- field = { key, kind = num|bool|enum|list, el | chips, value, set, order, extras, zeroBlank, at（同步到的版本）, gen }
+-- field = { key, kind = num|bool|enum|list, el | chips, value, set, order, extras, at（同步到的版本）, gen }
 
 local function field(pg, key, kind)
     local f = pg.fields[key]
@@ -474,7 +480,7 @@ function AP.syncField(P, pg, f)
     f.at = pg.version
     local v = AP.effective(P.values, f.key)
     if f.kind == "num" then
-        f.el:setText((f.zeroBlank and v == 0) and "" or tostring(v))
+        f.el:setText(tostring(v))
     elseif f.kind == "bool" then
         f.el:setChecked(v, true)
     elseif f.kind == "enum" then
@@ -491,18 +497,16 @@ function AP.syncField(P, pg, f)
     end
 end
 
-function AP.numField(P, pg, key, width, onEdit, zeroBlank)
+function AP.numField(P, pg, key, width, onEdit)
     local f = field(pg, key, "num")
     local UI, theme = P.UI, P.theme
     f.el = pg.flow:get("f:" .. key, function()
         local tf = UI.TextField.new({ x = 0, y = 0, width = width or 70, theme = theme,
-            placeholder = zeroBlank and getText("IGUI_MSH_Admin_Unlimited") or nil,
             onChange = function() if onEdit then onEdit(P, pg) end end })
         tf:setTooltip(getText("Sandbox_MinidoracatSafehouse_" .. key .. "_tooltip"))
         return tf
     end)
     if width ~= nil and f.el.width ~= width then f.el:setWidth(width) end
-    f.zeroBlank = zeroBlank
     AP.syncField(P, pg, f)
     AP.markError(P, f.el, pg.errors[key] and AP.errorText(key, pg.errors[key]) or nil)
     return f.el
@@ -573,7 +577,6 @@ end
 function AP.fieldValue(f)
     if f.kind == "num" then
         local t = MSH.trim(f.el:getText())
-        if t == "" and f.zeroBlank then return 0 end
         return tonumber(t) or t   -- 不是數字原樣送進檢查，回 OUT_OF_RANGE
     elseif f.kind == "bool" then
         return f.el:getChecked()
@@ -976,14 +979,15 @@ end
 
 function AP.onRelayout(P, pg) AP.layoutPage(P, pg.id) end
 
--- 面積在外框前面（使用者 2026-10-12：以格數為主），面積框旁邊寫「（24 × 24）」
-AP.DEED_COLS = { "Tier", "Area", "Side", "PerPlayer", "Loot", "Craft", "Free", "Buy", "Rent" }
-AP.DEED_MIN_W = { Tier = 40, Side = 56, Area = 64, PerPlayer = 56, Loot = 56, Craft = 70, Free = 40, Buy = 40, Rent = 40 }
-AP.DEED_FIELD_W = { Side = 52, Area = 60, PerPlayer = 52, Loot = 52 }   -- 下限；實際寬度見 AP.fieldW
-AP.DEED_FIELD_KEY = { Side = "Side", Area = "Area", PerPlayer = "PerPlayer", Loot = "LootChance" }
+-- 面積在外框前面（使用者 2026-10-12：以格數為主），面積框旁邊寫「（24 × 24）」。名額三欄是數字（使用者 2026-10-15：
+-- 每一級設免費、可買、可租幾個），最後一欄「每人最多」＝三個相加，只顯示
+AP.DEED_COLS = { "Tier", "Area", "Side", "Loot", "Craft", "Free", "Buy", "Rent", "Max" }
+AP.DEED_MIN_W = { Tier = 40, Side = 56, Area = 64, Loot = 56, Craft = 70, Free = 44, Buy = 44, Rent = 44, Max = 56 }
+AP.DEED_FIELD_W = { Side = 52, Area = 60, Loot = 52, Free = 44, Buy = 44, Rent = 44 }   -- 下限；實際寬度見 AP.fieldW
+AP.DEED_FIELD_KEY = { Side = "Side", Area = "Area", Loot = "LootChance", Free = "FreeSlots", Buy = "BuySlots",
+    Rent = "RentSlots" }
 -- TextField 文字區兩側內距（Controls.lua FIELD_PAD 6＋TEXTBOX_INSET 2，各兩側）再留 4 格餘裕：placeholder 寬＋這個＝不截字
 AP.FIELD_CHROME = 20
-AP.TOGGLE_W = 48   -- 開關 36＋標籤間距 8＋餘裕（Controls.lua TOGGLE_WIDTH／LABEL_GAP；標籤是空字串）
 -- 預設高 800：1080p 下付費頁與規則頁不用捲（使用者 2026-10-11 620 時付費頁要捲）；K.center 夾到螢幕高，可再拉大小
 AP.PANEL_W, AP.PANEL_H, AP.MIN_H = 780, 800, 400
 AP.FIX_WAIT_MS = 3000   -- 〔套用必要設定〕送出後多久重抓狀態（伺服器 Health 每 500 ms 重讀設定）
@@ -1013,14 +1017,10 @@ function AP.sampleW(textW, minW)
     return math.max(minW or 0, textW + AP.FIELD_CHROME)
 end
 
--- 沙盒選項的數字框寬；每人上限另外要放得下 placeholder「不限」（法文、俄文實機截字）
+-- 沙盒選項的數字框寬
 function AP.fieldW(key, minW)
     local o = Settings.BY_KEY[key]
-    local w = AP.sampleW(AP.numberTextW(o.min, o.max, o.type == "double" and 2 or nil), minW)
-    if string.find(key, "PerPlayer$") then
-        w = math.max(w, K.textW(UIFont.Small, getText("IGUI_MSH_Admin_Unlimited")) + AP.FIELD_CHROME)
-    end
-    return w
+    return AP.sampleW(AP.numberTextW(o.min, o.max, o.type == "double" and 2 or nil), minW)
 end
 
 -- 付費頁欄位寬（範圍見 AP.PLAN_RANGE）
@@ -1028,8 +1028,6 @@ function AP.planFieldW(fieldName, minW)
     local r = AP.PLAN_RANGE[fieldName]
     return AP.sampleW(AP.numberTextW(r[1], r[2]), minW)
 end
-
-function AP.perPlayerFieldW() return AP.fieldW("Tier1PerPlayer", AP.DEED_FIELD_W.PerPlayer) end
 
 function AP.deedFieldW(c) return AP.fieldW("Tier1" .. AP.DEED_FIELD_KEY[c], AP.DEED_FIELD_W[c]) end
 
@@ -1061,8 +1059,9 @@ function AP.deedColumns()
             end
         elseif AP.DEED_FIELD_KEY[c] then
             w = math.max(w, AP.deedFieldW(c) + (c == "Area" and K.GAP + AP.areaEqW() or 0))
-        else
-            w = math.max(w, AP.TOGGLE_W)
+        else   -- Max：三個名額上限都填到最大時的和
+            local B = Settings.BY_KEY
+            w = math.max(w, AP.numberTextW(0, B.Tier1FreeSlots.max + B.Tier1BuySlots.max + B.Tier1RentSlots.max) + 8)
         end
         xs[c], ws[c] = x, w
         x = x + w + K.GAP
@@ -1118,13 +1117,14 @@ function AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn)
         Tier = tl,
         Area = AP.numField(P, pg, p .. "Area", AP.deedFieldW("Area"), AP.onRelayout),
         Side = AP.numField(P, pg, p .. "Side", AP.deedFieldW("Side")),
-        PerPlayer = AP.numField(P, pg, p .. "PerPlayer", AP.deedFieldW("PerPlayer"), nil, true),
         Loot = AP.numField(P, pg, p .. "LootChance", AP.deedFieldW("Loot")),
         Craft = AP.craftButton(P, pg, n, ws.Craft),
-        Free = AP.boolField(P, pg, p .. "Free", "", AP.onRelayout),
-        Buy = AP.boolField(P, pg, p .. "Buy", "", AP.onRelayout),
-        Rent = AP.boolField(P, pg, p .. "Rent", "", AP.onRelayout),
+        Free = AP.numField(P, pg, p .. "FreeSlots", AP.deedFieldW("Free"), AP.onRelayout),
+        Buy = AP.numField(P, pg, p .. "BuySlots", AP.deedFieldW("Buy"), AP.onRelayout),
+        Rent = AP.numField(P, pg, p .. "RentSlots", AP.deedFieldW("Rent"), AP.onRelayout),
     }
+    local free, buy, rent = AP.slotNum(pg, p .. "FreeSlots"), AP.slotNum(pg, p .. "BuySlots"), AP.slotNum(pg, p .. "RentSlots")
+    ctrls.Max = F:label("mx" .. n, tostring(free + buy + rent), "textMuted")
     local eq = AP.areaEqLabel(pg, p .. "Area")
     local rowH = 0
     for _, c in pairs(ctrls) do rowH = math.max(rowH, c.height) end
@@ -1132,12 +1132,13 @@ function AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn)
         local el = ctrls[c]
         el:setX(xs[c])
         el:setY(F.y + math.floor((rowH - el.height) / 2))
-        if el ~= tl then el:setEnabled((econ or (c ~= "Buy" and c ~= "Rent")) and (lootOn or c ~= "Loot")) end
+        if el ~= tl and el ~= ctrls.Max then
+            el:setEnabled((econ or (c ~= "Buy" and c ~= "Rent")) and (lootOn or c ~= "Loot"))
+        end
     end
     eq:setX(xs.Area + ctrls.Area.width + K.GAP)
     eq:setY(F.y + math.floor((rowH - eq.height) / 2))
     F.y = F.y + rowH + 4
-    local free, buy, rent = ctrls.Free:getChecked(), ctrls.Buy:getChecked(), ctrls.Rent:getChecked()
     if AP.nobodyCanBuild(free, buy, rent, econ) then
         F:text("warn" .. n, getText("IGUI_MSH_Admin_NobodyCanBuild", n), "warning")
     end
@@ -1398,7 +1399,7 @@ end
 
 function AP.onOverride(P, b)
     local r = b.internal
-    local def = AP.effective(P.values, "ClaimsPerPlayer")
+    local def = AP.effective(P.values, "Tier1FreeSlots")
     P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_SetLimit"), theme = P.theme,
         text = getText("IGUI_MSH_Admin_OverrideText", r.name, def),
         input = { text = r.override >= 0 and tostring(r.override) or "", placeholder = getText("IGUI_MSH_Admin_OverridePlaceholder") },

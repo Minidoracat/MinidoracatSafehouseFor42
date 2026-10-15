@@ -432,7 +432,7 @@ return function(T)
 
     T.section("ManagerWindow：安全屋多、視窗小、字大時，左欄「在地面顯示範圍」與上列按鈕都在視窗裡（使用者 2026-10-12）")
     -- 寬鬆的假框架：每個元件記住位置、大小、可見；字寬 charW、字高 fh 可調（模擬放大字型）
-    local fw = { charW = 7, fh = 16, sw = 1280, sh = 720 }
+    local fw = { charW = 7, fh = 16, sw = 1280, sh = 720, toasts = {} }
     local savedG = {}
     for _, k in ipairs({ "ISPanel", "ISUIElement", "getTextManager", "getCore", "UIFont", "MinidoracatUI", "getTexture" }) do
         savedG[k] = _G[k]
@@ -497,6 +497,7 @@ return function(T)
     end
     local caps = {}
     for _, c in ipairs(MW.CAPS) do caps[c] = true end
+    caps.toast = true
     local colors = {}
     for _, t in ipairs({ "text", "textMuted", "textDisabled", "warning", "errorText", "accent", "hover", "selected" }) do
         colors[t] = { r = 1, g = 1, b = 1, a = 1 }
@@ -512,6 +513,7 @@ return function(T)
                 return #out > 0 and out or { "" }
             end },
         Icons = { draw = function() end },
+        Toast = { show = function(o) fw.toasts[#fw.toasts + 1] = o.message end },
         Dialog = { show = function(o) return o end },
         Window = { new = function(o) return make(o) end },
         ScrollPanel = { new = function(o) return make(o) end },

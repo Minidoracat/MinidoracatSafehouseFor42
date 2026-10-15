@@ -172,7 +172,7 @@ return function(T)
         .. "（實際 " .. tostring(res.claimId) .. "）")
 
     T.section("有補回時檔案整份留著：同一份裡已放棄的串照樣不補")
-    local MANY = { ClaimsPerPlayer = 3 }
+    local MANY = { Tier1FreeSlots = 3 }
     boot({ sandbox = MANY })
     empty = save()
     local gil = T.player({ name = "gil", x = 805, y = 805, items = { D1, D1 } })

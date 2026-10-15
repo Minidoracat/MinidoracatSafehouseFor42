@@ -40,7 +40,6 @@ local TIER_DEFAULT = {
 -- type: bool | int | double | enum | string；enum 的值是 1..values
 local OPTIONS = {
     { key = "CreateMode", type = "enum", values = 2, default = S.CREATE.DEED },
-    { key = "ClaimsPerPlayer", type = "int", min = 0, max = 100, default = 1 },
     { key = "FreeMaxArea", type = "int", min = 1, max = 9216, default = 576 },
     { key = "FreeMaxSide", type = "int", min = 1, max = 96, default = 48 },
     { key = "ClaimGap", type = "int", min = 0, max = 16, default = 2 },
@@ -77,12 +76,15 @@ for n = 1, MSH.MAX_TIER do
     local d = TIER_DEFAULT[n]
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Area", type = "int", min = 1, max = 9216, default = d.area, tier = n }
     OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Side", type = "int", min = 1, max = 96, default = d.side, tier = n }
-    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "PerPlayer", type = "int", min = 0, max = 100, default = 0, tier = n }
 end
+-- 名額每一級各自三個數（使用者 2026-10-15 選 B）：免費幾間、每人最多買斷幾個、每人最多租用幾個；這一級每人最多
+-- 幾間＝三個相加。0＝這一級不給。免費預設只有 1 級 1 間（和舊版「每人免費 1 間」一樣多）。租用上限 10＝經濟中心每個
+-- 帳號每個產品最多 10 張租約（rentalsMax）；買斷上限照經濟中心 permanentLimit 的範圍取 100。
 for n = 1, MSH.MAX_TIER do
-    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Free", type = "bool", default = true, tier = n }
-    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Buy", type = "bool", default = false, tier = n }
-    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Rent", type = "bool", default = false, tier = n }
+    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "FreeSlots", type = "int", min = 0, max = 100,
+        default = n == 1 and 1 or 0, tier = n }
+    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "BuySlots", type = "int", min = 0, max = 100, default = 0, tier = n }
+    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "RentSlots", type = "int", min = 0, max = 10, default = 0, tier = n }
 end
 -- 地契會不會從辦公桌、檔案櫃、保險箱掉出來（使用者 2026-10-13：預設不開）；關著時各級的掉落機率都不生效
 OPTIONS[#OPTIONS + 1] = { key = "DeedLoot", type = "bool", default = false }
@@ -168,7 +170,6 @@ function S.get()
     end
     local cfg = {
         createMode = raw.CreateMode,
-        claimsPerPlayer = raw.ClaimsPerPlayer,
         freeMaxSide = raw.FreeMaxSide,
         freeMaxArea = math.min(raw.FreeMaxArea, raw.FreeMaxSide * raw.FreeMaxSide),
         claimGap = raw.ClaimGap,
@@ -214,10 +215,12 @@ function S.get()
             enabled = n <= raw.TiersEnabled,
             side = side,
             area = area,
-            perPlayer = raw["Tier" .. n .. "PerPlayer"],
-            free = raw["Tier" .. n .. "Free"],
-            buy = raw["Tier" .. n .. "Buy"],
-            rent = raw["Tier" .. n .. "Rent"],
+            freeSlots = raw["Tier" .. n .. "FreeSlots"],
+            buySlots = raw["Tier" .. n .. "BuySlots"],
+            rentSlots = raw["Tier" .. n .. "RentSlots"],
+            free = raw["Tier" .. n .. "FreeSlots"] > 0,
+            buy = raw["Tier" .. n .. "BuySlots"] > 0,
+            rent = raw["Tier" .. n .. "RentSlots"] > 0,
             loot = raw["Tier" .. n .. "LootChance"],
             craft = raw["Tier" .. n .. "Craft"],
         }
