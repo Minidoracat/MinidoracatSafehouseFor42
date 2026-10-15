@@ -41,6 +41,7 @@ local SCENARIOS = {
     "t_economy",
     "t_idle",
     "t_respawn",
+    "t_indoor",
     "t_client",
     "t_ui_create",
     "t_ui_manager",

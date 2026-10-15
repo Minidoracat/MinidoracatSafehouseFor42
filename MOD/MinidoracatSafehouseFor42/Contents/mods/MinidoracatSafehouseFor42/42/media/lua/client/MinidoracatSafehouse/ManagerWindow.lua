@@ -362,6 +362,7 @@ function W:build()
     body:addChild(self.areaTabs)
     self.btnRefresh = self:button(body, getText("IGUI_MSH_Manager_Refresh"), W.onRefresh, self, nil, "reload")
     self.btnSlots = self:button(body, getText("IGUI_MSH_Manager_Slots"), W.onSlots, self, nil, "coins")
+    self.btnIndoor = self:button(body, getText("IGUI_MSH_Manager_Indoor"), W.onIndoor, self, nil, "house")
     self.btnCreate = self:button(body, getText("IGUI_MSH_Manager_Create"), W.onCreate, self, nil, "plus")
     self.btnAdmin = self:button(body, getText("IGUI_MSH_Manager_Admin"), W.onAdmin, self, nil, "settings")
 
@@ -433,7 +434,7 @@ function W:build()
     self.btnQuery = self:button(body, getText("IGUI_MSH_Manager_QueryResult"), W.onQuery, self, "primary")
     self.btnDismiss = self:button(body, getText("IGUI_MSH_Manager_Dismiss"), W.onDismiss, self)
     self.hideable = { self.list, self.rangesBox, self.btnCreateEmpty, self.btnBack, self.btnRename, self.tabs, self.scroll,
-        self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnCreate, self.btnAdmin }
+        self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnIndoor, self.btnCreate, self.btnAdmin }
     for _, b in ipairs(self.rangeChips) do self.hideable[#self.hideable + 1] = b end
 
     -- 窄版門檻：詳細欄放不下最長的標籤加一個典型值（以目前字型量測，§10.3 Narrow）
@@ -722,6 +723,7 @@ function W:layout()
     self:place(self.areaTabs, PAD, PAD)
     local right = { self.btnRefresh }
     if MSH.SlotsWindow then right[#right + 1] = self.btnSlots end
+    if MSH.IndoorPanel then right[#right + 1] = self.btnIndoor end
     if MSH.CreatePanel then right[#right + 1] = self.btnCreate end
     if MSH.AdminPanel and MW.isAdmin() then right[#right + 1] = self.btnAdmin end
     local need = 0
@@ -1152,6 +1154,18 @@ end
 
 function W.onCreate()
     MW.openCreate({ mode = "create" })
+end
+
+-- 從管理視窗開室內檢查（查站的那格）：同建立面板，先收起管理視窗，面板關掉時開回來（IndoorPanel.close）；沒開成就馬上開回來
+function MW.openIndoor()
+    if MSH.IndoorPanel == nil then return end
+    local w = MW.instance
+    if w ~= nil and w.win:getIsVisible() then w.win:close() end
+    if MSH.IndoorPanel.open({ fromManager = true }) == nil and not MW.isOpen() then MW.open() end
+end
+
+function W.onIndoor()
+    MW.openIndoor()
 end
 
 function W.onSlots()

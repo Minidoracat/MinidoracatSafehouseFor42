@@ -39,6 +39,7 @@ MSH.LIMIT = {
     CALIBRATE_MAX = 2048,          -- 客戶端校正最多帶幾筆（MAX_CLAIMS × MAX_PIECES 個原生）
     -- 一次校正最多替幾個原生觸發廣播（正常客戶端登入時已拿到全部，§6.3）；同一間整組一起送，所以至少要放得下一整間
     CALIBRATE_UPSERTS = 8,
+    INDOOR_REACH = 40,             -- 室內檢查只查玩家附近的格子（server Indoor.lua；客戶端送出前先比，太遠就不送）
 }
 
 MSH.LIFECYCLE = {
@@ -100,6 +101,8 @@ MSH.CODE = {
     INSURE_CLOSED = "INSURE_CLOSED", NOT_INSURABLE = "NOT_INSURABLE",
     -- 安全屋重生點（2026-10-14）：伺服器設定 SafehouseAllowRespawn 關著
     RESPAWN_DISABLED = "RESPAWN_DISABLED",
+    -- 室內檢查（2026-10-15）：要查的格子離玩家超過 LIMIT.INDOOR_REACH
+    TOO_FAR = "TOO_FAR",
 }
 
 -- ===== 小工具 =====

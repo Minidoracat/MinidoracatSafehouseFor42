@@ -1,7 +1,7 @@
 <!-- 指南網址：https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336 -->
 <!-- Steam guide source (English): the full reference for this mod; the Workshop description only summarizes. Format and sync: pz-family-docs/release.md「完整說明：Steam 指南」 -->
 <!-- 標題：📖 Safehouse Mod Guide: Deeds, Claiming, Sharing, Paid Slots & Server Setup -->
-<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window, ground outlines and respawn points, paid slots, idle release and insurance, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
+<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window, ground outlines, respawn points and the indoor check, paid slots, idle release and insurance, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
 === 🚀 Quick start
 [b]繁體中文版：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307]Safehouse MOD 完整說明[/url]
 
@@ -252,7 +252,7 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [*] [b]Two lists[/b]: "Mine" and "Shared with me"; with many safehouses the list just scrolls.
 [*] [b]Three tabs per safehouse[/b]: "Overview", "Members & sharing", "Land rules".
 [*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Set as respawn point", "Redraw", "Abandon safehouse...".
-[*] [b]Other buttons[/b]: "Create safehouse", "Slots".
+[*] [b]Other buttons[/b]: "Create safehouse", "Indoor check", "Slots".
 [*] [b]Idle release[/b]: the "Idle release" row on Overview shows how long is left; see "Idle release and insurance".
 [*] [b]After creating[/b]: the window opens on the new safehouse.
 [*] [b]Small window or large font[/b]: the window grows taller to fit.
@@ -292,6 +292,16 @@ A switch under the list (on by default) outlines the safehouses near you on the 
 [*] [b]One per player[/b]: setting it in another safehouse replaces it; you can also press "Clear respawn point".
 [*] [b]Paused[/b]: while the safehouse is released or suspended, or you've been removed as a member, you spawn the vanilla way; it works again once you have access back.
 [*] [b]Server must allow it[/b]: with the vanilla server option SafehouseAllowRespawn off, it can't be set and isn't used.
+[/list]
+[h3]Indoor check[/h3]
+[list]
+[*] [b]Open it[/b]: right-click the floor and choose "Check if this counts as indoors" (checks the tile you clicked), or press "Indoor check" in the Safehouse Manager (checks the tile you stand on).
+[*] [b]Result[/b]: counts as indoors, gap in the walls, roof isn't finished, only part of it has a roof, only under a roof, or outdoors.
+[*] [b]What counts[/b]: the room must be closed in on all sides (walls, door frames, window frames and fences all count, even with the door open or the glass removed), and every tile needs a floor on the level right above. With one roof tile missing, body temperature and wind chill follow the outdoors for the whole room.
+[*] [b]Finding the cause[/b]: it lists the missing wall and roof tiles and how far away they are; with "Mark the spots on the ground" on, missing roof tiles turn the floor red and missing walls show as red wall outlines.
+[*] [b]Under the same roof[/b]: the other rooms are listed too; click one to look at it. A roof that sticks out past the walls, or a porch, shows as "Under the eaves".
+[*] [b]Rechecks by itself[/b]: while the window is open, it checks again when walls or floors nearby change; once you close it, nothing is checked in the background.
+[*] [b]Limits[/b]: only tiles within 40 tiles of you; the map's own buildings count the vanilla way; self-built rooms underground never count as indoors.
 [/list]
 === 🧰 Paid slots (optional Economy)
 [list]
