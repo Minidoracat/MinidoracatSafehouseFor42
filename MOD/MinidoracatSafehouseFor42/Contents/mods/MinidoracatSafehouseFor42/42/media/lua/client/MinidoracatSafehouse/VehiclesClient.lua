@@ -9,9 +9,10 @@
 --   對附近每塊不能進的原生安全屋做 SAT：
 --   1) 照目前速度再走 LOOK_FRAMES 幀（至少 LOOK_MIN 秒）會碰到 → setForceBrake（1 秒、×13、掛空檔，
 --      CarController.updateControls:974-980）＋速度歸零；
---   2) 已經碰到，上一個合法位置在外面（卡頓、被撞進去）→ 拉回那裡（setWorldTransform → Bullet.teleportVehicle，
---      BaseVehicle.java:4049-4067）＋歸零；車和拖車的位置在同一幀存、一起拉回；
---   3) 本來就壓在裡面（車停著之後才建屋、改分享）→ 只擋往裡面走，往外開照常。
+--   2) 從外面穿進去（卡頓、被撞），上一個合法位置在每塊外面 → 拉回那裡（setWorldTransform → Bullet.teleportVehicle，
+--      BaseVehicle.java:4049-4067）＋強制煞車＋歸零；車和拖車的位置在同一幀存、一起拉回；
+--   3) 本來就壓在裡面（車停著之後才建屋、改分享）→ 棘輪：記住最淺的位置，比它深 DEEPER 以上就拉回那裡＋歸零，
+--      往外開照常。這裡不強制煞車：煞車會掛空檔 1 秒，貼著邊界的晃動一直重新觸發，車就倒不出去（E2E sh-vblock-1015d）。
 --   歸零用 applyImpulseFromHitPlant(車自己, 質量 ÷ (0.3 × fudgedMass))：列表衝量在下一個物理子步 ×30 套用
 --   （:3590-3631、5556-5565），relPos 0 沒有力矩，也不佔 addImpulse 的單一槽；速度和上次送的時候完全相同＝
 --   物理還沒走，不重送（同一步疊兩次會反彈）。
@@ -29,7 +30,7 @@ MSH.VehiclesClient = V
 V.PAD = 0.1          -- 車身外加的餘裕（公尺）：停在邊界外約這麼遠
 V.LOOK_FRAMES = 2    -- 預測幾幀：24–600 FPS、500 ms 卡頓都擋得住（E2E vblock-mp）
 V.LOOK_MIN = 0.05    -- 預測至少幾秒
-V.DEEPER = 0.001     -- 本來就壓在裡面時，深度多這麼多（公尺）才算往裡面走
+V.DEEPER = 0.05      -- 本來就壓在裡面時，比最淺的位置深這麼多（公尺）才拉回：小於它的晃動不算
 V.NEAR = 60          -- 只看離車這麼近的安全屋（公尺）
 V.CACHE_MS = 500     -- 不能進的安全屋多久重算一次：分享、上下車最多晚這麼久生效
 V.NOTICE_MS = 5000   -- 被擋的提示最短間隔
@@ -76,13 +77,14 @@ local function addRiders(v, out)
 end
 
 -- 附近不能進的安全屋（CACHE_MS 重算一次）：車上任何一人 isSafehouseAllowTrepass 為 false 就算。那個函式要一格：
--- 取屋內離車最近的一格（車在附近，那格已經載入；沒載入＝還遠，下次再看）。rider＝擋的是乘客（駕駛自己可以進）
+-- 取屋內離車最近的一格（車在附近，那格已經載入；沒載入＝還遠，下次再看）。rider＝擋的是乘客（駕駛自己可以進）。
+-- 清單變了（新屋、分享、上下車）就重記「最淺的位置」：多出來的那塊會讓深度變大，拿舊的比會一直拉回
 function V.blockers(st, p, v, tr, now)
     if st.cacheAt ~= nil and now - st.cacheAt < V.CACHE_MS then return st.rects end
     local riders = {}
     addRiders(v, riders)
     if tr ~= nil then addRiders(tr, riders) end
-    local rects, cx, cy = {}, v:getX(), v:getY()
+    local rects, keys, cx, cy = {}, {}, v:getX(), v:getY()
     local list = SafeHouse.getSafehouseList()
     for i = 0, list:size() - 1 do
         local h = list:get(i)
@@ -94,12 +96,15 @@ function V.blockers(st, p, v, tr, now)
                 for _, r in ipairs(riders) do
                     if not SafeHouse.isSafehouseAllowTrepass(sq, r) then
                         rects[#rects + 1] = { x = x, y = y, w = w, h = hh, rider = r ~= p }
+                        keys[#keys + 1] = x .. "," .. y .. "," .. w .. "," .. hh .. (r ~= p and "r" or "")
                         break
                     end
                 end
             end
         end
     end
+    local key = table.concat(keys, ";")
+    if key ~= st.key then st.key, st.inside = key, false end
     st.rects, st.cacheAt = rects, now
     return rects
 end
@@ -114,7 +119,7 @@ local function stateOf(p, v, tr)
     return st
 end
 
--- 存合法位置：車與拖車同一幀（拉回時兩台一起，連接點才對得上）；gfp 留當時的車身，拉回前確認它還在每塊外面
+-- 存位置：車與拖車同一幀（拉回時兩台一起，連接點才對得上）；gfp 留當時的車身，拉回前確認它還在每塊外面
 function V.saveGood(st, n)
     for i = 1, n do
         st.good[i] = st.cars[i]:getWorldTransform(st.good[i] or Transform.new())
@@ -125,19 +130,41 @@ function V.saveGood(st, n)
     st.hasGood = true
 end
 
--- 速度歸零；速度和上次送的時候完全相同＝物理還沒走，不重送
-function V.halt(st, c, i)
-    local vel = c:getLinearVelocity(V.vel)
-    local vx, vz = vel:x(), vel:z()
-    if vx * vx + vz * vz <= 0.0025 or (st.lx[i] == vx and st.lz[i] == vz) then return end
-    st.lx[i], st.lz[i] = vx, vz
-    c:applyImpulseFromHitPlant(c, c:getMass() / (0.3 * math.max(1, c:getFudgedMass())))
+function V.restore(st, n)
+    for i = 1, n do st.cars[i]:setWorldTransform(st.good[i]) end
 end
 
-function V.notify(p, st, now, rider)
+-- 速度歸零；速度和上次送的時候完全相同＝物理還沒走，不重送
+function V.halt(st, n)
+    for i = 1, n do
+        local c = st.cars[i]
+        local vel = c:getLinearVelocity(V.vel)
+        local vx, vz = vel:x(), vel:z()
+        if vx * vx + vz * vz > 0.0025 and not (st.lx[i] == vx and st.lz[i] == vz) then
+            st.lx[i], st.lz[i] = vx, vz
+            c:applyImpulseFromHitPlant(c, c:getMass() / (0.3 * math.max(1, c:getFudgedMass())))
+        end
+    end
+end
+
+-- 車身（fps，移動 look 秒後）和每塊的重疊深度加總（0＝都在外面），以及有沒有一塊是駕駛自己不能進的
+function V.overlap(fps, n, rects, look)
+    local sum, own = 0, false
+    for i = 1, n do
+        local fp = fps[i]
+        local cx, cy = fp.cx + (fp.vx or 0) * look, fp.cy + (fp.vy or 0) * look
+        for _, r in ipairs(rects) do
+            local d = V.sat(fp, cx, cy, r, V.PAD)
+            if d > 0 then sum, own = sum + d, own or not r.rider end
+        end
+    end
+    return sum, own
+end
+
+function V.notify(p, st, now, own)
     if st.noticeAt ~= nil and now - st.noticeAt < V.NOTICE_MS then return end
     st.noticeAt = now
-    MSH.Client.toast(getText(rider and "IGUI_MSH_Vehicle_BlockedRider" or "IGUI_MSH_Vehicle_Blocked"), p)
+    MSH.Client.toast(getText(own and "IGUI_MSH_Vehicle_Blocked" or "IGUI_MSH_Vehicle_BlockedRider"), p)
 end
 
 function V.update(p)
@@ -153,51 +180,44 @@ function V.update(p)
     st.at = now
     local rects = V.blockers(st, p, v, tr, now)
     if #rects == 0 then
-        st.hasGood = false   -- 附近沒有：不存位置（之後出現時車還在 NEAR 外，會先存到新的）
+        st.hasGood, st.inside = false, false   -- 附近沒有：不存位置（之後出現時車還在 NEAR 外，會先存到新的）
         return
     end
-    local cars, n = st.cars, tr ~= nil and 2 or 1
-    cars[1], cars[2] = v, tr
+    local n = tr ~= nil and 2 or 1
+    st.cars[1], st.cars[2] = v, tr
     V.vel = V.vel or Vector3f.new()
-    -- 拉回的位置要在每塊外面（之後才變成不能進的那塊可能包住它）
-    local goodOk = st.hasGood == true
-    if goodOk then
-        for i = 1, n do
-            for _, r in ipairs(rects) do
-                if V.sat(st.gfp[i], st.gfp[i].cx, st.gfp[i].cy, r, V.PAD) > 0 then goodOk = false end
-            end
-        end
-    end
-    local look = math.max(V.LOOK_MIN, V.LOOK_FRAMES * dt)
-    local inside, block, snap, rider = false, false, false, false
     for i = 1, n do
-        local c, fp = cars[i], st.fp[i]
-        if not V.footprint(c, fp) then return end
-        local vel = c:getLinearVelocity(V.vel)
-        local mx, my = vel:x() * look, vel:z() * look
-        for _, r in ipairs(rects) do
-            local d0 = V.sat(fp, fp.cx, fp.cy, r, V.PAD)
-            local d1 = V.sat(fp, fp.cx + mx, fp.cy + my, r, V.PAD)
-            local hit
-            if d0 <= 0 then
-                hit = d1 > 0                          -- 1) 快碰到
-            else
-                inside, snap = true, snap or goodOk   -- 2) 已經碰到、拉得回去
-                hit = goodOk or d1 > d0 + V.DEEPER    -- 3) 本來就在裡面：只擋往裡面走
-            end
-            if hit then block, rider = true, rider or r.rider end
-        end
+        local fp = st.fp[i]
+        if not V.footprint(st.cars[i], fp) then return end
+        local vel = st.cars[i]:getLinearVelocity(V.vel)
+        fp.vx, fp.vy = vel:x(), vel:z()
     end
-    if not block then
-        if not inside then V.saveGood(st, n) end
+    local depth, own = V.overlap(st.fp, n, rects, 0)
+    if depth > 0 then
+        if st.hasGood and not st.inside and V.overlap(st.gfp, n, rects, 0) == 0 then
+            v:setForceBrake()                    -- 2) 從外面穿進去
+            V.restore(st, n)
+            V.halt(st, n)
+            V.notify(p, st, now, own)
+        elseif not st.inside or depth < st.depth then
+            st.inside, st.depth = true, depth    -- 3) 本來就在裡面：記住最淺的位置
+            V.saveGood(st, n)
+        elseif depth > st.depth + V.DEEPER then
+            V.restore(st, n)
+            V.halt(st, n)
+            V.notify(p, st, now, own)
+        end
         return
     end
-    v:setForceBrake()
-    if snap then
-        for i = 1, n do cars[i]:setWorldTransform(st.good[i]) end
+    st.inside = false
+    local ahead, ownAhead = V.overlap(st.fp, n, rects, math.max(V.LOOK_MIN, V.LOOK_FRAMES * dt))
+    if ahead > 0 then
+        v:setForceBrake()                        -- 1) 快碰到
+        V.halt(st, n)
+        V.notify(p, st, now, ownAhead)
+        return
     end
-    for i = 1, n do V.halt(st, cars[i], i) end
-    V.notify(p, st, now, rider)
+    V.saveGood(st, n)
 end
 
 if first then
