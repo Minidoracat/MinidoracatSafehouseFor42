@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "구매 가격",
     "IGUI_MSH_Admin_Plan_rentalPrice": "기간당 임대료",
     "IGUI_MSH_Admin_Plan_insurePrice": "일일 보험료",
+    "IGUI_MSH_Admin_InsureNote": "'%1'은(는) 방치 회수 보험의 하루 가격입니다. 오랫동안 아무도 찾지 않은 은신처는 회수됩니다. 소유자는 '%3' 창에서 '%2'을(를) 눌러 일수를 고르고 한 번에 결제할 수 있습니다(하루 가격 × 일수). 보험 기간에는 회수되지 않습니다. 소유자가 직접 결제할 때만 비용이 들며, 자동 갱신이나 자동 결제는 없습니다. 임대 슬롯 은신처는 임대 계약을 따르므로 필요 없습니다.",
+    "IGUI_MSH_Admin_InsureOff": "지금은 방치 회수 보험을 판매하지 않습니다. 플레이어는 구매할 수 없고 아무에게도 비용이 청구되지 않습니다. 판매하려면 '%1' 탭에서 '%2'을(를) 켜고 '%3'을(를) 0보다 크게 설정하세요.",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "구매 판매",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "임대 판매",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "구매 통화",

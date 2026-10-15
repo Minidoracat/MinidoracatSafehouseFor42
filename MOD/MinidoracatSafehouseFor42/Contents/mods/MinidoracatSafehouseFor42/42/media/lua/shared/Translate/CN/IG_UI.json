@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "买断价",
     "IGUI_MSH_Admin_Plan_rentalPrice": "每期租金",
     "IGUI_MSH_Admin_Plan_insurePrice": "每日保险费",
+    "IGUI_MSH_Admin_InsureNote": "「%1」是闲置保险每天的价格。安全屋太久没人回去会被收回；屋主可以在「%3」窗口按「%2」，自选天数、一次付清（每日价格 × 天数），保险期间不会被收回。只有屋主自己付款时才收费，不会自动续买或扣款。用租用名额的安全屋按租约处理，不需要保险。",
+    "IGUI_MSH_Admin_InsureOff": "目前没有出售闲置保险：玩家买不到，也没有人被扣款。要开卖，请在「%1」页打开「%2」，并把「%3」设为大于 0。",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "出售买断",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "出售租用",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "买断货币",

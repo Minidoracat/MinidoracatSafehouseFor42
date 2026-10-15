@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "買い取り価格",
     "IGUI_MSH_Admin_Plan_rentalPrice": "1期間のレンタル料",
     "IGUI_MSH_Admin_Plan_insurePrice": "1日あたりの保険料",
+    "IGUI_MSH_Admin_InsureNote": "「%1」は放置回収の保険の1日あたりの価格です。長いあいだ誰も訪れないセーフハウスは回収されます。所有者は「%3」ウィンドウで「%2」を押し、日数を選んで一括で支払えます（1日あたりの価格 × 日数）。保険期間中は回収されません。料金がかかるのは所有者が自分で支払ったときだけで、自動更新や自動引き落としはありません。レンタル枠のセーフハウスは契約に従うため不要です。",
+    "IGUI_MSH_Admin_InsureOff": "現在、放置回収の保険は販売していません。プレイヤーは購入できず、誰にも請求されません。販売するには「%1」タブで「%2」をオンにし、「%3」を0より大きくしてください。",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "買い取りを販売",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "レンタルを販売",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "買い取りの通貨",

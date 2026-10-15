@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "Buy price",
     "IGUI_MSH_Admin_Plan_rentalPrice": "Rent per period",
     "IGUI_MSH_Admin_Plan_insurePrice": "Insurance per day",
+    "IGUI_MSH_Admin_InsureNote": "\"%1\" is the daily price of idle-release insurance. A safehouse nobody visits for too long is released; its owner can press %2 in the %3 window, choose how many days, and pay once (daily price × days). While insured it is not released. Owners are only charged when they pay themselves; nothing renews or charges automatically. Rented-slot safehouses follow their lease and don't need it.",
+    "IGUI_MSH_Admin_InsureOff": "Idle-release insurance isn't on sale right now: players can't buy it, and nobody is charged. To sell it, turn on \"%2\" on the %1 tab and set \"%3\" above 0.",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "Sell buyouts",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "Sell rentals",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "Buy currency",

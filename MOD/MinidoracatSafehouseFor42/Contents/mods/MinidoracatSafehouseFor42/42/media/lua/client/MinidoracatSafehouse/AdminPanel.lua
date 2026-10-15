@@ -1551,6 +1551,17 @@ function AP.layoutPaid(P, pg)
     end
     F:row({ F:label("planCount", getText("IGUI_MSH_Admin_TiersCount", k, MSH.MAX_TIER), "textMuted"),
         F:button("goDeeds", getText("IGUI_MSH_Admin_GoDeeds"), P, AP.onGoDeeds) })
+    -- 閒置保險的作用直接寫在表格下（使用者 2026-10-15：「應該要寫清楚作用」；只放滑鼠提示會被忽略，同規則頁 MaxPieces）。
+    -- 伺服器沒開賣時（IdleInsure 關或 IdleDays 0，同 Idle.canInsure）再寫一句：玩家買不到、沒有扣款、怎麼開
+    if plans.insureReady then
+        F.y = F.y + K.GAP
+        F:text("insureNote", getText("IGUI_MSH_Admin_InsureNote", AP.planLabel("insurePrice"),
+            getText("IGUI_MSH_Manager_Insure"), getText("IGUI_MSH_Entry_Button")), "textMuted")
+        if P.values ~= nil and not (AP.effective(P.values, "IdleInsure") and AP.effective(P.values, "IdleDays") > 0) then
+            F:text("insureOff", getText("IGUI_MSH_Admin_InsureOff", getText("IGUI_MSH_Admin_Tab_rules"),
+                getText("Sandbox_MinidoracatSafehouse_IdleInsure"), getText("Sandbox_MinidoracatSafehouse_IdleDays")), "text")
+        end
+    end
 end
 
 function AP.onGoDeeds(P)

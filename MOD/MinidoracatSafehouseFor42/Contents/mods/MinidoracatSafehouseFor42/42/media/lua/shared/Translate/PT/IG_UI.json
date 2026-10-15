@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "Preço de compra",
     "IGUI_MSH_Admin_Plan_rentalPrice": "Aluguel por período",
     "IGUI_MSH_Admin_Plan_insurePrice": "Seguro por dia",
+    "IGUI_MSH_Admin_InsureNote": "\"%1\" é o preço diário do seguro contra liberação. Uma base que ninguém visita por muito tempo é liberada; o dono pode clicar em \"%2\" na janela %3, escolher os dias e pagar de uma vez (preço diário × dias). Enquanto estiver segurada, ela não é liberada. Só há cobrança quando o próprio dono paga; nada é renovado nem cobrado automaticamente. Bases de vaga alugada seguem o aluguel e não precisam dele.",
+    "IGUI_MSH_Admin_InsureOff": "O seguro contra liberação não está à venda agora: os jogadores não podem comprá-lo e ninguém é cobrado. Para vendê-lo, ative \"%2\" na aba %1 e defina \"%3\" acima de 0.",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "Vender compras",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "Vender aluguéis",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "Moeda da compra",

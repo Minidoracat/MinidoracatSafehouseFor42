@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "Precio de compra",
     "IGUI_MSH_Admin_Plan_rentalPrice": "Alquiler por periodo",
     "IGUI_MSH_Admin_Plan_insurePrice": "Seguro por día",
+    "IGUI_MSH_Admin_InsureNote": "\"%1\" es el precio diario del seguro contra liberación. Un refugio que nadie visita durante demasiado tiempo se libera; su dueño puede pulsar \"%2\" en la ventana %3, elegir los días y pagar una sola vez (precio diario × días). Mientras está asegurado no se libera. Solo se cobra cuando el propio dueño paga; nada se renueva ni se cobra automáticamente. Los refugios de plaza alquilada siguen su alquiler y no lo necesitan.",
+    "IGUI_MSH_Admin_InsureOff": "El seguro contra liberación no está a la venta ahora: los jugadores no pueden comprarlo y no se cobra a nadie. Para venderlo, activa \"%2\" en la pestaña %1 y pon \"%3\" en más de 0.",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "Vender compras",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "Vender alquileres",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "Moneda de compra",

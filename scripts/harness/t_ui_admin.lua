@@ -757,7 +757,8 @@ return function(T)
     local rp = PI.pages.rules.flow.pool
     check(rp["f:IdleDays"]:isVisible() and rp["f:IdleDays"]:getText() == "14" and rp["f:IdleBuyDays"]:getText() == "30"
         and rp["f:IdleInsure"]:isVisible() and not rp["f:IdleInsure"]:getChecked(), "規則頁排出三個欄位、顯示伺服器值")
-    check(PI.pages.paid.flow.pool["pl:insurePrice:1"] == nil, "伺服器沒回 insureReady：付費頁沒有保險價格欄")
+    check(PI.pages.paid.flow.pool["pl:insurePrice:1"] == nil and PI.pages.paid.flow.pool["insureNote#1"] == nil,
+        "伺服器沒回 insureReady：付費頁沒有保險價格欄與保險說明")
     AP.instance = nil
     local function insRow(tier, rev, insRev)
         local row = planRow(tier, rev)
@@ -774,6 +775,13 @@ return function(T)
     local ip2 = jp["pl:insurePrice:2"]
     check(ip2 ~= nil and ip2:isVisible() and ip2:getText() == "50" and jp["pl:insurePrice:1"]:isVisible(),
         "insureReady：每個啟用的等級多一格保險每日價格（顯示目前的 rentalPrice）")
+    check(jp["insureNote#1"] ~= nil and jp["insureNote#1"]:isVisible() and jp["insureOff#1"] ~= nil and jp["insureOff#1"]:isVisible(),
+        "insureReady、IdleInsure 關：表格下寫保險的作用，再寫目前沒開賣（使用者 2026-10-15）")
+    PJ.values.IdleInsure = true
+    AP.layoutPage(PJ, "paid")
+    check(jp["insureNote#1"]:isVisible() and not jp["insureOff#1"]:isVisible(), "IdleInsure 開、IdleDays > 0：不寫沒開賣")
+    PJ.values.IdleInsure = false
+    AP.layoutPage(PJ, "paid")
     local nPlan = countCmd("adminSetPlan")
     ip2:setText("0")
     fw.click(PJ.barFlow.pool.apply)

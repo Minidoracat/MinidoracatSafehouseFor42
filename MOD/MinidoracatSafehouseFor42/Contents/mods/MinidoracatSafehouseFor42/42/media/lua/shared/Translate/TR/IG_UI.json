@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "Satın alma fiyatı",
     "IGUI_MSH_Admin_Plan_rentalPrice": "Dönemlik kira",
     "IGUI_MSH_Admin_Plan_insurePrice": "Günlük sigorta",
+    "IGUI_MSH_Admin_InsureNote": "\"%1\", boşta bırakma sigortasının günlük fiyatıdır. Uzun süre kimsenin ziyaret etmediği güvenli ev bırakılır; sahibi \"%3\" penceresinde \"%2\" düğmesine basıp gün sayısını seçerek tek seferde ödeyebilir (günlük fiyat × gün). Sigortalıyken ev bırakılmaz. Ücret yalnızca sahibi kendisi ödediğinde alınır; hiçbir şey otomatik yenilenmez ya da tahsil edilmez. Kiralık haktaki evler kira süresine uyar ve sigortaya ihtiyaç duymaz.",
+    "IGUI_MSH_Admin_InsureOff": "Boşta bırakma sigortası şu an satışta değil: oyuncular satın alamaz ve kimseden ücret alınmaz. Satmak için %1 sekmesinde \"%2\" seçeneğini açın ve \"%3\" değerini 0'dan büyük yapın.",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "Satın alma sunulsun",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "Kiralama sunulsun",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "Satın alma para birimi",

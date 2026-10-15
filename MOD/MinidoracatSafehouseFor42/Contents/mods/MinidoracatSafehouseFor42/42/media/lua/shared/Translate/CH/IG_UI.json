@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "買斷價",
     "IGUI_MSH_Admin_Plan_rentalPrice": "每期租金",
     "IGUI_MSH_Admin_Plan_insurePrice": "每日保險費",
+    "IGUI_MSH_Admin_InsureNote": "「%1」是閒置保險每天的價格。安全屋太久沒人回去會被收回；屋主可以在「%3」視窗按〔%2〕，自己選天數、一次付清（每日價格 × 天數），保險期間不會被收回。只有屋主自己付款時才收費，不會自動續買或扣款。用租用名額的安全屋照租約處理，不需要保險。",
+    "IGUI_MSH_Admin_InsureOff": "目前沒有販售閒置保險：玩家買不到，也沒有人被扣款。要開賣，請在「%1」頁打開「%2」，並把「%3」設成大於 0。",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "販售買斷",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "販售租用",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "買斷幣別",

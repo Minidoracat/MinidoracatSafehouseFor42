@@ -168,6 +168,8 @@
     "IGUI_MSH_Admin_Plan_permanentPrice": "Cena kupna",
     "IGUI_MSH_Admin_Plan_rentalPrice": "Najem za okres",
     "IGUI_MSH_Admin_Plan_insurePrice": "Ubezpieczenie za dzień",
+    "IGUI_MSH_Admin_InsureNote": "„%1” to dzienna cena ubezpieczenia od zwolnienia. Schronienie, którego nikt długo nie odwiedza, zostaje zwolnione; właściciel może nacisnąć „%2” w oknie „%3”, wybrać liczbę dni i zapłacić jednorazowo (cena dzienna × dni). W czasie ubezpieczenia schronienie nie zostanie zwolnione. Opłata jest pobierana tylko wtedy, gdy właściciel sam zapłaci; nic nie odnawia się ani nie jest pobierane automatycznie. Schronienia z wynajętym miejscem podlegają najmowi i go nie potrzebują.",
+    "IGUI_MSH_Admin_InsureOff": "Ubezpieczenie od zwolnienia nie jest teraz w sprzedaży: gracze nie mogą go kupić i nikt nie jest obciążany. Aby je sprzedawać, włącz „%2” w zakładce %1 i ustaw „%3” na więcej niż 0.",
     "IGUI_MSH_Admin_Plan_permanentEnabled": "Oferuj kupno",
     "IGUI_MSH_Admin_Plan_rentalEnabled": "Oferuj najem",
     "IGUI_MSH_Admin_Plan_permanentCurrency": "Waluta kupna",
