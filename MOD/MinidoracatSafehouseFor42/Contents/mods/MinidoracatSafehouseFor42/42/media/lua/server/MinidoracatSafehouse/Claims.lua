@@ -263,6 +263,16 @@ function C.checkResources(v)
     return MSH.Exclusions.resources(v.rects, v.cfg)
 end
 
+-- 管理員禁建區（Zones.lua）：任一塊壓到就拒絕；沒有禁建區時預檢不列這一項（STEPS 的 active）
+function C.checkZones(v)
+    if MSH.Zones == nil then return nil end
+    return MSH.Zones.hit(v.rects)
+end
+
+function C.hasZones()
+    return MSH.Zones ~= nil and MSH.Zones.any()
+end
+
 -- 已重畫次數；手改壞的值當 0
 function C.redraws(rec)
     return MSH.isInt(rec.redraws) and rec.redraws or 0
@@ -301,7 +311,7 @@ end
 
 -- 建立的檢查順序；name 是預檢回報的分組（同組只報第一個失敗）；needsTier：等級未知時預檢略過；
 -- needsShape：形狀不合規則時略過（逐格掃地圖的道路與資源點：重疊的塊會讓同一片地掃好幾次，
--- 不合規則的預檢不能拿來放大伺服器的工作量，2026-10-11 審查）
+-- 不合規則的預檢不能拿來放大伺服器的工作量，2026-10-11 審查）；active：回 false 時整組不跑、預檢也不列
 C.STEPS = {
     { name = "identity", fn = C.checkIdentity },
     { name = "onsite", fn = C.checkOnSite },
@@ -313,6 +323,7 @@ C.STEPS = {
     { name = "title", fn = C.checkTitle },
     { name = "overlap", fn = C.checkOverlap },
     { name = "occupancy", fn = C.checkOccupancy },
+    { name = "zones", fn = C.checkZones, needsShape = true, active = C.hasZones },
     { name = "roads", fn = C.checkRoads, needsShape = true },
     { name = "resources", fn = C.checkResources, needsShape = true },
     { name = "quota", fn = C.checkCapacity, needsTier = true },
@@ -322,7 +333,7 @@ C.STEPS = {
 function C.validate(v, collect)
     local byName = {}
     for _, s in ipairs(C.STEPS) do
-        if not (s.needsTier and v.tier == nil) and not (s.needsShape and v.badShape) then
+        if not (s.needsTier and v.tier == nil) and not (s.needsShape and v.badShape) and (s.active == nil or s.active(v)) then
             local code, detail = s.fn(v)
             if collect == nil then
                 if code then return code, detail end

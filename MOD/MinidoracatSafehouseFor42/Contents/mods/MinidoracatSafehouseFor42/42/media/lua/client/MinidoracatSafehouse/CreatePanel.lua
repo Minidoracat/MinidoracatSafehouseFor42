@@ -1031,6 +1031,9 @@ local function openUnsafe(opts)
         prev.fromManager = false
         P.close(prev)
     end
+    -- 禁建區面板和這裡共用框選的地面圖層與 OnMouseDown：一次只開一個（它關掉時照常開回管理員面板）
+    local ZP = MSH.ZonePanel
+    if ZP ~= nil and ZP.model ~= nil then ZP.close(ZP.model) end
     local UI = MSH.Client.ui({ "window", "controls", "focus" })
     if UI == nil then
         MSH.log("create panel needs MinidoracatUI rev " .. tostring(MSH.Client.MIN_REV) .. " with window/controls/focus")

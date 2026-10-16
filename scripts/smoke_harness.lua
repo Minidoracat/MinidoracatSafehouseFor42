@@ -33,6 +33,7 @@ local SCENARIOS = {
     "t_migration",
     "t_journal",
     "t_admin",
+    "t_zones",
     "t_deeds",
     "t_recipes",
     "t_mirror",
@@ -47,6 +48,7 @@ local SCENARIOS = {
     "t_ui_create",
     "t_ui_manager",
     "t_ui_admin",
+    "t_ui_zones",
     "t_ui_entry",
     "t_public_api",
 }

@@ -106,6 +106,23 @@ S.TYPES = {
         local b = MSH.Rect.bounds(v)
         return b.w <= MSH.LIMIT.HARD_SIDE and b.h <= MSH.LIMIT.HARD_SIDE
     end,
+    -- 禁建區（Zones.lua）：1–MAX_PIECES 塊、連續整數鍵，每塊與外框邊長 ≤ ZONE_SIDE（只做矩形比對，不掃地板）；形狀規則由 Zones 判
+    zoneRects = function(v)
+        if type(v) ~= "table" then return false end
+        local n = 0
+        for k in pairs(v) do
+            n = n + 1
+            if not MSH.isInt(k) or k < 1 or k > MSH.LIMIT.MAX_PIECES then return false end
+        end
+        if n < 1 or n ~= #v then return false end
+        for i = 1, n do
+            local r = v[i]
+            if type(r) ~= "table" or not exactKeys(r, RECT_KEYS) or not MSH.Rect.valid(r) then return false end
+        end
+        local b = MSH.Rect.bounds(v)
+        return b.w <= MSH.LIMIT.ZONE_SIDE and b.h <= MSH.LIMIT.ZONE_SIDE
+    end,
+    zoneId = function(v) return MSH.isInt(v) and v >= 1 and v < 1e9 end,
     deedType = function(v) return MSH.tierOfDeed(v) ~= nil end,
     title = function(v) return type(v) == "string" and #v <= 120 and not MSH.hasControl(v) end,
     username = function(v) return MSH.validUsername(v) end,
@@ -355,10 +372,16 @@ end
 -- ===== 開服時序（§6 sequenceDiagram）=====
 -- OnInitGlobalModData：registry 可讀、native 還沒載入；OnLoadedMapZones：native 清單完整 → 首輪 reconcile → 開放 dispatcher。
 
+-- 私有目錄的檔案：private.txt 與禁建區 zones.txt 都要在首次 Health.evaluate 之前讀好（讀不開＝PrivateStore blocker）
+local function loadPrivateFiles()
+    MSH.Registry.loadPrivate()
+    if MSH.Zones ~= nil then MSH.Zones.load() end
+end
+
 function S.onInitGlobalModData()
     if not S.enabled then return end
     MSH.Registry.init()
-    MSH.Registry.loadPrivate()
+    loadPrivateFiles()
 end
 
 function S.onLoadedMapZones()
@@ -366,7 +389,7 @@ function S.onLoadedMapZones()
     local R = MSH.Registry
     if R.md == nil then
         R.init()
-        R.loadPrivate()
+        loadPrivateFiles()
     end
     -- bootSeq 只在正常開服後＋1；崩潰時這次的增量隨 Global ModData 一起沒存，所以「跨乾淨 restart」可用它判斷（§4.2）
     if R.ready() then R.md.bootSeq = R.md.bootSeq + 1 end

@@ -40,6 +40,10 @@ MSH.LIMIT = {
     -- 一次校正最多替幾個原生觸發廣播（正常客戶端登入時已拿到全部，§6.3）；同一間整組一起送，所以至少要放得下一整間
     CALIBRATE_UPSERTS = 8,
     INDOOR_REACH = 40,             -- 室內檢查只查玩家附近的格子（server Indoor.lua；客戶端送出前先比，太遠就不送）
+    -- 管理員禁建區（server Zones.lua）：最多幾個、每個的外框邊長上限。禁建區只做矩形比對、不掃地板，邊長不必受 HARD_SIDE 限；
+    -- 客戶端只染畫面看得到的格子（FloorTint.setRects 照視窗裁切）
+    MAX_ZONES = 100,
+    ZONE_SIDE = 1000,
 }
 
 MSH.LIFECYCLE = {
@@ -83,7 +87,7 @@ MSH.CODE = {
     QUOTA_FULL = "QUOTA_FULL", TIER_FULL = "TIER_FULL", SERVER_FULL = "SERVER_FULL",
     REGISTRY_FULL = "REGISTRY_FULL", ROSTER_FULL = "ROSTER_FULL", BAD_TITLE = "BAD_TITLE",
     OVERLAP = "OVERLAP", TOO_CLOSE = "TOO_CLOSE", OCCUPIED = "OCCUPIED",
-    ROAD = "ROAD", NOT_LOADED = "NOT_LOADED",
+    ROAD = "ROAD", NOT_LOADED = "NOT_LOADED", NO_BUILD = "NO_BUILD",
     RESOURCE = "RESOURCE", RESOURCE_PENDING = "RESOURCE_PENDING", RESOURCE_ERROR = "RESOURCE_ERROR",
     NATIVE_FAILED = "NATIVE_FAILED", DEED_REMOVE_FAILED = "DEED_REMOVE_FAILED",
     REDRAW_CLOSED = "REDRAW_CLOSED",

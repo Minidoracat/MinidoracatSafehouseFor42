@@ -625,12 +625,16 @@ function R.readLines(path, max)
         return false
     end
     local lines = {}
-    while #lines < max do
-        local line = reader:readLine()
-        if line == nil then break end
-        lines[#lines + 1] = line
-    end
+    -- readLine 也會丟 IOException：讀到一半壞掉一樣回 false（讀不開），不讓例外中斷開服的載入、留下讀了一半當成讀完的資料
+    local read = pcall(function()
+        while #lines < max do
+            local line = reader:readLine()
+            if line == nil then break end
+            lines[#lines + 1] = line
+        end
+    end)
     pcall(function() reader:close() end)
+    if not read then return false end
     return lines
 end
 

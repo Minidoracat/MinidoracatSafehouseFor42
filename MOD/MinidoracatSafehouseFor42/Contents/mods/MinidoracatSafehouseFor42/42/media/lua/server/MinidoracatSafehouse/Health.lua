@@ -70,7 +70,10 @@ function H.evaluate(now)
     if not MSH.Settings.readable() then blockers[#blockers + 1] = "SandboxVars" end
     local R = MSH.Registry
     if R ~= nil and R.readOnly then blockers[#blockers + 1] = "RegistrySchema" end
-    if R ~= nil and R.privateUnreadable then blockers[#blockers + 1] = "PrivateStore" end
+    -- 禁建區檔（Zones.lua，同一個私有目錄）讀不開也算：不然玩家能在讀不到的禁建區裡建立
+    if R ~= nil and (R.privateUnreadable or (MSH.Zones ~= nil and MSH.Zones.unreadable)) then
+        blockers[#blockers + 1] = "PrivateStore"
+    end
     local _, settingsWarnings = MSH.Settings.get()
     local st = {
         blocked = #blockers > 0,

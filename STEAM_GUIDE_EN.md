@@ -132,8 +132,8 @@ Default chances once "Deeds drop as loot" is on:
 {{img:04-preview-marks-en.jpg}}
 The server re-checks every rule when you send the area, and the check page lists each failed rule with what to do.
 [list]
-[*] [b]What's checked[/b]: Character, Your position, Deed, Size, Distance and overlap, Slots, Name, Other players, Roads, Resource points.
-[*] [b]Red on the ground[/b]: road tiles, resource buildings or other safehouses in the way are marked red.
+[*] [b]What's checked[/b]: Character, Your position, Deed, Size, Distance and overlap, Slots, Name, Other players, No-build zones (only when the server has some), Roads, Resource points.
+[*] [b]Red on the ground[/b]: road tiles, resource buildings, no-build zones or other safehouses in the way are marked red.
 [*] [b]After fixing[/b]: press "Edit area" to adjust, or "Check again".
 [*] [b]No slot left[/b]: while the tier can still be bought or rented, the panel shows "Get a slot", which opens the slots window with that tier selected.
 [/list]
@@ -150,6 +150,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [tr][td]Another player is standing inside the area.[/td][td]Wait until they leave, then try again.[/td][/tr]
 [tr][td]The area covers a road that safehouses can't include.[/td][td]Move the area off the road or make it smaller.[/td][/tr]
 [tr][td]The area covers a resource site.[/td][td]Move the area off the resource site or make it smaller.[/td][/tr]
+[tr][td]The area covers the no-build zone "name" set by an admin.[/td][td]Move the area out of the no-build zone or make it smaller.[/td][/tr]
 [tr][td]Part of the area isn't loaded on the server yet.[/td][td]Stay near the area for a moment and try again.[/td][/tr]
 [tr][td]Resource site data is still loading.[/td][td]Try again in a moment.[/td][/tr]
 [tr][td]You have no slots left for this tier.[/td][td]Get a slot for this tier, or abandon a safehouse you no longer need.[/td][/tr]
@@ -182,6 +183,13 @@ The server re-checks every rule when you send the area, and the check page lists
 [*] Room data: a building counts if any room in it belongs to a chosen category; also covers map mods' buildings, stricter.
 [/list]
 [*] [b]Without MiniMap[/b]: resource sites aren't checked.
+[/list]
+[h3]No-build zones (set by admins)[/h3]
+[list]
+[*] [b]What they are[/b]: places an admin marks in the admin panel where safehouses can't be built, such as dirt roads the road check can't detect.
+[*] [b]How they're checked[/b]: if the area covers any tile of one, you can't create or redraw it there. Only touching the edge is fine, and admins are blocked too.
+[*] [b]Can I see them?[/b] They aren't drawn on the ground. When a check fails, the covered part is marked red and the zone's name is shown.
+[*] [b]Existing safehouses[/b]: a zone added later doesn't remove them.
 [/list]
 [h3]This server's rules[/h3]
 {{img:05-land-rules-en.jpg}}
@@ -454,7 +462,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [*] The slot columns "Free", "Buy" and "Rent" take numbers (free safehouses per player, max bought, max rented at the same time); "Max/player" shows the three added together.
 [*] With a supported Economy, an extra "List in the Economy shop" button.
 [/list]
-[*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod).
+[*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod); no-build zones: "Add no-build zone" hides the panel and opens the same area tool as creating a safehouse (drag or walk to two corners, add or cut pieces), then you name it and press "Save zone". Existing zones show in red on the ground while you mark. Each zone in the list shows its top-left corner, outline and piece count, with "Delete" (asks first); safehouses already inside a zone are listed under it (they aren't removed, so the admin decides what to do). Up to 100 zones.
 [*] [b]Players[/b]: server-side paged search (50 per page); "Tier 1 free slots…" changes one player's tier 1 free slots (tier 1 only; leave it empty to use the server default), view, or release on their behalf (logged to the audit log).
 [*] [b]Paid slots[/b] (with Economy available): buy price, rent per period and insurance per day for each enabled tier, plus shared currency, period, grace, reminder and auto-renew.
 [list]
@@ -589,6 +597,7 @@ Server-side data:
 [tr][td]Account-to-Steam bindings, personal tier 1 free slots, players' respawn points[/td][td]Zomboid/Lua/MinidoracatSafehouse/<server name>/private.txt[/td][/tr]
 [tr][td]Takeover records[/td][td]migration-completion.txt in the same folder[/td][/tr]
 [tr][td]Creation records for crash recovery[/td][td]crash-journal.txt in the same folder (cleared at start-up when there's nothing to restore)[/td][/tr]
+[tr][td]No-build zones set by admins[/td][td]zones.txt in the same folder[/td][/tr]
 [tr][td]Audit log[/td][td]Zomboid/Logs/*_MinidoracatSafehouse.txt (one line per event; refusals summed up once a minute)[/td][/tr]
 [/table]
 [list]

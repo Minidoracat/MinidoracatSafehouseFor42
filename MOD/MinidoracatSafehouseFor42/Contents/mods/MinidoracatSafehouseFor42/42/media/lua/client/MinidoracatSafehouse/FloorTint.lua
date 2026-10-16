@@ -9,7 +9,7 @@
 --    測試（IsoSprite.java:853-862），玩家又在 :1107 先畫好：站在上面的人物、前面房子的牆與屋簷都會被蓋住
 --    （sh-overlay-1013b、-1013c；把玩家重畫一次也蓋不回來）。所以在屋裡、前方的房子在畫面上擋得到（OCC_*）、人物身體
 --    在畫面上蓋得到（BODY_*）的格子改用同一個顏色的地板染色（使用者 2026-10-13 選定）。
--- 一格只能有一種顏色：各圖層（Ranges、建立面板的各塊／拉到一半那塊／標紅、室內檢查）各自交出自己的格子，同一格取 F.ORDER 裡最前面的
+-- 一格只能有一種顏色：各圖層（Ranges、建立面板與禁建區面板的各塊／拉到一半那塊／標紅／既有禁建區、室內檢查）各自交出自己的格子，同一格取 F.ORDER 裡最前面的
 --   圖層，只在那一格要顯示的東西變了才呼叫引擎。所以框選蓋過地面範圍、關掉框選後底下的顏色回來，兩邊不會互相取消。
 -- 染色是常駐的（renderOnce＝false），不必每幀重設；每 SCAN_MS 對一次染色的格子（F.tick）：區塊重新載入換了地板物件、被別的
 --   程式取消染色、之前沒載入的現在載入了，就重設。疊色每幀照 F.list 畫，格子變了才重排（不配置）。
@@ -26,7 +26,8 @@ local first = MSH.FloorTint == nil
 local F = MSH.FloorTint or {}
 MSH.FloorTint = F
 
-F.ORDER = { "marks", "indoor", "indoorArea", "pending", "shape", "ranges" }   -- 前面的蓋過後面的
+-- 前面的蓋過後面的；"zones"＝禁建區面板畫的既有禁建區（新框的範圍蓋在上面）
+F.ORDER = { "marks", "indoor", "indoorArea", "pending", "shape", "zones", "ranges" }
 F.MARGIN = 4
 F.SCAN_MS = 500
 -- 被房子擋住：每層樓（牆）在畫面上 OCC_ROWS 列高，屋頂再 OCC_ROOF 列（sh-rangesov-1013c 一層樓：後面第 4 列被屋頂蓋住、

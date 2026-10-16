@@ -126,6 +126,7 @@ T.files = {}          -- path → { lines }
 T.failWrites = false
 T.silentWrites = false   -- 開得了、writeln／close 不丟錯，但什麼都沒寫進去（PrintWriter 吞掉 IOException，LuaManager.java:12834）
 T.unreadable = {}     -- path → true：檔案存在但讀不開
+T.readFails = {}      -- path → n：開得了，讀到第 n 行時 readLine 丟錯（BufferedReader 的 IOException）
 function getFileWriter(path, createIfNull, append)
     if T.failWrites then return nil end
     local f = T.files[path]
@@ -145,9 +146,13 @@ end
 function getFileReader(path, createIfNull)
     local f = T.files[path]
     if f == nil or T.unreadable[path] then return nil end
-    local i = 0
+    local i, failAt = 0, T.readFails[path]
     return {
-        readLine = function() i = i + 1 return f.lines[i] end,
+        readLine = function()
+            i = i + 1
+            if failAt ~= nil and i >= failAt then error("java.io.IOException: read failed (harness)") end
+            return f.lines[i]
+        end,
         close = function() end,
     }
 end
@@ -867,7 +872,7 @@ local function resetWorld(opts)
     for k, v in pairs(T.DEFAULT_OPTIONS) do T.serverOptions[k] = v end
     if not opts.keepGmd then T.gmd = {} end
     if not opts.keepFiles then T.files = {} end
-    T.unreadable = {}
+    T.unreadable, T.readFails = {}, {}
     T.failWrites, T.failRemove, T.failAdd, T.noLocation, T.failHouseRemove = false, false, false, false, false
     T.silentWrites = false
     T.floors, T.floorMods, T.unloaded, T.rooms, T.solid = {}, {}, {}, {}, {}

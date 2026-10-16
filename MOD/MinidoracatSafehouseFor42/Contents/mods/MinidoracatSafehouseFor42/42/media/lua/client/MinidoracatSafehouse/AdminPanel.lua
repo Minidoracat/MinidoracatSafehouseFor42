@@ -1,5 +1,5 @@
 -- MinidoracatSafehouse/AdminPanel.lua：管理員面板（計畫 §10.6）。UI.Tabs 五頁：規則（含伺服器狀態、遷移狀態與
---   targeted recovery）、地契、排除、玩家、付費。設定頁〔套用變更〕只送有改動的鍵（adminSetOptions），伺服器整批驗證、
+--   targeted recovery）、地契、排除（含禁建區清單、刪除與〔新增禁建區〕→ ZonePanel.lua）、玩家、付費。設定頁〔套用變更〕只送有改動的鍵（adminSetOptions），伺服器整批驗證、
 --   存檔後回快照；本機先逐欄檢查（Settings.validateChanges 同一套規則）並把錯誤標在欄位上，伺服器回的 BAD_OPTION
 --   { key, reason } 也標回該欄。付費頁照等級各送一次 adminSetPlan（帶該級 expectedRevision），逐級回錯、不互相連帶。
 -- 玩家頁照 Economy 身分清單（ECAdminIdentity.lua:71 QUERY_DEBOUNCE_MS、:205 loginsKey、:230 pump、:243-247 debounce）：
@@ -347,7 +347,7 @@ function AP.select(P, id)
     AP.layoutPage(P, id)
 end
 
--- 全部重抓：選項（含 health）、付費方案、非 active 的紀錄、遷移狀態；玩家頁重抓目前那一頁
+-- 全部重抓：選項（含 health）、付費方案、非 active 的紀錄、遷移狀態、禁建區；玩家頁重抓目前那一頁
 function AP.reload(P)
     MSH.Client.send("adminOptions", {}, function(res)
         if res.ok then
@@ -364,6 +364,7 @@ function AP.reload(P)
         AP.layoutAll(P)
     end)
     AP.loadClaims(P)
+    AP.loadZones(P)
     MSH.Client.send("adminMigration", {}, function(res)
         P.migration = res.ok and res.migration or nil
         AP.layoutPage(P, "rules")
@@ -378,6 +379,22 @@ function AP.loadClaims(P)
         P.crash = res.ok and res.crash or nil
         AP.layoutPage(P, "rules")
     end)
+end
+
+-- 禁建區清單（adminZones：zones、max、unreadable）；讀不到時留著上一次的清單、另寫原因
+function AP.loadZones(P)
+    MSH.Client.send("adminZones", {}, function(res) AP.onZones(P, res) end)
+end
+
+-- adminZones 的回覆，或 adminRemoveZone 成功的回覆（同樣帶 zones、max）
+function AP.onZones(P, res)
+    if res.ok then
+        P.zones, P.zonesMax, P.zonesUnreadable, P.zonesError = res.zones or {}, res.max or MSH.LIMIT.MAX_ZONES,
+            res.unreadable == true, nil
+    else
+        P.zonesError = res.code
+    end
+    AP.layoutPage(P, "exclusions")
 end
 
 -- 這一頁的欄位下次排版時改回伺服器值（放棄未套用的編輯）
@@ -1271,13 +1288,94 @@ function AP.layoutExclusions(P, pg)
     -- 沒有 MiniMap：這組設定藏起來，只寫要裝小地圖 MOD 才有這個功能（使用者 2026-10-12：「可以判斷隱藏，或者顯示
     -- 要裝小地圖MOD才有這功能」）
     if not (P.options and P.options.resourceApi) then
-        return F:text("noMiniMap", getText("IGUI_MSH_Admin_NoMiniMap"), "textMuted")
+        F:text("noMiniMap", getText("IGUI_MSH_Admin_NoMiniMap"), "textMuted")
+    else
+        AP.formRow(pg, "AvoidResources", lw, { AP.boolField(P, pg, "AvoidResources") })
+        AP.formRow(pg, "ResourceRule", lw, AP.enumField(P, pg, "ResourceRule", {
+            getText("Sandbox_MinidoracatSafehouse_ResourceRule_option1"), getText("Sandbox_MinidoracatSafehouse_ResourceRule_option2") }))
+        F:text("ruleHelp", getText("Sandbox_MinidoracatSafehouse_ResourceRule_tooltip"), "textMuted")
+        AP.formRow(pg, "ResourceCats", lw, AP.listField(P, pg, "ResourceCats", AP.categories(), Settings.DEFAULT_RESOURCE_CATS))
     end
-    AP.formRow(pg, "AvoidResources", lw, { AP.boolField(P, pg, "AvoidResources") })
-    AP.formRow(pg, "ResourceRule", lw, AP.enumField(P, pg, "ResourceRule", {
-        getText("Sandbox_MinidoracatSafehouse_ResourceRule_option1"), getText("Sandbox_MinidoracatSafehouse_ResourceRule_option2") }))
-    F:text("ruleHelp", getText("Sandbox_MinidoracatSafehouse_ResourceRule_tooltip"), "textMuted")
-    AP.formRow(pg, "ResourceCats", lw, AP.listField(P, pg, "ResourceCats", AP.categories(), Settings.DEFAULT_RESOURCE_CATS))
+    AP.layoutZones(P, pg)
+end
+
+-- ===== 禁建區（伺服器 Zones.lua；不看小地圖，一律顯示）=====
+-- 新增與刪除立即生效（新增在 ZonePanel 按〔儲存禁建區〕、刪除先確認），不經底列〔套用變更〕（那是這頁的沙盒選項）。
+-- 每個禁建區一列：名稱＋〔刪除〕、左上角／外框／塊數，已經壓到這裡的安全屋（不會被移除）用 warning 列出
+
+-- 〔新增禁建區〕停用的原因；nil＝可以新增
+function AP.zoneAddBlock(P)
+    if P.zones == nil then return "" end
+    if P.zonesUnreadable then return getText("IGUI_MSH_Admin_ZonesUnreadable", getText("IGUI_MSH_Admin_Tab_rules")) end
+    if #P.zones >= (P.zonesMax or MSH.LIMIT.MAX_ZONES) then return getText("IGUI_MSH_Admin_ZonesFull", #P.zones) end
+    if MSH.ZonePanel == nil or not MSH.ZonePanel.available() then return getText("IGUI_MSH_Create_NeedFramework") end
+    return nil
+end
+
+function AP.layoutZones(P, pg)
+    local F = pg.flow
+    F.y = F.y + K.GAP
+    F:text("h:zones", getText("IGUI_MSH_Admin_ZonesHead"), "text", UIFont.Medium)
+    F:text("zhint", getText("IGUI_MSH_Admin_ZonesHint"), "textMuted")
+    if P.zonesError ~= nil then F:text("zerr", AP.codeText(P.zonesError), "errorText") end
+    local zones = P.zones
+    if zones == nil then
+        if P.zonesError == nil then F:text("zload", getText("IGUI_MSH_Admin_Loading"), "textMuted") end
+        return
+    end
+    F:text("zcount", getText("IGUI_MSH_Admin_ZonesCount", #zones, P.zonesMax or MSH.LIMIT.MAX_ZONES), "textMuted")
+    local block = AP.zoneAddBlock(P)
+    local add = F:button("zadd", getText("IGUI_MSH_Admin_ZoneAdd"), P, AP.onZoneAdd)
+    add:setEnabled(block == nil and P.busy == nil)
+    F:row({ add })
+    if block ~= nil then F:text("zblock", block, "warning") end
+    if #zones == 0 then return F:text("zempty", getText("IGUI_MSH_Admin_ZonesEmpty"), "textMuted") end
+    local sep = getText("IGUI_MSH_Admin_ListSep")
+    for i, z in ipairs(zones) do
+        local rects = type(z.rects) == "table" and z.rects or {}
+        local del = F:button("zd" .. i, getText("IGUI_MSH_Admin_ZoneRemove"), P, AP.onZoneRemove, "danger")
+        del.internal = z
+        del:setEnabled(P.busy == nil and not P.zonesUnreadable)
+        F:row({ F:label("zn" .. i, tostring(z.name or ("#" .. tostring(z.id)))), del })
+        if #rects > 0 then
+            local b = MSH.Rect.bounds(rects)
+            F:text("za" .. i, getText("IGUI_MSH_Admin_ZoneArea", b.x, b.y, b.w, b.h, #rects), "textMuted")
+        end
+        local claims = type(z.claims) == "table" and z.claims or {}
+        if #claims > 0 then
+            local parts = {}
+            for j, c in ipairs(claims) do parts[j] = tostring(c.owner or "-") .. " #" .. tostring(c.claimId) end
+            -- 伺服器最多列 20 間，claimCount 是總數（舊伺服器沒有，就當列出的就是全部）
+            local more = (tonumber(z.claimCount) or #claims) - #claims
+            if more > 0 then parts[#parts + 1] = getText("IGUI_MSH_Admin_ZoneClaimsMore", more) end
+            F:text("zc" .. i, getText("IGUI_MSH_Admin_ZoneClaims", table.concat(parts, sep)), "warning")
+        end
+    end
+end
+
+-- 〔新增禁建區〕：同 ManagerWindow.openCreate，先收起管理員面板，框選時不擋地面；ZonePanel 關掉時開回排除頁（Z.close），
+-- 沒開成就馬上開回來（面板不能就此消失）
+function AP.onZoneAdd(P)
+    if P.busy ~= nil or AP.zoneAddBlock(P) ~= nil then return end
+    P.win:close()
+    if MSH.ZonePanel.open({ zones = P.zones, fromAdmin = true }) == nil then AP.open({ tab = "exclusions" }) end
+end
+
+-- 〔刪除〕：danger 確認框，確定才送；成功時用回覆的清單重排。NOT_FOUND（別的管理員先刪了）只重抓清單
+function AP.onZoneRemove(P, b)
+    local z = b.internal
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_ZonesHead"), theme = P.theme,
+        danger = true,
+        text = getText("IGUI_MSH_Admin_ZoneRemoveAsk", tostring(z.name)),
+        confirmText = getText("IGUI_MSH_Admin_ZoneRemove"), cancelText = getText("UI_Cancel"),
+        onResult = function(ok)
+            if not ok then return end
+            AP.mutate(P, "adminRemoveZone", { zoneId = z.id }, function(res)
+                if res.ok then return AP.onZones(P, res) end
+                if res.code == MSH.CODE.NOT_FOUND then return AP.loadZones(P) end
+                AP.say(P, AP.codeText(res.code), "errorText")
+            end)
+        end }))
 end
 
 -- ===== 套用（設定頁） =====

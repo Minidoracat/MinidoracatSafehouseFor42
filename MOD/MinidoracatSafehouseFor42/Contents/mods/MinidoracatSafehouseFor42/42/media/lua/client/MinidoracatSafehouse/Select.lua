@@ -46,10 +46,10 @@ S.PENDING_TINT = 1.0
 S.CURSOR_TINT = 1.0
 
 -- s = { tool, playerNum, ax, ay（第一角）, bx, by（終點）, cx, cy（手把游標）, dragging, cut（挖掉模式）, shape }
--- rects：重新框選時從現有範圍開始
-function S.new(tool, playerNum, rects)
+-- rects：重新框選時從現有範圍開始；max：最多幾塊（不傳＝沙盒 MaxPieces，Shape.new；禁建區用硬上限 LIMIT.MAX_PIECES）
+function S.new(tool, playerNum, rects, max)
     local s = { tool = tool == S.WALK and S.WALK or S.DRAG, playerNum = playerNum or 0, dragging = false, cut = false,
-        shape = Shape.new() }
+        shape = Shape.new(max) }
     if rects ~= nil then Shape.load(s.shape, rects) end
     return s
 end
@@ -72,6 +72,13 @@ end
 local function setWorldMenu(disabled)
     -- 拖曳中右鍵不跳世界選單（原版 :58 設、reset :196 還原）
     if ISWorldObjectContextMenu then ISWorldObjectContextMenu.disableWorldMenu = disabled end
+end
+
+-- 換工具（拖曳／走位）：拉到一半的那塊取消，範圍與復原紀錄保留
+function S.setTool(s, tool)
+    s.ax, s.ay, s.bx, s.by, s.dragging = nil, nil, nil, nil, false
+    s.tool = tool == S.WALK and S.WALK or S.DRAG
+    setWorldMenu(false)
 end
 
 function S.result(s)
