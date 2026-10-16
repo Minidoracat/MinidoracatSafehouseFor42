@@ -188,7 +188,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [list]
 [*] [b]What they are[/b]: places an admin marks in the admin panel where safehouses can't be built, such as dirt roads the road check can't detect.
 [*] [b]How they're checked[/b]: if the area covers any tile of one, you can't create or redraw it there. Only touching the edge is fine, and admins are blocked too.
-[*] [b]Can I see them?[/b] Yes. The "No-build zones" kind of "Show ranges on the ground" in the safehouse window (on by default) draws the zones near you in bright red, and updates right away when an admin adds or deletes one. When a check fails, the covered part is also marked red and the zone's name is shown.
+[*] [b]Can I see them?[/b] Yes. The "No-build zones" kind of "Show ranges on the ground" in Safehouse Manager (on by default) draws the zones near you in bright red, and updates right away when an admin adds or deletes one. When a check fails, the covered part is also marked red and the zone's name is shown.
 [*] [b]Existing safehouses[/b]: a zone added later doesn't remove them.
 [/list]
 [h3]This server's rules[/h3]
