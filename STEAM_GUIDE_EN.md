@@ -462,7 +462,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [*] The slot columns "Free", "Buy" and "Rent" take numbers (free safehouses per player, max bought, max rented at the same time); "Max/player" shows the three added together.
 [*] With a supported Economy, an extra "List in the Economy shop" button.
 [/list]
-[*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod); no-build zones: "Add no-build zone" hides the panel and opens the same area tool as creating a safehouse (drag or walk to two corners, add or cut pieces), then you name it and press "Save zone". Existing zones show in red on the ground while you mark. Each zone in the list shows its top-left corner, outline and piece count, with "Delete" (asks first); safehouses already inside a zone are listed under it (they aren't removed, so the admin decides what to do). Up to 100 zones.
+[*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod); no-build zones: "Manage no-build zones" hides the panel and opens the no-build zone window on the right side of the screen. Each zone in the list shows its top-left corner, outline and piece count; you can search names, press "Teleport" to go to its center (needs the teleport-to-coordinates permission) and "Delete" (asks first); safehouses already inside a zone are listed under it (they aren't removed, so the admin decides what to do). While the window is open, zones are drawn bright red on the ground and the one you teleported to is yellow. "Add no-build zone" opens the same area tool as creating a safehouse (drag or walk to two corners, add or cut pieces), then you name it and press "Save zone"; saving or canceling brings you back to the zone window. Up to 100 zones; closing the zone window returns to the admin panel.
 [*] [b]Players[/b]: server-side paged search (50 per page); "Tier 1 free slots…" changes one player's tier 1 free slots (tier 1 only; leave it empty to use the server default), view, or release on their behalf (logged to the audit log).
 [*] [b]Paid slots[/b] (with Economy available): buy price, rent per period and insurance per day for each enabled tier, plus shared currency, period, grace, reminder and auto-renew.
 [list]
@@ -638,7 +638,7 @@ Server-side data:
 [*] Blocking zombies.
 [*] Moving or expanding a safehouse (only redrawing right after creation).
 [*] Buying and selling land.
-[*] A server-wide map browser or teleporting.
+[*] A server-wide map browser or teleporting (only admins can teleport to no-build zones from the zone window, using the vanilla command).
 [*] Keeping vanilla safehouse chat in sync.
 [*] Adding new deed kinds in game (8 tiers max).
 [/list]

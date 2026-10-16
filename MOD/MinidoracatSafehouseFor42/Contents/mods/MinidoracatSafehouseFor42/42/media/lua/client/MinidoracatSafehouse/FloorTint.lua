@@ -1,15 +1,15 @@
--- MinidoracatSafehouse/FloorTint.lua：地面標示（地面顯示範圍、建立面板的框選與標紅、室內檢查的缺屋頂）。兩種畫法：
+-- MinidoracatSafehouse/FloorTint.lua：地面標示（地面顯示範圍、建立面板的框選與標紅、禁建區、室內檢查的缺屋頂）。兩種畫法：
 -- 1. 地板染色（IsoObject:setHighlightColor＋setHighlighted(0, true, false)）：FBORenderObjectHighlight 在人物之後、照地板
 --    自己的深度重畫那一格（FBORenderCell.java:1128-1137；地板用 FloorShaper 的 tint，IsoObject.java:3686-3700），站在上面
 --    的人物、前面的房子照樣擋得住它（floortint-sp、sh-ranges-1012c 實機）。tint 把地板的光照色往顏色拉 a（Color.tintABGR，
 --    Color.java:243-253），最後乘上地板貼圖：草地幾乎沒有藍，藍、洋紅在草地上出不來（sh-tintbright-1012b）。
--- 2. 疊色（顏色帶 ov 的：地面顯示範圍）：在 RenderOpaqueObjectsInWorld（FBORenderCell.java:1126，原版建造游標
+-- 2. 疊色（顏色帶 ov 的：地面顯示範圍、禁建區）：在 RenderOpaqueObjectsInWorld（FBORenderCell.java:1126，原版建造游標
 --    ISBuildingObject.lua:694-698 的畫法）用 IsoSprite:RenderGhostTileColor 疊一張白色菱形貼圖（IsoSprite.java:519-556），
 --    顏色照 alpha 混進地面，任何地面上都是同一個色相（sh-overlay-1012a：四類彼此、和標紅的色差都 ≥ 38）。但它關掉深度
 --    測試（IsoSprite.java:853-862），玩家又在 :1107 先畫好：站在上面的人物、前面房子的牆與屋簷都會被蓋住
 --    （sh-overlay-1013b、-1013c；把玩家重畫一次也蓋不回來）。所以在屋裡、前方的房子在畫面上擋得到（OCC_*）、人物身體
 --    在畫面上蓋得到（BODY_*）的格子改用同一個顏色的地板染色（使用者 2026-10-13 選定）。
--- 一格只能有一種顏色：各圖層（Ranges、建立面板與禁建區面板的各塊／拉到一半那塊／標紅／既有禁建區、室內檢查）各自交出自己的格子，同一格取 F.ORDER 裡最前面的
+-- 一格只能有一種顏色：各圖層（Ranges、建立面板與禁建區面板的各塊／拉到一半那塊／標紅／既有禁建區、禁建區視窗選中的那個、室內檢查）各自交出自己的格子，同一格取 F.ORDER 裡最前面的
 --   圖層，只在那一格要顯示的東西變了才呼叫引擎。所以框選蓋過地面範圍、關掉框選後底下的顏色回來，兩邊不會互相取消。
 -- 染色是常駐的（renderOnce＝false），不必每幀重設；每 SCAN_MS 對一次染色的格子（F.tick）：區塊重新載入換了地板物件、被別的
 --   程式取消染色、之前沒載入的現在載入了，就重設。疊色每幀照 F.list 畫，格子變了才重排（不配置）。
@@ -26,8 +26,9 @@ local first = MSH.FloorTint == nil
 local F = MSH.FloorTint or {}
 MSH.FloorTint = F
 
--- 前面的蓋過後面的；"zones"＝禁建區面板畫的既有禁建區（新框的範圍蓋在上面）
-F.ORDER = { "marks", "indoor", "indoorArea", "pending", "shape", "zones", "ranges" }
+-- 前面的蓋過後面的；"zoneSel"＝禁建區視窗〔傳送〕過去的那個（蓋過其他禁建區），"zones"＝禁建區視窗與禁建區面板畫的
+-- 既有禁建區（新框的範圍蓋在上面）
+F.ORDER = { "marks", "indoor", "indoorArea", "pending", "shape", "zoneSel", "zones", "ranges" }
 F.MARGIN = 4
 F.SCAN_MS = 500
 -- 被房子擋住：每層樓（牆）在畫面上 OCC_ROWS 列高，屋頂再 OCC_ROOF 列（sh-rangesov-1013c 一層樓：後面第 4 列被屋頂蓋住、
@@ -70,7 +71,7 @@ local function unkey(k)
     return x, y, math.floor(t / B) - 64
 end
 
--- 同一個主題顏色的各種強度只建一次：顏色用表的同一性比對，每幀不配置
+-- 同一個主題顏色的各種強度只建一次：顏色用表的同一性比對，每幀不配置。base 帶 ov 的（疊色）照樣帶上，setRects 也能疊色
 local colorCache = {}
 function F.color(base, a)
     local byA = colorCache[base]
@@ -80,7 +81,7 @@ function F.color(base, a)
     end
     local c = byA[a]
     if c == nil then
-        c = { r = base.r, g = base.g, b = base.b, a = a }
+        c = { r = base.r, g = base.g, b = base.b, a = a, ov = base.ov }
         byA[a] = c
     end
     return c

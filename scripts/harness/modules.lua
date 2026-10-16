@@ -41,6 +41,7 @@ return {
     { dir = "client", name = "MinidoracatSafehouse/SlotsWindow" },
     { dir = "client", name = "MinidoracatSafehouse/AdminPanel" },
     { dir = "client", name = "MinidoracatSafehouse/ZonePanel" },
+    { dir = "client", name = "MinidoracatSafehouse/ZoneList" },
     { dir = "client", name = "MinidoracatSafehouse/PermissionsClient" },
     { dir = "client", name = "MinidoracatSafehouse/IndoorPanel" },
     { dir = "client", name = "MinidoracatSafehouse/VehiclesClient" },

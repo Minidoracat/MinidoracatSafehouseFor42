@@ -1,10 +1,11 @@
--- MinidoracatSafehouse/ZonePanel.lua：新增禁建區（管理員）。管理員面板排除頁〔新增禁建區〕開（AP.onZoneAdd：先收起管理員
---   面板，這裡關掉時開回排除頁並重抓）；框選照建立面板的框選階段（Select.lua／Shape.lua：拖曳或走到兩角、加入／挖掉、復原、
+-- MinidoracatSafehouse/ZonePanel.lua：新增禁建區（管理員）。禁建區視窗〔新增禁建區〕開（ZoneList.onAdd：先收起那個視窗，
+--   這裡關掉時呼叫 opts.onClosed 開回去）；框選照建立面板的框選階段（Select.lua／Shape.lua：拖曳或走到兩角、加入／挖掉、復原、
 --   清除；塊數用硬上限 LIMIT.MAX_PIECES，外框 ≤ LIMIT.ZONE_SIDE），〔儲存禁建區〕送 adminAddZone { name, rects }
 --   （伺服器照同一套形狀規則再驗、存檔，Zones.lua）。成功就關窗；失敗在面板上寫原因、範圍保留。
--- 開著時地上畫既有的禁建區（FloorTint 圖層 "zones"，errorText、比標紅淺），新框的範圍照 Select.draw（青色）蓋在上面。
+-- 開著時地上畫既有的禁建區（FloorTint 圖層 "zones"，Z.ZONE_COLOR 亮紅疊色，禁建區視窗同一個顏色），新框的範圍照
+--   Select.draw（青色）蓋在上面。
 -- 和建立面板共用 "shape"／"pending" 圖層與 OnMouseDown，一次只開一個（兩邊開的時候都先關掉另一個）。
--- 框架不合（window／controls／focus）時不開（Z.available；管理員面板的〔新增禁建區〕停用並寫原因），不報錯。
+-- 框架不合（window／controls／focus）時不開（Z.available；禁建區視窗的〔新增禁建區〕停用並寫原因），不報錯。
 -- 檔案載入時不碰 ISPanel、框架或玩家（harness T.bootClient 會載入本檔）。
 
 if not isClient() then return end
@@ -28,9 +29,11 @@ local CODE = MSH.CODE
 local LIMIT = MSH.LIMIT
 
 Z.CAPS = { "window", "controls", "focus" }
--- 既有禁建區：比標紅（CreatePanel.MARK_TINT 1）淺，新框的各塊（Select.PIECE_TINT）蓋在上面。0.6 在泥土、草地上看起來是
--- 褐色、和泥土分不出來（sh-zones-1016b 的 zn-a03），0.85 才看得出是紅色
-Z.ZONE_TINT = { 0.85 }
+-- 既有禁建區：疊色（ov，同 Ranges.COLORS 的畫法），任何地面上都是同一個亮紅；ov 以外的 r/g/b 與 alpha 是被房子擋住、
+-- 人物蓋住那幾格改用地板染色時的顏色。使用者 2026-10-16「顏色可以調亮」：原本用 errorText 染色 0.85，在泥土路上是
+-- 暗紅褐色、和土色分不清（報告 safehouse-zones-1016 第 1 段第 4 張）。新框的各塊（Select.PIECE_TINT）照樣蓋在上面
+Z.ZONE_COLOR = { r = 1.0, g = 0.3, b = 0.3, ov = { r = 1.0, g = 0.08, b = 0.08, a = 0.5 } }
+Z.ZONE_ALPHAS = { 1.0 }
 Z.W = 440
 
 local function player()
@@ -42,7 +45,7 @@ local function changed(m)
 end
 
 -- ===== 狀態（不碰畫面，harness t_ui_zones 直接測）=====
--- m = { zones（開窗時的清單）, flat（既有禁建區的扁平 x, y, w, h, ...）, sel, defaultName, fromAdmin,
+-- m = { zones（開窗時的清單）, flat（既有禁建區的扁平 x, y, w, h, ...）, sel, defaultName, onClosed（關窗時呼叫）,
 --       busy（nil | "saving" | "waiting"：10 秒沒回覆 | "unknown"：伺服器快取過期）, err, errDetail, rid, closed }
 
 function Z.available()
@@ -62,12 +65,12 @@ function Z.flatZones(zones)
     return out
 end
 
--- opts = { zones = 目前的禁建區清單（adminZones）, fromAdmin = 從管理員面板開的 }
+-- opts = { zones = 目前的禁建區清單（adminZones）, onClosed = 關窗時呼叫（禁建區視窗用它開回自己） }
 function Z.newModel(opts)
     local zones = type(opts.zones) == "table" and opts.zones or {}
     local CP = MSH.CreatePanel
     local tool = CP ~= nil and CP.defaultTool() or Sel.DRAG
-    return { zones = zones, flat = Z.flatZones(zones), fromAdmin = opts.fromAdmin == true,
+    return { zones = zones, flat = Z.flatZones(zones), onClosed = type(opts.onClosed) == "function" and opts.onClosed or nil,
         sel = Sel.new(tool, 0, nil, LIMIT.MAX_PIECES),
         defaultName = getText("IGUI_MSH_Zone_DefaultName", tostring(#zones + 1)) }
 end
@@ -144,9 +147,11 @@ end
 -- 10 秒沒回覆先寫等候中（真結果可能晚到）；伺服器快取過期就是結果未知，不再讓這個面板重送（可能已經存了，重送會多一個）
 function Z.onSaved(m, res)
     if m.closed then
-        -- 等候中關了窗：晚到的成功讓開著的管理員面板重抓清單
-        local AP = MSH.AdminPanel
-        if res.ok and AP ~= nil and AP.visible(AP.instance) then AP.loadZones(AP.instance) end
+        -- 等候中關了窗：晚到的成功讓開著的禁建區視窗（清單）與管理員面板（個數）重抓
+        if not res.ok then return end
+        local ZL, AP = MSH.ZoneList, MSH.AdminPanel
+        if ZL ~= nil and ZL.model ~= nil then ZL.load(ZL.model) end
+        if AP ~= nil and AP.visible(AP.instance) then AP.loadZones(AP.instance) end
         return
     end
     if res.code == "NO_REPLY" then
@@ -285,7 +290,7 @@ function Z.frame(v)
         l:setWidth(K.textW(FONT, l.text))
     end
     v.tinted = true
-    MSH.FloorTint.setRects("zones", m.flat, v.colors.errorText, Z.ZONE_TINT, math.floor(p:getZ()))
+    MSH.FloorTint.setRects("zones", m.flat, Z.ZONE_COLOR, Z.ZONE_ALPHAS, math.floor(p:getZ()))
     Sel.draw(s, p, Sel.FLOOR_OK, v.colors.errorText, v.over)
 end
 
@@ -358,14 +363,7 @@ function Z.build(m, UI)
     return v
 end
 
-local function openAdmin()
-    local AP = MSH.AdminPanel
-    if AP == nil then return end
-    local ok, err = pcall(AP.open, { tab = "exclusions" })
-    if not ok then MSH.log("AdminPanel.open failed: " .. tostring(err)) end
-end
-
--- 關窗（儲存成功、取消、Esc、被建立面板取代）：收掉地上的三層、還原世界選單；從管理員面板開的就開回排除頁（會重抓清單）
+-- 關窗（儲存成功、取消、Esc、被建立面板取代）：收掉地上的三層、還原世界選單，最後呼叫 onClosed（禁建區視窗開回自己）
 function Z.close(m)
     if m.closed then return end
     m.closed = true
@@ -384,7 +382,12 @@ function Z.close(m)
             end)
         end
     end
-    if m.fromAdmin then openAdmin() end
+    local onClosed = m.onClosed
+    m.onClosed = nil
+    if onClosed ~= nil then
+        local ok, err = pcall(onClosed)
+        if not ok then MSH.log("zone panel onClosed failed: " .. tostring(err)) end
+    end
 end
 
 local function openUnsafe(opts)
@@ -396,9 +399,9 @@ local function openUnsafe(opts)
     end
     local prev = Z.model
     if prev ~= nil then
-        -- 一次一個：開回管理員面板的事交給新的這個
-        opts.fromAdmin = opts.fromAdmin or prev.fromAdmin
-        prev.fromAdmin = false
+        -- 一次一個：關掉時要做的事（開回禁建區視窗）交給新的這個
+        opts.onClosed = opts.onClosed or prev.onClosed
+        prev.onClosed = nil
         Z.close(prev)
     end
     local CP = MSH.CreatePanel
@@ -409,14 +412,14 @@ local function openUnsafe(opts)
     return m
 end
 
--- 回 nil＝沒開成（不是管理員、框架不合、建窗失敗）：呼叫端自己開回管理員面板
+-- 回 nil＝沒開成（不是管理員、框架不合、建窗失敗）：呼叫端自己開回原來的視窗（不呼叫 onClosed）
 function Z.open(opts)
     local ok, res = pcall(openUnsafe, opts or {})
     if ok then return res end
     MSH.log("zone panel failed: " .. tostring(res))
     local m = Z.model
     if m ~= nil then
-        m.fromAdmin = false
+        m.onClosed = nil
         Z.close(m)   -- 半建好的視窗一起收掉
     end
     return nil
