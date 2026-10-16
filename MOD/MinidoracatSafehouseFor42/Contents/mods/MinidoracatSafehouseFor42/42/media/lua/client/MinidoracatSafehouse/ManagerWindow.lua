@@ -382,7 +382,7 @@ function W:build()
     self.list:initialise()
     body:addChild(self.list)
     self.list:setVisible(false)
-    -- 清單底下：在地面顯示範圍（總開關＋四類 chip；關窗照畫；Ranges.lua，使用者 2026-10-11、10-12）
+    -- 清單底下：在地面顯示範圍（總開關＋五類 chip＋整片顯示；關窗照畫；Ranges.lua，使用者 2026-10-11、10-12、10-16）
     self.rangesBox = UI.Checkbox.new({ x = 0, y = 0, label = getText("IGUI_MSH_Manager_ShowRanges"),
         tooltip = getText("IGUI_MSH_Manager_ShowRanges_tooltip"), checked = MSH.Ranges ~= nil and MSH.Ranges.isOn(),
         theme = self.theme, target = self, onChange = W.onRanges })
@@ -400,6 +400,13 @@ function W:build()
             self.rangeChips[#self.rangeChips + 1] = b
         end
     end
+    -- chip 下一列：整片顯示（關著只畫外緣；使用者 2026-10-16）
+    self.fillBox = UI.Checkbox.new({ x = 0, y = 0, label = getText("IGUI_MSH_Manager_RangesFill"),
+        tooltip = getText("IGUI_MSH_Manager_RangesFill_tooltip"), checked = MSH.Ranges ~= nil and MSH.Ranges.isFill(),
+        theme = self.theme, target = self, onChange = W.onRangesFill })
+    body:addChild(self.fillBox)
+    self.fillBox:setVisible(false)
+    self.fillChrome = self.fillBox.width - measure(self.fillBox.label)
     self.btnCreateEmpty = self:button(body, getText("IGUI_MSH_Manager_Create"), W.onCreate, self, "primary", "plus")
 
     self.btnBack = self:button(body, getText("IGUI_MSH_Manager_Back"), W.onBack, self, nil, "chevronLeft")
@@ -433,8 +440,8 @@ function W:build()
 
     self.btnQuery = self:button(body, getText("IGUI_MSH_Manager_QueryResult"), W.onQuery, self, "primary")
     self.btnDismiss = self:button(body, getText("IGUI_MSH_Manager_Dismiss"), W.onDismiss, self)
-    self.hideable = { self.list, self.rangesBox, self.btnCreateEmpty, self.btnBack, self.btnRename, self.tabs, self.scroll,
-        self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnIndoor, self.btnCreate, self.btnAdmin }
+    self.hideable = { self.list, self.rangesBox, self.fillBox, self.btnCreateEmpty, self.btnBack, self.btnRename, self.tabs,
+        self.scroll, self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnIndoor, self.btnCreate, self.btnAdmin }
     for _, b in ipairs(self.rangeChips) do self.hideable[#self.hideable + 1] = b end
 
     -- 窄版門檻：詳細欄放不下最長的標籤加一個典型值（以目前字型量測，§10.3 Narrow）
@@ -791,8 +798,8 @@ function W:layout()
     if showDetail then self:layoutDetail(dx, mainTop, dw, mainH) end
 end
 
--- 在地面顯示範圍：總開關一列，底下四類 chip（放不下換行）。總開關關著時 chip 停用；伺服器沒開放的那類停用、
--- 滑鼠提示寫原因。place＝false 只量高度。回傳整塊高度
+-- 在地面顯示範圍：總開關一列，底下五類 chip（放不下換行），再下一列整片顯示。總開關關著時 chip 與整片顯示停用；伺服器
+-- 沒開放的那類停用、滑鼠提示寫原因。place＝false 只量高度。回傳整塊高度
 function W:layoutRanges(x, y, w, place)
     local R, GAP = MSH.Ranges, MW.GAP
     local box = self.rangesBox
@@ -813,7 +820,15 @@ function W:layoutRanges(x, y, w, place)
         cx = cx + b.width + GAP
     end
     if #self.rangeChips == 0 then return box.height end
-    return cy + self.ch - y
+    local fill = self.fillBox
+    fill:setChecked(R.isFill(), true)
+    local fillLabel = self:fit(getText("IGUI_MSH_Manager_RangesFill"), w - self.fillChrome)
+    fill:setLabel(fillLabel)
+    fill:setWidth(self.fillChrome + measure(fillLabel))
+    fill:setEnabled(on)
+    cy = cy + self.ch + GAP
+    if place then self:place(fill, x, cy) end
+    return cy + fill.height - y
 end
 
 -- 視窗不夠高、左欄放不下時：最小高度提高到放得下為止並長高 px（不超過螢幕，貼著底就往上移），回 true＝長高了、要重排。
@@ -1198,6 +1213,10 @@ end
 
 function W.onRanges(self, checked)
     if MSH.Ranges ~= nil then MSH.Ranges.setOn(checked) end
+end
+
+function W.onRangesFill(self, checked)
+    if MSH.Ranges ~= nil then MSH.Ranges.setFill(checked) end
 end
 
 function W.onRangeKind(self, b)

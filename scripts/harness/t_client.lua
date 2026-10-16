@@ -1,5 +1,6 @@
 -- 客戶端共用核心（Client.lua）：結果照 requestId 配對（冷卻中被伺服器丟掉的查詢不讓後面的回覆錯位）、
--- 10 秒沒回覆的通知、mutation 結果待定後用同一 requestId 重送、晚到的真結果、清單快取與格子權限位元。
+-- 10 秒沒回覆的通知、mutation 結果待定後用同一 requestId 重送、晚到的真結果、清單快取與格子權限位元、
+-- 禁建區清單（zones 查詢與 zonesSync 推送的 rev、同時一筆、失敗後的間隔）。
 return function(T)
     local check = T.check
     local MSH = T.bootClient()
@@ -141,4 +142,59 @@ return function(T)
     check(slotsSent() == s0 + 5, "回覆後滿 SLOTS_GAP_MS：補送被要過的那次")
     reply(lastSent(), {})
     C.off("slots", "test")
+
+    -- 禁建區（使用者 2026-10-16：玩家也看得到）：地面範圍要畫時才查一次 zones，之後靠伺服器推 zonesSync；
+    -- 回覆與推送沒有順序保證，rev 比手上舊的丟掉；伺服器 1 秒冷卻，同時一筆、失敗後 ZONES_RETRY_MS 才再送
+    T.section("Client：禁建區清單（zones 查詢與 zonesSync 推送）只收不比手上舊的")
+    local function zonesSent()
+        local c = 0
+        for _, s in ipairs(T.clientSent) do if s.command == "zones" then c = c + 1 end end
+        return c
+    end
+    local events = 0
+    C.on("zones", "test", function() events = events + 1 end)
+    local A = { id = 1, name = "Road", rects = { { x = 10, y = 10, w = 5, h = 5 } } }
+    local B = { id = 2, name = "Base", rects = { { x = 50, y = 50, w = 5, h = 5 } } }
+    C.zones = { list = nil, rev = -1 }
+    local z0 = zonesSent()
+    check(C.ensureZones() == nil and zonesSent() == z0 + 1 and lastSent().command == "zones",
+        "還沒拿到：回 nil、送一筆 zones")
+    local ask = lastSent()
+    check(C.ensureZones() == nil and zonesSent() == z0 + 1, "送出中再被要：不重送")
+    serverCmd("zonesSync", { zones = { A, B }, rev = 2 })
+    check(#C.zones.list == 2 and C.zones.rev == 2 and events == 1, "推送 rev 2 先到：換掉清單、發 zones 事件")
+    reply(ask, { zones = { A }, rev = 1 })
+    check(#C.zones.list == 2 and C.zones.rev == 2 and events == 1, "晚到的查詢回覆 rev 1：比手上舊，不蓋掉")
+    serverCmd("zonesSync", { zones = {}, rev = 1 })
+    check(#C.zones.list == 2 and events == 1, "舊 rev 的推送也不蓋掉")
+    check(C.ensureZones() == C.zones.list and zonesSent() == z0 + 1, "已經有清單：不再查")
+    serverCmd("zonesSync", { zones = { A, { id = 3, name = "bad", rects = { { x = 0, y = 0, w = 0, h = 5 } } } }, rev = 3 })
+    check(#C.zones.list == 1 and C.zones.list[1].id == 1 and C.zones.rev == 3 and events == 2,
+        "新的 rev 3：換掉；形狀不合法的那個不收")
+    serverCmd("zonesSync", { zones = { B }, rev = 3 })
+    check(#C.zones.list == 1 and C.zones.list[1].id == 2 and events == 3, "同一個 rev 照收（同一次開服的同一版）")
+    serverCmd("zonesSync", { zones = "x", rev = 9 })
+    check(C.zones.rev == 3 and events == 3, "格式不對的推送不收")
+
+    T.section("Client：禁建區查詢失敗後 ZONES_RETRY_MS 內不重送")
+    C.zones = { list = nil, rev = -1 }
+    z0 = zonesSent()
+    C.ensureZones()
+    reply(lastSent(), { ok = false, code = "NOT_READY" })
+    check(zonesSent() == z0 + 1 and C.ensureZones() == nil and zonesSent() == z0 + 1, "回覆失敗：馬上再要也不送")
+    T.advance(C.ZONES_RETRY_MS - 1)
+    C.ensureZones()
+    check(zonesSent() == z0 + 1, "失敗後 10 秒內：不送")
+    T.advance(1)
+    C.ensureZones()
+    check(zonesSent() == z0 + 2, "滿 10 秒：再送")
+    T.advance(C.TIMEOUT_MS + 500)
+    T.fire("OnTick")
+    C.ensureZones()
+    check(zonesSent() == z0 + 2 and C.zones.list == nil, "10 秒沒回覆（NO_REPLY）也算失敗：從那時起算，不馬上重送")
+    T.advance(C.ZONES_RETRY_MS)
+    C.ensureZones()
+    reply(lastSent(), { zones = { A }, rev = 0 })
+    check(zonesSent() == z0 + 3 and #C.zones.list == 1 and C.zones.rev == 0, "再過 10 秒送出、拿到清單")
+    C.off("zones", "test")
 end

@@ -12,6 +12,12 @@
 -- 檔案只由本 MOD 寫，所以內容對不上（讀到一半出錯、沒有 next 行、有讀不懂的行、zone 行數不等於個數）一律當成讀不開：
 -- Z.unreadable，Health 列成 PrivateStore blocker（fail closed：少讀一個禁建區就有人能在那裡建立），新增、刪除回
 -- SAVE_FAILED（整份覆寫會蓋掉讀不到的內容）。檔案不存在＝還沒有禁建區。
+-- 玩家也看得到禁建區（使用者 2026-10-16「那玩家是不是也應該要可以從畫面上看到禁建區?」；客戶端 Ranges.lua 的 zones 類）：
+--   公開查詢 zones（不限管理員、1 秒冷卻）回 { zones = Z.publicView(), rev = Z.rev }，只有編號、名稱、各塊，不含壓到的
+--   安全屋（那是管理員面板的 adminZones）。新增、刪除存檔成功後 Z.rev 加一，放鎖後推 zonesSync（同樣的兩欄）給每位在線
+--   玩家（getOnlinePlayers LuaManager.java:4457；sendServerCommand(player, ...) :8966-8970；同 Admin.pushSync）。rev 是
+--   這次開服內的版本號（開服 0）：查詢回覆與推送沒有順序保證，客戶端只收 rev 不比手上舊的。OnServerStarted 之前不推
+--   （S.netUp；那時沒有客戶端，getOnlinePlayers 會 NPE）。
 
 if isClient() then return end
 
@@ -36,6 +42,7 @@ Z.MAX_LINES = 10000
 Z.list = Z.list or {}   -- { { id, name, rects } }，照編號由小到大
 Z.nextId = Z.nextId or 1
 Z.unreadable = Z.unreadable or false
+Z.rev = Z.rev or 0     -- 這次開服內禁建區清單的版本，新增、刪除成功各加一
 
 function Z.path()
     return MSH.Registry.privateFile("zones.txt")
@@ -202,6 +209,23 @@ function Z.view()
     return out
 end
 
+-- 給玩家看的清單：編號、名稱、各塊（複本），不含壓到的安全屋
+function Z.publicView()
+    local out = {}
+    for i, z in ipairs(Z.list) do out[i] = { id = z.id, name = z.name, rects = Rect.copyList(z.rects) } end
+    return out
+end
+
+-- 推給每位在線玩家（放鎖後由 ctx.defer 呼叫）；開服前不碰連線
+function Z.broadcast()
+    if not S.netUp then return end
+    local args = { zones = Z.publicView(), rev = Z.rev }
+    local list = getOnlinePlayers()
+    for i = 0, list:size() - 1 do
+        sendServerCommand(list:get(i), MSH.MODULE, "zonesSync", args)
+    end
+end
+
 local function reply(fields)
     fields.zones, fields.max = Z.view(), LIMIT.MAX_ZONES
     return S.ok(fields)
@@ -209,6 +233,10 @@ end
 
 S.define("adminZones", { kind = "query", admin = true, fields = {}, run = function()
     return reply({ unreadable = Z.unreadable })
+end })
+
+S.define("zones", { kind = "query", cooldownMs = 1000, fields = {}, run = function()
+    return S.ok({ zones = Z.publicView(), rev = Z.rev })
 end })
 
 S.define("adminAddZone", { kind = "mutation", admin = true, whenBlocked = true,
@@ -226,7 +254,8 @@ S.define("adminAddZone", { kind = "mutation", admin = true, whenBlocked = true,
         for i, e in ipairs(Z.list) do list[i] = e end
         list[#list + 1] = z
         if not save(list, z.id + 1) then return S.fail(CODE.SAVE_FAILED) end
-        Z.list, Z.nextId = list, z.id + 1
+        Z.list, Z.nextId, Z.rev = list, z.id + 1, Z.rev + 1
+        ctx.defer(Z.broadcast)
         MSH.Audit.write("ADMIN_ZONE_ADD", { actor = ctx.who, code = int(z.id), detail = name .. " " .. rectsText(rects) })
         return reply({ zoneId = z.id })
     end })
@@ -242,7 +271,8 @@ S.define("adminRemoveZone", { kind = "mutation", admin = true, whenBlocked = tru
         end
         if gone == nil then return S.fail(CODE.NOT_FOUND, { zoneId = id }) end
         if not save(list, Z.nextId) then return S.fail(CODE.SAVE_FAILED) end
-        Z.list = list
+        Z.list, Z.rev = list, Z.rev + 1
+        ctx.defer(Z.broadcast)
         MSH.Audit.write("ADMIN_ZONE_REMOVE", { actor = ctx.who, code = int(id), detail = gone.name })
         return reply({ zoneId = id })
     end })

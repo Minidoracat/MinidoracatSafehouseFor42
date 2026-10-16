@@ -1,6 +1,6 @@
 -- 管理員禁建區（Zones.lua，使用者 2026-10-16）：管理員指令（權限、驗證、存檔失敗、上限、編號不重用）、zones.txt
 -- 重開保留與壞行、讀不開時 fail closed；建立、預檢、重新框選壓到禁建區時 NO_BUILD（壓到的部分、相接不算）、
--- 已經建好的安全屋不動但列給管理員、沒有禁建區時預檢不列這一項。
+-- 已經建好的安全屋不動但列給管理員、沒有禁建區時預檢不列這一項；玩家的公開清單 zones 與變更推送 zonesSync（rev）。
 return function(T)
     local check = T.check
     local D1 = "MinidoracatSafehouse.Deed1"
@@ -244,4 +244,75 @@ return function(T)
     row = res.ok and res.zones[#res.zones]
     check(row and #row.claims == MSH.Zones.MAX_LIST_CLAIMS and row.claimCount == MSH.Zones.MAX_LIST_CLAIMS + 1,
         "壓到 21 間：列出 20 間、總數 21")
+
+    T.section("Zones：玩家看得到的公開清單（zones）與變更推送（zonesSync）")
+    boot()
+    boss = T.player({ name = "boss", admin = true })
+    alice = T.player({ name = "alice" })
+    local bob = T.player({ name = "bob" })
+    local everyone = { boss, alice, bob }
+    local function syncsOf(p)
+        local out = {}
+        for _, m in ipairs(T.outbox[p.name] or {}) do
+            if m.command == "zonesSync" then out[#out + 1] = m.args end
+        end
+        return out
+    end
+    local function noAdminFields(zones)
+        for _, z in ipairs(zones) do
+            if z.claims ~= nil or z.claimCount ~= nil then return false end
+        end
+        return true
+    end
+    -- 每位在線玩家都剛好收到 n 則，最後一則是 rev、zones 個數
+    local function allGot(n, rev, count)
+        for _, p in ipairs(everyone) do
+            local s = syncsOf(p)
+            local last = s[#s]
+            if #s ~= n or (n > 0 and (last.rev ~= rev or #last.zones ~= count or not noAdminFields(last.zones))) then
+                return false
+            end
+        end
+        return true
+    end
+    res = T.cmd(alice, "zones", {})
+    check(res ~= nil and res.ok and #res.zones == 0 and res.rev == 0, "一般玩家查 zones（不是 NOT_ADMIN）：空清單、開服 rev 0")
+    -- 已經建好、後來被框進禁建區的安全屋：adminZones 列出它，公開清單不能帶
+    R = MSH.Registry
+    R.put(R.newRecord({ claimId = R.allocId(), rects = { rect(5000, 5000, 4, 4) }, title = "t", owner = "carol",
+        source = MSH.SOURCE.DEED, deedTier = 1, createdAt = T.now }))
+    local lockedAtSend, realSend = {}, sendServerCommand
+    sendServerCommand = function(a, b, c, d)
+        if c == "zonesSync" then lockedAtSend[#lockedAtSend + 1] = MSH.Srv.locked end
+        return realSend(a, b, c, d)
+    end
+    res = T.cmd(boss, "adminAddZone", { name = "Base", rects = { rect(4998, 4998, 10, 10) } })
+    sendServerCommand = realSend
+    local s1 = syncsOf(alice)[1]
+    check(res.ok and res.zones[1].claimCount == 1 and allGot(1, 1, 1) and s1.zones[1].id == 1 and s1.zones[1].name == "Base"
+        and s1.zones[1].rects[1].x == 4998 and s1.zones[1].rects[1].w == 10,
+        "新增成功：每位在線玩家（含管理員自己）各收到一次 zonesSync，rev 加一、有編號名稱各塊、沒有 claims／claimCount")
+    check(#lockedAtSend == 3 and lockedAtSend[1] == false and lockedAtSend[3] == false, "zonesSync 在放鎖之後才送")
+    T.advance(1000)
+    res = T.cmd(alice, "zones", {})
+    check(res.ok and res.rev == 1 and #res.zones == 1 and res.zones[1].id == 1 and res.zones[1].rects[1].h == 10
+        and noAdminFields(res.zones), "一般玩家查 zones：拿到清單與 rev 1，沒有 claims／claimCount")
+    res = T.cmd(alice, "zones", {})
+    check(res == nil, "1 秒內重送：冷卻中直接丟、不回覆")
+    T.failWrites = true
+    res = T.cmd(boss, "adminAddZone", { name = "C", rects = { rect(3100, 3000, 5, 5) } })
+    local addFail = res.code == "SAVE_FAILED"
+    res = T.cmd(boss, "adminRemoveZone", { zoneId = 1 })
+    T.failWrites = false
+    check(addFail and res.code == "SAVE_FAILED" and MSH.Zones.rev == 1 and allGot(1, 1, 1),
+        "新增、刪除存檔失敗：不推送、rev 不變")
+    res = T.cmd(boss, "adminRemoveZone", { zoneId = 9 })
+    check(res.code == "NOT_FOUND" and MSH.Zones.rev == 1 and allGot(1, 1, 1), "刪不存在的：不推送")
+    res = T.cmd(boss, "adminRemoveZone", { zoneId = 1 })
+    check(res.ok and MSH.Zones.rev == 2 and allGot(2, 2, 0), "刪除成功：每人再收到一次，rev 2、清單空了")
+    T.netUp, MSH.Srv.netUp = false, false
+    local early = #T.netEarly
+    local okB = pcall(MSH.Zones.broadcast)
+    T.netUp, MSH.Srv.netUp = true, true
+    check(okB and #T.netEarly == early and allGot(2, 2, 0), "OnServerStarted 之前（netUp 是 false）：不碰連線、不推送")
 end

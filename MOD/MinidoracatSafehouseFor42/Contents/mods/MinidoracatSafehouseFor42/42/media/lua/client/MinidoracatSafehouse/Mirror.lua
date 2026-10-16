@@ -1,4 +1,5 @@
--- MinidoracatSafehouse/Mirror.lua：客戶端原生安全屋 mirror 的 remove 與校正、沙盒同步（計畫 §6.3、§7.1）。
+-- MinidoracatSafehouse/Mirror.lua：客戶端原生安全屋 mirror 的 remove 與校正、沙盒同步、禁建區推送（zonesSync 交給
+-- Client.takeZones，和 zones 查詢的回覆同一條路；計畫 §6.3、§7.1）。
 -- upsert 走原生 SafehouseSync（伺服器 kickUserFromSafehouse 觸發），不需要這裡處理；原生沒有 remove 廣播，
 -- 伺服器送自訂 nativeRemove。只移除 owner 恰好等於 @MSH:<claimId> 的本地物件：SafehouseSync（RELIABLE 非 ORDERED）
 -- 和自訂指令沒有順序保證，同 rect 可能已是新 claim，所以不比 rect；foreign 一律不動、永不清空整份清單。
@@ -117,6 +118,8 @@ function M.onServerCommand(module, command, args)
         M.onCalibrated(args)
     elseif command == "sandboxSync" then
         M.onSandboxSync(args)
+    elseif command == "zonesSync" then
+        MSH.Client.takeZones(args)
     end
 end
 

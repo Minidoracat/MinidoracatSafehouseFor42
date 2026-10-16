@@ -2,7 +2,7 @@
 --   這裡關掉時呼叫 opts.onClosed 開回去）；框選照建立面板的框選階段（Select.lua／Shape.lua：拖曳或走到兩角、加入／挖掉、復原、
 --   清除；塊數用硬上限 LIMIT.MAX_PIECES，外框 ≤ LIMIT.ZONE_SIDE），〔儲存禁建區〕送 adminAddZone { name, rects }
 --   （伺服器照同一套形狀規則再驗、存檔，Zones.lua）。成功就關窗；失敗在面板上寫原因、範圍保留。
--- 開著時地上畫既有的禁建區（FloorTint 圖層 "zones"，Z.ZONE_COLOR 亮紅疊色，禁建區視窗同一個顏色），新框的範圍照
+-- 開著時地上畫既有的禁建區（FloorTint 圖層 "zones"，Ranges.COLORS.zones 亮紅疊色，禁建區視窗、地面範圍同一個顏色），新框的範圍照
 --   Select.draw（青色）蓋在上面。
 -- 和建立面板共用 "shape"／"pending" 圖層與 OnMouseDown，一次只開一個（兩邊開的時候都先關掉另一個）。
 -- 框架不合（window／controls／focus）時不開（Z.available；禁建區視窗的〔新增禁建區〕停用並寫原因），不報錯。
@@ -14,6 +14,7 @@ require "MinidoracatSafehouse/Contract"
 require "MinidoracatSafehouse/Client"
 require "MinidoracatSafehouse/Select"
 require "MinidoracatSafehouse/FloorTint"
+require "MinidoracatSafehouse/Ranges"
 require "MinidoracatSafehouse/SlotsWindow"
 require "MinidoracatSafehouse/CreatePanel"
 require "MinidoracatSafehouse/AdminPanel"
@@ -29,10 +30,7 @@ local CODE = MSH.CODE
 local LIMIT = MSH.LIMIT
 
 Z.CAPS = { "window", "controls", "focus" }
--- 既有禁建區：疊色（ov，同 Ranges.COLORS 的畫法），任何地面上都是同一個亮紅；ov 以外的 r/g/b 與 alpha 是被房子擋住、
--- 人物蓋住那幾格改用地板染色時的顏色。使用者 2026-10-16「顏色可以調亮」：原本用 errorText 染色 0.85，在泥土路上是
--- 暗紅褐色、和土色分不清（報告 safehouse-zones-1016 第 1 段第 4 張）。新框的各塊（Select.PIECE_TINT）照樣蓋在上面
-Z.ZONE_COLOR = { r = 1.0, g = 0.3, b = 0.3, ov = { r = 1.0, g = 0.08, b = 0.08, a = 0.5 } }
+-- 既有禁建區的顏色是 Ranges.COLORS.zones（亮紅疊色，來由寫在 Ranges.lua）；新框的各塊（Select.PIECE_TINT）照樣蓋在上面
 Z.ZONE_ALPHAS = { 1.0 }
 Z.W = 440
 
@@ -290,7 +288,7 @@ function Z.frame(v)
         l:setWidth(K.textW(FONT, l.text))
     end
     v.tinted = true
-    MSH.FloorTint.setRects("zones", m.flat, Z.ZONE_COLOR, Z.ZONE_ALPHAS, math.floor(p:getZ()))
+    MSH.FloorTint.setRects("zones", m.flat, MSH.Ranges.COLORS.zones, Z.ZONE_ALPHAS, math.floor(p:getZ()))
     Sel.draw(s, p, Sel.FLOOR_OK, v.colors.errorText, v.over)
 end
 

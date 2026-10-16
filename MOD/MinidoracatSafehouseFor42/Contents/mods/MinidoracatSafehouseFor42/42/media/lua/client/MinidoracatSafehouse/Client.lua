@@ -23,6 +23,7 @@ C.pending = C.pending or {}    -- requestId → { command, args, sentAt, retried
 C.seq = C.seq or 0
 C.listeners = C.listeners or {}
 C.claims = C.claims or { mine = {}, shared = {}, byId = {}, at = nil }
+C.zones = C.zones or { list = nil, rev = -1 }   -- 禁建區（地面範圍的 zones 類）：list＝nil 是還沒拿到
 
 -- ===== UI 框架（../MinidoracatUIFor42/AGENTS.md「下游 consumer」；docs/ARCHITECTURE.md §2）=====
 -- 讀全域、檢查 API_MAJOR 與版本、逐個檢查 capability；不合回 nil，呼叫端退最小直角 fallback（AGENTS.md 鐵則）。
@@ -274,6 +275,44 @@ function C.pumpSlots(now)
         C.emit("slots", res)
     end)
     if rid == nil then C.slotsWanted, C.slotsBusy, C.slotsAt = true, false, now end   -- 還沒有玩家：間隔滿了再試
+end
+
+-- ===== 禁建區（公開查詢 zones 與推送 zonesSync，伺服器 Zones.lua）=====
+-- 地面範圍要畫禁建區時才抓一次（Ranges.rebuild）：還沒拿到、沒有送出中、離上次失敗滿 ZONES_RETRY_MS 才送；之後的變更
+-- 由伺服器推 zonesSync（Mirror.lua 收），不再查。伺服器 1 秒冷卻，同時一筆、失敗（含 10 秒沒回覆）後從那時起算間隔
+-- （client-ui.md「冷卻間隔從回覆算」）。回覆與推送沒有順序保證：rev 比手上舊的丟掉
+C.ZONES_RETRY_MS = 10000
+
+-- 回覆或推送 { zones, rev }：格式不對回 false；rev 舊的忽略（回 true）；否則換掉清單、發 "zones" 事件。
+-- 只留形狀合法的（Rect.shapeError：塊數、各塊合法、不重疊、連成一片）：地面範圍照 rects 算外緣、逐格走各塊
+function C.takeZones(args)
+    if type(args.zones) ~= "table" or not MSH.isInt(args.rev) then return false end
+    local z = C.zones
+    if args.rev < z.rev then return true end
+    local list = {}
+    for _, e in ipairs(args.zones) do
+        if type(e) == "table" and MSH.isInt(e.id) and MSH.Rect.shapeError(e.rects) == nil then
+            list[#list + 1] = { id = e.id, name = type(e.name) == "string" and e.name or "", rects = MSH.Rect.copyList(e.rects) }
+        end
+    end
+    z.list, z.rev = list, args.rev
+    C.emit("zones", z)
+    return true
+end
+
+-- 回目前的清單（還沒拿到回 nil，必要時送出查詢）
+function C.ensureZones()
+    local z = C.zones
+    if z.list ~= nil or z.busy then return z.list end
+    local now = getTimestampMs()
+    if z.failedAt ~= nil and now - z.failedAt < C.ZONES_RETRY_MS then return nil end
+    z.busy = true   -- 先標記：回覆在送出當下就到也不會卡住
+    local rid = C.send("zones", {}, function(res)
+        z.busy = false
+        if not (res.ok and C.takeZones(res)) then z.failedAt = getTimestampMs() end
+    end)
+    if rid == nil then z.busy, z.failedAt = false, now end   -- 還沒有玩家：間隔滿了再試
+    return z.list
 end
 
 -- 這格屬於哪間 managed 安全屋（本地原生清單裡 owner 是 @MSH:<id> 的；SafeHouse.getSafehouseList SafeHouse.java:652、

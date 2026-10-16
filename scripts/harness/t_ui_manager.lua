@@ -421,6 +421,96 @@ return function(T)
     for _, h in ipairs(natives) do SafeHouse.removeSafeHouse(h) end
     MSH.Client.claims = savedClaims
     MSH.PublicApi.ownerName = realOwnerName
+
+    T.section("在地面顯示範圍：禁建區（第五類，rangeZones 圖層、安全屋蓋過它）與整片顯示（只走畫的範圍，不走整塊）")
+    local C = MSH.Client
+    local function zonesAsked()
+        local n = 0
+        for _, s in ipairs(T.clientSent) do if s.command == "zones" then n = n + 1 end end
+        return n
+    end
+    local function pushZones(rev, zones) T.fire("OnServerCommand", MSH.MODULE, "zonesSync", { rev = rev, zones = zones }) end
+    local key = FT.key
+    alice.x, alice.y, alice.z = 3000.5, 3000.5, 0
+    C.zones = { list = nil, rev = -1 }
+    Rg.setOn(true)
+    local asked = zonesAsked()
+    drawn(0)
+    check(zonesAsked() == asked + 1 and next(FT.cells.rangeZones) == nil, "打開、清單還沒拿到：送一次 zones 查詢、先不畫")
+    -- 禁建區 2980..2999；我的（原版、屋主 alice）2995..3004 × 2975..2984，壓在禁建區上緣
+    local mine = SafeHouse.addSafeHouse(2995, 2975, 10, 10, "alice")
+    pushZones(1, { { id = 1, name = "Z", rects = { { x = 2980, y = 2980, w = 20, h = 20 } } } })
+    -- 一輪掃描後畫一幀，回疊色的格子、顏色、透明度（檢查的格子都離 alice 夠遠，不會改成染色）
+    local function ovDrawn()
+        drawn(0)
+        return overlay(0)
+    end
+    local zc, zcol, za = ovDrawn()
+    local zoneOv, zoneC = ovOf("zones"), Rg.COLORS.zones
+    check(FT.cells.rangeZones[key(2980, 2980, 0)] == zoneC and zoneC.ov ~= nil and FT.cells.ranges[key(2980, 2980, 0)] == nil
+        and zcol["2980,2980"] == zoneOv and za["2980,2980"] == zoneC.ov.a and zcol["2980,2999"] == zoneOv,
+        "推送到了就畫：禁建區外緣在 rangeZones 圖層、亮紅疊色（顏色帶 ov）")
+    check(FT.cells.rangeZones[key(2985, 2985, 0)] == nil and zc["2985,2985"] == nil,
+        "外框模式：禁建區內部沒有格子")
+    check(FT.cells.rangeZones[key(2995, 2980, 0)] == zoneC and FT.cells.ranges[key(2995, 2980, 0)] == Rg.COLORS.own
+        and zcol["2995,2980"] == ovOf("own"),
+        "安全屋與禁建區重疊的格子：兩層都有，顯示安全屋的顏色（圖層順序）")
+    Rg.setKind("zones", false)
+    zc = ovDrawn()
+    check(next(FT.cells.rangeZones) == nil and zc["2980,2980"] == nil and zc["2995,2975"] == true, "關掉禁建區 chip：禁建區都取消、安全屋照畫")
+    Rg.setKind("zones", true)
+    Rg.setFill(true)
+    zc, zcol, za = ovDrawn()
+    local FC = Rg.FILL_COLORS
+    local function fillOf(kind)
+        local c = FC[kind].ov
+        return c.r .. "/" .. c.g .. "/" .. c.b
+    end
+    check(FT.cells.rangeZones[key(2985, 2985, 0)] == FC.zones and zcol["2985,2985"] == fillOf("zones")
+        and za["2985,2985"] == zoneC.ov.a and FC.zones.ov.r < zoneC.ov.r and FC.zones.ov.g < zoneC.ov.g
+        and FT.cells.rangeZones[key(2980, 2985, 0)] == zoneC and zcol["2980,2985"] == zoneOv and za["2980,2985"] == zoneC.ov.a
+        and FT.cells.ranges[key(2998, 2978, 0)] == FC.own and zcol["2998,2978"] == fillOf("own")
+        and FT.cells.ranges[key(2995, 2978, 0)] == Rg.COLORS.own and zcol["2995,2978"] == ovOf("own")
+        and FC.zones.a == Rg.FILL_TINT_A,
+        "整片：內部是 FILL_COLORS（疊色調暗、透明度不變）、外緣是 COLORS；安全屋也一樣")
+    check(zcol["2997,2982"] == fillOf("own") and FT.cells.rangeZones[key(2997, 2982, 0)] == FC.zones,
+        "整片時安全屋內部蓋在禁建區內部上面")
+    SafeHouse.removeSafeHouse(mine)
+    -- 很大的禁建區：只走「各塊 ∩ 畫的範圍」，走過的格子數和外框大小無關（舊寫法逐格走整塊，1000×1000 就是一百萬格）
+    local function bigWalk(side, rev)
+        pushZones(rev, { { id = 9, name = "Big", rects = { { x = 3000 - side / 2, y = 3000 - side / 2, w = side, h = side } } } })
+        T.advance(Rg.SCAN_MS)
+        Rg.walked = 0
+        T.fire("OnPreUIDraw")
+        return Rg.walked
+    end
+    local w300 = bigWalk(300, 2)
+    local w1000 = bigWalk(1000, 3)
+    local v = FT.win
+    local winCells = (v.x1 - v.x0 + 1) * (v.y1 - v.y0 + 1)
+    local put = 0
+    for _ in pairs(FT.cells.rangeZones) do put = put + 1 end
+    check(put == winCells and w1000 == w300 and w1000 == winCells,
+        "1000×1000 的禁建區整片：放到 FloorTint 的格子＝畫的範圍（" .. put .. "／" .. winCells .. "），走過的格子數和 300×300 一樣（"
+        .. w1000 .. "／" .. w300 .. "）")
+    local ox0, ox1 = v.x0, v.x1
+    alice.x = 3005.5
+    Rg.walked = 0
+    T.fire("OnPreUIDraw")
+    local moved = FT.win
+    check(moved.x0 > ox0 and FT.cells.rangeZones[key(ox0, 3000, 0)] == nil and FT.cells.rangeZones[key(moved.x1, 3000, 0)] == FC.zones
+        and moved.x1 > ox1 and FT.cells.rangeZones[key(ox1, 3000, 0)] == FC.zones and Rg.walked < winCells / 4,
+        "鏡頭移動：舊範圍外的格子取消、新範圍裡的放上，兩邊都有的不動（只走移動的那一條，" .. Rg.walked .. " 格）")
+    Rg.setFill(false)
+    drawn(0)
+    local edges = 0
+    for _ in pairs(FT.cells.rangeZones) do edges = edges + 1 end
+    check(edges == 0, "外框模式、外緣都在畫面外：大禁建區一格都不畫")
+    pushZones(4, {})
+    check(next((drawn(0))) == nil, "禁建區刪光：推送後取消")
+    C.zones = { list = nil, rev = -1 }
+    Rg.setOn(false)
+    drawn(0)
     tw.restore()
     Rg.dirty = true
 
@@ -570,11 +660,12 @@ return function(T)
         local footY = BH - MW.PAD - math.max(win.ch, win.fh * 2)
         local box = win.rangesBox
         local bottom = box.y + box.height
-        local allChips = true
+        local allChips = win.fillBox.visible
         for _, b in ipairs(win.rangeChips) do
-            allChips = allChips and b.visible
+            allChips = allChips and b.visible and b.x + b.width <= BW
             bottom = math.max(bottom, b.y + b.height)
         end
+        bottom = math.max(bottom, win.fillBox.y + win.fillBox.height)
         local inRow = true
         for _, b in ipairs({ win.btnRefresh, win.btnSlots, win.btnCreate, win.btnAdmin }) do
             if b.visible and (b.x < 0 or b.x + b.width > BW) then inRow = false end
@@ -592,7 +683,8 @@ return function(T)
     local okB, infoB = fits(b)
     check(okB and b.win.height > 280 and b.win.minHeight == b.win.height,
         "縮到最小 300×280：上列按鈕換行不出界；清單留不到兩列就把視窗長高、最小高度跟著提高（" .. infoB .. "）")
-    fw.charW, fw.fh = 16, 40   -- 放大字型（約 2.5x）
+    -- 放大字型（約 2.5x）。範圍那塊有五顆 chip 和〔整片顯示〕一列，720 高的螢幕放不下兩列清單（那是下一個情境），這裡用 900 高
+    fw.charW, fw.fh, fw.sh = 16, 40, 900
     local c = openWith(150, 860, 560)
     local okC, infoC = fits(c)
     check(okC and c.win.height > 560, "字型放大：預設大小放不下兩列清單就長高（" .. infoC .. "）")
@@ -607,8 +699,36 @@ return function(T)
     local footY = BH - MW.PAD - math.max(e.ch, e.fh * 2)
     local eb = e.rangesBox.y + e.rangesBox.height
     for _, k in ipairs(e.rangeChips) do eb = math.max(eb, k.y + k.height) end
-    check(e.rangesBox.visible and eb <= footY,
-        "沒有安全屋、最小大小：說明與〔建立安全屋〕底下的範圍那塊在頁尾上面（" .. eb .. " ≤ " .. footY .. "）")
+    eb = math.max(eb, e.fillBox.y + e.fillBox.height)
+    check(e.rangesBox.visible and e.fillBox.visible and eb <= footY,
+        "沒有安全屋、最小大小：說明與〔建立安全屋〕底下的範圍那塊（含整片顯示）在頁尾上面（" .. eb .. " ≤ " .. footY .. "）")
+
+    T.section("ManagerWindow：在地面顯示範圍五顆 chip（含禁建區）、chip 下一列〔整片顯示〕（使用者 2026-10-16）")
+    local kinds, chipBottom = {}, 0
+    for _, k in ipairs(b.rangeChips) do
+        kinds[#kinds + 1] = k.internal
+        chipBottom = math.max(chipBottom, k.y + k.height)
+    end
+    check(table.concat(kinds, ",") == "own,shared,faction,others,zones"
+        and b.rangeChips[5].title == getText("IGUI_MSH_Ranges_zones"), "五顆 chip，第五顆是禁建區")
+    check(b.fillBox ~= nil and b.fillBox.y >= chipBottom and b.fillBox.x == b.rangesBox.x,
+        "〔整片顯示〕在 chip 下一列、和總開關對齊")
+    MSH.Ranges.setOn(false)
+    b:layout()
+    local offFill = b.fillBox.enabled == false and b.rangeChips[5].enabled == false
+    MSH.Ranges.setOn(true)
+    b:layout()
+    check(offFill and b.fillBox.enabled and b.rangeChips[5].enabled, "總開關關著：整片顯示與 chip 停用；打開就能按")
+    local savedPZ, saves = PZAPI, 0
+    PZAPI = { ModOptions = { save = function() saves = saves + 1 end } }
+    MSH.Ranges.fillOpt = { v = false, getValue = function(s) return s.v end, setValue = function(s, x) s.v = x end }
+    b.fillBox.onChange(b.fillBox.target, true, b.fillBox)
+    check(MSH.Ranges.fillOpt.v == true and saves == 1 and MSH.Ranges.isFill(), "勾〔整片顯示〕：寫進 ModOptions RangesFill 並存檔")
+    b:layout()
+    check(b.fillBox.checked == true, "重排時勾選狀態照 ModOptions")
+    MSH.Ranges.fillOpt, PZAPI = nil, savedPZ
+    MSH.Ranges.session.fill = false
+    MSH.Ranges.setOn(false)
 
     T.section("ManagerWindow：重生點（使用者 2026-10-14）：〔設為重生點〕只在伺服器開放、站在這間裡時可按；點在這間給〔清除重生點〕")
     local rw = openWith(1, 860, 560)

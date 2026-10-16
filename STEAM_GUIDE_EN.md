@@ -188,7 +188,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [list]
 [*] [b]What they are[/b]: places an admin marks in the admin panel where safehouses can't be built, such as dirt roads the road check can't detect.
 [*] [b]How they're checked[/b]: if the area covers any tile of one, you can't create or redraw it there. Only touching the edge is fine, and admins are blocked too.
-[*] [b]Can I see them?[/b] They aren't drawn on the ground. When a check fails, the covered part is marked red and the zone's name is shown.
+[*] [b]Can I see them?[/b] Yes. The "No-build zones" kind of "Show ranges on the ground" in the safehouse window (on by default) draws the zones near you in bright red, and updates right away when an admin adds or deletes one. When a check fails, the covered part is also marked red and the zone's name is shown.
 [*] [b]Existing safehouses[/b]: a zone added later doesn't remove them.
 [/list]
 [h3]This server's rules[/h3]
@@ -269,18 +269,21 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [*] [b]Vanilla UI[/b]: the vanilla claim-safehouse right-click option is removed; the vanilla safehouse window opens this manager for this mod's safehouses.
 [/list]
 [h3]Show ranges on the ground[/h3]
-A switch under the list (on by default) outlines the safehouses near you on the ground:
+A switch under the list (on by default) marks the safehouses and no-build zones near you on the ground:
 [table]
 [tr][th]Kind[/th][th]Color[/th][th]Who sees it[/th][/tr]
 [tr][td]Mine[/td][td]Cyan[/td][td]Always[/td][/tr]
 [tr][td]Shared with me[/td][td]Blue[/td][td]Always[/td][/tr]
 [tr][td]Faction[/td][td]Orange[/td][td]If the server allows it (on by default)[/td][/tr]
 [tr][td]Other players[/td][td]Magenta[/td][td]If the server allows it (off by default)[/td][/tr]
+[tr][td]No-build zones[/td][td]Bright red[/td][td]Always[/td][/tr]
 [/table]
 [list]
 [*] [b]Same color everywhere[/b]: grass and asphalt show the same color, and the swatch next to each switch is what you see on the ground.
-[*] [b]Darker tiles[/b]: near characters, and where a building would hide it, the outline is tinted into the floor and looks darker; characters still stand on it and buildings still cover it.
-[*] [b]Per kind[/b]: each of the four kinds can be turned on or off.
+[*] [b]Darker tiles[/b]: near characters, and where a building would hide it, the color is tinted into the floor and looks darker; characters still stand on it and buildings still cover it.
+[*] [b]Fill areas[/b]: only the edges are drawn by default; with "Fill areas" on (off by default) the whole area gets a darker color and the edge is drawn in a brighter one.
+[*] [b]Overlaps[/b]: where a safehouse and a no-build zone overlap, the safehouse's color is shown.
+[*] [b]Per kind[/b]: each of the five kinds can be turned on or off.
 [*] [b]Stays on[/b]: after you close the window and next time you play; also switchable on the Mods page in Options.
 [*] [b]Display only[/b]: the game already sends every safehouse's area to all players, so a server turning a kind off doesn't keep it secret.
 [/list]

@@ -294,16 +294,17 @@ return function(T)
         and pool["status#1"].text == tr("IGUI_MSH_ZoneList_Teleported", "Mall", 8, 6)
         and pool.zn1.color == colors.accent and pool.zn4.color == colors.text,
         "按〔傳送〕：送原版 /teleportto 到中央那格的中心，狀態列寫送到哪，那一列名稱改 accent")
-    local SEL, ZONE = colorOf(ZL.SEL_COLOR.ov), colorOf(Z.ZONE_COLOR.ov)
+    local ZC = MSH.Ranges.COLORS.zones
+    local SEL, ZONE = colorOf(ZL.SEL_COLOR.ov), colorOf(ZC.ov)
     ZL.frame(v)
     local oc, ok0, oa = tw.overlay(0)
     local lit0 = tw.lit(0)
     check(ok0["5,5"] == SEL and ok0["10,7"] == SEL and ok0["40,40"] == ZONE and ok0["42,42"] == ZONE
-        and oa["40,40"] == Z.ZONE_COLOR.ov.a and oa["5,5"] == ZL.SEL_COLOR.ov.a
+        and oa["40,40"] == ZC.ov.a and oa["5,5"] == ZL.SEL_COLOR.ov.a
         and not oc["4,5"] and not oc["11,5"] and not oc["5,8"] and not lit0["5,5"] and not lit0["40,40"],
         "地上：禁建區是亮紅疊色、傳送過去的那個是黃色疊色（都帶 ov，不是地板染色），邊界照範圍")
     local FT = MSH.FloorTint
-    check(FT.cells.zones[FT.key(40, 40, 0)].ov == Z.ZONE_COLOR.ov and FT.cells.zoneSel[FT.key(5, 5, 0)].ov == ZL.SEL_COLOR.ov,
+    check(FT.cells.zones[FT.key(40, 40, 0)].ov == ZC.ov and FT.cells.zoneSel[FT.key(5, 5, 0)].ov == ZL.SEL_COLOR.ov,
         "zones／zoneSel 圖層的格子顏色帶 ov")
     canTp = false
     ZL.layout(m)
@@ -382,9 +383,9 @@ return function(T)
     end
     frame()
     local _, ko = tw.overlay(0)
-    check(FT.cells.zones[FT.key(5, 5, 0)].ov == Z.ZONE_COLOR.ov and ko["5,5"] == ZONE and ko["10,7"] == ZONE and ko["42,42"] == ZONE
+    check(FT.cells.zones[FT.key(5, 5, 0)].ov == ZC.ov and ko["5,5"] == ZONE and ko["10,7"] == ZONE and ko["42,42"] == ZONE
         and not ko["4,5"] and not ko["11,5"] and not ko["5,8"],
-        "禁建區面板也用 ZONE_COLOR（亮紅疊色）畫既有禁建區，邊界照範圍")
+        "禁建區面板也用 Ranges.COLORS.zones（亮紅疊色）畫既有禁建區，邊界照範圍")
     fw.click(pool.drag)
     check(zm.sel.tool == Sel.DRAG and pool.save.style == "primary" and not pool.save.enabled,
         "拖曳、範圍還空著：〔儲存禁建區〕是唯一的主要按鈕但停用")

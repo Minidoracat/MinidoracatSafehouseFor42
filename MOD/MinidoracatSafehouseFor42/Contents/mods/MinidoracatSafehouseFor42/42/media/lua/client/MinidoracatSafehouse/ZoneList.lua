@@ -1,7 +1,7 @@
 -- MinidoracatSafehouse/ZoneList.lua：禁建區視窗（管理員）。使用者 2026-10-16：「禁建區數量多了，顯示還會清楚嗎? 另外可能還需要
 --   傳送過去確認或者查看座標，所以是不是應該另外做一個分頁或視窗來管理比較好?」管理員面板排除頁〔管理禁建區〕開（AP.onZoneManage：
 --   先收起管理員面板，這裡關掉時開回排除頁）。側邊、非 modal，不擋角色附近的地面：開著時地上用亮紅疊色畫全部禁建區（FloorTint
---   圖層 "zones"，ZonePanel.ZONE_COLOR），〔傳送〕過去的那個用黃色（"zoneSel"，ZL.SEL_COLOR），可以一個一個傳送過去看範圍。
+--   圖層 "zones"，Ranges.COLORS.zones），〔傳送〕過去的那個用黃色（"zoneSel"，ZL.SEL_COLOR），可以一個一個傳送過去看範圍。
 -- 清單：名稱搜尋（不分大小寫的子字串）；每個禁建區一列 名稱＋〔傳送〕＋〔刪除〕，下一行左上角／外框／塊數，已經壓到的安全屋
 --   用 warning 列出。〔新增禁建區〕收起本視窗開 ZonePanel.lua，那邊關掉時開回本視窗（onClosed）。新增、刪除立即生效
 --   （adminAddZone／adminRemoveZone，伺服器 Zones.lua）；刪除先 danger 確認。
@@ -294,7 +294,7 @@ function ZL.frame(v)
     end
     local Tint, Z = MSH.FloorTint, MSH.ZonePanel
     local pz = math.floor(p:getZ())
-    Tint.setRects("zones", m.flat, Z.ZONE_COLOR, Z.ZONE_ALPHAS, pz)
+    Tint.setRects("zones", m.flat, MSH.Ranges.COLORS.zones, Z.ZONE_ALPHAS, pz)
     Tint.setRects("zoneSel", m.selFlat, ZL.SEL_COLOR, ZL.SEL_ALPHAS, pz)
 end
 
