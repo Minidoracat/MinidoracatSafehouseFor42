@@ -23,7 +23,7 @@
   8. 佔位符殘留            — {{TOKEN}} 漏替換
   9. Steam 描述位元組      — 各語言 ≤8000 UTF-8 bytes（中日文 3 bytes/字，容易低估）
  10. 沙盒選項翻譯配對       — 每個 option 要有 Sandbox_<translation> 標題＋ _tooltip＋分頁名
- 11. CHANGELOG 洩漏掃描     — bullet 會被整段貼到公開的 Workshop 更新說明；掃基礎設施
+ 11. 公開文件洩漏掃描      — CHANGELOG bullet 與 STEAM_*.md 都會原樣貼到公開 Steam 頁；掃基礎設施
                            樣式（/home/ 路徑、IP、SteamID64、ssh、主機名）當最後防線。
                            攻擊配方與玩家識別資訊機器認不出來，靠撰寫規則（AGENTS.md）
  12. craftRecipe 腳本       — module Base、必要欄位、輸入行 token、物品存在、OnTest／OnAddToMenu 函式存在
@@ -404,7 +404,9 @@ for m in MEDIA_DIRS:
     miss += [f"缺分頁名: Sandbox_{p}" for p in pages if f"Sandbox_{p}" not in keys]
     fail("沙盒選項翻譯配對", miss) if miss else ok(f"沙盒選項翻譯配對（{len(opts)} 選項）")
 
-# ---- 11. CHANGELOG 洩漏掃描 ----
+# ---- 11. 公開文件洩漏掃描 ----
+# STEAM_*.md 也掃：2026-10-18 三個發版代理都把 gen_steam_changelog.py 的草稿整篇手寫覆蓋，
+# 生成器的掃描只在產生當下跑，覆蓋後的稿沒人再掃。
 LEAK_PATTERNS = [
     (re.compile(r"/home/\w+"), "Linux 家目錄路徑"),
     (re.compile(r"[A-Z]:\\Users\\"), "Windows 使用者路徑"),
@@ -413,16 +415,17 @@ LEAK_PATTERNS = [
     (re.compile(r"\bssh\b", re.IGNORECASE), "ssh 字樣"),
     (re.compile(r"pz-?server", re.IGNORECASE), "伺服器主機名"),
 ]
-_cl = os.path.join(REPO, "CHANGELOG.md")
-if os.path.isfile(_cl):
-    leaks = []
-    with open(_cl, encoding="utf-8") as fh:
+_pub = [n for n in sorted(os.listdir(REPO)) if re.fullmatch(r"CHANGELOG\.md|STEAM_.*\.md", n)]
+leaks = []
+for _n in _pub:
+    with open(os.path.join(REPO, _n), encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, 1):
             for pat, desc in LEAK_PATTERNS:
                 mm = pat.search(line)
                 if mm:
-                    leaks.append(f"CHANGELOG.md:{lineno} {desc}（{mm.group()[:40]}）")
-    fail("CHANGELOG 無基礎設施洩漏樣式", leaks) if leaks else ok("CHANGELOG 無基礎設施洩漏樣式")
+                    leaks.append(f"{_n}:{lineno} {desc}（{mm.group()[:40]}）")
+_t = f"公開文件無基礎設施洩漏樣式（{len(_pub)} 檔）"
+fail(_t, leaks) if leaks else ok(_t)
 
 # ---- 翻譯字元：原版字型能顯示 ----
 # 原版字型沒有退回機制：字碼超過該字型的最大字碼畫成「?」，範圍內但沒有字形就畫成空白（寬 0）。
