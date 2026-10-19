@@ -13,6 +13,11 @@
 --   起點 NEAR 步內沒有屋頂＝室外（OUTSIDE）。
 --   缺口那條邊上有門的另外列（doors）：引擎只把有牆屬性（cutN／cutW）或門框型別的邊算牆，原版綠、白車庫門開著時的門片
 --   沒有牆屬性，Knox Pass 的模型門關著也沒有（使用者 2026-10-15 正式服回報車庫門被列成缺牆）。客戶端照開著／關著寫原因。
+--   缺口在西邊、那格有西牆又有柱子的也另外列（pillars）：引擎整格有 WallSE（柱子的圖塊屬性）就不算那格的西牆
+--   （IsoRegions.java:336），牆在也照缺口算（玩家 2026-10-19 回報）。柱子是蓋牆時遊戲自動補的牆角（buildUtil.addCorner
+--   的 isCorner）就由伺服器拆掉（使用者 2026-10-19 裁定；那格有西牆時牆角多餘，拆前拆後畫面只差柱頂幾個像素，
+--   sh-pillarroot-1019a）：新蓋的牆在 buildUtil.checkCorner 之後排進佇列、下一個 tick 才拆（I.install／I.tick；同一刻拆，
+--   伺服器格子上的物件順序和還沒收到新牆的客戶端不同），已經存在的在查詢查到時排進佇列。玩家自己蓋的柱子不動，客戶端叫玩家拆。
 -- 同一棟（使用者 2026-10-15：「每一層都分析」）：同一層從起點沿著有屋頂的格子往外找（不看牆、不進地圖房間），每碰到
 -- 一個新的 region 就照上面分析一次；樓上、樓下從相鄰那一層走過的格子裡、這一層有地板而且頭上有屋頂的格子開始找。
 -- 單層房子屋頂上的平台（上面沒再蓋一層）沒有這種格子，不算一層。
@@ -132,7 +137,7 @@ end
 local function newCtx(x, y, z)
     local cache = {}
     local ctx = { left = I.LIMIT, cell = getCell(), minX = x, minY = y, minZ = z, maxX = x, maxY = y, maxZ = z,
-        partial = false, holes = {}, foot = {}, footList = {}, regions = {} }
+        partial = false, holes = {}, foot = {}, footList = {}, regions = {}, corners = {} }
     function ctx.roofed(rx, ry, rz)
         local c = at(cache, rz)
         local k = key(rx, ry)
@@ -148,11 +153,12 @@ end
 
 -- 一間的結果：verdict、z（哪一層）、size（格數）、roofs（有屋頂的格數）、walls（房子邊上有牆的邊數）、x, y（分析的
 -- 起點；起點沒有屋頂時是 NEAR 步內最近的有屋頂格子）、gaps（缺牆：x, y, side 三個一組）、doors（缺口那條邊上有門：
--- x, y, side, 開著 1／關著 0 四個一組）、holes（缺屋頂：x, y 兩個一組）、gapCount（缺牆加上有門的缺口）／doorCount／
--- holeCount（全部的數量；各清單最多 MAX_MARKS 筆）
+-- x, y, side, 開著 1／關著 0 四個一組）、pillars（西邊的缺口那格有牆又有柱子：x, y, 自動補的牆角 1／其他柱子 0 三個一組）、
+-- holes（缺屋頂：x, y 兩個一組）、gapCount（缺牆加上有門、有柱子的缺口）／doorCount／pillarCount／holeCount（全部的
+-- 數量；各清單最多 MAX_MARKS 筆）
 local function newRoom(x, y, z)
     return { x = x, y = y, z = z, size = 0, roofs = 0, walls = 0, gaps = {}, gapCount = 0, doors = {}, doorCount = 0,
-        holes = {}, holeCount = 0 }
+        pillars = {}, pillarCount = 0, holes = {}, holeCount = 0 }
 end
 
 local function addHole(r, ctx, x, y)
@@ -179,20 +185,46 @@ local function doorOn(cell, x, y, z, side)
     return nil
 end
 
+-- 這格有真的西牆（牆、門框、窗框；getWall 不算有 WallSE 的物件）又有柱子（WallSE）：回 "corner"＝柱子都是蓋牆時自動補的
+-- 牆角（buildUtil.addCorner 的 isCorner，存檔會留，IsoThumpable.java:450, 639），"pillar"＝有玩家自己蓋的或其他的柱子；
+-- 不是這種格子回 nil
+local function pillarOn(cell, x, y, z)
+    local sq = cell:getGridSquare(x, y, z)
+    if sq == nil or not sq:has(IsoFlagType.WallSE) or sq:getWall(false) == nil then return nil end
+    local objs = sq:getObjects()
+    for i = 0, objs:size() - 1 do
+        local o = objs:get(i)
+        if o:isWallSE() and not (instanceof(o, "IsoThumpable") and o:isCorner()) then return "pillar" end
+    end
+    return "corner"
+end
+
 local function addGap(r, ctx, x, y, d)
     r.gapCount = r.gapCount + 1
     local ex, ey, side = edgeOf(x, y, d)
     local open = doorOn(ctx.cell, ex, ey, r.z, side)
-    if open == nil then
-        if r.gapCount - r.doorCount > I.MAX_MARKS then return end
-        local g, n = r.gaps, #r.gaps
-        g[n + 1], g[n + 2], g[n + 3] = ex, ey, side
+    if open ~= nil then
+        r.doorCount = r.doorCount + 1
+        if r.doorCount > I.MAX_MARKS then return end
+        local g, n = r.doors, #r.doors
+        g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, open and 1 or 0
         return
     end
-    r.doorCount = r.doorCount + 1
-    if r.doorCount > I.MAX_MARKS then return end
-    local g, n = r.doors, #r.doors
-    g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, open and 1 or 0
+    local pillar = side == 2 and pillarOn(ctx.cell, ex, ey, r.z) or nil
+    if pillar ~= nil then
+        r.pillarCount = r.pillarCount + 1
+        if pillar == "corner" then
+            local c, n = ctx.corners, #ctx.corners
+            c[n + 1], c[n + 2], c[n + 3] = ex, ey, r.z
+        end
+        if r.pillarCount > I.MAX_MARKS then return end
+        local g, n = r.pillars, #r.pillars
+        g[n + 1], g[n + 2], g[n + 3] = ex, ey, pillar == "corner" and 1 or 0
+        return
+    end
+    if r.gapCount - r.doorCount - r.pillarCount > I.MAX_MARKS then return end
+    local g, n = r.gaps, #r.gaps
+    g[n + 1], g[n + 2], g[n + 3] = ex, ey, side
 end
 
 -- 封閉而且屋頂至少一半：整個 region 走一遍。格數與屋頂數照引擎（走到上限時清單只有一部分；判定不受影響）
@@ -486,7 +518,8 @@ end
 -- 查一格：{ verdict, x, y, z, rooms, levels, minX, minY, minZ, maxX, maxY, maxZ, partial }。rooms[1] 是那一格所在的
 -- 房間，之後是同一層、樓上、樓下的其他房間（MAP_ROOM、BASEMENT、OUTSIDE 沒有 rooms）；levels＝各層走過的範圍
 -- { z, runs }（由低到高）；partial＝走到上限，有房間或缺口沒列到。地圖的地下室有 RoomDef（Basements），先看地圖房間；
--- 其他地下（z < 0）不進 IsoRegions（IsoRegionWorker 只收 z >= 0），遊戲永遠不算室內
+-- 其他地下（z < 0）不進 IsoRegions（IsoRegionWorker 只收 z >= 0），遊戲永遠不算室內。第二個回傳值＝要拆自動牆角的
+-- 格子（x, y, z 三個一組；不在回覆裡，查詢只讀不改，I.query 交給佇列）
 function I.check(x, y, z)
     local res = { x = x, y = y, z = z, rooms = {}, levels = {} }
     local ctx = newCtx(x, y, z)
@@ -515,7 +548,7 @@ function I.check(x, y, z)
     end
     res.minX, res.minY, res.minZ = ctx.minX, ctx.minY, ctx.minZ
     res.maxX, res.maxY, res.maxZ, res.partial = ctx.maxX, ctx.maxY, ctx.maxZ, ctx.partial
-    return res
+    return res, ctx.corners
 end
 
 function I.query(ctx)
@@ -526,7 +559,8 @@ function I.query(ctx)
         return MSH.Srv.fail(CODE.TOO_FAR)
     end
     local t0 = getTimestampMs()
-    local res = I.check(a.x, a.y, a.z)
+    local res, corners = I.check(a.x, a.y, a.z)
+    for i = 1, #corners, 3 do I.queueCorner(corners[i], corners[i + 1], corners[i + 2]) end
     local ms = getTimestampMs() - t0
     if ms >= I.SLOW_MS then
         MSH.log("indoor check " .. a.x .. "," .. a.y .. "," .. a.z .. " took " .. ms .. " ms, rooms=" .. #res.rooms)
@@ -536,3 +570,57 @@ end
 
 MSH.Srv.define("indoor", { kind = "query", cooldownMs = 1000, fields = { x = "int", y = "int", z = "int" },
     run = function(ctx) return MSH.Indoor.query(ctx) end })
+
+-- ===== 自動牆角 =====
+
+-- 那格有真的西牆時，拆掉蓋牆時遊戲自動補的牆角（isCorner 而且是 WallSE 的 IsoThumpable）；玩家自己蓋的柱子不動。
+-- transmitRemoveItemFromSquare 走原版拆物件的路（RemoveTileObject：先記改前的位元、改完重算，西牆的位元回來）。回拆了幾個
+function I.dropCorners(sq)
+    if sq == nil or not sq:has(IsoFlagType.WallSE) or sq:getWall(false) == nil then return 0 end
+    local objs, n = sq:getObjects(), 0
+    for i = objs:size() - 1, 0, -1 do
+        local o = objs:get(i)
+        if instanceof(o, "IsoThumpable") and o:isCorner() and o:isWallSE() then
+            sq:transmitRemoveItemFromSquare(o)
+            n = n + 1
+        end
+    end
+    if n > 0 then
+        MSH.log("indoor: removed " .. n .. " automatic corner(s) at " .. sq:getX() .. "," .. sq:getY() .. "," .. sq:getZ())
+    end
+    return n
+end
+
+I.pending = I.pending or {}   -- 下一個 tick 要看的格子：x, y, z 三個一組
+
+function I.queueCorner(x, y, z)
+    local p = I.pending
+    p[#p + 1], p[#p + 2], p[#p + 3] = x, y, z
+end
+
+function I.tick()
+    local p = I.pending
+    if #p == 0 then return end
+    I.pending = {}
+    local cell = getCell()
+    for i = 1, #p, 3 do I.dropCorners(cell:getGridSquare(p[i], p[i + 1], p[i + 2])) end
+end
+
+-- 原版蓋牆、門框、窗框、圍籬的建造（ISBuildIsoEntity:create 等）放好物件後都呼叫 buildUtil.checkCorner：包它，把那一格排進
+-- 佇列。開服才裝（原版 server 檔一定載完）；熱重載不重包（I.installed 隨 MSH.Indoor 保留）
+function I.install()
+    if I.installed then return end
+    I.installed = true
+    if type(buildUtil) ~= "table" or type(buildUtil.checkCorner) ~= "function" then
+        MSH.log("indoor: buildUtil.checkCorner missing, not wrapped")
+        return
+    end
+    local orig = buildUtil.checkCorner
+    buildUtil.checkCorner = function(x, y, z, north, thumpable, item)
+        orig(x, y, z, north, thumpable, item)
+        MSH.Indoor.queueCorner(x, y, z)
+    end
+end
+
+MSH.Srv.hook("startup", "indoorCorners", function() MSH.Indoor.install() end)
+MSH.Srv.hook("tick", "indoorCorners", function() MSH.Indoor.tick() end)

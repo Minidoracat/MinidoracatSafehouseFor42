@@ -12,6 +12,9 @@
 --   畫不出來，sh-indoor-1015c）：貼圖是本 MOD 的白色牆面（實心外框＋半透明面，WallGhost{N,W}2x.png），不用原版木牆
 --   （使用者 2026-10-15：「應該明顯一點的亮紅色，然後不應該是用那個木板牆的樣子」）。只在玩家站在那一層時畫（疊色不測
 --   深度，會蓋過樓上）。缺口那條邊上有門（車庫門開著、遊戲不算牆的門）另外列一種列，寫「開著的門」而不是「補上牆」。
+--   西邊的缺口那格有牆又有柱子（遊戲整格有柱子就不算那格的西牆，玩家 2026-10-19 回報）也另外列：玩家自己蓋的柱子寫「有柱子的
+--   牆」、叫玩家拆柱子；蓋牆時遊戲自動補的牆角寫「自動補的牆角」，伺服器查到就拆（server/…/Indoor.lua），拆掉後面板照物件
+--   增減自己重查。
 -- 同一棟每一層都分析（使用者 2026-10-15：「每一層都分析」）：結果有不只一層時，房間列與房間那一行前面寫第幾樓；目前看的
 --   那間不在玩家這一層時，問題列右邊寫第幾樓、不寫距離。
 -- 屋簷下（OPEN 而且沒圍起來的邊不少於有牆的邊：比牆多出一圈的屋頂、門廊、車棚）只說結論、不列缺口：那些邊本來就沒要圍。
@@ -139,16 +142,37 @@ function P.doorRows(doors)
     return rows
 end
 
+-- 西邊的缺口那格有牆又有柱子（伺服器的 pillars：x, y, 自動補的牆角 1／其他柱子 0 三個一組）：兩種各自併段，列成
+-- kind = "pillar"（玩家自己蓋的柱子，叫玩家拆）、"corner"（蓋牆時遊戲自動補的牆角，伺服器查到就拆）
+function P.pillarRows(pillars)
+    local own, auto, rows = {}, {}, {}
+    for i = 1, #pillars, 3 do
+        local t = pillars[i + 2] == 1 and auto or own
+        local n = #t
+        t[n + 1], t[n + 2], t[n + 3] = pillars[i], pillars[i + 1], 2
+    end
+    for _, row in ipairs(P.segments(own)) do
+        row.kind = "pillar"
+        rows[#rows + 1] = row
+    end
+    for _, row in ipairs(P.segments(auto)) do
+        row.kind = "corner"
+        rows[#rows + 1] = row
+    end
+    return rows
+end
+
 -- 屋簷下：沒圍起來的邊不少於有牆的邊（比牆多出一圈的屋頂、門廊、車棚、院子裡的棚子）
 function P.eaves(room)
     return room ~= nil and (room.verdict == "OPEN" or room.verdict == "PART_ROOF") and room.gapCount >= room.walls
 end
 
--- 這一間要列的問題：缺牆的段、有門的缺口、缺屋頂的塊，近的在前；屋簷下（OPEN）不列
+-- 這一間要列的問題：缺牆的段、有門的缺口、有柱子的缺口、缺屋頂的塊，近的在前；屋簷下（OPEN）不列
 function P.issues(room, px, py)
     if room == nil or (room.verdict == "OPEN" and P.eaves(room)) then return {} end
     local rows = P.segments(room.gaps or EMPTY)
     for _, d in ipairs(P.doorRows(room.doors or EMPTY)) do rows[#rows + 1] = d end
+    for _, d in ipairs(P.pillarRows(room.pillars or EMPTY)) do rows[#rows + 1] = d end
     for _, b in ipairs(P.blobs(room.holes or EMPTY)) do rows[#rows + 1] = b end
     for _, row in ipairs(rows) do row.dist = P.dist(row, px, py) end
     MSH.sortSafe(rows, function(a, b) return a.dist < b.dist end)
@@ -516,6 +540,10 @@ function P.bindCell(v, cell, item, index)
             key, fix = "IGUI_MSH_Indoor_DoorOpen", "IGUI_MSH_Indoor_DoorOpenFix"   -- 開著的車庫門：關上就好
         elseif item.kind == "door" then
             key, fix = "IGUI_MSH_Indoor_DoorShut", "IGUI_MSH_Indoor_DoorShutFix"   -- 關著也不算牆（Knox Pass 模型門等）
+        elseif item.kind == "pillar" then
+            key, fix = "IGUI_MSH_Indoor_Pillar", "IGUI_MSH_Indoor_PillarFix"       -- 同一格的柱子讓牆不算：拆柱子
+        elseif item.kind == "corner" then
+            key, fix = "IGUI_MSH_Indoor_Corner", "IGUI_MSH_Indoor_CornerFix"       -- 自動補的牆角：伺服器已經在拆
         elseif room ~= nil and room.verdict == "PART_ROOF" then
             fix = "IGUI_MSH_Indoor_SplitFix"   -- 圍起來的範圍裡面：隔一道牆就好
         end

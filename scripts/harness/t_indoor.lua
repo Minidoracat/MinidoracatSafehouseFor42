@@ -5,11 +5,11 @@
 return function(T)
     local check = T.check
     local WALL_N, WALL_W, FLOOR = 1, 2, 16
-    local saved = { getCell = getCell, IsoRegions = IsoRegions }
+    local saved = { getCell = getCell, IsoRegions = IsoRegions, IsoFlagType = IsoFlagType, buildUtil = buildUtil }
 
     -- 假 IsoRegions（getSquareFlags／getIsoWorldRegion／getChunkRegion）：flags["x,y,z"]＝位元和，沒有＝-1（沒資料）。
     -- region 照引擎：同一層不穿牆相連的格子；有一條走得過去的邊通到沒資料的格子＝不封閉；屋頂數＝正上方一層有地板的格數
-    local W = { flags = {}, map = {}, doors = {}, regions = nil }
+    local W = { flags = {}, map = {}, doors = {}, regions = nil, objs = {}, westWall = {}, removed = {} }
     local function k3(x, y, z) return x .. "," .. y .. "," .. z end
     local function fl(x, y, z) return W.flags[k3(x, y, z)] or -1 end
     local function bit(f, b) return f >= 0 and math.floor(f / b) % 2 == 1 end
@@ -105,20 +105,64 @@ return function(T)
             return r and r.chunk or nil
         end,
     }
-    -- 伺服器的格子：地圖房間（getRoom 不是 nil、不是 user-defined）與缺口上的門（getSpecialObjects）
+    -- 格子上的柱子（WallSE）與真的西牆（getWall(false) 找得到）：W.objs[k]＝物件清單，W.westWall[k]＝有真的西牆。
+    -- 西牆位元照引擎（IsoRegions.java:336）：那格有柱子就不設；拆物件時照同一條重算（RemoveTileObject）
+    local function anySE(list)
+        for _, o in ipairs(list or {}) do
+            if o.isWallSE() then return true end
+        end
+        return false
+    end
+    local function engineW(x, y, z)
+        local k = k3(x, y, z)
+        setBit(x, y, z, WALL_W, W.westWall[k] == true and not anySE(W.objs[k]))
+    end
+    local function westWall(x, y)
+        W.westWall[k3(x, y, 0)] = true
+        engineW(x, y, 0)
+    end
+    -- 柱子：corner＝蓋牆時自動補的牆角（isCorner），否則是玩家自己蓋的
+    local function pillar(x, y, corner)
+        local k = k3(x, y, 0)
+        local list = W.objs[k] or {}
+        W.objs[k] = list
+        local o = { __class = "IsoThumpable" }
+        function o.isWallSE() return true end
+        function o.isCorner() return corner == true end
+        list[#list + 1] = o
+        engineW(x, y, 0)
+        return o
+    end
+    -- 伺服器的格子：地圖房間（getRoom 不是 nil、不是 user-defined）、缺口上的門（getSpecialObjects）、柱子與西牆
     local NO_OBJECTS = {}
     getCell = function()
         return { getGridSquare = function(_, x, y, z)
             local k = k3(x, y, z)
             local inMap, objs = W.map[k], W.doors[k] or NO_OBJECTS
-            return { getRoom = function() return inMap and {} or nil end, isUserDefinedRoom = function() return false end,
+            return { getX = function() return x end, getY = function() return y end, getZ = function() return z end,
+                getRoom = function() return inMap and {} or nil end, isUserDefinedRoom = function() return false end,
                 getSpecialObjects = function()
                     return { size = function() return #objs end, get = function(_, i) return objs[i + 1] end }
+                end,
+                has = function(_, f) return f == IsoFlagType.WallSE and anySE(W.objs[k]) end,
+                getWall = function(_, north) return (not north and W.westWall[k]) and {} or nil end,
+                getObjects = function()
+                    local l = W.objs[k] or NO_OBJECTS
+                    return { size = function() return #l end, get = function(_, i) return l[i + 1] end }
+                end,
+                transmitRemoveItemFromSquare = function(_, o)
+                    local l = W.objs[k] or {}
+                    for i = #l, 1, -1 do
+                        if l[i] == o then table.remove(l, i) end
+                    end
+                    W.removed[#W.removed + 1] = k
+                    engineW(x, y, z)
                 end }
         end }
     end
     local function fresh()
         W.flags, W.map, W.doors, W.regions = {}, {}, {}, nil
+        W.objs, W.westWall, W.removed = {}, {}, {}
         ground(0, 0, 40, 40, 0)
     end
     -- 在 (x, y) 放一扇門：north＝北邊的門；class 預設 IsoDoor（IsoThumpable 用 isDoor 分辨，isDoor＝false＝不是門的物件）
@@ -153,12 +197,23 @@ return function(T)
         end
         return sorted(out)
     end
+    local function pillars(r)
+        local out = {}
+        for i = 1, #r.pillars, 3 do out[#out + 1] = r.pillars[i] .. "," .. r.pillars[i + 1] .. "W" .. r.pillars[i + 2] end
+        return sorted(out)
+    end
     local function runs(lv)
         local out = {}
         for i = 1, #lv.runs, 3 do out[#out + 1] = lv.runs[i] .. "," .. lv.runs[i + 1] .. "," .. lv.runs[i + 2] end
         return table.concat(out, " ")
     end
 
+    -- 原版 buildUtil.checkCorner（蓋牆、門框、窗框、圍籬放好物件後呼叫；本 MOD 開服時包它）：記呼叫
+    IsoFlagType = { WallSE = "WallSE" }
+    local cornerCalls = {}
+    buildUtil = { checkCorner = function(x, y, z, north)
+        cornerCalls[#cornerCalls + 1] = x .. "," .. y .. "," .. z .. (north and "N" or "W")
+    end }
     local MSH = T.boot()
     local I = MSH.Indoor
 
@@ -313,6 +368,85 @@ return function(T)
         "門與缺牆各自最多 MAX_MARKS 筆，數量照實數")
     I.MAX_MARKS = marks0
 
+    T.section("室內檢查：西牆那格有柱子（玩家 2026-10-19 回報「要敲掉木柱才會正常室內」）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 10, 13 do westWall(10, y) end
+    pillar(10, 11, false)
+    local corners
+    res, corners = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(not bit(fl(10, 11, 0), WALL_W) and r.verdict == "OPEN" and r.gapCount == 1 and r.pillarCount == 1
+        and pillars(r) == "10,11W0" and gaps(r) == "" and #corners == 0,
+        "西牆那格有玩家自己蓋的柱子：遊戲不算那面牆，列成有柱子的牆（不叫你補牆），伺服器不動玩家的柱子")
+    pillar(10, 12, true)
+    res, corners = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(pillars(r) == "10,11W0 10,12W1" and table.concat(corners, ",") == "10,12,0" and res.corners == nil,
+        "蓋牆時自動補的牆角：標成 1，另外回給查詢交給佇列拆（不放進回覆）")
+    pillar(10, 11, true)
+    res, corners = I.check(11, 11, 0)
+    check(pillars(res.rooms[1]) == "10,11W0 10,12W1" and table.concat(corners, ",") == "10,12,0",
+        "同一格有玩家的柱子又有自動牆角：照玩家的柱子列（只拆牆角救不回）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    wall(10, 11, WALL_W, false)
+    pillar(10, 11, true)
+    wall(12, 10, WALL_N, false)
+    westWall(12, 10)
+    pillar(12, 10, true)
+    res, corners = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(gaps(r) == "10,11W 12,10N" and r.pillarCount == 0 and #corners == 0,
+        "那格沒有真的西牆只有柱子、或缺口在北邊（柱子只擋西牆）：照缺牆列")
+
+    T.section("室內檢查：自動補的牆角由伺服器拆（使用者 2026-10-19 裁定）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 10, 13 do westWall(10, y) end
+    pillar(10, 11, false)
+    pillar(10, 12, true)
+    local bob = T.player({ name = "bob", x = 11.5, y = 11.5 })
+    res = T.cmd(bob, "indoor", { x = 11, y = 11, z = 0 })
+    check(res ~= nil and res.ok and #W.removed == 0 and res.corners == nil,
+        "查詢當下不拆、回覆裡沒有要拆的格子")
+    T.tick(1)
+    check(#W.removed == 1 and W.removed[1] == k3(10, 12, 0) and bit(fl(10, 12, 0), WALL_W) and #W.objs[k3(10, 11, 0)] == 1,
+        "下一個 tick 拆掉自動牆角，那格的西牆算回來；玩家自己蓋的柱子不動")
+    T.advance(1000)
+    r = T.cmd(bob, "indoor", { x = 11, y = 11, z = 0 }).rooms[1]
+    check(pillars(r) == "10,11W0" and r.gapCount == 1, "再查：只剩玩家的柱子那格")
+    check(I.dropCorners(getCell():getGridSquare(10, 11, 0)) == 0 and #W.objs[k3(10, 11, 0)] == 1,
+        "直接叫 dropCorners：玩家的柱子不拆")
+
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 10, 13 do
+        if y ~= 12 then westWall(10, y) end
+    end
+    wall(10, 12, WALL_W, false)
+    pillar(10, 12, true)       -- 屋外那面北牆蓋好時，這格還沒有牆：遊戲在這格補了牆角
+    westWall(10, 12)           -- 之後在這格補西牆：有柱子，遊戲照樣不算
+    check(not bit(fl(10, 12, 0), WALL_W), "（前提）補了西牆、遊戲還是不算")
+    local before = #cornerCalls
+    buildUtil.checkCorner(10, 12, 0, false, {}, {})
+    check(#cornerCalls == before + 1 and cornerCalls[#cornerCalls] == "10,12,0W" and #W.removed == 0,
+        "開服後原版 checkCorner 被包起來：照樣呼叫原版，當下不拆")
+    T.tick(1)
+    check(#W.removed == 1 and bit(fl(10, 12, 0), WALL_W) and I.check(11, 11, 0).verdict == "ROOM",
+        "下一個 tick 拆掉那格的自動牆角：西牆算回來，整間算室內")
+    buildUtil.checkCorner(11, 10, 0, true, {}, {})
+    T.tick(1)
+    check(#W.removed == 1, "蓋在沒有柱子的格子：不拆任何東西")
+    I.install()
+    before = #cornerCalls
+    buildUtil.checkCorner(11, 10, 0, true, {}, {})
+    check(#cornerCalls == before + 1, "再呼叫一次 install：不重複包（原版只被呼叫一次）")
+
     T.section("室內檢查：同一棟每一層（使用者 2026-10-15：「每一層都分析」）")
     fresh()
     box(10, 10, 13, 13)
@@ -376,6 +510,7 @@ return function(T)
     check(T.cmd(alice, "indoor", { x = 11, y = 11 }).code == "BAD_ARGS", "缺 z：BAD_ARGS")
 
     getCell, IsoRegions = saved.getCell, saved.IsoRegions
+    IsoFlagType, buildUtil = saved.IsoFlagType, saved.buildUtil
 
     -- ===== 客戶端面板 =====
     local G = { "MinidoracatUI", "ISPanel", "ISButton", "getCore", "getTextManager", "UIFont", "getText", "IsoSprite",
@@ -668,6 +803,24 @@ return function(T)
     ghosts = {}
     T.fire("RenderOpaqueObjectsInWorld", 0)
     check(#ghosts == 4, "有門的缺口一樣畫牆影")
+
+    T.section("室內檢查面板：西牆那格有柱子（玩家 2026-10-19 回報）")
+    local PILLARS = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,
+        partial = false, levels = { { z = 0, runs = RUNS44 } },
+        rooms = { { verdict = "OPEN", z = 0, x = 11, y = 11, size = 16, roofs = 16, walls = 13, gapCount = 3, doorCount = 0,
+            pillarCount = 3, holeCount = 0, gaps = {}, holes = {}, doors = {}, pillars = { 10, 12, 0, 10, 11, 0, 10, 13, 1 } } } }
+    T.advance(P.GAP_MS)
+    P.recheck(m)
+    T.tick(1)
+    reply(PILLARS)
+    check(#m.issues == 2 and m.issues[1].kind == "pillar" and m.issues[1].n == 2 and m.issues[2].kind == "corner"
+        and m.issues[2].n == 1, "有柱子的缺口：玩家的柱子、自動補的牆角各自併段，不列成缺牆")
+    check(v.issues.pool[1].title == "IGUI_MSH_Indoor_Pillar|2" and v.issues.pool[1].sub == "IGUI_MSH_Indoor_PillarFix"
+        and v.issues.pool[2].title == "IGUI_MSH_Indoor_Corner|1" and v.issues.pool[2].sub == "IGUI_MSH_Indoor_CornerFix",
+        "柱子那列叫你拆柱子、牆角那列說已經拆掉，都不叫你補牆")
+    ghosts = {}
+    T.fire("RenderOpaqueObjectsInWorld", 0)
+    check(#ghosts == 3 and ghosts[1] == P.GHOST_TEX[2] .. "@10,11,0/" .. P.GHOST, "有柱子的缺口一樣在西邊畫牆影")
 
     T.section("室內檢查面板：太遠、換查別格、關窗")
     T.advance(P.GAP_MS)
