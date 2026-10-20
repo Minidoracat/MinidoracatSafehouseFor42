@@ -44,6 +44,7 @@ local SCENARIOS = {
     "t_respawn",
     "t_indoor",
     "t_vehicles",
+    "t_storage",
     "t_client",
     "t_ui_create",
     "t_ui_manager",

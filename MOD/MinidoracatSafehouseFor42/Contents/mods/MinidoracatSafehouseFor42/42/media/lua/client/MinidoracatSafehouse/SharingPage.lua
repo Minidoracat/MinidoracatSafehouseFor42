@@ -19,12 +19,13 @@ local SHARE = MSH.SHARE
 local SP = MSH.SharingPage or {}
 MSH.SharingPage = SP
 
-SP.CHIPS = { "MEMBER", "USE", "MOVE", "BUILD", "FARM", "INVITE", "MANAGE" }
+-- 遠距拿取（使用者 2026-10-20）排在農耕後面：一般權限在前、邀請與管理在最後
+SP.CHIPS = { "MEMBER", "USE", "MOVE", "BUILD", "FARM", "TAKE", "INVITE", "MANAGE" }
 SP.DEFAULT_BITS = SHARE.MEMBER + SHARE.USE   -- 預設勾成員與用電器（§10.5）
 
 -- ===== 純邏輯（t_ui_manager.lua 測）=====
 
--- 切換一個 chip：其他五個一定要搭配成員（打開就自動加成員）；取消成員＝全部取消（§6.5「其他位元一定要搭配 MEMBER」）
+-- 切換一個 chip：其他權限一定要搭配成員（打開就自動加成員）；取消成員＝全部取消（§6.5「其他位元一定要搭配 MEMBER」）
 function SP.setChip(bits, name, on)
     local bit = SHARE[name]
     if name == "MEMBER" and not on then return 0 end
@@ -257,11 +258,14 @@ function Page:layout(d, x0, y0, w)
     y = y + gap * 3
     L:add(host:fit(getText("IGUI_MSH_Share_Add"), w), 0, y, "text")
     y = y + fh + gap
+    -- 遠距拿取的 chip 只在沙盒是「可遠距拿取」時排出（沒開時勾了也沒作用，2026-10-20 審查）；收起來不會洗掉已存的位元
+    -- （shareBits 只看 chipAllowed）
+    local takeOn = MSH.Settings.storageMode() == MSH.Settings.STORAGE.REMOTE
     local shown = {}
     for i, name in ipairs(SP.CHIPS) do
         local b = self.chips[i]
         b:setVisible(false)
-        if SP.chipAllowed(d, name) then
+        if SP.chipAllowed(d, name) and (name ~= "TAKE" or takeOn) then
             b:setActive(MSH.hasBit(self.bits, SHARE[name]))
             b:setEnabled(idle)
             shown[#shown + 1] = b

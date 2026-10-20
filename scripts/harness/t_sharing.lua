@@ -436,7 +436,6 @@ return function(T)
         local pia = T.player({ name = "pia", x = 500, y = 500 })
         for _, n in ipairs({ "bob", "nora", "quinn", "rex" }) do T.player({ name = n, x = 500, y = 500 }) end
         local r, h = seed("alice", rect(100, 100, 10, 10))
-        check(MSH.SHARE_ALL == 127 and INVITE == 64, "INVITE＝64、SHARE_ALL＝127")
         check(cmd(al, "share", r, { targetUsername = "ivy", bits = INVITE + USE }).ok
             and MSH.Claims.grantOf(r, "ivy").bits == INVITE + USE + MEMBER, "INVITE 自動帶 MEMBER")
         check(cmd(al, "share", r, { targetUsername = "bob", bits = MEMBER }).ok, "bob 是一般成員")
@@ -465,7 +464,7 @@ return function(T)
         check(code(cmd(max, "share", r, { targetUsername = "pia", bits = MOVE })) == "NOT_OWNER",
             "MANAGE 成員仍只能給自己有的一般位元")
         check(cmd(al, "share", r, { targetUsername = "quinn", bits = MSH.SHARE_ALL }).ok
-            and MSH.Claims.grantOf(r, "quinn").bits == 127, "屋主能給全部位元")
+            and MSH.Claims.grantOf(r, "quinn").bits == MSH.SHARE_ALL, "屋主能給全部位元（含遠距拿取）")
         check(cmd(pia, "share", r, { targetUsername = "rex", bits = USE }).ok and has(h, "rex"),
             "只有 INVITE：邀沒有任何資格的人可以")
         check(code(cmd(pia, "share", r, { targetUsername = "fox1", bits = USE })) == "NOT_OWNER"

@@ -24,6 +24,7 @@ local LC, SRC = MSH.LIFECYCLE, MSH.SOURCE
 MW.CAPS = { "window", "controls", "dialog", "virtualList", "scrollPanel", "textWrap", "autocomplete" }
 MW.PAD, MW.GAP = 10, 6
 MW.LIST_PAD = 2   -- 清單（VirtualList）上下的內距
+MW.TITLE_MIN = 6  -- 詳情標題至少留幾個中字寬（Medium 字高）；放不下時右上的按鈕換到標題下一行
 
 -- ===== 狀態（§10.3）：只顯示最高優先的一個與下一步，其餘收進「詳細」 =====
 -- 伺服器設定不完整 ＞ 修復已暫停 ＞ 成員同步受干擾 ＞ 租約寬限或已停用 ＞ 土地規則警告 ＞ 已保護；數字小＝優先。
@@ -411,6 +412,7 @@ function W:build()
 
     self.btnBack = self:button(body, getText("IGUI_MSH_Manager_Back"), W.onBack, self, nil, "chevronLeft")
     self.btnRename = self:button(body, getText("IGUI_MSH_Manager_Rename"), W.onRename, self)
+    self.btnStorage = self:button(body, getText("IGUI_MSH_Storage_Open"), W.onStorage, self, nil, "search")
     self.tabs = UI.Tabs.new({ x = 0, y = 0, height = self.ch, theme = self.theme, target = self, onSelect = W.onTab,
         selected = "overview", items = {
             { id = "overview", label = getText("IGUI_MSH_Manager_TabOverview") },
@@ -441,7 +443,8 @@ function W:build()
     self.btnQuery = self:button(body, getText("IGUI_MSH_Manager_QueryResult"), W.onQuery, self, "primary")
     self.btnDismiss = self:button(body, getText("IGUI_MSH_Manager_Dismiss"), W.onDismiss, self)
     self.hideable = { self.list, self.rangesBox, self.fillBox, self.btnCreateEmpty, self.btnBack, self.btnRename, self.tabs,
-        self.scroll, self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnIndoor, self.btnCreate, self.btnAdmin }
+        self.scroll, self.btnQuery, self.btnDismiss, self.btnRefresh, self.btnSlots, self.btnIndoor, self.btnCreate, self.btnAdmin,
+        self.btnStorage }
     for _, b in ipairs(self.rangeChips) do self.hideable[#self.hideable + 1] = b end
 
     -- 窄版門檻：詳細欄放不下最長的標籤加一個典型值（以目前字型量測，§10.3 Narrow）
@@ -917,16 +920,31 @@ function W:layoutDetail(dx, y, dw, h)
         end
         return
     end
-    -- 標題：Text.wrap 換行、不截（§10.3）；屋主右上〔重新命名〕
+    -- 標題：Text.wrap 換行、不截（§10.3）；右上〔搜尋物品〕（使用者 2026-10-20）與屋主的〔重新命名〕，標題放不下
+    -- TITLE_MIN 時兩顆換到標題下一行（設計稿 temp/plan-storage-1020）
     local a = d.actions or {}
-    local titleW = dw
+    local btns = {}
+    if MW.canSearch(d) then
+        self.btnStorage:setEnabled(true)
+        btns[#btns + 1] = self.btnStorage
+    end
     if a.canRename then
         self.btnRename:setEnabled(self.busy == nil)
-        self:place(self.btnRename, dx + dw - self.btnRename.width, y)
-        titleW = dw - self.btnRename.width - GAP
+        btns[#btns + 1] = self.btnRename
     end
-    local ny = self:addWrapped(B, d.title or "", dx, y, titleW, "text", UIFont.Medium)
-    y = math.max(ny, a.canRename and y + ch or ny) + GAP
+    local bw = 0
+    for _, b in ipairs(btns) do bw = bw + b.width + GAP end
+    local inline = dw - bw >= self.fhM * MW.TITLE_MIN
+    local ny = self:addWrapped(B, d.title or "", dx, y, inline and dw - bw or dw, "text", UIFont.Medium)
+    local by = y
+    if not inline and #btns > 0 then by = ny + GAP end
+    local bx = dx + dw
+    for i = #btns, 1, -1 do
+        bx = bx - btns[i].width
+        self:place(btns[i], bx, by)
+        bx = bx - GAP
+    end
+    y = math.max(ny, #btns > 0 and by + ch or ny) + GAP
     -- 分頁：分享給我的只有概覽；帶 MANAGE 或 INVITE 多「成員與分享」；土地規則只給屋主（§10.3 第一點）
     local owner = d.actorRole == "owner"
     local canShare = MSH.SharingPage.canAdd(d)
@@ -1191,6 +1209,28 @@ end
 
 function W.onIndoor()
     MW.openIndoor()
+end
+
+-- 〔搜尋物品〕（使用者 2026-10-20）：沙盒 StorageMode 不是「關閉」、這間 active（詳情只給屋主與成員）、框架有面板要的能力
+function MW.canSearch(d)
+    local SP = MSH.StoragePanel
+    return SP ~= nil and d.lifecycle == MSH.LIFECYCLE.ACTIVE
+        and MSH.Settings.storageMode() ~= MSH.Settings.STORAGE.OFF and SP.available()
+end
+
+-- 開物品搜尋：同室內檢查，先收起管理視窗，面板關掉時開回這間（StoragePanel.close）；沒開成就馬上開回來
+function MW.openStorage()
+    local w = MW.instance
+    local d = w and w.detail
+    if MSH.StoragePanel == nil or d == nil then return end
+    if w.win:getIsVisible() then w.win:close() end
+    if MSH.StoragePanel.open({ detail = d, fromManager = true }) == nil and not MW.isOpen() then
+        MW.open({ claimId = d.claimId })
+    end
+end
+
+function W.onStorage()
+    MW.openStorage()
 end
 
 function W.onSlots()
@@ -1472,4 +1512,6 @@ if first then
     MSH.Client.on("claims", "ManagerWindow", function() MSH.ManagerWindow.onClaims() end)
     MSH.Client.on("changed", "ManagerWindow", function(args) MSH.ManagerWindow.onChanged(args) end)
     MSH.Client.on("ranges", "ManagerWindow", function() MSH.ManagerWindow.onRangesChanged() end)
+    -- 管理員改沙盒：〔搜尋物品〕（StorageMode 關閉）與分享頁的遠距拿取 chip（只在可遠距拿取時排出）跟著重排
+    MSH.Client.on("sandbox", "ManagerWindow", function() MSH.ManagerWindow.onRangesChanged() end)
 end

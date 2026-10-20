@@ -144,7 +144,8 @@ return function(T)
         parsed[#parsed + 1] = { key = key, f = f }
     end
     local TYPE = { int = "integer", double = "double", bool = "boolean", string = "string", enum = "enum" }
-    local VT = { CreateMode = "MinidoracatSafehouse_CreateMode", ResourceRule = "MinidoracatSafehouse_ResourceRule" }
+    local VT = { CreateMode = "MinidoracatSafehouse_CreateMode", ResourceRule = "MinidoracatSafehouse_ResourceRule",
+        StorageMode = "MinidoracatSafehouse_StorageMode" }
     local drift = {}
     local function bad(key, what) drift[#drift + 1] = key .. ":" .. what end
     local function numEq(s, v) return tonumber(s) ~= nil and tonumber(s) == v end

@@ -53,6 +53,9 @@ option MinidoracatSafehouse.RangesFaction
 option MinidoracatSafehouse.RangesOthers
 {type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_RangesOthers,}
 
+option MinidoracatSafehouse.StorageMode
+{type = enum, numValues = 3, default = 2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_StorageMode, valueTranslation = MinidoracatSafehouse_StorageMode,}
+
 option MinidoracatSafehouse.AvoidRoads
 {type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_AvoidRoads,}
 

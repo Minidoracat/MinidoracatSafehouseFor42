@@ -27,6 +27,7 @@ return {
     { dir = "server", name = "MinidoracatSafehouse/Respawn" },
     { dir = "server", name = "MinidoracatSafehouse/Indoor" },
     { dir = "server", name = "MinidoracatSafehouse/Vehicles" },
+    { dir = "server", name = "MinidoracatSafehouse/Storage" },
     { dir = "client", name = "MinidoracatSafehouse/Mirror" },
     { dir = "client", name = "MinidoracatSafehouse/PublicApi" },
     { dir = "client", name = "MinidoracatSafehouse/Client" },
@@ -44,6 +45,8 @@ return {
     { dir = "client", name = "MinidoracatSafehouse/ZoneList" },
     { dir = "client", name = "MinidoracatSafehouse/PermissionsClient" },
     { dir = "client", name = "MinidoracatSafehouse/IndoorPanel" },
+    { dir = "client", name = "MinidoracatSafehouse/StorageScan" },
+    { dir = "client", name = "MinidoracatSafehouse/StoragePanel" },
     { dir = "client", name = "MinidoracatSafehouse/VehiclesClient" },
     { dir = "client", name = "MinidoracatSafehouse/Entry" },
 }

@@ -653,6 +653,15 @@ function AP.layoutRules(P, pg)
     local rw = AP.labelWidth(AP.RANGE_KEYS)
     for _, key in ipairs(AP.RANGE_KEYS) do AP.formRow(pg, key, rw, { AP.boolField(P, pg, key) }) end
     F:text("rangesHelp", getText("IGUI_MSH_Admin_RangesHelp"), "textMuted")
+    -- 物品搜尋（使用者 2026-10-20）：關閉／只指引／可以遠距拿；說明就是沙盒選項的 tooltip，直接寫在底下
+    F.y = F.y + K.GAP
+    F:text("h:storage", getText("IGUI_MSH_Admin_StorageHead"), "text", UIFont.Medium)
+    local labels = {}
+    for i = 1, Settings.BY_KEY.StorageMode.values do
+        labels[i] = getText("Sandbox_MinidoracatSafehouse_StorageMode_option" .. i)
+    end
+    AP.formRow(pg, "StorageMode", AP.labelWidth({ "StorageMode" }), AP.enumField(P, pg, "StorageMode", labels))
+    F:text("storageHelp", getText("Sandbox_MinidoracatSafehouse_StorageMode_tooltip"), "textMuted")
 end
 
 -- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定排成「設定｜目前值｜建議值｜原因」表，必要與建議

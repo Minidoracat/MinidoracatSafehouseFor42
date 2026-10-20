@@ -44,6 +44,7 @@ MSH.LIMIT = {
     -- 客戶端只染畫面看得到的格子（FloorTint.setRects 照視窗裁切）
     MAX_ZONES = 100,
     ZONE_SIDE = 1000,
+    STORAGE_PICKS = 50,            -- 遠距拿取一次最多幾件（server Storage.lua；客戶端數量對話框照這個上限）
 }
 
 MSH.LIFECYCLE = {
@@ -58,13 +59,16 @@ MSH.SOURCE = { FREE = "free", DEED = "deed", LEGACY = "legacy" }
 
 -- 分享權限位元（§6.5）；其他位元一定要搭配 MEMBER。
 -- INVITE（使用者 2026-10-11）：只能邀請還不在名單的新人、給自己有的一般位元；不能改、移除既有成員（那是 MANAGE）
-MSH.SHARE = { MEMBER = 1, USE = 2, MOVE = 4, BUILD = 8, FARM = 16, MANAGE = 32, INVITE = 64 }
-MSH.SHARE_ALL = 127
--- 遷移來的成員等同原版成員能做的事（§9 第 4 點）；沒有邀請、管理
+-- TAKE（使用者 2026-10-20）：遠距拿取，站在安全屋裡把別處容器的東西直接拿進背包（server Storage.lua；沙盒 StorageMode
+-- 選「可以遠距拿」時才用得到）
+MSH.SHARE = { MEMBER = 1, USE = 2, MOVE = 4, BUILD = 8, FARM = 16, MANAGE = 32, INVITE = 64, TAKE = 128 }
+MSH.SHARE_ALL = 255
+-- 遷移來的成員等同原版成員能做的事（§9 第 4 點）；沒有邀請、管理，也沒有原版沒有的遠距拿取
 MSH.SHARE_LEGACY = 1 + 2 + 4 + 8 + 16
--- 陣營分享能給的位元上限：成員、用電器、搬家具、建造、農耕；不給邀請與管理（主代理 2026-10-11 裁定，使用者可改）。
--- 原因：陣營名單由領袖決定，陣營給的邀請／管理邀進來的人是永久個人 grant，停止陣營分享後還留著
-MSH.SHARE_FACTION_MAX = 1 + 2 + 4 + 8 + 16
+-- 陣營分享能給的位元上限：成員、用電器、搬家具、建造、農耕、遠距拿取；不給邀請與管理（主代理 2026-10-11 裁定，使用者可改）。
+-- 原因：陣營名單由領袖決定，陣營給的邀請／管理邀進來的人是永久個人 grant，停止陣營分享後還留著（遠距拿取沒有這個問題，
+-- 主代理 2026-10-20）
+MSH.SHARE_FACTION_MAX = 1 + 2 + 4 + 8 + 16 + 128
 
 -- 結果碼：伺服器只回這些字串；客戶端照碼顯示「原因＋動作」（M3）。
 MSH.CODE = {
@@ -107,6 +111,9 @@ MSH.CODE = {
     RESPAWN_DISABLED = "RESPAWN_DISABLED",
     -- 室內檢查（2026-10-15）：要查的格子離玩家超過 LIMIT.INDOOR_REACH
     TOO_FAR = "TOO_FAR",
+    -- 遠距拿取（2026-10-20，server Storage.lua）：沙盒沒開「可以遠距拿」；東西已經不在那裡；背包放不下；
+    -- 拿取中斷（離開原地、等太久、還沒到時間就送完成）
+    STORAGE_OFF = "STORAGE_OFF", GONE = "GONE", NO_ROOM = "NO_ROOM", TAKE_STOPPED = "TAKE_STOPPED",
 }
 
 -- ===== 小工具 =====
@@ -163,6 +170,18 @@ function MSH.maskBits(bits, mask)
         if MSH.hasBit(bits, bit) and MSH.hasBit(mask, bit) then out = out + bit end
     end
     return out
+end
+
+-- 容器上了密碼鎖，或掛了鎖而這個人身上沒有鑰匙：物品搜尋不列、遠距拿取不拿（2026-10-20 審查；原版只在戰利品視窗擋，
+-- ISInventoryPage.lua:1742-1748，伺服器的搬運不查鎖）。照 IsoThumpable.isLockedToCharacter（IsoThumpable.java:2486-2497）
+-- 但不放行管理員能力：那支在伺服器上本來就不看能力，兩端用同一個判斷，才不會客戶端列出來、伺服器說不在了
+function MSH.lockedFor(c, player)
+    local o = c:getParent()
+    if o == nil or not instanceof(o, "IsoThumpable") then return false end
+    if o:getLockedByCode() > 0 then return true end
+    if not o:isLockedByPadlock() then return false end
+    local inv = player:getInventory()
+    return inv == nil or inv:haveThisKeyId(o:getKeyId()) == nil
 end
 
 -- java.util.List 轉 Lua 陣列（0-based size()/get(i)）

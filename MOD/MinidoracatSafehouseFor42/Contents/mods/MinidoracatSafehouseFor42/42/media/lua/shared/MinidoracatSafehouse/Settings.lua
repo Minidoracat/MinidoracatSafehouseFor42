@@ -14,6 +14,8 @@ S.PAGE = "MinidoracatSafehouse"
 S.CREATE = { DEED = 1, FREE = 2 }
 S.RULE = { MINIMAP = 1, ROOMS = 2 }
 S.CRAFT = { OFF = 1, EASY = 2, STANDARD = 3, STRICT = 4 }
+-- 物品搜尋（使用者 2026-10-20）：關閉、只指引（箭頭帶路）、可以遠距拿（站在安全屋裡直接拿進背包，要分享權限 TAKE）
+S.STORAGE = { OFF = 1, GUIDE = 2, REMOTE = 3 }
 S.ROAD_KINDS = { "main", "street", "gravel", "sidewalk" }
 
 -- 清單型選項的 txt default 留空（ScriptParser 拿逗號當欄位分隔，pitfalls.md「Sandbox 選項」），預設清單寫在這裡
@@ -64,6 +66,8 @@ local OPTIONS = {
     -- 只影響客戶端畫面（Ranges.lua）：原版本來就把每間安全屋的範圍傳給所有客戶端（MetaDataPacket、SafehouseSync）
     { key = "RangesFaction", type = "bool", default = true },
     { key = "RangesOthers", type = "bool", default = false },
+    -- 物品搜尋與遠距拿取（使用者 2026-10-20：新伺服器預設只指引）
+    { key = "StorageMode", type = "enum", values = 3, default = S.STORAGE.GUIDE },
     { key = "AvoidRoads", type = "bool", default = true },
     { key = "RoadMargin", type = "int", min = 0, max = 8, default = 1 },
     { key = "RoadKinds", type = "string", default = "" },
@@ -152,6 +156,15 @@ function S.readable()
     return sandboxTable() ~= nil
 end
 
+-- 物品搜尋的模式（只讀這一鍵：管理視窗每次排版都問，不必整份 get）；不合法照預設
+function S.storageMode()
+    local sb = sandboxTable()
+    local v = sb and sb.StorageMode
+    local o = S.BY_KEY.StorageMode
+    if not typeOk(o, v) or not inRange(o, v) then return o.default end
+    return v
+end
+
 -- 讀出整份設定；不合法的值夾回範圍並附警告（每次呼叫都重讀，面板或原版畫面改值後立即生效）
 -- 回傳 cfg, warnings（{ "Key" , ... }）
 function S.get()
@@ -185,6 +198,7 @@ function S.get()
         rangesFaction = raw.RangesFaction,
         rangesOthers = raw.RangesOthers,
         redrawLimit = raw.RedrawLimit,
+        storageMode = raw.StorageMode,
         avoidRoads = raw.AvoidRoads,
         roadMargin = raw.RoadMargin,
         avoidResources = raw.AvoidResources,

@@ -83,8 +83,9 @@ return function(T)
         factionShare = { bits = SHARE.MEMBER } }), "屋主可以停止陣營分享")
     check(not SP.canStopFaction({ actorRole = "member", bits = SHARE.MEMBER + SHARE.INVITE,
         actions = { canManageShares = false }, factionShare = { bits = SHARE.MEMBER } }), "只有邀請的成員不能停止陣營分享")
-    check(SP.factionBits(MSH.SHARE_ALL) == SHARE.MEMBER + SHARE.USE + SHARE.MOVE + SHARE.BUILD + SHARE.FARM
-        and SP.factionBits(SHARE.MEMBER + SHARE.USE) == SHARE.MEMBER + SHARE.USE, "陣營分享的位元一律去掉邀請與管理")
+    check(SP.factionBits(MSH.SHARE_ALL) == MSH.SHARE_ALL - SHARE.INVITE - SHARE.MANAGE
+        and SP.factionBits(SHARE.MEMBER + SHARE.USE) == SHARE.MEMBER + SHARE.USE,
+        "陣營分享的位元一律去掉邀請與管理（遠距拿取可以給）")
     check(SP.reasonKey({ reason = "LEADER_CHANGED" }) ~= SP.reasonKey({ reason = "GONE" })
         and SP.reasonKey({ reason = "???" }) == SP.reasonKey({}), "暫停原因分三種、其他用一般句")
     check(SP.bitsText(SHARE.MEMBER + SHARE.MANAGE + SHARE.INVITE) == getText("IGUI_MSH_Share_Bit_MEMBER") .. sep
@@ -164,9 +165,13 @@ return function(T)
     local function stops() return (page.rows[1].visible and "1" or "-") .. (page.rows[2].visible and "2" or "-") end
 
     local d = view("owner", MSH.SHARE_ALL)
+    T.sandbox("StorageMode", 3)
     local chips = render(d)
-    check(SP.CHIPS[6] == "INVITE" and SP.CHIPS[7] == "MANAGE" and chips == table.concat(SP.CHIPS, ","),
-        "屋主：七個 chip 全部可勾，順序成員…農耕、邀請、管理")
+    check(table.concat(SP.CHIPS, ",") == "MEMBER,USE,MOVE,BUILD,FARM,TAKE,INVITE,MANAGE" and chips == table.concat(SP.CHIPS, ","),
+        "屋主（物品搜尋可遠距拿取）：八個 chip 全部可勾，順序成員…農耕、遠距拿取、邀請、管理")
+    T.sandbox("StorageMode", 2)
+    check(render(d) == "MEMBER,USE,MOVE,BUILD,FARM,INVITE,MANAGE" and shareAll() == MSH.SHARE_ALL,
+        "物品搜尋只指引：不排遠距拿取 chip（勾了也沒作用），已勾的位元照樣送出、不洗掉")
     check(stops() == "12" and page.btnFactionStop.visible and page.btnFaction.visible, "屋主：每列都有〔停止〕、看得到陣營分享按鈕")
     check(shareAll() == MSH.SHARE_ALL, "屋主：送出照勾的全部（含邀請、管理）")
     page.bits, sent = MSH.SHARE_ALL, nil

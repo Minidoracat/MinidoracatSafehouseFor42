@@ -1,7 +1,7 @@
 <!-- 指南網址：https://steamcommunity.com/sharedfiles/filedetails/?id=3819479336 -->
 <!-- Steam guide source (English): the full reference for this mod; the Workshop description only summarizes. Format and sync: pz-family-docs/release.md「完整說明：Steam 指南」 -->
 <!-- 標題：📖 Safehouse Mod Guide: Deeds, Claiming, Sharing, Paid Slots & Server Setup -->
-<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window, ground outlines, respawn points and the indoor check, paid slots, idle release and insurance, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
+<!-- 摘要：Illustrated guide to the Minidoracat Safehouse mod: getting deeds, marking your safehouse area, fixing failed checks, sharing and permissions, the manager window, ground outlines, respawn points and the indoor check, item search and remote take, paid slots, idle release and insurance, plus required server settings, the admin panel, sandbox options, taking over existing safehouses and what to know before removing the mod. -->
 === 🚀 Quick start
 [b]繁體中文版：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3819479307]Safehouse MOD 完整說明[/url]
 
@@ -224,12 +224,13 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [tr][td]Move furniture[/td][td]Moving furniture, including picking up generators[/td][/tr]
 [tr][td]Build[/td][td]Building, including dismantling[/td][/tr]
 [tr][td]Farm[/td][td]Farming[/td][/tr]
+[tr][td]Remote take[/td][td]When the server allows remote take: standing inside the safehouse, take items from a container elsewhere straight into your inventory[/td][/tr]
 [tr][td]Invite[/td][td]Adding players who can't enter yet[/td][/tr]
 [tr][td]Manage[/td][td]Changing permissions, stopping shares and inviting, for the owner[/td][/tr]
 [/table]
 [h3]Invite and Manage[/h3]
 [list]
-[*] [b]Individual players only[/b]: faction shares go up to Farm.
+[*] [b]Individual players only[/b]: faction shares go up to Remote take.
 [*] [b]Invite[/b]: can only grant permissions the inviter has, and can't change or remove existing members.
 [*] [b]Manage[/b]: can only grant permissions they have, and can't grant Manage.
 [*] [b]Changing an existing member[/b]: ask the owner or someone with Manage.
@@ -262,7 +263,7 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [*] [b]Second line in the list[/b]: in "Mine", the status is followed by the slot that safehouse uses: a free or paid slot with its tier, or "Migrated safehouse" for taken-over ones.
 [*] [b]Three tabs per safehouse[/b]: "Overview", "Members & sharing", "Land rules".
 [*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Set as respawn point", "Redraw", "Abandon safehouse...".
-[*] [b]Other buttons[/b]: "Create safehouse", "Indoor check", "Slots".
+[*] [b]Other buttons[/b]: "Create safehouse", "Indoor check", "Slots"; "Find items" sits next to the safehouse name (see "Item search").
 [*] [b]Idle release[/b]: the "Idle release" row on Overview shows how long is left; see "Idle release and insurance".
 [*] [b]After creating[/b]: the window opens on the new safehouse.
 [*] [b]Small window or large font[/b]: the window grows taller to fit.
@@ -322,6 +323,24 @@ Find out whether a house you built counts as indoors on a multiplayer server (wa
 [*] [b]The same building[/b]: the other rooms are listed too; click one to look at it. On the same floor it follows the connected roof, and up and down it follows the floors, so every floor is checked; with more than one floor, each row says which floor, and the marks on the ground move to the floor of the room you're looking at. A flat roof with nothing built on top doesn't count as a floor; a roof that sticks out past the walls, or a porch, shows as "Under the eaves".
 [*] [b]Rechecks by itself[/b]: while the window is open, it checks again when walls or floors nearby change; once you close it, nothing is checked in the background.
 [*] [b]Limits[/b]: only tiles within 40 tiles of you; up to 12 rooms per building, and for a very large building only the part nearest the checked spot; the map's own buildings count the vanilla way; self-built rooms underground never count as indoors.
+[/list]
+=== 🧰 Item search
+{{img:13-storage-en.jpg}}
+Pick a safehouse in the manager window and press "Find items" next to its name to list what is in every container of that safehouse.
+[list]
+[*] [b]Where it looks[/b]: furniture containers, bags inside containers (one level deep), items on the floor and vehicles parked inside the area; items with the same name share one row. Locked containers (code lock, or a padlock you have no key for) and locked vehicles aren't listed; the panel only says how many there are.
+[*] [b]Finding things[/b]: search by name, filter by category and floor, sort by name, count or distance; click a row to see where it is, on which floor and how many tiles away.
+[*] [b]Guiding[/b]: pick a place and press "Guide me there" to get an on-screen arrow; on the same floor a ring is drawn on the ground, on another floor the arrow turns into a stairs icon. When you reach it, the loot window switches to that container. Guiding goes on after you close the panel, for up to 10 minutes, or until you press "Stop guiding".
+[*] [b]What it can see[/b]: only places your game has loaded (about 50–80 tiles around you, more on bigger screens); for places too far away the panel says how many tiles were not loaded, so walk closer and press "Rescan".
+[*] [b]Performance[/b]: searching and guiding run in your own game and never ask the server; with the panel closed nothing runs, and opening it scans once, spread over several frames.
+[/list]
+[h3]Remote take[/h3]
+[list]
+[*] [b]The server has to allow it[/b]: "Take..." only appears when the admin sets "Item search" to "Remote take"; the default is "Guide only".
+[*] [b]Who can[/b]: the owner, and members shared with the "Remote take" permission (a faction share can include it). The sharing page only shows this permission while the server allows remote take.
+[*] [b]Where to stand[/b]: anywhere inside any piece of that safehouse.
+[*] [b]How[/b]: pick a place, press "Take...", enter how many (up to 50 at a time), then stand still for the normal transfer time and the items go straight into your inventory; walking away interrupts it and nothing moves. Whatever doesn't fit stays where it was.
+[*] [b]Guide only[/b]: items in vehicles or worn by mannequins have to be picked up in person.
 [/list]
 === 🧰 Vehicles can't drive in
 [list]
@@ -457,7 +476,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [h3]Five tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, and which other safehouses players see on the ground; also the server settings status, takeover results and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take); also the server settings status, takeover results and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
@@ -509,6 +528,7 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][td]Resource site detection[/td][td]MiniMap resources[/td][/tr]
 [tr][td]Resource categories to avoid[/td][td]Military, police, gun stores, medical, pharmacies, fire stations, gas stations, prisons[/td][/tr]
 [tr][td]Show faction / other players' safehouse ranges[/td][td]On / Off[/td][/tr]
+[tr][td]Item search[/td][td]Guide only (Off / Guide only / Remote take)[/td][/tr]
 [tr][td]Enabled deed tiers[/td][td]3 (1–8)[/td][/tr]
 [tr][td]Each tier's max area and outline limit[/td][td]See "Deeds"[/td][/tr]
 [tr][td]Each tier's free slots (Tier<N>FreeSlots)[/td][td]Tier 1: 1, others 0 (0–100; how many safehouses of that tier each player can build for free; tier 1 can be changed per player on the admin panel's Players tab)[/td][/tr]
@@ -620,6 +640,7 @@ Server-side data:
 [*] [b]Server crashes[/b]: changes since the last world save roll back to the save. A just-created safehouse is the exception: it's restored on restart with the area, name and tier it was created with (sharing added later must be set again); released ones aren't restored. If the server crashed within 3½ minutes of creating it, the deed may have gone back to the owner, so it's listed under "Claims needing attention" in the admin panel (marked CRASH_UNCONFIRMED) instead: ask the owner, then press "Release…" if they still have the deed, or "Rebind" it to the original owner if they don't.
 [*] [b]Idle release counts visits, not logins[/b]: being online without going back doesn't reset the countdown; stepping into the area resets it within about 20 seconds.
 [*] [b]Server-wide limit[/b]: 256 safehouses (taken-over ones included).
+[*] [b]What item search can see[/b]: bags lying on the floor, corpses and what players carry are not listed, and bags inside containers are opened one level deep only. The game already sends the contents of nearby containers to every player, so the search reveals nothing new.
 [/list]
 [h3]Player identity[/h3]
 [list]

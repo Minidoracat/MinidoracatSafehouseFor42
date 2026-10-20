@@ -132,6 +132,19 @@ S.TYPES = {
     query = function(v) return type(v) == "string" and #v <= MSH.LIMIT.USERNAME_CHARS and not MSH.hasControl(v) end,
     word = function(v) return type(v) == "string" and #v <= 32 and string.find(v, "^[%w_]+$") ~= nil end,
     count = function(v) return MSH.isInt(v) and v >= -1 and v <= 1000 end,
+    -- 遠距拿取（Storage.lua）：樓層；物品 id 1–LIMIT.STORAGE_PICKS 個、連續整數鍵、32 位元整數、不重複
+    level = function(v) return MSH.isInt(v) and v >= -32 and v <= 31 end,
+    ids = function(v)
+        if type(v) ~= "table" then return false end
+        local n, seen = 0, {}
+        for k, id in pairs(v) do
+            n = n + 1
+            if not MSH.isInt(k) or k < 1 or k > MSH.LIMIT.STORAGE_PICKS then return false end
+            if not MSH.isInt(id) or id < -2147483648 or id > 2147483647 or seen[id] then return false end
+            seen[id] = true
+        end
+        return n >= 1 and n == #v
+    end,
     -- 管理員沙盒變更：鍵是字串、值是純量；逐欄範圍由 Settings.validateChanges 檢查
     changes = function(v)
         if type(v) ~= "table" then return false end

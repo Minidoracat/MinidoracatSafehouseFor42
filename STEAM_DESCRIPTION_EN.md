@@ -30,6 +30,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [*] [b]Avoids roads, resource points and no-build zones[/b]: roads, parking lots, buildings such as military, police and medical sites, and no-build zones set by admins cannot be claimed
 [*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately
 [*] [b]Manager window[/b]: rename, share or release your safehouses, set a respawn point, and see nearby safehouses and no-build zones on the ground
+[*] [b]Item search[/b]: search every container in your safehouse and follow an arrow to the item; when the server allows it, take items straight from where you stand inside
 [*] [b]Vanilla protection[/b]: non-members cannot enter or take items, but zombies can still spawn inside
 [*] [b]No driving in[/b]: if anyone aboard can't enter, the vehicle can't drive in, trailers included
 [*] [b]Admin panel[/b]: adjust every rule in game, including deeds, exclusions and paid slots
