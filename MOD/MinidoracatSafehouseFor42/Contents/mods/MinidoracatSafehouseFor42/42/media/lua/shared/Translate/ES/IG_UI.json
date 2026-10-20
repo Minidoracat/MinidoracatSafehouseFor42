@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "Tu inventario está lleno. Quedan %1 más en %2.",
     "IGUI_MSH_Storage_GotGone": "%1 más ya no estaban allí.",
     "IGUI_MSH_Storage_ModeGuide": "Ajuste del servidor: solo guía. Ve hasta allí para sacar los objetos.",
-    "IGUI_MSH_Storage_ModeRemote": "Ajuste del servidor: dentro del refugio puedes sacar los objetos directamente."
+    "IGUI_MSH_Storage_ModeRemote": "Ajuste del servidor: dentro del refugio puedes sacar los objetos directamente.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "Ajuste del servidor: dentro del refugio o en su margen (casillas: %1) puedes sacar los objetos directamente."
 }

@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "Seu inventário está cheio. Ainda restam %1 em %2.",
     "IGUI_MSH_Storage_GotGone": "Outros %1 não estavam mais lá.",
     "IGUI_MSH_Storage_ModeGuide": "Configuração do servidor: só orientação. Vá até lá para pegar os itens.",
-    "IGUI_MSH_Storage_ModeRemote": "Configuração do servidor: dentro da base você pode pegar itens diretamente."
+    "IGUI_MSH_Storage_ModeRemote": "Configuração do servidor: dentro da base você pode pegar itens diretamente.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "Configuração do servidor: dentro da base ou na margem ao redor dela (quadrados: %1) você pode pegar itens diretamente."
 }

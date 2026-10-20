@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "Dein Inventar ist voll. %1 weitere sind noch in %2.",
     "IGUI_MSH_Storage_GotGone": "%1 weitere waren nicht mehr da.",
     "IGUI_MSH_Storage_ModeGuide": "Servereinstellung: nur Wegweisung. Geh hin, um Gegenstände zu nehmen.",
-    "IGUI_MSH_Storage_ModeRemote": "Servereinstellung: Im Safehouse kannst du Gegenstände direkt nehmen."
+    "IGUI_MSH_Storage_ModeRemote": "Servereinstellung: Im Safehouse kannst du Gegenstände direkt nehmen.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "Servereinstellung: Im Safehouse oder in seinem Randbereich (in Kacheln: %1) kannst du Gegenstände direkt nehmen."
 }

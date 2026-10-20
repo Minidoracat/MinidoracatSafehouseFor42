@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "%1 tanesi hâlâ %2 içinde.",
     "IGUI_MSH_Storage_GotGone": "Diğer %1 tanesi artık orada değildi.",
     "IGUI_MSH_Storage_ModeGuide": "Sunucu ayarı: yalnızca yol gösterme. Eşyaları almak için yanına gidin.",
-    "IGUI_MSH_Storage_ModeRemote": "Sunucu ayarı: güvenli evin içindeyken eşyaları doğrudan alabilirsiniz."
+    "IGUI_MSH_Storage_ModeRemote": "Sunucu ayarı: güvenli evin içindeyken eşyaları doğrudan alabilirsiniz.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "Sunucu ayarı: güvenli evin içindeyken veya en fazla %1 kare dışındayken eşyaları doğrudan alabilirsiniz."
 }

@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "物品栏满了，另外 %1 个还在%2。",
     "IGUI_MSH_Storage_GotGone": "另外 %1 个已经不在原处。",
     "IGUI_MSH_Storage_ModeGuide": "管理员设置：只提供指引，物品要走过去拿。",
-    "IGUI_MSH_Storage_ModeRemote": "管理员设置：站在安全屋里可以直接拿取。"
+    "IGUI_MSH_Storage_ModeRemote": "管理员设置：站在安全屋里可以直接拿取。",
+    "IGUI_MSH_Storage_ModeRemoteNear": "管理员设置：站在安全屋里，或安全屋外 %1 格内，可以直接拿取。"
 }

@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "소지품이 가득 찼습니다. 나머지 %1개는 아직 %2에 있습니다.",
     "IGUI_MSH_Storage_GotGone": "나머지 %1개는 이미 그 자리에 없었습니다.",
     "IGUI_MSH_Storage_ModeGuide": "서버 설정: 길 안내만 합니다. 아이템은 직접 가서 가져오세요.",
-    "IGUI_MSH_Storage_ModeRemote": "서버 설정: 은신처 안에 서 있으면 바로 꺼낼 수 있습니다."
+    "IGUI_MSH_Storage_ModeRemote": "서버 설정: 은신처 안에 서 있으면 바로 꺼낼 수 있습니다.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "서버 설정: 은신처 안이나 바깥 %1타일 이내에 서 있으면 바로 꺼낼 수 있습니다."
 }

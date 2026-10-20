@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "Ekwipunek jest pełny. Pozostałe sztuki (%1) są nadal w: %2.",
     "IGUI_MSH_Storage_GotGone": "Pozostałych sztuk (%1) już tam nie było.",
     "IGUI_MSH_Storage_ModeGuide": "Ustawienie serwera: tylko prowadzenie. Podejdź, aby wziąć przedmioty.",
-    "IGUI_MSH_Storage_ModeRemote": "Ustawienie serwera: stojąc w schronieniu, możesz brać przedmioty bezpośrednio."
+    "IGUI_MSH_Storage_ModeRemote": "Ustawienie serwera: stojąc w schronieniu, możesz brać przedmioty bezpośrednio.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "Ustawienie serwera: stojąc w schronieniu lub w pasie wokół niego (pola: %1), możesz brać przedmioty bezpośrednio."
 }

@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "Votre inventaire est plein. Il en reste %1 dans %2.",
     "IGUI_MSH_Storage_GotGone": "Il en manquait %1 : ils n'étaient plus là.",
     "IGUI_MSH_Storage_ModeGuide": "Réglage du serveur : guidage seul. Allez sur place pour prendre les objets.",
-    "IGUI_MSH_Storage_ModeRemote": "Réglage du serveur : dans l'abri, vous pouvez prendre les objets directement."
+    "IGUI_MSH_Storage_ModeRemote": "Réglage du serveur : dans l'abri, vous pouvez prendre les objets directement.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "Réglage du serveur : dans l'abri ou dans sa marge (en cases : %1), vous pouvez prendre les objets directement."
 }

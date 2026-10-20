@@ -553,6 +553,12 @@ return function(T)
     T.advance(600)
     T.tick()
     check(m.inside == true and P.takeBlock(m, m.sel) == nil, "管理員放寬 2 格：沒走動也重算，外面 1 格可以拿")
+    local function hasLine(text)
+        for _, l in ipairs(m.view.lines) do if l.text == text then return true end end
+        return false
+    end
+    check(hasLine("IGUI_MSH_Storage_ModeRemoteNear") and not hasLine("IGUI_MSH_Storage_ModeRemote"),
+        "放寬 2 格：面板最底下的管理員設定寫出格數（2026-10-21 實機截圖還寫只能站在安全屋裡）")
     me.x = 196.5
     T.advance(600)
     T.tick()
@@ -561,6 +567,8 @@ return function(T)
     me.x = 201.5
     T.advance(600)
     T.tick()
+    check(hasLine("IGUI_MSH_Storage_ModeRemote") and not hasLine("IGUI_MSH_Storage_ModeRemoteNear"),
+        "改回 0：管理員設定改回只寫站在安全屋裡")
     local carRow = nil
     for _, r in ipairs(m.rows) do if r.kind == "group" and r.v.g.name == "Gas Can" then carRow = r end end
     P.pick(m, carRow)

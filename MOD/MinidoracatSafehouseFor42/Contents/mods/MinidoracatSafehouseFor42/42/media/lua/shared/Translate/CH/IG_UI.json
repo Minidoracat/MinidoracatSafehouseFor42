@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "背包滿了，另外 %1 個還在%2。",
     "IGUI_MSH_Storage_GotGone": "另外 %1 個已經不在原處。",
     "IGUI_MSH_Storage_ModeGuide": "管理員設定：只提供指引，東西要走過去拿。",
-    "IGUI_MSH_Storage_ModeRemote": "管理員設定：站在安全屋裡可以直接拿取。"
+    "IGUI_MSH_Storage_ModeRemote": "管理員設定：站在安全屋裡可以直接拿取。",
+    "IGUI_MSH_Storage_ModeRemoteNear": "管理員設定：站在安全屋裡，或安全屋外 %1 格內，可以直接拿取。"
 }

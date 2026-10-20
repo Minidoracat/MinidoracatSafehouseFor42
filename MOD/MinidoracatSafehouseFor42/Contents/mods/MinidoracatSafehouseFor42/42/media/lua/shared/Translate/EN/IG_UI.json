@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "Your inventory is full. %1 more are still in %2.",
     "IGUI_MSH_Storage_GotGone": "%1 more were no longer there.",
     "IGUI_MSH_Storage_ModeGuide": "Server setting: guidance only. Walk over to take items.",
-    "IGUI_MSH_Storage_ModeRemote": "Server setting: stand inside the safehouse to take items directly."
+    "IGUI_MSH_Storage_ModeRemote": "Server setting: stand inside the safehouse to take items directly.",
+    "IGUI_MSH_Storage_ModeRemoteNear": "Server setting: stand inside the safehouse, or in the %1-tile margin around it, to take items directly."
 }

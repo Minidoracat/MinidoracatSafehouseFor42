@@ -790,8 +790,13 @@ function P.layout(v)
         y = row(v, { v.btnStop }, y)
     end
     if m.msg ~= nil then y = para(v, m.msg, m.msgToken, y) end
-    -- 管理員設定
-    y = para(v, getText(remote and "IGUI_MSH_Storage_ModeRemote" or "IGUI_MSH_Storage_ModeGuide"), "textMuted", y + 2)
+    -- 管理員設定（放寬了站的範圍就寫出格數）
+    local mode = getText("IGUI_MSH_Storage_ModeGuide")
+    if remote then
+        local reach = MSH.Settings.storageReach()
+        mode = reach > 0 and getText("IGUI_MSH_Storage_ModeRemoteNear", reach) or getText("IGUI_MSH_Storage_ModeRemote")
+    end
+    y = para(v, mode, "textMuted", y + 2)
     y = y + PAD - 2
     -- 字大或畫面矮時整個視窗放不進畫面：清單少幾列（至少 MIN_ROWS）再排一次，之後就用這個列數，不跟著內容伸縮
     local over = v.top + y - (getCore():getScreenHeight() - 20)

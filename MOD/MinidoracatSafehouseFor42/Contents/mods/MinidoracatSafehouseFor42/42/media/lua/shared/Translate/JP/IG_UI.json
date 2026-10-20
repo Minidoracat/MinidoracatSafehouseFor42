@@ -812,5 +812,6 @@
     "IGUI_MSH_Storage_GotFull": "インベントリがいっぱいです。残り%1個はまだ%2にあります。",
     "IGUI_MSH_Storage_GotGone": "残り%1個はもうその場所にありませんでした。",
     "IGUI_MSH_Storage_ModeGuide": "サーバー設定：案内のみ。アイテムは歩いて取りに行ってください。",
-    "IGUI_MSH_Storage_ModeRemote": "サーバー設定：セーフハウスの中に立てば直接取り出せます。"
+    "IGUI_MSH_Storage_ModeRemote": "サーバー設定：セーフハウスの中に立てば直接取り出せます。",
+    "IGUI_MSH_Storage_ModeRemoteNear": "サーバー設定：セーフハウスの中か、外側 %1 マス以内に立てば直接取り出せます。"
 }
