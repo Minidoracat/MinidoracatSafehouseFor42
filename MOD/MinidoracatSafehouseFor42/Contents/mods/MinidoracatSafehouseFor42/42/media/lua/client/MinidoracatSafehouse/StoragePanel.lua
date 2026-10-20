@@ -4,9 +4,10 @@
 -- 掃描、分組、篩選在 StorageScan.lua（客戶端自己掃，不問伺服器）；這裡排版、帶路、拿取。
 -- 效能（使用者 2026-10-20：「記得要幫我評估是否會影響到客戶端或伺服器端的性能」）：面板關著又沒在帶路時不掛任何事件；
 --   掃描分幀（StorageScan.BUDGET_MS）；開著時每 DIST_MS 看一次玩家換了格子沒有，換了才重算距離；帶路每 GUIDE_MS 看一次。
--- 帶路：原版方向箭頭（WorldMarkers addDirectionArrow，放大到 ARROW px）；同一層再加地面圈（別層畫圈會浮在半空，
---   sh-storage-1020a）。走到 1 格內、同一層就結束，戰利品視窗切到那個容器（ISInventoryPage:setForceSelectedContainer）；
---   面板關了也繼續帶，按〔停止指引〕或 GUIDE_MAX_MS 後結束。
+-- 帶路：原版方向箭頭（WorldMarkers addDirectionArrow，放大到 ARROW px；在畫面內停在目標上方、畫面外貼著邊緣、別層換上下樓
+--   圖示）；人物旁邊再加一個繞著人物轉、指向目標的箭頭（addPlayerHomingPoint，原版採集與教學用的那個；使用者 2026-10-20：
+--   「人物旁邊也要有方向箭頭指引吧」）；同一層再加地面圈（別層畫圈會浮在半空，sh-storage-1020a）。走到 1 格內、同一層就結束，
+--   戰利品視窗切到那個容器（ISInventoryPage:setForceSelectedContainer）；面板關了也繼續帶，按〔停止指引〕或 GUIDE_MAX_MS 後結束。
 -- 遠距拿取（沙盒「可以遠距拿」、有 TAKE、站在這間裡）：storageBegin 回原版搬運時間，本地跑一個只在客戶端的計時動作
 --   （類別沒有 complete，LuaTimedActionNew.java:78-80；走動就中斷），跑完送 storageTake（兩段的原因見 server Storage.lua）。
 -- 框架缺席或太舊：管理視窗不給〔搜尋物品〕（P.available），面板也不開。
@@ -321,6 +322,7 @@ function P.stopGuide(quiet)
     P.guide = nil
     local wm = getWorldMarkers()
     if g.arrow ~= nil then wm:removeDirectionArrow(g.arrow) end
+    if g.homing ~= nil then wm:removeHomingPoint(g.homing) end
     if g.ring ~= nil then wm:removeGridSquareMarker(g.ring) end
     hook(P.model ~= nil)
     if not quiet then P.refresh() end
@@ -348,6 +350,8 @@ function P.guideTick(g, now)
     ring(g, pz == g.z)
     local d = math.max(math.abs(px - g.x), math.abs(py - g.y))
     if pz == g.z and d <= 1 then return P.arrive(g) end
+    -- 人物旁的箭頭只看平面（引擎不管樓層）：目標在正上下方時它沒有方向可指，收起來，交給方向箭頭的上下樓圖示
+    if g.homing ~= nil then g.homing:setActive(d > 1) end
     if d ~= g.d or pz ~= g.pz then
         g.d, g.pz = d, pz
         P.refresh()
@@ -361,10 +365,18 @@ function P.startGuide(m, p)
     local now = getTimestampMs()
     local g = { x = p.x, y = p.y, z = p.z, title = p.title, kind = p.kind, c = p.c, endAt = now + P.GUIDE_MAX_MS, nextAt = 0 }
     local c = P.GOLD
-    g.arrow = getWorldMarkers():addDirectionArrow(player, g.x, g.y, g.z, "dir_arrow_up", c.r, c.g, c.b, 1)
+    local wm = getWorldMarkers()
+    g.arrow = wm:addDirectionArrow(player, g.x, g.y, g.z, "dir_arrow_up", c.r, c.g, c.b, 1)
     if g.arrow ~= nil then
         g.arrow:setRenderWidth(P.ARROW)
         g.arrow:setRenderHeight(P.ARROW)
+    end
+    -- 不往目標飄（homeOnTarget＝false）：目標上方已經有方向箭頭；目標比繞圈的半徑還近時，引擎照樣把它移到目標方向的 3/4 處
+    -- （WorldMarkers.java:425-435）。放大到 ARROW：預設 32 px 的原版三角形在名字標籤旁幾乎看不出來（sh-homing-1020a）
+    g.homing = wm:addPlayerHomingPoint(player, g.x, g.y, "arrow_triangle", c.r, c.g, c.b, 1, false, 0)
+    if g.homing ~= nil then
+        g.homing:setRenderWidth(P.ARROW)
+        g.homing:setRenderHeight(P.ARROW)
     end
     P.guide = g
     m.msg = nil

@@ -447,7 +447,7 @@ return function(T)
         Dropdown = { new = make, close = function() end },
         Dialog = { show = function(o) dialogs[#dialogs + 1] = o end },
         Toast = { show = function(o) toasts[#toasts + 1] = o.message end } } }
-    local markers = { arrows = {}, rings = {} }
+    local markers = { arrows = {}, rings = {}, homing = {} }
     getWorldMarkers = function()
         return {
             addDirectionArrow = function(_, p, x, y, z)
@@ -464,6 +464,15 @@ return function(T)
                 return r
             end,
             removeGridSquareMarker = function(_, r) markers.rings[r] = nil end,
+            addPlayerHomingPoint = function(_, p, x, y, tex, r, g, b, a, home)
+                local h = { x = x, y = y, home = home, active = true }
+                function h:setActive(on) self.active = on end
+                function h:setRenderWidth(w) self.w = w end
+                function h:setRenderHeight(hh) self.h = hh end
+                markers.homing[h] = true
+                return h
+            end,
+            removeHomingPoint = function(_, h) markers.homing[h] = nil end,
         }
     end
     local function count(set)
@@ -544,17 +553,29 @@ return function(T)
 
     local carPlace = m.sel
     P.startGuide(m, m.sel)
-    check(count(markers.arrows) == 1 and count(markers.rings) == 1, "帶路：方向箭頭＋同一層的地面圈")
+    local homing = next(markers.homing)
+    check(count(markers.arrows) == 1 and count(markers.rings) == 1 and count(markers.homing) == 1 and homing.active
+        and homing.x == carPlace.x and homing.y == carPlace.y and homing.home == false,
+        "帶路：方向箭頭＋人物旁指向目標的箭頭（不往目標飄）＋同一層的地面圈")
     P.close(m)
     check(P.model == nil and hooked() == 1 and P.guide ~= nil, "關面板：還在帶路就留著 OnTick")
     me.z = 1
     T.advance(300)
     T.tick()
-    check(count(markers.rings) == 0 and count(markers.arrows) == 1, "走到別層：收掉地面圈（別層畫圈會浮在半空）")
+    check(count(markers.rings) == 0 and count(markers.arrows) == 1 and homing.active,
+        "走到別層：收掉地面圈（別層畫圈會浮在半空），人物旁的箭頭照樣指")
+    me.x, me.y = carPlace.x + 0.5, carPlace.y + 0.5
+    T.advance(300)
+    T.tick()
+    check(P.guide ~= nil and not homing.active, "別層的正上下方：人物旁的箭頭收起來（它不管樓層、沒有方向可指）")
+    me.x, me.y = 200.5, 200.5
+    T.advance(300)
+    T.tick()
+    check(homing.active, "離開正上下方：人物旁的箭頭再出現")
     me.x, me.y, me.z = 203.5, 201.5, 0
     T.advance(300)
     T.tick()
-    check(P.guide == nil and count(markers.arrows) == 0 and loot.forced == trunk and hooked() == 0,
+    check(P.guide == nil and count(markers.arrows) == 0 and count(markers.homing) == 0 and loot.forced == trunk and hooked() == 0,
         "到了（同一層 1 格內）：收掉標示、戰利品視窗切到那個容器、拿掉 OnTick")
     check(loot.refreshed == 1, "到了馬上重整戰利品視窗（原版只在轉向、換格子時才真的切過去）")
     me.x, me.y = 200.5, 200.5
@@ -563,7 +584,8 @@ return function(T)
     T.advance(300)
     T.tick()
     me.dead = false
-    check(P.guide == nil and count(markers.arrows) == 0 and hooked() == 0, "帶路途中死了：停止帶路（重生的新角色不會被指著）")
+    check(P.guide == nil and count(markers.arrows) == 0 and count(markers.homing) == 0 and hooked() == 0,
+        "帶路途中死了：停止帶路（重生的新角色不會被指著）")
     P.startGuide(m, carPlace)
     T.sandbox("StorageMode", 1)
     MSH.Client.emit("sandbox")
