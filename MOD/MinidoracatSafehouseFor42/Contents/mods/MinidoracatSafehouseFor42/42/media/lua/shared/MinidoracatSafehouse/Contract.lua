@@ -45,6 +45,7 @@ MSH.LIMIT = {
     MAX_ZONES = 100,
     ZONE_SIDE = 1000,
     STORAGE_PICKS = 50,            -- 遠距拿取一次最多幾件（server Storage.lua；客戶端數量對話框照這個上限）
+    MAX_SHARES = 32,               -- 沙盒 MaxShares 的最大值；shareEdit／unshareMany 一次最多幾位（server Server.lua TYPES.users）
 }
 
 MSH.LIFECYCLE = {

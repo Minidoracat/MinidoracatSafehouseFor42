@@ -28,6 +28,12 @@ return function(T)
         if args.expectedRevision == nil and command ~= "leave" then args.expectedRevision = rec.revision end
         return T.cmd(p, command, args)
     end
+    -- 改既有成員（shareEdit）與停止分享（unshareMany），使用者 2026-10-20 核准批量修改
+    local function edit(p, rec, users, add, remove)
+        return cmd(p, "shareEdit", rec, { users = users, add = add or 0, remove = remove or 0 })
+    end
+    local function stop(p, rec, users) return cmd(p, "unshareMany", rec, { users = users }) end
+    local function bitsOf(rec, user) return MSH.Claims.grantOf(rec, user).bits end
     local function code(res) return res and res.code end
     local function pushed(p, claimId)
         local c = T.lastOf(p, "changed")
@@ -83,8 +89,8 @@ return function(T)
     check(code(cmd(alice, "share", rec, { targetUsername = "bad\nname", bits = 1 })) == "BAD_ARGS", "名字含控制字元：BAD_ARGS")
     check(code(cmd(eve, "share", rec, { targetUsername = "carol", bits = 1 })) == "NOT_FOUND", "沒有角色：NOT_FOUND")
     check(code(cmd(bob, "share", rec, { targetUsername = "carol", bits = 1 })) == "NOT_OWNER", "沒有 MANAGE 的成員：NOT_OWNER")
-    res = cmd(alice, "share", rec, { targetUsername = "bob", bits = BUILD })
-    check(res.ok and MSH.Claims.grantOf(rec, "bob").bits == BUILD + MEMBER and #rec.grants == 1, "既有分享改位元、不重複")
+    check(code(cmd(alice, "share", rec, { targetUsername = "bob", bits = BUILD })) == "BAD_USER"
+        and bitsOf(rec, "bob") == USE + MEMBER and #rec.grants == 1, "share 不改既有成員（改權限走 shareEdit）：BAD_USER、位元不變")
     rec.lifecycle = "lapsed"
     check(code(cmd(alice, "share", rec, { targetUsername = "carol", bits = 1 })) == "WRONG_LIFECYCLE", "不是 active：WRONG_LIFECYCLE")
     rec.lifecycle = "active"
@@ -96,31 +102,34 @@ return function(T)
         "MANAGE 成員給自己沒有的位元（USE）：NOT_OWNER")
     check(cmd(carol, "share", rec, { targetUsername = "dave", bits = MEMBER }).ok and has(hs, "dave"),
         "MANAGE 成員給自己有的位元（MEMBER）可以")
-    check(cmd(alice, "share", rec, { targetUsername = "carol", bits = MANAGE + USE + BUILD }).ok, "屋主給 carol MANAGE＋USE＋BUILD")
-    check(cmd(carol, "share", rec, { targetUsername = "dave", bits = USE + BUILD }).ok
-        and MSH.Claims.grantOf(rec, "dave").bits == USE + BUILD + MEMBER, "MANAGE 成員給自己有的 USE＋BUILD 可以")
-    check(cmd(carol, "share", rec, { targetUsername = "dave", bits = USE }).ok
-        and MSH.Claims.grantOf(rec, "dave").bits == USE + MEMBER, "MANAGE 成員拿掉位元可以")
-    check(cmd(alice, "share", rec, { targetUsername = "carol", bits = MANAGE }).ok, "屋主把 carol 降回 MEMBER＋MANAGE")
-    check(code(cmd(carol, "share", rec, { targetUsername = "dave", bits = USE })) == "NOT_OWNER",
-        "降級後連「維持 USE」也不行（新位元仍須是子集）")
-    check(code(cmd(carol, "share", rec, { targetUsername = "dave", bits = MANAGE })) == "NOT_OWNER", "不能給 MANAGE")
+    check(edit(alice, rec, { "carol" }, USE + BUILD).ok and bitsOf(rec, "carol") == MANAGE + MEMBER + USE + BUILD,
+        "屋主加給 carol USE＋BUILD")
+    check(edit(carol, rec, { "dave" }, USE + BUILD).ok and bitsOf(rec, "dave") == USE + BUILD + MEMBER,
+        "MANAGE 成員加自己有的 USE＋BUILD 可以")
+    check(edit(carol, rec, { "dave" }, 0, BUILD).ok and bitsOf(rec, "dave") == USE + MEMBER, "MANAGE 成員拿掉自己有的位元可以")
+    check(edit(alice, rec, { "carol" }, 0, USE + BUILD).ok, "屋主把 carol 降回 MEMBER＋MANAGE")
+    check(code(edit(carol, rec, { "dave" }, 0, USE)) == "NOT_OWNER" and bitsOf(rec, "dave") == USE + MEMBER,
+        "降級後不能加減自己沒有的位元（USE）")
+    check(edit(carol, rec, { "dave" }, MSH.SHARE.INVITE).ok and bitsOf(rec, "dave") == USE + MEMBER + MSH.SHARE.INVITE,
+        "MANAGE 成員加 INVITE：對方比自己多的 USE 照留（不再整組覆蓋）")
+    check(code(edit(carol, rec, { "dave" }, MANAGE)) == "NOT_OWNER", "不能給 MANAGE")
     check(cmd(alice, "share", rec, { targetUsername = "erin", bits = MANAGE }).ok, "屋主給 erin MANAGE")
-    check(code(cmd(carol, "share", rec, { targetUsername = "erin", bits = USE })) == "NOT_OWNER", "不能改 MANAGE 持有者")
-    check(code(cmd(carol, "unshare", rec, { targetUsername = "erin" })) == "NOT_OWNER", "不能移除 MANAGE 持有者")
-    check(code(cmd(carol, "unshare", rec, { targetUsername = "alice" })) == "BAD_USER", "不能動屋主")
-    check(code(cmd(carol, "unshare", rec, { targetUsername = "carol" })) == "BAD_USER", "不能動自己")
+    check(code(edit(carol, rec, { "erin" }, MSH.SHARE.INVITE)) == "NOT_OWNER", "不能改 MANAGE 持有者")
+    check(code(stop(carol, rec, { "erin" })) == "NOT_OWNER", "不能移除 MANAGE 持有者")
+    check(code(stop(carol, rec, { "alice" })) == "BAD_USER", "不能動屋主")
+    check(code(stop(carol, rec, { "carol" })) == "BAD_USER" and code(edit(carol, rec, { "carol" }, MSH.SHARE.INVITE))
+        == "BAD_USER", "不能動自己")
     check(code(cmd(carol, "share", rec, { targetUsername = "carol", bits = USE })) == "BAD_USER", "不能改自己")
     check(code(cmd(carol, "shareFaction", rec, { bits = USE })) == "NOT_OWNER", "MANAGE 成員不能分享給陣營")
-    check(code(cmd(alice, "unshare", rec, { targetUsername = "zed" })) == "BAD_USER", "不在名單：BAD_USER")
-    check(cmd(carol, "unshare", rec, { targetUsername = "dave" }).ok and not has(hs, "dave"), "MANAGE 成員可移除一般成員")
+    check(code(stop(alice, rec, { "zed" })) == "BAD_USER", "不在名單：BAD_USER")
+    check(stop(carol, rec, { "dave" }).ok and not has(hs, "dave"), "MANAGE 成員可移除一般成員")
 
     T.section("上限：SHARE_FULL、REGISTRY_FULL 預檢、ROSTER_FULL")
     T.sandbox("MaxShares", #rec.grants)
     local before = #rec.grants
     check(code(cmd(alice, "share", rec, { targetUsername = "dave", bits = 1 })) == "SHARE_FULL" and #rec.grants == before,
         "新增後超過 MaxShares：SHARE_FULL、名單不變")
-    check(cmd(alice, "share", rec, { targetUsername = "bob", bits = USE }).ok, "滿了仍可改既有分享的位元")
+    check(edit(alice, rec, { "bob" }, MSH.SHARE.MOVE).ok, "滿了仍可改既有成員的位元")
     T.sandbox("MaxShares", 8)
     local saved = MSH.LIMIT.REGISTRY_BYTES
     MSH.LIMIT.REGISTRY_BYTES = R.estimateBytes() + 5
@@ -182,7 +191,7 @@ return function(T)
     check(d.ok and not d.actions.canLeave, "detail：只靠陣營的人沒有〔離開〕")
 
     T.section("撤銷只撤銷沒有其他資格的人")
-    check(cmd(alice, "unshare", rec, { targetUsername = "bob" }).ok and has(hs, "bob") and not teleported("bob"),
+    check(stop(alice, rec, { "bob" }).ok and has(hs, "bob") and not teleported("bob"),
         "移除 bob 的 grant：仍是陣營成員，名單保留")
     check(cmd(alice, "share", rec, { targetUsername = "bob", bits = BUILD }).ok, "bob 的 grant 加回")
     local dave2 = T.player({ name = "dave", x = 103, y = 103 })
@@ -194,7 +203,7 @@ return function(T)
         revokeLocked[#revokeLocked + 1] = MSH.Srv.locked
         return origRevoke(h, u)
     end
-    res = cmd(alice, "unshare", rec, { targetUsername = "dave" })
+    res = stop(alice, rec, { "dave" })
     MSH.Native.revoke = origRevoke
     check(res.ok and not has(hs, "dave") and teleported("dave") and pushed(dave2, rec.claimId),
         "移除只有 grant 的 dave：撤銷、人在屋內傳出、收到 changed")
@@ -388,7 +397,7 @@ return function(T)
     check(res.ok and b ~= nil and b.sid == SID_C, "未綁定的 MANAGE 成員第一次 share：綁定")
     local impostor = T.player({ name = "carol", x = 500, y = 500, sid = SID_X })
     local grants = #rec.grants
-    res = cmd(impostor, "unshare", rec, { targetUsername = "dave" })
+    res = stop(impostor, rec, { "dave" })
     check(code(res) == "IDENTITY_UNVERIFIED" and #rec.grants == grants, "之後同名不同 SteamID：IDENTITY_UNVERIFIED、沒有改動")
     T.failWrites = true
     local nina = T.player({ name = "nina", x = 500, y = 500, sid = 76561198000000005 })
@@ -414,7 +423,7 @@ return function(T)
     local r15, h15 = seed("olga", rect(400, 400, 8, 8))
     check(cmd(olga, "share", r15, { targetUsername = "pete", bits = MEMBER }).ok and has(h15, "pete"), "分享給 pete")
     T.tick(2)
-    check(cmd(olga, "unshare", R.get(r15.claimId), { targetUsername = "pete" }).ok and not has(h15, "pete"),
+    check(stop(olga, R.get(r15.claimId), { "pete" }).ok and not has(h15, "pete"),
         "停止分享：原生名單移除")
     T.tick(2)
     h15:addPlayer("pete")   -- 崩潰組合：原生存檔停在停止分享之前，registry 已存下停止分享
@@ -445,12 +454,11 @@ return function(T)
             and MSH.Claims.grantOf(r, "omar") == nil, "只有 INVITE：給自己沒有的位元被拒")
         check(code(cmd(ivy, "share", r, { targetUsername = "omar", bits = INVITE })) == "NOT_OWNER", "只有 INVITE：不能給 INVITE")
         check(code(cmd(ivy, "share", r, { targetUsername = "omar", bits = MANAGE })) == "NOT_OWNER", "只有 INVITE：不能給 MANAGE")
-        check(code(cmd(ivy, "share", r, { targetUsername = "bob", bits = USE })) == "NOT_OWNER"
-            and MSH.Claims.grantOf(r, "bob").bits == MEMBER, "只有 INVITE：改既有成員被拒")
-        check(code(cmd(ivy, "share", r, { targetUsername = "nora", bits = MEMBER })) == "NOT_OWNER",
-            "只有 INVITE：自己邀的人也不能再改")
-        check(code(cmd(ivy, "unshare", r, { targetUsername = "bob" })) == "NOT_OWNER" and has(h, "bob"),
-            "只有 INVITE：unshare 被拒")
+        check(code(cmd(ivy, "share", r, { targetUsername = "bob", bits = USE })) == "BAD_USER"
+            and code(edit(ivy, r, { "bob" }, USE)) == "NOT_OWNER" and bitsOf(r, "bob") == MEMBER,
+            "只有 INVITE：改既有成員被拒（share 不改既有、shareEdit 要管理）")
+        check(code(edit(ivy, r, { "nora" }, 0, USE)) == "NOT_OWNER", "只有 INVITE：自己邀的人也不能再改")
+        check(code(stop(ivy, r, { "bob" })) == "NOT_OWNER" and has(h, "bob"), "只有 INVITE：停止分享被拒")
         local foxes = T.faction("Foxes", "alice", { "fox1" })
         check(cmd(al, "shareFaction", r, { bits = USE }).ok, "陣營分享")
         check(code(cmd(ivy, "unshareFaction", r)) == "NOT_OWNER" and r.factionShare ~= nil,
@@ -459,10 +467,8 @@ return function(T)
         check(cmd(al, "share", r, { targetUsername = "max", bits = MANAGE + USE }).ok, "max 有 MANAGE＋USE（沒有 INVITE）")
         check(cmd(max, "share", r, { targetUsername = "pia", bits = INVITE + USE }).ok
             and MSH.Claims.grantOf(r, "pia").bits == INVITE + USE + MEMBER, "MANAGE 成員能給 INVITE")
-        check(cmd(max, "share", r, { targetUsername = "ivy", bits = USE }).ok
-            and MSH.Claims.grantOf(r, "ivy").bits == USE + MEMBER, "MANAGE 成員能拿掉別人的 INVITE")
-        check(code(cmd(max, "share", r, { targetUsername = "pia", bits = MOVE })) == "NOT_OWNER",
-            "MANAGE 成員仍只能給自己有的一般位元")
+        check(edit(max, r, { "ivy" }, 0, INVITE).ok and bitsOf(r, "ivy") == USE + MEMBER, "MANAGE 成員能拿掉別人的 INVITE")
+        check(code(edit(max, r, { "pia" }, MOVE)) == "NOT_OWNER", "MANAGE 成員仍只能給自己有的一般位元")
         check(cmd(al, "share", r, { targetUsername = "quinn", bits = MSH.SHARE_ALL }).ok
             and MSH.Claims.grantOf(r, "quinn").bits == MSH.SHARE_ALL, "屋主能給全部位元（含遠距拿取）")
         check(cmd(pia, "share", r, { targetUsername = "rex", bits = USE }).ok and has(h, "rex"),
@@ -477,7 +483,7 @@ return function(T)
         local _, foxBits = MSH.Claims.roleOf(r, "fox1")
         check(foxBits == USE + MEMBER, "舊資料裡陣營的 MANAGE／INVITE 不給權限")
         check(code(cmd(fox1, "share", r, { targetUsername = "sam", bits = MEMBER })) == "NOT_OWNER"
-            and code(cmd(fox1, "unshare", r, { targetUsername = "rex" })) == "NOT_OWNER", "舊資料：陣營成員不能邀人、不能移除")
+            and code(stop(fox1, r, { "rex" })) == "NOT_OWNER", "舊資料：陣營成員不能邀人、不能移除")
         local dv = T.cmd(al, "detail", { claimId = r.claimId })
         check(dv.factionShare.bits == USE + MEMBER, "detail 的陣營位元也遮掉")
         r.factionShare.state = "SUSPENDED"
@@ -488,6 +494,68 @@ return function(T)
         for _, u in ipairs(h.players._raw) do same = same and want[u] == true end
         check(same and has(h, "fox1") and has(h, "pia") and has(h, "ivy"), "原生名單＝desiredPlayers，INVITE 不改投影")
         T.disband(foxes)
+    end
+
+    T.section("批量修改與停止分享（shareEdit、unshareMany，使用者 2026-10-20）")
+    do
+        local INVITE, TAKE, FARM = MSH.SHARE.INVITE, MSH.SHARE.TAKE, 16
+        local function audits(event)
+            local n = 0
+            for _, line in ipairs(T.logs) do
+                if string.sub(line, 1, #event + 1) == event .. "\t" then n = n + 1 end
+            end
+            return n
+        end
+        boot()
+        local al = T.player({ name = "alice", x = 5, y = 5 })
+        local ps = {}
+        for _, n in ipairs({ "bob", "cara", "dan", "eve", "max" }) do ps[n] = T.player({ name = n, x = 500, y = 500 }) end
+        local r, h = seed("alice", rect(100, 100, 10, 10))
+        check(cmd(al, "share", r, { targetUsername = "bob", bits = USE }).ok
+            and cmd(al, "share", r, { targetUsername = "cara", bits = USE + INVITE }).ok
+            and cmd(al, "share", r, { targetUsername = "dan", bits = BUILD }).ok, "（前置）三位成員")
+        clearBoxes()
+        local rev, edits = r.revision, audits("SHARE_EDIT")
+        local res = edit(al, r, { "bob", "cara", "dan" }, TAKE, INVITE)
+        check(res.ok and r.revision == rev + 1 and audits("SHARE_EDIT") == edits + 1,
+            "三位一起改：一次寫入（revision 只加 1）、一行稽核")
+        check(bitsOf(r, "bob") == MEMBER + USE + TAKE and bitsOf(r, "cara") == MEMBER + USE + TAKE
+            and bitsOf(r, "dan") == MEMBER + BUILD + TAKE, "只加減有變的位元：遠距拿取加給三位、邀請從 cara 拿掉，其他照留")
+        check(pushed(ps.bob, r.claimId) and pushed(ps.cara, r.claimId) and pushed(ps.dan, r.claimId)
+            and pushed(al, r.claimId) and not pushed(ps.eve, r.claimId), "changed 推給改到的人與屋主")
+        check(has(h, "bob") and has(h, "cara") and has(h, "dan"), "改權限不動原生名單")
+
+        rev = r.revision
+        check(code(edit(al, r, { "bob" }, 0, 0)) == "BAD_ARGS", "沒有要改的：BAD_ARGS")
+        check(code(edit(al, r, { "bob" }, USE, USE)) == "BAD_ARGS", "同一位元又加又拿：BAD_ARGS")
+        check(code(edit(al, r, { "bob" }, 0, MEMBER)) == "BAD_ARGS", "拿掉成員：BAD_ARGS（移除走 unshareMany）")
+        check(code(edit(al, r, {}, FARM)) == "BAD_ARGS" and code(edit(al, r, { "bob", "bob" }, FARM)) == "BAD_ARGS"
+            and code(edit(al, r, { "bad\nname" }, FARM)) == "BAD_ARGS", "對象空的、重複或名字不合法：BAD_ARGS")
+        check(code(edit(al, r, names(MSH.LIMIT.MAX_SHARES + 1, "p"), FARM)) == "BAD_ARGS", "超過 MAX_SHARES 位：BAD_ARGS")
+        check(code(edit(al, r, { "bob", "eve" }, FARM)) == "BAD_USER" and bitsOf(r, "bob") == MEMBER + USE + TAKE
+            and r.revision == rev, "有一位不在名單：整批不改")
+        check(cmd(al, "share", r, { targetUsername = "max", bits = MANAGE + USE }).ok, "max 有 MANAGE＋USE")
+        rev = r.revision
+        check(code(edit(ps.max, r, { "bob", "dan" }, FARM)) == "NOT_OWNER" and r.revision == rev,
+            "管理成員加自己沒有的位元：整批拒絕")
+        check(edit(ps.max, r, { "bob", "dan" }, 0, USE).ok and bitsOf(r, "bob") == MEMBER + TAKE
+            and bitsOf(r, "dan") == MEMBER + BUILD + TAKE, "管理成員拿掉自己有的位元：沒有的人不受影響，其他照留")
+        check(code(edit(ps.max, r, { "bob", "max" }, USE)) == "BAD_USER", "管理成員一起改的人裡有自己：BAD_USER")
+
+        rev = r.revision
+        local unshares = audits("UNSHARE")
+        clearBoxes()
+        res = stop(al, r, { "bob", "cara" })
+        check(res.ok and r.revision == rev + 1 and audits("UNSHARE") == unshares + 1
+            and MSH.Claims.grantOf(r, "bob") == nil and MSH.Claims.grantOf(r, "cara") == nil and #r.grants == 2,
+            "停止分享給兩位：一次寫入、一行稽核")
+        check(not has(h, "bob") and not has(h, "cara") and has(h, "dan") and pushed(ps.bob, r.claimId)
+            and pushed(ps.cara, r.claimId), "原生名單移除兩位、兩位都收到 changed")
+        rev = r.revision
+        check(code(stop(al, r, { "dan", "zed" })) == "BAD_USER" and MSH.Claims.grantOf(r, "dan") ~= nil and r.revision == rev,
+            "有一位不在名單：整批不停")
+        check(code(stop(ps.max, r, { "max" })) == "BAD_USER" and code(stop(ps.dan, r, { "max" })) == "NOT_OWNER",
+            "不能停止自己；沒有管理的成員不能停止別人")
     end
 
     T.section("身分：上線就綁定（Steam 模式，來源 LOGIN）")

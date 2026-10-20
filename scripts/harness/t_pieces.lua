@@ -199,7 +199,7 @@ return function(T)
         end
         return origRevoke(house, user)
     end
-    res = T.cmd(alice, "unshare", { claimId = rr.claimId, expectedRevision = rr.revision, targetUsername = "bob" })
+    res = T.cmd(alice, "unshareMany", { claimId = rr.claimId, expectedRevision = rr.revision, users = { "bob" } })
     N.revoke = origRevoke
     check(res.ok and stillListed == false, "第一次傳送前，bob 已不在任何一塊的名單")
     check(bob.x == 501 and bob.y == 503 and not kb[1].players:contains("bob") and not kb[2].players:contains("bob"),

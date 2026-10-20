@@ -1,5 +1,7 @@
 -- MinidoracatSafehouse/Sharing.lua：分享指令（指定玩家、陣營）與陣營 round-robin 同步
 -- （計畫 §4.2 第 212-213、238 行，§4.3、§4.4、§6.4、§6.5、§10.5 伺服器端）。
+-- 指定玩家三個指令（使用者 2026-10-20 核准批量修改）：share 只新增、shareEdit 對一位或多位只加減有變的位元、
+--   unshareMany 停止分享給一位或多位；不再有整組覆蓋既有成員權限的路徑。
 -- 位元的唯一來源是 Claims.roleOf；原生名單應有的人是 Native.desiredPlayers。Reconcile 也用 desiredPlayers 收斂，
 --   兩邊同一個判定，所以不會一邊加、一邊移。
 -- 撤銷（移除、停止分享、陣營暫停、離開、陣營少了人）用 Native.revoke（kickUserFromSafehouse：人在屋內立即傳出，§4.4），
@@ -203,18 +205,32 @@ local function subsetOf(bits, mine)
     return true
 end
 
--- 非屋主能不能把 user 設成 bits。共同：不能給 MANAGE、不能動持有 MANAGE 的人。
--- MANAGE 成員：位元 ⊆ 自己的位元＋INVITE（MANAGE 含邀請能力，自己沒有 INVITE 位元也能給），可改既有成員。
--- 只有 INVITE：對象必須沒有任何資格（不是屋主、沒有 grant、也不靠陣營；否則等於替既有成員加權限，
---   而且陣營撤銷後這個 grant 還留著），位元 ⊆ 自己的位元且不含 INVITE。
--- 保守規則（2026-10-10 審查 MEDIUM；INVITE 使用者 2026-10-11；陣營成員 2026-10-11 審查 MEDIUM）
-local function memberMayShare(rec, user, bits, mine)
-    if MSH.hasBit(bits, SHARE.MANAGE) or holdsManage(rec, user) then return false end
-    if MSH.hasBit(mine, SHARE.MANAGE) then
-        local cap = MSH.hasBit(mine, SHARE.INVITE) and mine or mine + SHARE.INVITE
-        return subsetOf(bits, cap)
-    end
+-- MANAGE 成員能給、能加減的位元：自己 roleOf 的位元＋INVITE（MANAGE 含邀請能力，自己沒有 INVITE 位元也能給），不含 MANAGE
+-- （2026-10-10 審查 MEDIUM；INVITE 使用者 2026-10-11）
+local function manageCap(mine)
+    local cap = MSH.hasBit(mine, SHARE.INVITE) and mine or mine + SHARE.INVITE
+    return MSH.hasBit(cap, SHARE.MANAGE) and cap - SHARE.MANAGE or cap
+end
+
+-- 非屋主新增分享（對象還沒有 grant）。MANAGE 成員：位元 ⊆ manageCap。
+-- 只有 INVITE：對象必須沒有任何資格（不是屋主、也不靠陣營；否則等於替既有成員加權限，而且陣營撤銷後這個 grant 還留著），
+--   位元 ⊆ 自己的位元且不含 INVITE（陣營成員 2026-10-11 審查 MEDIUM）
+local function memberMayAdd(rec, user, bits, mine)
+    if MSH.hasBit(mine, SHARE.MANAGE) then return subsetOf(bits, manageCap(mine)) end
     return MSH.Claims.roleOf(rec, user) == nil and not MSH.hasBit(bits, SHARE.INVITE) and subsetOf(bits, mine)
+end
+
+-- 改既有成員（shareEdit、unshareMany）的對象：每位都要有 grant、不是自己；非屋主不能動持有 MANAGE 的人（grant 或陣營給的）。
+-- 回傳照 users 順序的 grants，或 nil, code
+local function grantsOf(ctx, rec, owner)
+    local out = {}
+    for i, user in ipairs(ctx.args.users) do
+        local g = MSH.Claims.grantOf(rec, user)
+        if g == nil or user == ctx.who then return nil, CODE.BAD_USER end
+        if not owner and holdsManage(rec, user) then return nil, CODE.NOT_OWNER end
+        out[i] = g
+    end
+    return out
 end
 
 -- ===== 分享對象：存在檢查與候選 =====
@@ -288,6 +304,7 @@ end
 
 -- ===== 指定玩家 =====
 
+-- 新增分享：對象還不能有 grant。改既有成員的權限走 shareEdit（使用者 2026-10-20 核准批量修改：不再整組覆蓋）
 function Sh.share(ctx)
     local a = ctx.args
     local rec, owner, mine = target(ctx, "invite")
@@ -295,38 +312,61 @@ function Sh.share(ctx)
     local bits = Sh.normalize(a.bits)
     if bits == nil then return S.fail(CODE.BAD_ARGS) end
     local user = a.targetUsername
-    if user == rec.owner or user == ctx.who then return S.fail(CODE.BAD_USER) end
-    local g = MSH.Claims.grantOf(rec, user)
-    if not owner and not memberMayShare(rec, user, bits, mine) then return S.fail(CODE.NOT_OWNER) end
+    if user == rec.owner or user == ctx.who or MSH.Claims.grantOf(rec, user) ~= nil then return S.fail(CODE.BAD_USER) end
+    if not owner and not memberMayAdd(rec, user, bits, mine) then return S.fail(CODE.NOT_OWNER) end
+    -- 新加的人要是伺服器認得的玩家：打錯字不會變成一筆沒人用的分享（使用者 2026-10-12）
+    if not Sh.known(user) then return S.fail(CODE.UNKNOWN_PLAYER) end
+    if #rec.grants + 1 > MSH.Settings.get().maxShares then return S.fail(CODE.SHARE_FULL) end
+    local entry = { user = user, bits = bits }
+    if R.estimateBytes(entry) > LIMIT.REGISTRY_BYTES then return S.fail(CODE.REGISTRY_FULL) end
     local old = toSet(N.desiredPlayers(rec))
-    if g == nil then
-        -- 新加的人要是伺服器認得的玩家：打錯字不會變成一筆沒人用的分享（使用者 2026-10-12）
-        if not Sh.known(user) then return S.fail(CODE.UNKNOWN_PLAYER) end
-        if #rec.grants + 1 > MSH.Settings.get().maxShares then return S.fail(CODE.SHARE_FULL) end
-        local entry = { user = user, bits = bits }
-        if R.estimateBytes(entry) > LIMIT.REGISTRY_BYTES then return S.fail(CODE.REGISTRY_FULL) end
-        -- 新名字在這間的每一塊各佔一個
-        if not old[user] and rosterNames() + #rec.rects > LIMIT.NATIVE_NAMES then return S.fail(CODE.ROSTER_FULL) end
-        rec.grants[#rec.grants + 1] = entry
-    else
-        g.bits = bits
-    end
+    -- 新名字在這間的每一塊各佔一個
+    if not old[user] and rosterNames() + #rec.rects > LIMIT.NATIVE_NAMES then return S.fail(CODE.ROSTER_FULL) end
+    rec.grants[#rec.grants + 1] = entry
     R.touch(rec)
     finish(ctx, rec, old, { [user] = true }, "SHARE", user .. " " .. tostring(bits))
     return S.ok({ claimId = rec.claimId, revision = rec.revision })
 end
 
-function Sh.unshare(ctx)
+-- 改既有成員的權限（一位或多位，使用者 2026-10-20 核准批量修改）：每位只加 add、只拿 remove，其他位元不動。
+-- add、remove 不重疊、不能都是 0；remove 不含 MEMBER（移除成員走 unshareMany）。屋主或 MANAGE 成員；MANAGE 成員只能
+-- 加減 manageCap 內的位元，對方比自己多的權限照留。整批一起成功或一起失敗；一次寫入、一次同步、一行稽核
+function Sh.edit(ctx)
+    local a = ctx.args
+    local rec, owner, mine = target(ctx, "manage")
+    if rec == nil then return S.fail(owner) end
+    local add, remove = a.add, a.remove
+    if add + remove == 0 or MSH.maskBits(add, remove) ~= 0 or MSH.hasBit(remove, SHARE.MEMBER) then
+        return S.fail(CODE.BAD_ARGS)
+    end
+    if not owner and not subsetOf(add + remove, manageCap(mine)) then return S.fail(CODE.NOT_OWNER) end
+    local grants, code = grantsOf(ctx, rec, owner)
+    if grants == nil then return S.fail(code) end
+    local old = toSet(N.desiredPlayers(rec))
+    for _, g in ipairs(grants) do
+        local bits = g.bits - MSH.maskBits(g.bits, remove)
+        g.bits = bits + add - MSH.maskBits(bits, add)
+    end
+    R.touch(rec)
+    finish(ctx, rec, old, toSet(a.users), "SHARE_EDIT",
+        table.concat(a.users, ",") .. " +" .. tostring(add) .. " -" .. tostring(remove))
+    return S.ok({ claimId = rec.claimId, revision = rec.revision })
+end
+
+-- 停止分享給 users（一位或多位都走這裡，使用者 2026-10-20）：對象規則同 shareEdit。只撤銷不再有任何資格的人（陣營成員
+-- 照留在原生名單）；整批一起成功或一起失敗，一次寫入、一次同步、一行稽核
+function Sh.unshareMany(ctx)
     local rec, owner = target(ctx, "manage")
     if rec == nil then return S.fail(owner) end
-    local user = ctx.args.targetUsername
-    local g, i = MSH.Claims.grantOf(rec, user)
-    if user == rec.owner or user == ctx.who or g == nil then return S.fail(CODE.BAD_USER) end
-    if not owner and holdsManage(rec, user) then return S.fail(CODE.NOT_OWNER) end
+    local _, code = grantsOf(ctx, rec, owner)
+    if code then return S.fail(code) end
+    local drop = toSet(ctx.args.users)
     local old = toSet(N.desiredPlayers(rec))
-    table.remove(rec.grants, i)
+    for i = #rec.grants, 1, -1 do
+        if drop[rec.grants[i].user] then table.remove(rec.grants, i) end
+    end
     R.touch(rec)
-    finish(ctx, rec, old, { [user] = true }, "UNSHARE", user)
+    finish(ctx, rec, old, drop, "UNSHARE", table.concat(ctx.args.users, ","))
     return S.ok({ claimId = rec.claimId, revision = rec.revision })
 end
 
@@ -508,9 +548,11 @@ S.define("share", { kind = "mutation",
     run = function(ctx) return MSH.Sharing.share(ctx) end })
 S.define("shareCandidates", { kind = "query", fields = { claimId = "claimId", query = "query" },
     run = function(ctx) return MSH.Sharing.candidates(ctx) end })
-S.define("unshare", { kind = "mutation",
-    fields = { claimId = "claimId", expectedRevision = "revision", targetUsername = "username" },
-    run = function(ctx) return MSH.Sharing.unshare(ctx) end })
+S.define("shareEdit", { kind = "mutation",
+    fields = { claimId = "claimId", expectedRevision = "revision", users = "users", add = "bits", remove = "bits" },
+    run = function(ctx) return MSH.Sharing.edit(ctx) end })
+S.define("unshareMany", { kind = "mutation", fields = { claimId = "claimId", expectedRevision = "revision", users = "users" },
+    run = function(ctx) return MSH.Sharing.unshareMany(ctx) end })
 S.define("shareFaction", { kind = "mutation",
     fields = { claimId = "claimId", expectedRevision = "revision", bits = "bits" },
     run = function(ctx) return MSH.Sharing.shareFaction(ctx) end })

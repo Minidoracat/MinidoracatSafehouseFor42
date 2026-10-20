@@ -45,14 +45,15 @@ return function(T)
     local memberView = { actorRole = "member", actions = { canManageShares = false } }
     local plain = { user = "bob", bits = SHARE.MEMBER + SHARE.USE }
     local mgr = { user = "carol", bits = SHARE.MEMBER + SHARE.MANAGE }
-    check(SP.canStopGrant(ownerView, mgr, "alice") and SP.canStopGrant(ownerView, plain, "alice"), "屋主可以停止任何人")
-    check(SP.canStopGrant(managerView, plain, "dave"), "管理成員可以停止一般成員")
-    check(not SP.canStopGrant(managerView, mgr, "dave"), "管理成員不能動持有管理的人")
-    check(not SP.canStopGrant(managerView, { user = "dave", bits = SHARE.MEMBER }, "dave"), "管理成員不能動自己")
-    check(not SP.canStopGrant(memberView, plain, "dave"), "一般成員不能停止分享")
+    check(SP.rowBlock(ownerView, mgr, "alice") == nil and SP.rowBlock(ownerView, plain, "alice") == nil, "屋主每一列都能勾")
+    check(SP.rowBlock(managerView, plain, "dave") == nil, "管理成員能勾一般成員")
+    check(SP.rowBlock(managerView, mgr, "dave") == "IGUI_MSH_Share_RowManager", "管理成員不能勾持有管理的人（寫原因）")
+    check(SP.rowBlock(managerView, { user = "dave", bits = SHARE.MEMBER }, "dave") == "IGUI_MSH_Share_RowSelf",
+        "管理成員不能勾自己")
+    check(SP.rowBlock(memberView, plain, "dave") == "IGUI_MSH_Share_RowInviteOnly", "沒有管理的成員一列都不能勾")
     local viaFaction = { user = "erin", bits = SHARE.MEMBER + SHARE.USE, effBits = SHARE.MEMBER + SHARE.USE + SHARE.MANAGE }
-    check(not SP.canStopGrant(managerView, viaFaction, "dave") and SP.canStopGrant(ownerView, viaFaction, "alice"),
-        "陣營給的管理也算：管理成員不能停止實際持有管理的人（effBits）")
+    check(SP.rowBlock(managerView, viaFaction, "dave") == "IGUI_MSH_Share_RowManager" and SP.rowBlock(ownerView, viaFaction,
+        "alice") == nil, "陣營給的管理也算：管理成員不能勾實際持有管理的人（effBits）")
     check(SP.chipAllowed(ownerView, "MANAGE") and not SP.chipAllowed(managerView, "MANAGE"), "只有屋主能給管理")
     check(SP.chipAllowed(managerView, "MEMBER") and SP.chipAllowed(managerView, "USE")
         and not SP.chipAllowed(managerView, "BUILD") and not SP.chipAllowed(managerView, "FARM")
@@ -65,7 +66,7 @@ return function(T)
         sentArgs = nil
         local host = { detail = d, say = function() end,
             mutate = function(_, command, args) sentArgs = { command = command, args = args } end }
-        local p = setmetatable({ host = host, bits = MSH.SHARE_ALL, ac = { getText = function() return "bob" end } },
+        local p = setmetatable({ host = host, bits = MSH.SHARE_ALL, items = {}, ac = { getText = function() return "bob" end } },
             SP.Page)
         SP.Page.onShareUser(p)
         return sentArgs and sentArgs.args.bits
@@ -96,23 +97,37 @@ return function(T)
         and SP.roleText(SHARE.MEMBER) == getText("IGUI_MSH_Share_Bit_MEMBER"),
         "概覽的身分欄：括號裡只列成員以外的權限，不再寫「成員（成員、…）」；只有成員就寫「成員」")
 
-    T.section("SharingPage：每種角色的 chip、按鈕與送出的位元（邀請，使用者 2026-10-11）")
-    -- 假元件：只記可見、可用、勾選與文字；host 照管理視窗的介面（button／newLines／place／fit／flow／mutate／say）
+    T.section("SharingPage：每種角色的名單、chip、按鈕與送出的位元（邀請，使用者 2026-10-11；名單多選 2026-10-20）")
+    -- 假元件：只記可見、可用、勾選與文字；host 照管理視窗的介面（button／newLines／place／fit／flow／addWrapped／mutate／
+    -- say／layout）
     local function el(w)
-        local e = { width = w or 40, visible = false, enabled = true, active = false, text = "" }
+        local e = { width = w or 40, height = 20, visible = false, enabled = true, active = false, text = "" }
         function e:setVisible(v) self.visible = v end
         function e:getIsVisible() return self.visible end
         function e:setEnabled(v) self.enabled = v end
         function e:isEnabled() return self.enabled end
         function e:setActive(v) self.active = v end
         function e:setTooltip(t) self.tip = t end
+        function e:setTitle(t) self.title = t end
         function e:setText(t) self.text = t end
         function e:getText() return self.text end
         function e:setWidth(v) self.width = v end
-        function e:setHeight() end
+        function e:setHeight(v) self.height = v end
         function e:clear() self.texts = {} end
         function e:add(t) self.texts = self.texts or {}; self.texts[#self.texts + 1] = t end
         return e
+    end
+    -- 框架 VirtualList 的替身：記列、游標與尺寸（滑鼠派送不跑，測試直接呼叫頁面的 click 與清單的回呼）
+    local function fakeList(opts)
+        local l = el(100)
+        l.opts, l.items, l.padding, l.rowHeight = opts, {}, opts.padding, opts.rowHeight
+        function l:initialise() end
+        function l:setItems(items) self.items = items end
+        function l:setSelectedIndex(i) self.selectedIndex = i end
+        function l:getSelectedIndex() return self.selectedIndex end
+        function l:resize(w, h) self.width, self.height = w, h end
+        function l:scrollToIndex(i) self.scrolledTo = i end
+        return l
     end
     -- 框架 Autocomplete 的替身：記文字、可見、可用、下拉高度上限、交回的結果
     local function fakeAc(opts)
@@ -127,18 +142,26 @@ return function(T)
         function ac:queryFailed(retry) self.failed = retry end
         return ac
     end
-    local sent
-    local host = { ch = 20, fh = 14, GAP = 6, iconW = 18, me = "dave",
-        UI = { Autocomplete = { new = fakeAc } } }
+    local sent, dialogs = nil, {}
+    local mods = { false, false }   -- Ctrl、Shift 按著沒（框架 Focus.modifiers）
+    local host = { ch = 20, fh = 14, GAP = 6, iconW = 18, me = "dave", theme = {},
+        UI = { Autocomplete = { new = fakeAc }, VirtualList = { new = fakeList },
+            Dialog = { show = function(o) dialogs[#dialogs + 1] = o return o end },
+            Focus = { modifiers = function() return mods[1], mods[2] end, focusControl = function() end } } }
     function host:newLines() return el() end
-    function host:button() return el() end
+    function host:button(_, title) local b = el(); b.title = title; return b end
     function host:place(e) e.visible = true end
     function host:fit(s) return s end
     function host:flow(items, x0, y) for _, e in ipairs(items) do e.visible = true end return y + self.ch end
-    function host:mutate(command, args) sent = { command = command, args = args } return true end
+    function host:addWrapped(L, text, x, y) L:add(text) return y + self.fh end
+    function host:mutate(command, args, okText, onOk) sent = { command = command, args = args, onOk = onOk } return true end
     local errors = 0
-    function host:say(_, token) if token == "errorText" then errors = errors + 1 end end
+    function host:say(text, token)
+        self.said = text
+        if token == "errorText" then errors = errors + 1 end
+    end
     local page = SP.new(host, { addChild = function() end, height = 300 })
+    function host:layout() page:layout(self.detail, 0, 0, 400) end
     local function view(role, bits, lifecycle)
         local manage = role == "owner" or MSH.hasBit(bits, SHARE.MANAGE)
         return { claimId = 9, revision = 2, lifecycle = lifecycle or "active", actorRole = role, bits = bits,
@@ -162,7 +185,7 @@ return function(T)
         SP.Page.onShareUser(page)
         return sent and sent.args.bits
     end
-    local function stops() return (page.rows[1].visible and "1" or "-") .. (page.rows[2].visible and "2" or "-") end
+    local function blocks() return tostring(page.items[1].block) .. "," .. tostring(page.items[2].block) end
 
     local d = view("owner", MSH.SHARE_ALL)
     T.sandbox("StorageMode", 3)
@@ -172,7 +195,9 @@ return function(T)
     T.sandbox("StorageMode", 2)
     check(render(d) == "MEMBER,USE,MOVE,BUILD,FARM,INVITE,MANAGE" and shareAll() == MSH.SHARE_ALL,
         "物品搜尋只指引：不排遠距拿取 chip（勾了也沒作用），已勾的位元照樣送出、不洗掉")
-    check(stops() == "12" and page.btnFactionStop.visible and page.btnFaction.visible, "屋主：每列都有〔停止〕、看得到陣營分享按鈕")
+    check(blocks() == "nil,nil" and page.list.visible and page.btnPickAll.visible and page.btnPickClear.visible
+        and page.btnFactionStop.visible and page.btnFaction.visible,
+        "屋主：名單每列都能勾、有〔全選〕〔清除選取〕、看得到陣營分享按鈕")
     check(shareAll() == MSH.SHARE_ALL, "屋主：送出照勾的全部（含邀請、管理）")
     page.bits, sent = MSH.SHARE_ALL, nil
     SP.Page.onShareFaction(page)
@@ -189,23 +214,33 @@ return function(T)
     for _, t in ipairs(page.lines.texts) do if t == want then factionText = t end end
     getText = realText
     check(factionText ~= nil, "陣營列的權限文字不列邀請與管理（舊資料也一樣）")
-    check(shareAll("bob") == MSH.SHARE_ALL, "屋主：輸入既有成員照樣送出（改權限）")
+    check(shareAll("bob") == nil and page.count == 1 and page.picked.bob and page.editUser == "bob"
+        and page.editBits == SHARE.MEMBER + SHARE.USE and host.said == "IGUI_MSH_Share_Existing",
+        "屋主：輸入名單上的人＝選到他那一列、帶入他目前的權限，不送出（不整組覆蓋）")
+    page:clearPicks()
 
     d = view("member", SHARE.MEMBER + SHARE.USE + SHARE.MANAGE)
     check(render(d) == "MEMBER,USE,INVITE" and SP.canAdd(d), "管理成員：只能勾自己有的，另外可以勾邀請（自己沒有也可以）")
-    check(stops() == "12" and page.rows[1].enabled and not page.rows[2].enabled and page.btnFactionStop.visible
-        and not page.btnFaction.visible, "管理成員：可停止一般成員、不能停自己；可停止陣營分享、不能分享給陣營")
+    check(blocks() == "nil,IGUI_MSH_Share_RowSelf" and page.btnFactionStop.visible and not page.btnFaction.visible,
+        "管理成員：能勾一般成員、不能勾自己；可停止陣營分享、不能分享給陣營")
     check(shareAll() == SHARE.MEMBER + SHARE.USE + SHARE.INVITE, "管理成員：送出的位元 ⊆ 自己的＋邀請，不帶管理")
-    check(shareAll("bob") == SHARE.MEMBER + SHARE.USE + SHARE.INVITE, "管理成員：輸入既有成員照樣送出（改權限）")
+    check(shareAll("bob") == nil and page.picked.bob, "管理成員：輸入名單上的人＝選到他那一列")
+    page:clearPicks()
+    local before = errors
+    check(shareAll("dave") == nil and page.count == 0 and errors == before + 1 and host.said == "IGUI_MSH_Share_RowSelf",
+        "管理成員：輸入自己（不能勾的列）寫原因、不送出")
 
     d = view("member", SHARE.MEMBER + SHARE.USE + SHARE.BUILD + SHARE.INVITE)
     check(render(d) == "MEMBER,USE,BUILD" and SP.canAdd(d), "只有邀請：看得到分享頁，只能勾自己有的，不能勾邀請與管理")
-    check(stops() == "--" and not page.btnFactionStop.visible and not page.btnFaction.visible
-        and not page.btnResume.visible and page.ac.field.visible and page.btnUser.visible,
-        "只有邀請：名單每列都沒有〔停止〕、看不到陣營分享按鈕，只有分享給玩家那一塊")
+    check(blocks() == "IGUI_MSH_Share_RowInviteOnly,IGUI_MSH_Share_RowInviteOnly" and not page.btnPickAll.visible
+        and not page.btnFactionStop.visible and not page.btnFaction.visible and not page.btnResume.visible
+        and page.ac.field.visible and page.btnUser.visible,
+        "只有邀請：名單一列都不能勾（寫原因）、沒有〔全選〕、看不到陣營分享按鈕，只有分享給玩家那一塊")
+    page:click(1, true)
+    check(page.count == 0, "只有邀請：點名單不會選取")
     check(shareAll() == SHARE.MEMBER + SHARE.USE + SHARE.BUILD and sent.command == "share",
         "只有邀請：送出的位元 ⊆ 自己的、不帶邀請與管理")
-    local before = errors
+    before = errors
     check(shareAll("bob") == nil and shareAll("alice") == nil and errors == before + 2,
         "只有邀請：輸入名單上已有的名字（成員或屋主）直接提示、不送出")
 
@@ -250,6 +285,213 @@ return function(T)
     page:hide()
     check(not ac.visible, "換分頁：輸入框與下拉收起")
     T.disconnect(me)
+
+    T.section("SharingPage：名單多選（點一列、勾選框、Ctrl、Shift、全選、清除；使用者 2026-10-20）")
+    -- 四位成員：bob 用電器、cara 用電器＋邀請、dave（測試裡的「我」）、erin 管理
+    local function team(role, bits)
+        local v = view(role, bits)
+        v.grants = { { user = "bob", bits = SHARE.MEMBER + SHARE.USE },
+            { user = "cara", bits = SHARE.MEMBER + SHARE.USE + SHARE.INVITE }, { user = "dave", bits = bits },
+            { user = "erin", bits = SHARE.MEMBER + SHARE.MANAGE } }
+        return v
+    end
+    local function picks()
+        local out = {}
+        for _, r in ipairs(page.items) do if page.picked[r.user] then out[#out + 1] = r.user end end
+        return table.concat(out, ",")
+    end
+    local function click(i, ctrl, shift, box)
+        mods[1], mods[2] = ctrl == true, shift == true
+        page:click(i, box == true)
+        mods[1], mods[2] = false, false
+    end
+    local cb = page.list.opts
+    d = team("owner", MSH.SHARE_ALL)
+    render(d)
+    click(2)
+    check(picks() == "cara" and page.count == 1 and page.anchor == "cara", "點一列：只選這一位")
+    click(4, true)
+    check(picks() == "cara,erin", "Ctrl＋點：加選")
+    click(1, false, false, true)
+    check(picks() == "bob,cara,erin" and page.anchor == "bob", "點勾選框：加選，錨點移到這一列")
+    click(3, false, true)
+    check(picks() == "bob,cara,dave", "Shift＋點：從錨點選到這一列，取代原本的選取（同原版物品欄）")
+    click(2, true)
+    check(picks() == "bob,dave", "Ctrl＋點已選的：取消")
+    click(3)
+    check(picks() == "dave", "點已在多選裡的一列：只剩這一位")
+    cb.onSelect(page.list, nil, 3)
+    check(picks() == "" and page.count == 0, "鍵盤 Enter／Space、手把 A：勾選或取消游標那一列")
+    click(1)
+    mods[2] = true
+    cb.onHighlight(page.list, nil, 2)
+    cb.onHighlight(page.list, nil, 3)
+    mods[2] = false
+    cb.onHighlight(page.list, nil, 4)
+    check(picks() == "bob,cara,dave", "Shift＋方向鍵一路選過去；放開 Shift 只移游標")
+    Keyboard = { KEY_A = 30 }
+    mods[1] = true
+    local took = cb.onKey(page.list, 30)
+    mods[1] = false
+    check(took == true and picks() == "bob,cara,dave,erin" and cb.onKey(page.list, 30) == false,
+        "Ctrl＋A 全選；沒按 Ctrl 的 A 交回框架")
+    Keyboard = nil
+    check(not page.btnPickAll.enabled and page.btnPickClear.enabled, "全選了：〔全選〕停用、〔清除選取〕可按")
+    check(page:clearPicks() == true and picks() == "" and page:clearPicks() == false and page.btnPickAll.enabled
+        and not page.btnPickClear.enabled, "清除選取（〔清除選取〕、Esc、手把 B）；沒有選取時回 false，Esc 照框架的預設")
+    SP.Page.onPickAll(page)
+    check(picks() == "bob,cara,dave,erin", "〔全選〕")
+    d = team("member", SHARE.MEMBER + SHARE.USE + SHARE.MANAGE)
+    render(d)
+    check(picks() == "bob,cara", "換成管理成員看：選取只留還能勾的人（自己、持有管理的拿掉）")
+    click(3)
+    check(picks() == "bob,cara", "點不能勾的列（自己）：選取不變")
+    click(1)
+    click(4, false, true)
+    check(picks() == "bob,cara", "Shift 選一段跳過不能勾的列")
+    SP.Page.onPickAll(page)
+    check(picks() == "bob,cara" and not page.btnPickAll.enabled, "全選只選能勾的")
+    d = team("owner", MSH.SHARE_ALL)
+    render(d)
+    SP.Page.onPickAll(page)
+    table.remove(d.grants, 2)
+    render(d)
+    check(picks() == "bob,dave,erin" and page.count == 3, "重抓後不在名單的人從選取拿掉")
+    d.claimId = 10
+    render(d)
+    check(picks() == "" and page.anchor == nil, "換一間：選取清掉")
+    -- 名單太長、表單被擠出捲動區（捲動區高 300）：名單收短成自己捲，至少 MIN_ROWS 列；列照樣全部交給清單
+    local big = team("owner", MSH.SHARE_ALL)
+    for i = 1, 10 do big.grants[#big.grants + 1] = { user = "m" .. i, bits = SHARE.MEMBER } end
+    host.detail = big
+    local stride = host.ch + SP.ROW_GAP
+    local bottom = page:layout(big, 0, 0, 400)
+    check(page.listH < #big.grants * stride + SP.ROW_GAP and page.listH >= SP.MIN_ROWS * stride + SP.ROW_GAP
+        and page.list.height == page.listH and #page.list.items == 14 and bottom <= 300,
+        "名單太長：收短成自己捲（至少 3 列），表單留在捲動區裡（listH=" .. tostring(page.listH) .. " bottom="
+        .. tostring(bottom) .. "）")
+    page.parent.height = 150
+    page.list.selectedIndex, page.list.scrolledTo = 9, nil
+    page:layout(big, 0, 0, 400)
+    check(page.list.scrolledTo == 9, "名單變矮：游標列捲回看得到的地方")
+    -- 游標列在收短的名單外面：焦點框框整個名單（回 nil），不畫到名單外面；看得到時只框那一列
+    local l = page.list
+    l.scrollOffset = 0
+    local outside = l:focusRect()
+    l.selectedIndex = 1
+    local rx, ry = l:focusRect()
+    check(outside == nil and rx == 0 and ry == l.padding, "焦點框：游標列捲出名單時框整個名單，看得到時只框那一列")
+    l.selectedIndex = nil
+    local idleShort = page.short
+    page:click(1)
+    check(idleShort == 0 and page.short > 0 and page.listH == SP.MIN_ROWS * stride + SP.ROW_GAP,
+        "捲動區太矮：沒選人時不要求長高；選了人、名單收到最短表單還放不下，short 寫差多少（管理視窗照它長高）")
+    page.parent.height = 300
+    page:clearPicks()
+    render(team("owner", MSH.SHARE_ALL))
+    check(page.listH == 4 * stride + SP.ROW_GAP, "四位：照全部列、不收短")
+
+    T.section("SharingPage：改一位（帶入目前權限，只送改過的；使用者 2026-10-20）")
+    local function chip(name)
+        for i, n in ipairs(SP.CHIPS) do if n == name then return page.chips[i] end end
+    end
+    local function said(key)
+        for _, t in ipairs(page.lines.texts or {}) do if t == key then return true end end
+        return false
+    end
+    T.sandbox("StorageMode", 3)
+    d = team("owner", MSH.SHARE_ALL)
+    render(d)
+    click(1)
+    check(page.editBits == SHARE.MEMBER + SHARE.USE and chip("MEMBER").active and not chip("MEMBER").enabled
+        and chip("MEMBER").tip == "IGUI_MSH_Share_MemberLocked" and chip("USE").active and not chip("TAKE").active
+        and not page.btnSave.enabled and page.btnStop.visible and not page.ac.field.visible and not page.btnUser.visible,
+        "選一位：chip 帶入他目前的權限、成員鎖住；沒改不能存；新增的輸入框收起")
+    SP.Page.onChip(page, chip("TAKE"))
+    SP.Page.onChip(page, chip("USE"))
+    SP.Page.onChip(page, chip("MEMBER"))
+    check(page.editBits == SHARE.MEMBER + SHARE.TAKE and page.btnSave.enabled and said("IGUI_MSH_Share_Adding")
+        and said("IGUI_MSH_Share_Removing"), "勾遠距拿取、取消用電器：寫出加上、拿掉，可以存；成員點了不變")
+    sent, dialogs = nil, {}
+    SP.Page.onSave(page)
+    check(sent and sent.command == "shareEdit" and #dialogs == 0 and table.concat(sent.args.users, ",") == "bob"
+        and sent.args.add == SHARE.TAKE and sent.args.remove == SHARE.USE and sent.args.expectedRevision == 2,
+        "〔儲存變更〕：不確認，送 shareEdit，只帶改過的（加遠距拿取、拿掉用電器）")
+    sent.onOk()
+    host:layout()
+    check(not page.btnSave.enabled and page.editBits == SHARE.MEMBER + SHARE.USE, "成功：清掉這次的變更（重抓前按鈕先停用）")
+    T.sandbox("StorageMode", 2)
+    render(d)
+    check(not chip("TAKE").visible, "只指引：遠距拿取 chip 收起，改一位時不會動到他的遠距拿取")
+
+    T.section("SharingPage：改多位（三態 chip，先確認；使用者 2026-10-20）")
+    check(SP.nextMode(nil, 0, 3) == "add" and SP.nextMode("add", 0, 3) == nil, "都沒有：不改、加給全部，來回切換")
+    check(SP.nextMode(nil, 3, 3) == "remove" and SP.nextMode("remove", 3, 3) == nil, "全部都有：不改、拿掉，來回切換")
+    check(SP.nextMode(nil, 1, 3) == "add" and SP.nextMode("add", 1, 3) == "remove" and SP.nextMode("remove", 1, 3) == nil,
+        "部分有：不改、加給全部、從全部拿掉，再回到不改")
+    T.sandbox("StorageMode", 3)
+    page:clearPicks()
+    click(1)
+    click(2, true)
+    click(4, true)
+    check(picks() == "bob,cara,erin" and page.btnSave.title == "IGUI_MSH_Share_ApplyMany", "（前置）選三位")
+    local realArgs = getText
+    getText = function(k, ...)
+        local a = { ... }
+        for i = 1, #a do a[i] = tostring(a[i]) end
+        return #a == 0 and k or (k .. "|" .. table.concat(a, "|"))
+    end
+    host:layout()
+    check(chip("USE").title == "IGUI_MSH_Share_ChipSome|" .. page.names.USE .. "|2|3" and not chip("USE").active
+        and chip("TAKE").title == page.names.TAKE and not chip("TAKE").active and chip("MEMBER").active
+        and not chip("MEMBER").enabled and not page.btnSave.enabled, "多位：部分有的寫「k/n」、都沒有的照原名、成員鎖住；還沒改不能套用")
+    SP.Page.onChip(page, chip("TAKE"))
+    SP.Page.onChip(page, chip("INVITE"))
+    SP.Page.onChip(page, chip("INVITE"))
+    check(chip("TAKE").title == "IGUI_MSH_Share_ChipAdd|" .. page.names.TAKE and chip("TAKE").active
+        and chip("INVITE").title == "IGUI_MSH_Share_ChipRemove|" .. page.names.INVITE and not chip("INVITE").active
+        and page.btnSave.enabled, "點 chip：遠距拿取加給全部；邀請點兩下＝從全部拿掉")
+    sent, dialogs = nil, {}
+    SP.Page.onSave(page)
+    local dlg = dialogs[1]
+    check(sent == nil and dlg ~= nil and dlg.title == "IGUI_MSH_Share_ApplyTitle|3" and not dlg.danger,
+        "〔套用到 3 位...〕：先開確認框、還沒送出")
+    check(dlg.text == "IGUI_MSH_Share_ApplyAdd|IGUI_MSH_Share_Bit_TAKE|bob" .. sep .. "cara" .. sep .. "erin\n"
+        .. "IGUI_MSH_Share_ApplyRemove|IGUI_MSH_Share_Bit_INVITE|cara", "確認框逐項寫出名字：只列真的會變的人")
+    dlg.onResult(false)
+    check(sent == nil, "取消：不送")
+    dlg.onResult(true)
+    check(sent and sent.command == "shareEdit" and table.concat(sent.args.users, ",") == "bob,cara,erin"
+        and sent.args.add == SHARE.TAKE and sent.args.remove == SHARE.INVITE, "確認：一次送 shareEdit 給三位，只帶要加、要拿的位元")
+    for _, g in ipairs(d.grants) do
+        if g.user ~= "dave" then g.bits = g.bits + SHARE.TAKE end
+    end
+    host:layout()
+    check(page.modes.TAKE == nil and chip("TAKE").active and chip("TAKE").title == page.names.TAKE,
+        "重抓後三位都有了：「加給全部」自己消失，chip 顯示全部都有")
+
+    T.section("SharingPage：停止分享先確認（danger；使用者 2026-10-20）")
+    sent, dialogs = nil, {}
+    SP.Page.onStop(page)
+    dlg = dialogs[1]
+    check(dlg and dlg.danger and dlg.title == "IGUI_MSH_Share_StopTitleMany|3" and sent == nil, "停止分享給三位：danger 確認框")
+    dlg.onResult(true)
+    check(sent.command == "unshareMany" and table.concat(sent.args.users, ",") == "bob,cara,erin", "確認：一次送 unshareMany")
+    page:clearPicks()
+    click(1)
+    sent, dialogs = nil, {}
+    SP.Page.onStop(page)
+    check(dialogs[1].danger and dialogs[1].title == "IGUI_MSH_Share_StopTitle|bob", "停止一位也先確認，標題寫名字")
+    dialogs[1].onResult(false)
+    check(sent == nil, "取消：不送")
+    sent, dialogs = nil, {}
+    SP.Page.onStopFaction(page)
+    check(dialogs[1].danger and dialogs[1].title == "IGUI_MSH_Share_FactionStopTitle|Wolves" and sent == nil,
+        "陣營的〔停止〕也先確認")
+    dialogs[1].onResult(true)
+    check(sent.command == "unshareFaction", "確認：送 unshareFaction")
+    getText = realArgs
+    page:clearPicks()
 
     T.section("ManagerWindow：重新框選按鈕顯示剩幾次")
     local realGetText = getText

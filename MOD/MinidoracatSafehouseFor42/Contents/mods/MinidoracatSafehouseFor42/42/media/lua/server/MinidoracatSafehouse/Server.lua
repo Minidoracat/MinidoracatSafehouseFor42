@@ -145,6 +145,18 @@ S.TYPES = {
         end
         return n >= 1 and n == #v
     end,
+    -- 分享的對象（Sharing.lua shareEdit、unshareMany）：1–LIMIT.MAX_SHARES 位、連續整數鍵、合法玩家名、不重複
+    users = function(v)
+        if type(v) ~= "table" then return false end
+        local n, seen = 0, {}
+        for k, name in pairs(v) do
+            n = n + 1
+            if not MSH.isInt(k) or k < 1 or k > MSH.LIMIT.MAX_SHARES then return false end
+            if not MSH.validUsername(name) or seen[name] then return false end
+            seen[name] = true
+        end
+        return n >= 1 and n == #v
+    end,
     -- 管理員沙盒變更：鍵是字串、值是純量；逐欄範圍由 Settings.validateChanges 檢查
     changes = function(v)
         if type(v) ~= "table" then return false end

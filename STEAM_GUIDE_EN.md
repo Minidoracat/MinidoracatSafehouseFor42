@@ -216,7 +216,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [/list]
 === 🧰 Sharing and permissions
 {{img:06-share-en.jpg}}
-Select a safehouse in the manager window and open "Members & sharing": pick permissions first, then press "Share with player" or "Share with faction".
+Select a safehouse in the manager window and open "Members & sharing". To add someone new: pick permissions first, then press "Share with player" or "Share with faction".
 [table]
 [tr][th]Permission[/th][th]Allows[/th][/tr]
 [tr][td]Member[/td][td]Entering the safehouse, taking and putting items in containers[/td][/tr]
@@ -232,8 +232,17 @@ Select a safehouse in the manager window and open "Members & sharing": pick perm
 [list]
 [*] [b]Individual players only[/b]: faction shares go up to Remote take.
 [*] [b]Invite[/b]: can only grant permissions the inviter has, and can't change or remove existing members.
-[*] [b]Manage[/b]: can only grant permissions they have, and can't grant Manage.
+[*] [b]Manage[/b]: can only add or remove permissions they have themselves, and can't grant Manage; the member's other permissions stay.
 [*] [b]Changing an existing member[/b]: ask the owner or someone with Manage.
+[/list]
+[h3]Changing members, several at once[/h3]
+[list]
+[*] [b]One member[/b]: click their row and the permissions switch to what they have now; change them and press "Save changes". Only the permissions you clicked change.
+[*] [b]Several members[/b]: tick the box at the start of each row, or Ctrl+click; Shift+click picks a range and Ctrl+A selects everyone; Esc or "Clear selection" clears it. On a controller: D-pad to move, A to tick, B to clear.
+[*] [b]Changing them together[/b]: with two or more picked, each permission shows how many have it (for example "Use appliances 2/3"); click it to cycle through give to all, remove from all, no change. "Apply to N players..." first lists who each change applies to and asks you to confirm.
+[*] [b]Stopping a share[/b]: pick the players and press "Stop sharing..."; after you confirm, they lose every permission in this safehouse. The faction row's "Stop" also asks first.
+[*] [b]Typing someone already on the list[/b]: "Share with player" picks their row instead of replacing their permissions.
+[*] [b]Rows you can't change[/b]: yourself and others with Manage can't be ticked; hover the row to see why. When the permissions are cut off, hover the row to see them all.
 [/list]
 [h3]Entering a player name[/h3]
 [list]

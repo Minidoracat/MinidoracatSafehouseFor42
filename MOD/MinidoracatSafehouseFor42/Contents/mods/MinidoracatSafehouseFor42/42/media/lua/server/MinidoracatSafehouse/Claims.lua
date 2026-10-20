@@ -441,7 +441,7 @@ end
 -- 對既有 claim 的 mutation 在 ACL 通過後綁定 actor（Steam 模式；§4.2「建立安全屋時」的同一組安全條件）。
 -- 原因：沒綁定的名字（MANAGE 成員、遷移來的 legacy 屋主）原本能對既有安全屋做 mutation，之後同名冒用也通過。
 -- 只在 mutation 綁：查詢、calibrate、admin 指令照 VehicleManager 回名字（§4.2），所以看指令的 kind。
--- 共用位置：C.owned（release、rename、redraw）與 Sharing 的 ACL（share、unshare、陣營三個、leave）都呼叫這裡。
+-- 共用位置：C.owned（release、rename、redraw）與 Sharing 的 ACL（share、shareEdit、unshareMany、陣營三個、leave）都呼叫這裡。
 -- 回傳 nil（通過或不需要）或 IDENTITY_UNVERIFIED, 原因
 function C.bindActor(ctx)
     local spec = S.commands[ctx.command]

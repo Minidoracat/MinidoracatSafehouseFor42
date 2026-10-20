@@ -50,7 +50,7 @@ local OPTIONS = {
     -- 一間最多幾塊矩形（使用者 2026-10-12：預設 4，管理員可調高）；每塊一個原生 SafeHouse，登入封包、全服名單額度與
     -- 客戶端切塊的成本都隨它成長，硬上限 LIMIT.MAX_PIECES 由 registry 與校正的容量預算決定
     { key = "MaxPieces", type = "int", min = 1, max = MSH.LIMIT.MAX_PIECES, default = 4 },
-    { key = "MaxShares", type = "int", min = 0, max = 32, default = 8 },
+    { key = "MaxShares", type = "int", min = 0, max = MSH.LIMIT.MAX_SHARES, default = 8 },
     { key = "AllowFactionShare", type = "bool", default = true },
     { key = "LapseKeepDays", type = "int", min = 0, max = 365, default = 7 },
     -- 閒置收回（使用者 2026-10-14）：屋主或名單上的人多少天沒踩進範圍就收回，0＝不收。IdleDays 管免費與沒有付費名額

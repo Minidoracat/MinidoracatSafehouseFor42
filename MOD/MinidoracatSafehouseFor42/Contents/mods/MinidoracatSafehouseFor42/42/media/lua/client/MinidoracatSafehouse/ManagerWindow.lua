@@ -439,6 +439,8 @@ function W:build()
     self.overviewWidgets = { self.btnDetails, self.btnRedraw, self.btnRelease, self.btnLeave, self.btnRespawnSet,
         self.btnRespawnClear, self.idleHover, self.btnInsure, self.btnInsureCheck }
     self.share = MSH.SharingPage.new(self, self.scroll)
+    -- Esc／手把 B：分享頁有選取時先清掉選取（使用者 2026-10-20 核准批量修改），沒有才照框架的預設（收焦點框、關窗）
+    win.onEscape = function() return self.tab == "share" and self.share:clearPicks() end
 
     self.btnQuery = self:button(body, getText("IGUI_MSH_Manager_QueryResult"), W.onQuery, self, "primary")
     self.btnDismiss = self:button(body, getText("IGUI_MSH_Manager_Dismiss"), W.onDismiss, self)
@@ -798,7 +800,7 @@ function W:layout()
         showList = not showDetail
     end
     if showList and self:layoutList(PAD, mainTop, listW, mainH) then return self:layout() end
-    if showDetail then self:layoutDetail(dx, mainTop, dw, mainH) end
+    if showDetail and self:layoutDetail(dx, mainTop, dw, mainH) then return self:layout() end
 end
 
 -- 在地面顯示範圍：總開關一列，底下五類 chip（放不下換行），再下一列整片顯示。總開關關著時 chip 與整片顯示停用；伺服器
@@ -834,8 +836,9 @@ function W:layoutRanges(x, y, w, place)
     return cy + fill.height - y
 end
 
--- 視窗不夠高、左欄放不下時：最小高度提高到放得下為止並長高 px（不超過螢幕，貼著底就往上移），回 true＝長高了、要重排。
--- 字型大、譯文長、欄窄時「在地面顯示範圍」那塊會多換幾行；最小高度只升不降（使用者 2026-10-12 問這塊會不會被擠掉）
+-- 視窗不夠高、左欄或分享頁選了人之後的表單放不下時：最小高度提高到放得下為止並長高 px（不超過螢幕，貼著底就往上移），
+-- 回 true＝長高了、要重排。字型大、譯文長、欄窄時「在地面顯示範圍」那塊會多換幾行；最小高度只升不降（使用者 2026-10-12
+-- 問這塊會不會被擠掉）
 function W:grow(px)
     local win = self.win
     local sh = getCore():getScreenHeight()
@@ -965,6 +968,8 @@ function W:layoutDetail(dx, y, dw, h)
         -- 同一頁重排不先收起（Page:layout 自己管每個元件的顯示）：收起會讓正在打字的輸入框失焦
         self.lines:setVisible(false)
         endY = self.share:layout(d, 0, 0, cw)
+        -- 選了人、名單收短了表單還放不下（字大、譯文長）：視窗長高到放得下，同左欄的 W:grow（回 true＝要重排）
+        if self.share.short > 0 and self:grow(self.share.short) then return true end
     else
         self.share:hide()
         self:place(self.lines, 0, 0)
