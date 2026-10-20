@@ -403,7 +403,7 @@ return function(T)
         return setmetatable({ x = x or 0, y = y or 0, width = w or 60, height = h or 20, visible = true, kids = {} }, self)
     end
     for _, k in ipairs({ "initialise", "addToUIManager", "removeFromUIManager", "bringToTop", "setTooltip", "drawText",
-        "drawTextureScaledAspect", "setOptions", "setSelectedIndex", "fitWidth" }) do
+        "drawTextureScaledAspect", "setOptions", "setSelectedIndex", "fitWidth", "scrollToIndex" }) do
         E[k] = function() end
     end
     function E:addChild(k) self.kids[#self.kids + 1] = k end
@@ -668,6 +668,63 @@ return function(T)
     core.getScreenHeight = function() return 720 end
     P.close(m)
     check(hooked() == 0, "關面板、沒在帶路：拿掉 OnTick")
+
+    T.section("物品搜尋面板：清單／網格（框架有 TileGrid 才有）、點一格、網格下面的各處、記住上次選的")
+    m = P.open({ detail = detail })
+    for _ = 1, 10 do T.tick() end
+    check(m.view.viewTabs == nil and m.view.grid == nil and not m.grid and m.view.list.visible,
+        "框架沒有 TileGrid：沒有〔清單｜網格〕，只有清單")
+    P.close(m)
+    local ui = MinidoracatUI.v1
+    caps.tileGrid, ui.TileGrid, ui.Tabs = true, { new = make }, { new = make }
+    local savedPZ, saves = PZAPI, 0
+    PZAPI = { ModOptions = { save = function() saves = saves + 1 end } }
+    P.gridOpt = { v = false, getValue = function(s) return s.v end, setValue = function(s, x) s.v = x end }
+    m = P.open({ detail = detail })
+    for _ = 1, 10 do T.tick() end
+    local pv = m.view
+    check(pv.viewTabs.selected == "list" and not m.grid and pv.list.visible and not pv.grid.visible
+        and pv.search.x + pv.search.width <= pv.viewTabs.x, "第一次是清單；〔清單｜網格〕在搜尋框右邊，不壓到搜尋框")
+    local nails = nil
+    for _, r in ipairs(m.rows) do if r.kind == "group" and r.v.g.name == "Nails" then nails = r end end
+    P.pick(m, nails)
+    pv.viewTabs.onSelect(pv.viewTabs.target, "grid", pv.viewTabs)
+    check(m.grid and pv.grid.visible and not pv.list.visible and m.job == nil and m.open == nails.v.g
+        and P.gridOpt.v == true and saves == 1, "切到網格：不重掃，展開的那組照樣選著；記進 ModOptions 並存檔")
+    check(pv.grid.items == m.views and m.views[m.tileIndex].g.name == "Nails" and pv.placeList.visible
+        and #pv.placeList.items == 3, "網格一組一格、選的是釘子那格；它放在 3 處，網格下面列出那 3 處")
+    local second = pv.placeList.items[2]
+    pv.placeList.onSelect(pv.placeList, second, 2)
+    check(m.sel == second.p and m.placeIndex == 2 and m.grid, "在下面挑一處：選它（按鈕能按），還在網格")
+    pv.grid.onPick(pv.grid.target, m.views[m.tileIndex], m.tileIndex, pv.grid)
+    check(m.open == nails.v.g and m.sel == second.p, "再點同一格：不收起，挑好的那處留著")
+    local rope = nil
+    for i, view in ipairs(m.views) do if view.g.name == "Rope" then rope = i end end
+    pv.grid.onPick(pv.grid.target, m.views[rope], rope, pv.grid)
+    check(m.sel ~= nil and m.sel.kind == "bag" and m.tileIndex == rope and not pv.placeList.visible,
+        "只有一處的那格：直接選那處，下面不列各處")
+    local drawn = {}
+    local function put(_, s) drawn[#drawn + 1] = s end
+    local el = { drawText = put, drawTextCentre = put, drawTextureScaledAspect = function() end }
+    local nailsView = nil
+    for _, view in ipairs(m.views) do if view.g.name == "Nails" then nailsView = view end end
+    pv.grid.drawTile(pv.grid.target, el, nailsView, 0, 0, pv.tileW, pv.tileH, { picked = false, hover = false, index = 5 })
+    check(table.concat(drawn, ",") == "IGUI_MSH_Storage_Count,Nails,IGUI_MSH_Storage_Places,IGUI_MSH_Indoor_Here",
+        "一格寫件數、名稱、幾處與最近那處多遠（" .. table.concat(drawn, ",") .. "）")
+    local far = { places = { { z = 0, dist = 5 }, { z = 1, dist = 9 } }, dist = 5 }
+    check(select(2, P.groupWhere(far, 0, false)) == "IGUI_MSH_Storage_Tiles"
+        and select(2, P.groupWhere(far, 0, true)) == "IGUI_MSH_Storage_Nearest", "網格一格窄，距離只寫幾格；清單寫最近幾格")
+    pv.viewTabs.onSelect(pv.viewTabs.target, "list", pv.viewTabs)
+    check(not m.grid and pv.list.visible and not pv.grid.visible and not pv.placeList.visible and m.sel ~= nil
+        and P.gridOpt.v == false, "切回清單：選的那處留著，記回清單")
+    pv.viewTabs.onSelect(pv.viewTabs.target, "grid", pv.viewTabs)
+    P.close(m)
+    m = P.open({ detail = detail })
+    check(m.grid and m.view.viewTabs.selected == "grid" and m.view.grid.visible and not m.view.list.visible,
+        "重開面板：照上次選的，直接是網格")
+    P.close(m)
+    P.gridOpt, PZAPI = nil, savedPZ
+    caps.tileGrid, ui.TileGrid, ui.Tabs = nil, nil, nil
 
     local MW = MSH.ManagerWindow
     check(MW.canSearch(detail), "管理視窗：模式不是關閉、這間 active、框架夠新 → 有〔搜尋物品〕")
