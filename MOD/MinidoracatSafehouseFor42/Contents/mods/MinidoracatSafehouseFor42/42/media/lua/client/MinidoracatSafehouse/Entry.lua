@@ -113,6 +113,7 @@ end
 E.dockSpec = {
     id = "safehouse",
     order = E.DOCK_ORDER,
+    icon = "media/ui/MinidoracatSafehouse/dock_house.png",   -- 彩色圖（原色）；框架 rev 21 起讀不到時改畫 iconKey
     iconKey = "house",
     label = function() return getText("IGUI_MSH_Entry_Button") end,
     onClick = function() MSH.Entry.openManager(nil) end,

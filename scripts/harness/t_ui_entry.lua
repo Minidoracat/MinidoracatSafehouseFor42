@@ -126,8 +126,9 @@ return function(T)
     local registered
     MinidoracatUI = { v1 = { API_MAJOR = 1, API_REVISION = 17, CAPABILITIES = { dock = true },
         Dock = { register = function(spec) registered = spec return true end } } }
-    check(E.registerDock() == true and registered.id == "safehouse" and registered.order == 60,
-        "有 dock capability：登記 id safehouse、order 60")
+    check(E.registerDock() == true and registered.id == "safehouse" and registered.order == 60
+        and registered.icon == "media/ui/MinidoracatSafehouse/dock_house.png" and registered.iconKey == "house",
+        "有 dock capability：登記 id safehouse、order 60、彩色圖示並留白色 house 當退路")
     registered.onClick()
     check(opened[#opened].claimId == nil, "Dock 按下開管理視窗")
     check(registered.getBadge() == 0 and registered.getStatus() == nil, "沒有需要處理的安全屋：沒有徽章與狀態")
