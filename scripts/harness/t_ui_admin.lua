@@ -299,6 +299,13 @@ return function(T)
     check(deeds["f:Tier1LootChance"].enabled ~= false and deeds["f:Tier3LootChance"].enabled ~= false,
         "勾起地契掉落：掉落欄馬上可以改")
     deeds["f:DeedLoot"]:setChecked(false)
+    -- 遠距拿取站的範圍（使用者 2026-10-21，預設 0）：只在「可以遠距拿」時能改，點 chip 不用存檔就重排
+    check(rules["f:StorageReach"] ~= nil and rules["f:StorageReach"].enabled == false,
+        "物品搜尋預設只指引：「安全屋外的範圍」反灰")
+    fw.click(rules["f:StorageMode:3"])
+    check(rules["f:StorageReach"].enabled ~= false, "點〔可以遠距拿〕：範圍欄馬上可以改")
+    fw.click(rules["f:StorageMode:2"])
+    check(rules["f:StorageReach"].enabled == false, "改回〔只指引〕：範圍欄又反灰")
     local tiers = P.pages.deeds.fields.TiersEnabled
     fw.click(deeds.tierAdd)
     check(tiers.value == 4 and shown("f:Tier4Side") and shown("f:Tier4Craft"), "〔新增第 4 級〕：多出第 4 級那一列")

@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "Du bist da. Das Beutefenster zeigt jetzt „%1“.",
     "IGUI_MSH_Storage_WalkOnly": "Gegenstände in Fahrzeugen oder an Schaufensterpuppen musst du selbst holen.",
     "IGUI_MSH_Storage_StandInside": "Stell dich ins Safehouse, um Gegenstände direkt zu nehmen.",
+    "IGUI_MSH_Storage_StandNear": "Stell dich ins Safehouse oder in seinen Randbereich (in Kacheln: %1), um Gegenstände direkt zu nehmen.",
     "IGUI_MSH_Storage_TakeTitle": "%1 nehmen",
     "IGUI_MSH_Storage_TakeAsk": "%1 enthält %2. Wie viele willst du nehmen? Dein Inventar fasst noch %3 kg. Höchstens %4 auf einmal.",
     "IGUI_MSH_Storage_TakeOk": "Nehmen",

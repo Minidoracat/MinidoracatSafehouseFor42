@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "Chegou. A janela de saque mostra agora \"%1\".",
     "IGUI_MSH_Storage_WalkOnly": "Itens em veículos ou em manequins têm de ser recolhidos em pessoa.",
     "IGUI_MSH_Storage_StandInside": "Fique dentro da base para retirar itens diretamente.",
+    "IGUI_MSH_Storage_StandNear": "Fique dentro da base ou na margem à volta dela (quadrados: %1) para retirar itens diretamente.",
     "IGUI_MSH_Storage_TakeTitle": "Retirar %1",
     "IGUI_MSH_Storage_TakeAsk": "%1 tem %2. Quantos quer retirar? O seu inventário ainda aguenta %3 kg. Até %4 de cada vez.",
     "IGUI_MSH_Storage_TakeOk": "Retirar",

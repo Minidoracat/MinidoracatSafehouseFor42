@@ -1,6 +1,7 @@
 -- MinidoracatSafehouse/Storage.lua：遠距拿取（使用者 2026-10-20；設計稿 temp/plan-storage-1020，裁定見 decisions.md 2026-10-20）。
 -- 物品搜尋與指引都在客戶端（client/…/StorageScan.lua、StoragePanel.lua），伺服器只管「拿」，分兩段：
---   storageBegin：沙盒 StorageMode 是「可以遠距拿」、這間 active、自己有 TAKE、人站在這間任一塊裡、要拿的那格在範圍內而且
+--   storageBegin：沙盒 StorageMode 是「可以遠距拿」、這間 active、自己有 TAKE、人站在這間任一塊裡（或沙盒 StorageReach 放寬的
+--     安全屋外幾格內，使用者 2026-10-21）、要拿的那格在範圍內而且
 --     載入了；找出那一格上還在的那幾件（家具容器、容器裡的背包往裡一層、地上），背包放得下的照原版搬運時間加總，記下這次
 --     （開始時間、站的位置），回總毫秒數。
 --   storageTake：同一次、時間到了、人沒離開原地（STAND 格內、同一層）、模式權限位置都還成立，才把還在原處、放得下的搬進背包。
@@ -118,7 +119,8 @@ local function allowed(ctx)
     if not MSH.hasBit(bits, MSH.SHARE.TAKE) then return nil, CODE.PERM_DENIED end
     local p = ctx.player
     if p:isDead() then return nil, CODE.DEAD end
-    if not MSH.Rect.listContains(rec.rects, p:getX(), p:getY()) then return nil, CODE.NOT_ON_SITE end
+    local reach = MSH.Settings.storageReach()
+    if not MSH.Rect.listContains(rec.rects, p:getX(), p:getY(), reach) then return nil, CODE.NOT_ON_SITE end
     return rec
 end
 

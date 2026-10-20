@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "Você chegou. A janela de saque agora mostra \"%1\".",
     "IGUI_MSH_Storage_WalkOnly": "Itens em veículos ou em manequins precisam ser pegos pessoalmente.",
     "IGUI_MSH_Storage_StandInside": "Fique dentro da base para pegar itens diretamente.",
+    "IGUI_MSH_Storage_StandNear": "Fique dentro da base ou na margem ao redor dela (quadrados: %1) para pegar itens diretamente.",
     "IGUI_MSH_Storage_TakeTitle": "Pegar %1",
     "IGUI_MSH_Storage_TakeAsk": "%1 tem %2. Quantos você quer pegar? Seu inventário ainda aguenta %3 kg. Até %4 por vez.",
     "IGUI_MSH_Storage_TakeOk": "Pegar",

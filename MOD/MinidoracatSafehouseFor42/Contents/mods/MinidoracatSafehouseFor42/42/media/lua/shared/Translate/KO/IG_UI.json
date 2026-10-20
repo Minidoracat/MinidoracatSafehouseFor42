@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "도착했습니다. 루팅 창이 '%1'(으)로 바뀌었습니다.",
     "IGUI_MSH_Storage_WalkOnly": "차량 안이나 마네킹이 착용한 아이템은 직접 가서 가져와야 합니다.",
     "IGUI_MSH_Storage_StandInside": "은신처 안에 서 있어야 바로 꺼낼 수 있습니다.",
+    "IGUI_MSH_Storage_StandNear": "은신처 안이나 바깥 %1타일 이내에 서 있어야 바로 꺼낼 수 있습니다.",
     "IGUI_MSH_Storage_TakeTitle": "%1 꺼내기",
     "IGUI_MSH_Storage_TakeAsk": "%1에 %2개 있습니다. 몇 개 꺼낼까요? 소지품에 %3 kg 더 넣을 수 있고, 한 번에 최대 %4개입니다.",
     "IGUI_MSH_Storage_TakeOk": "꺼내기",

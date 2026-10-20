@@ -175,6 +175,16 @@ return function(T)
     check(code(begin(eve, 103, 103, nails)) == "NOT_FOUND", "在這間沒有角色：NOT_FOUND")
     alice.x = 99.9
     check(code(begin(alice, 103, 103, nails)) == "NOT_ON_SITE", "站在範圍外一格：NOT_ON_SITE")
+    T.sandbox("StorageReach", 2)
+    alice.x = 98.5
+    check(begin(alice, 103, 103, { nails[1] }).ok, "管理員放寬 2 格（StorageReach）：站在左邊外第 2 格也能拿")
+    alice.x = 97.9
+    check(code(begin(alice, 103, 103, nails)) == "NOT_ON_SITE", "放寬 2 格時外面第 3 格：NOT_ON_SITE")
+    alice.x = 111.5
+    check(begin(alice, 103, 103, { nails[1] }).ok, "右邊外第 2 格也可以（範圍半開，往外照格數算）")
+    alice.x = 101.5
+    check(code(begin(alice, 111, 103, nails)) == "BAD_ARGS", "放寬的只有站的位置：外面第 2 格的東西照樣不能拿")
+    T.sandbox("StorageReach", 0)
     alice.x = 101.5
     check(code(begin(alice, 120, 103, nails)) == "BAD_ARGS", "要拿的那格不在這間範圍裡：BAD_ARGS")
     check(code(T.cmd(alice, "storageBegin", { claimId = rec.claimId, x = 103, y = 103, z = 0, ids = {} })) == "BAD_ARGS",
@@ -539,6 +549,15 @@ return function(T)
     T.advance(600)
     T.tick()
     check(m.inside == false and P.takeBlock(m, m.sel) == "IGUI_MSH_Storage_StandInside", "走出範圍：寫要站在安全屋裡")
+    T.sandbox("StorageReach", 2)
+    T.advance(600)
+    T.tick()
+    check(m.inside == true and P.takeBlock(m, m.sel) == nil, "管理員放寬 2 格：沒走動也重算，外面 1 格可以拿")
+    me.x = 196.5
+    T.advance(600)
+    T.tick()
+    check(m.inside == false and P.takeBlock(m, m.sel) == "IGUI_MSH_Storage_StandNear", "外面第 4 格：寫要站在安全屋裡或外面幾格內")
+    T.sandbox("StorageReach", 0)
     me.x = 201.5
     T.advance(600)
     T.tick()

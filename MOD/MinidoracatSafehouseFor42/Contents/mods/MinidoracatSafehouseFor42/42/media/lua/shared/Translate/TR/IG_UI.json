@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "Vardınız. Yağma penceresinde artık \"%1\" açık.",
     "IGUI_MSH_Storage_WalkOnly": "Araçlardaki veya mankenlerin üzerindeki eşyaları gidip kendiniz almalısınız.",
     "IGUI_MSH_Storage_StandInside": "Eşyaları doğrudan almak için güvenli evin içinde durun.",
+    "IGUI_MSH_Storage_StandNear": "Eşyaları doğrudan almak için güvenli evin içinde veya en fazla %1 kare dışında durun.",
     "IGUI_MSH_Storage_TakeTitle": "Al: %1",
     "IGUI_MSH_Storage_TakeAsk": "%1 içinde %2 adet var. Kaç tane almak istiyorsunuz? Envanterinize %3 kg daha sığar. Bir seferde en fazla %4.",
     "IGUI_MSH_Storage_TakeOk": "Al",

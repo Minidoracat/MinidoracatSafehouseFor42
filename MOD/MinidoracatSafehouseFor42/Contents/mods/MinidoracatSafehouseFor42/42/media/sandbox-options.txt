@@ -56,6 +56,9 @@ option MinidoracatSafehouse.RangesOthers
 option MinidoracatSafehouse.StorageMode
 {type = enum, numValues = 3, default = 2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_StorageMode, valueTranslation = MinidoracatSafehouse_StorageMode,}
 
+option MinidoracatSafehouse.StorageReach
+{type = integer, min = 0, max = 50, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_StorageReach,}
+
 option MinidoracatSafehouse.AvoidRoads
 {type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_AvoidRoads,}
 

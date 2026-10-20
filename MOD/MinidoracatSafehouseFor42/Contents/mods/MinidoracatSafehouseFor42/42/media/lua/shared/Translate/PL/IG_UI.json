@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "Jesteś na miejscu. Okno łupów pokazuje teraz „%1”.",
     "IGUI_MSH_Storage_WalkOnly": "Przedmioty w pojazdach lub na manekinach trzeba zabrać osobiście.",
     "IGUI_MSH_Storage_StandInside": "Stań w schronieniu, aby brać przedmioty bezpośrednio.",
+    "IGUI_MSH_Storage_StandNear": "Stań w schronieniu lub w pasie wokół niego (pola: %1), aby brać przedmioty bezpośrednio.",
     "IGUI_MSH_Storage_TakeTitle": "Weź: %1",
     "IGUI_MSH_Storage_TakeAsk": "%1: %2 szt. Ile chcesz wziąć? Ekwipunek zmieści jeszcze %3 kg. Maksymalnie %4 naraz.",
     "IGUI_MSH_Storage_TakeOk": "Weź",

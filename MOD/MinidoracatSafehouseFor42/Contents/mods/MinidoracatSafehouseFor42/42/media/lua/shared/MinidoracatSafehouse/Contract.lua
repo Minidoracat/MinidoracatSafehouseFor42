@@ -259,10 +259,11 @@ function Rect.overlaps(a, b, gap)
         and a.y - gap < b.y + b.h and b.y < a.y + a.h + gap
 end
 
--- 玩家所在格 (floor(x), floor(y)) 是否在範圍內（任何 Z）
-function Rect.containsPoint(r, x, y)
+-- 玩家所在格 (floor(x), floor(y)) 是否在範圍內（任何 Z）；d＝往外多算幾格（遠距拿取站的位置，沙盒 StorageReach），預設 0
+function Rect.containsPoint(r, x, y, d)
     local fx, fy = math.floor(x), math.floor(y)
-    return fx >= r.x and fx < r.x + r.w and fy >= r.y and fy < r.y + r.h
+    d = d or 0
+    return fx >= r.x - d and fx < r.x + r.w + d and fy >= r.y - d and fy < r.y + r.h + d
 end
 
 function Rect.expand(r, d)
@@ -298,9 +299,9 @@ function Rect.listArea(rects)
     return n
 end
 
-function Rect.listContains(rects, x, y)
+function Rect.listContains(rects, x, y, d)
     for _, r in ipairs(rects) do
-        if Rect.containsPoint(r, x, y) then return true end
+        if Rect.containsPoint(r, x, y, d) then return true end
     end
     return false
 end

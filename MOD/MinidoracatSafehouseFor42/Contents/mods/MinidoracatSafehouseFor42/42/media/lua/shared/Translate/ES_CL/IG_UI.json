@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "Ya llegaste. La ventana de botín ahora muestra \"%1\".",
     "IGUI_MSH_Storage_WalkOnly": "Los objetos en vehículos o en maniquíes hay que ir a buscarlos en persona.",
     "IGUI_MSH_Storage_StandInside": "Quédate dentro del refugio para sacar objetos directamente.",
+    "IGUI_MSH_Storage_StandNear": "Quédate dentro del refugio o en su margen (casillas: %1) para sacar objetos directamente.",
     "IGUI_MSH_Storage_TakeTitle": "Sacar %1",
     "IGUI_MSH_Storage_TakeAsk": "%1 tiene %2. ¿Cuántos quieres sacar? Tu inventario puede llevar %3 kg más. Hasta %4 de una vez.",
     "IGUI_MSH_Storage_TakeOk": "Sacar",

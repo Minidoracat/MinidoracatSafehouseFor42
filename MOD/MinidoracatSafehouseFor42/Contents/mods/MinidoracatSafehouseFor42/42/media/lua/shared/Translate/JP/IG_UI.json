@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "到着しました。ルート画面を「%1」に切り替えました。",
     "IGUI_MSH_Storage_WalkOnly": "車両の中やマネキンが身につけているアイテムは、歩いて取りに行く必要があります。",
     "IGUI_MSH_Storage_StandInside": "セーフハウスの中に立つと直接取り出せます。",
+    "IGUI_MSH_Storage_StandNear": "セーフハウスの中か、外側 %1 マス以内に立つと直接取り出せます。",
     "IGUI_MSH_Storage_TakeTitle": "%1を取り出す",
     "IGUI_MSH_Storage_TakeAsk": "%1に%2個あります。いくつ取り出しますか？インベントリにはあと%3 kg入ります。1回に最大%4個です。",
     "IGUI_MSH_Storage_TakeOk": "取り出す",

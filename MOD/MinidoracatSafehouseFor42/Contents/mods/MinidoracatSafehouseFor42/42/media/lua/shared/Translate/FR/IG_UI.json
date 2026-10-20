@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "Vous y êtes. La fenêtre de butin affiche maintenant « %1 ».",
     "IGUI_MSH_Storage_WalkOnly": "Les objets dans les véhicules ou sur les mannequins doivent être pris sur place.",
     "IGUI_MSH_Storage_StandInside": "Tenez-vous dans l'abri pour prendre des objets directement.",
+    "IGUI_MSH_Storage_StandNear": "Tenez-vous dans l'abri ou dans sa marge (en cases : %1) pour prendre des objets directement.",
     "IGUI_MSH_Storage_TakeTitle": "Prendre %1",
     "IGUI_MSH_Storage_TakeAsk": "%1 en contient %2. Combien voulez-vous en prendre ? Votre inventaire peut encore porter %3 kg. %4 au maximum à la fois.",
     "IGUI_MSH_Storage_TakeOk": "Prendre",

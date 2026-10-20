@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "到了。战利品窗口已切换到「%1」。",
     "IGUI_MSH_Storage_WalkOnly": "车上和人体模特身上的物品要走过去拿。",
     "IGUI_MSH_Storage_StandInside": "站在安全屋里才能直接拿取。",
+    "IGUI_MSH_Storage_StandNear": "站在安全屋里，或安全屋外 %1 格内，才能直接拿取。",
     "IGUI_MSH_Storage_TakeTitle": "拿取%1",
     "IGUI_MSH_Storage_TakeAsk": "%1有 %2 个。要拿几个？物品栏还能放 %3 kg，一次最多 %4 个。",
     "IGUI_MSH_Storage_TakeOk": "拿取",

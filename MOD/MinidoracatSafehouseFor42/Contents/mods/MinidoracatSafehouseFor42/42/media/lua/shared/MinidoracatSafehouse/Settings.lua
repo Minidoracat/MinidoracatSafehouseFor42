@@ -68,6 +68,8 @@ local OPTIONS = {
     { key = "RangesOthers", type = "bool", default = false },
     -- 物品搜尋與遠距拿取（使用者 2026-10-20：新伺服器預設只指引）
     { key = "StorageMode", type = "enum", values = 3, default = S.STORAGE.GUIDE },
+    -- 遠距拿取可以站在安全屋外幾格內（使用者 2026-10-21：預設 0＝只能站在安全屋裡；拿的東西照樣要在範圍內的容器）
+    { key = "StorageReach", type = "int", min = 0, max = 50, default = 0 },
     { key = "AvoidRoads", type = "bool", default = true },
     { key = "RoadMargin", type = "int", min = 0, max = 8, default = 1 },
     { key = "RoadKinds", type = "string", default = "" },
@@ -156,14 +158,17 @@ function S.readable()
     return sandboxTable() ~= nil
 end
 
--- 物品搜尋的模式（只讀這一鍵：管理視窗每次排版都問，不必整份 get）；不合法照預設
-function S.storageMode()
+-- 只讀一鍵（管理視窗、物品搜尋每次排版都問，不必整份 get）；不合法照預設
+local function one(key)
     local sb = sandboxTable()
-    local v = sb and sb.StorageMode
-    local o = S.BY_KEY.StorageMode
+    local v = sb and sb[key]
+    local o = S.BY_KEY[key]
     if not typeOk(o, v) or not inRange(o, v) then return o.default end
     return v
 end
+
+function S.storageMode() return one("StorageMode") end
+function S.storageReach() return one("StorageReach") end
 
 -- 讀出整份設定；不合法的值夾回範圍並附警告（每次呼叫都重讀，面板或原版畫面改值後立即生效）
 -- 回傳 cfg, warnings（{ "Key" , ... }）

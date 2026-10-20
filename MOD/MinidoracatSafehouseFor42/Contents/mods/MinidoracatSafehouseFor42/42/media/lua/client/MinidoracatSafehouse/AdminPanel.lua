@@ -653,14 +653,19 @@ function AP.layoutRules(P, pg)
     local rw = AP.labelWidth(AP.RANGE_KEYS)
     for _, key in ipairs(AP.RANGE_KEYS) do AP.formRow(pg, key, rw, { AP.boolField(P, pg, key) }) end
     F:text("rangesHelp", getText("IGUI_MSH_Admin_RangesHelp"), "textMuted")
-    -- 物品搜尋（使用者 2026-10-20）：關閉／只指引／可以遠距拿；說明就是沙盒選項的 tooltip，直接寫在底下
+    -- 物品搜尋（使用者 2026-10-20）：關閉／只指引／可以遠距拿；說明就是沙盒選項的 tooltip，直接寫在底下。
+    -- 遠距拿取可以站在安全屋外幾格內（使用者 2026-10-21，預設 0）：只在選「可以遠距拿」時能改，換 chip 就重排（同地契掉落欄）
     F.y = F.y + K.GAP
     F:text("h:storage", getText("IGUI_MSH_Admin_StorageHead"), "text", UIFont.Medium)
     local labels = {}
     for i = 1, Settings.BY_KEY.StorageMode.values do
         labels[i] = getText("Sandbox_MinidoracatSafehouse_StorageMode_option" .. i)
     end
-    AP.formRow(pg, "StorageMode", AP.labelWidth({ "StorageMode" }), AP.enumField(P, pg, "StorageMode", labels))
+    local sw = AP.labelWidth({ "StorageMode", "StorageReach" })
+    AP.formRow(pg, "StorageMode", sw, AP.enumField(P, pg, "StorageMode", labels, AP.onRelayout))
+    local reach = AP.numField(P, pg, "StorageReach", AP.fieldW("StorageReach", 70))
+    reach:setEnabled(pg.fields.StorageMode.value == Settings.STORAGE.REMOTE)
+    AP.formRow(pg, "StorageReach", sw, { reach })
     F:text("storageHelp", getText("Sandbox_MinidoracatSafehouse_StorageMode_tooltip"), "textMuted")
 end
 

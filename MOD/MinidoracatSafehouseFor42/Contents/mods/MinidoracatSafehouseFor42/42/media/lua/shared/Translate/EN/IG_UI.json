@@ -802,6 +802,7 @@
     "IGUI_MSH_Storage_Arrived": "You're there. The loot window now shows \"%1\".",
     "IGUI_MSH_Storage_WalkOnly": "Items in vehicles or on mannequins have to be picked up in person.",
     "IGUI_MSH_Storage_StandInside": "Stand inside the safehouse to take items directly.",
+    "IGUI_MSH_Storage_StandNear": "Stand inside the safehouse, or in the %1-tile margin around it, to take items directly.",
     "IGUI_MSH_Storage_TakeTitle": "Take %1",
     "IGUI_MSH_Storage_TakeAsk": "%1 has %2. How many do you want? Your inventory can hold %3 kg more. Up to %4 at a time.",
     "IGUI_MSH_Storage_TakeOk": "Take",

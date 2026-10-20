@@ -8,8 +8,9 @@
 --   圖示）；人物旁邊再加一個繞著人物轉、指向目標的箭頭（addPlayerHomingPoint，原版採集與教學用的那個；使用者 2026-10-20：
 --   「人物旁邊也要有方向箭頭指引吧」）；同一層再加地面圈（別層畫圈會浮在半空，sh-storage-1020a）。走到 1 格內、同一層就結束，
 --   戰利品視窗切到那個容器（ISInventoryPage:setForceSelectedContainer）；面板關了也繼續帶，按〔停止指引〕或 GUIDE_MAX_MS 後結束。
--- 遠距拿取（沙盒「可以遠距拿」、有 TAKE、站在這間裡）：storageBegin 回原版搬運時間，本地跑一個只在客戶端的計時動作
---   （類別沒有 complete，LuaTimedActionNew.java:78-80；走動就中斷），跑完送 storageTake（兩段的原因見 server Storage.lua）。
+-- 遠距拿取（沙盒「可以遠距拿」、有 TAKE、站在這間裡或沙盒 StorageReach 放寬的安全屋外幾格內）：storageBegin 回原版搬運時間，
+--   本地跑一個只在客戶端的計時動作（類別沒有 complete，LuaTimedActionNew.java:78-80；走動就中斷），跑完送 storageTake
+--   （兩段的原因見 server Storage.lua）。
 -- 清單或網格（使用者 2026-10-21：「希望能支持經濟系統那樣的切換網格顯示」；設計稿 temp/plan-storage-grid-1020，三項照建議）：
 --   搜尋框右邊〔清單｜網格〕，網格一組一格（框架 rev 22 的 TileGrid；框架沒有就只有清單）。點一格選那一組，只有一處就直接選它，
 --   放在好幾處時網格下面列出各處讓玩家挑。換顯示方式不重掃，搜尋字、篩選與選取都留著；記在 ModOptions `StorageGrid`
@@ -144,7 +145,11 @@ function P.takeBlock(m, p)
     if not MSH.hasBit(m.bits, MSH.SHARE.TAKE) then
         return getText("IGUI_MSH_Perm_Denied", getText("IGUI_MSH_Share_Bit_TAKE"))
     end
-    if not m.inside then return getText("IGUI_MSH_Storage_StandInside") end
+    if not m.inside then
+        local reach = MSH.Settings.storageReach()
+        if reach > 0 then return getText("IGUI_MSH_Storage_StandNear", reach) end
+        return getText("IGUI_MSH_Storage_StandInside")
+    end
     return nil
 end
 
@@ -289,11 +294,14 @@ function P.where(m, now)
         return P.close(m)
     end
     if row ~= nil and MSH.isInt(row.bits) and row.bits ~= m.bits then m.bits, relayout = row.bits, true end
+    -- 管理員改了站的範圍（沙盒 StorageReach，安全屋外幾格內也能拿）：沒走動也重算在不在範圍裡
+    local reach = MSH.Settings.storageReach()
+    if reach ~= m.reach then m.reach, m.px = reach, nil end
     local px, py, pz = math.floor(p:getX()), math.floor(p:getY()), math.floor(p:getZ())
     if px ~= m.px or py ~= m.py or pz ~= m.pz then
         if pz ~= m.pz then relayout = true end   -- 「就在你旁邊」只算同一層（P.whereText）
         m.px, m.py, m.pz = px, py, pz
-        local inside = MSH.Rect.listContains(m.rects, px, py)
+        local inside = MSH.Rect.listContains(m.rects, px, py, reach)
         if inside ~= m.inside then m.inside, relayout = inside, true end
         if m.out ~= nil and SS.measure(m.out, px, py) then
             SS.viewDist(m.views)

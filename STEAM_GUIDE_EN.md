@@ -348,7 +348,7 @@ Pick a safehouse in the manager window and press "Find items" next to its name t
 [list]
 [*] [b]The server has to allow it[/b]: "Take..." only appears when the admin sets "Item search" to "Remote take"; the default is "Guide only".
 [*] [b]Who can[/b]: the owner, and members shared with the "Remote take" permission (a faction share can include it). The sharing page only shows this permission while the server allows remote take.
-[*] [b]Where to stand[/b]: anywhere inside any piece of that safehouse.
+[*] [b]Where to stand[/b]: anywhere inside any piece of that safehouse; the admin can widen this with "reach outside the safehouse" to a few tiles outside it (default 0). Only where you stand changes: the items still have to be in that safehouse's containers.
 [*] [b]How[/b]: pick a place, press "Take...", enter how many (up to 50 at a time), then stand still for the normal transfer time and the items go straight into your inventory; walking away interrupts it and nothing moves. Whatever doesn't fit stays where it was.
 [*] [b]Guide only[/b]: items in vehicles or worn by mannequins have to be picked up in person.
 [/list]
@@ -486,7 +486,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [h3]Five tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take); also the server settings status, takeover results and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works); also the server settings status, takeover results and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
@@ -539,6 +539,7 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][td]Resource categories to avoid[/td][td]Military, police, gun stores, medical, pharmacies, fire stations, gas stations, prisons[/td][/tr]
 [tr][td]Show faction / other players' safehouse ranges[/td][td]On / Off[/td][/tr]
 [tr][td]Item search[/td][td]Guide only (Off / Guide only / Remote take)[/td][/tr]
+[tr][td]Remote take: reach outside the safehouse[/td][td]0 tiles (0–50; 0 = stand inside the safehouse)[/td][/tr]
 [tr][td]Enabled deed tiers[/td][td]3 (1–8)[/td][/tr]
 [tr][td]Each tier's max area and outline limit[/td][td]See "Deeds"[/td][/tr]
 [tr][td]Each tier's free slots (Tier<N>FreeSlots)[/td][td]Tier 1: 1, others 0 (0–100; how many safehouses of that tier each player can build for free; tier 1 can be changed per player on the admin panel's Players tab)[/td][/tr]
