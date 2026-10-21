@@ -1,13 +1,14 @@
 -- 物品搜尋與遠距拿取（使用者 2026-10-20；server Storage.lua、client StorageScan.lua、StoragePanel.lua）：
 -- 伺服器兩段拿取的條件（模式、TAKE、站的位置、那格在範圍內）、原版搬運時間、等待與不動的檢查、三種搬法的同步呼叫、
 -- 背包放不下與東西不在；客戶端掃描（容器、背包往裡一層、地上、車、人形模特兒、沒載入、沒開過、樓層、分幀）、篩選與排序；
--- 面板只在開著或帶路時掛 OnTick、不能拿的原因、帶路到了切戰利品視窗、計時動作跑完才送完成。
+-- 面板只在開著、帶路或站在旁邊拿時掛 OnTick、不能拿的原因、帶路到了切戰利品視窗、計時動作跑完才送完成；站在旁邊拿走原版搬運、
+-- 〔自動走過去〕排原版尋路（使用者 2026-10-21）。
 -- 假世界（格子、物件、車）、假框架、假計時動作只在本檔用到，結束時還原全域。
 return function(T)
     local check = T.check
     local NAMES = { "getCell", "getTextOrNull", "CharacterTrait", "getWorldMarkers", "getPlayerLoot", "ISInventoryPage",
         "ISTimedActionQueue", "ISBaseTimedAction", "ISPanel", "ISButton", "getTextManager", "getCore", "UIFont", "MinidoracatUI",
-        "CatLangFor42", "Translator" }
+        "CatLangFor42", "Translator", "ISPathFindAction", "ISInventoryTransferUtil" }
     local saved = {}
     for _, k in ipairs(NAMES) do saved[k] = _G[k] end
     getTextOrNull = function() return nil end
@@ -17,7 +18,7 @@ return function(T)
     local W
     local nextId = 1000
     local function resetWorld(minZ, maxZ)
-        W = { sq = {}, unloaded = {}, removed = {}, chunk = {} }
+        W = { sq = {}, unloaded = {}, removed = {}, chunk = {}, walls = {}, noLoot = {} }
         function W.chunk.getMinLevel() return minZ or 0 end
         function W.chunk.getMaxLevel() return maxZ or 0 end
     end
@@ -73,6 +74,8 @@ return function(T)
         function s:getObjects() return T.javaList(self.objs) end
         function s:getWorldObjects() return T.javaList(self.wos) end
         function s:getVehicleContainer() return self.car end
+        -- 兩格之間沒有牆或關著的門（W.walls["x,y,z>x,y,z"] 擋住）
+        function s:canReachTo(o) return not W.walls[k .. ">" .. o.x .. "," .. o.y .. "," .. o.z] end
         function s:transmitRemoveItemFromSquare(wo)
             for i, x in ipairs(self.wos) do if x == wo then table.remove(self.wos, i) break end end
             W.removed[#W.removed + 1] = wo
@@ -323,7 +326,10 @@ return function(T)
     function car:isAnyDoorLocked() return false end
     function car:getPartCount() return #self.parts end
     function car:getPartByIndex(i) return self.parts[i + 1] end
-    car.parts[1] = { getItemContainer = function() return trunk end, getId = function() return "TruckBed" end }
+    car.parts[1] = { getItemContainer = function() return trunk end, getId = function() return "TruckBed" end,
+        getVehicle = function() return car end, getArea = function() return "TruckBed" end, getIndex = function() return 0 end }
+    function trunk:getVehiclePart() return car.parts[1] end
+    function car:canAccessContainer() return self.access == true end
     car.parts[2] = { getItemContainer = function() return nil end, getId = function() return "Engine" end }
     fill(trunk, { item("Gas Can", 2) })
     square(203, 200, 0).car = car
@@ -544,12 +550,52 @@ return function(T)
     function loot:refreshBackpacks() self.refreshed = self.refreshed + 1 end
     getPlayerLoot = function() return loot end
     ISInventoryPage = { GetFloorContainer = function() return "floor" end }
-    local queued, rejectAdd = {}, false
-    ISTimedActionQueue = { add = function(a)
-        if rejectAdd then return nil end
-        queued[#queued + 1] = a
-        return {}
+    -- 原版計時動作佇列：queued＝排過的（照順序），live＝還在佇列裡的；rejectAdd＝原版不收（拖著屍體、睡著）
+    local queued, live, rejectAdd = {}, {}, false
+    local function liveIndex(a)
+        for i, x in ipairs(live) do if x == a then return i - 1 end end
+        return -1
+    end
+    local function dequeue(a)
+        local i = liveIndex(a)
+        if i ~= -1 then table.remove(live, i + 1) end
+    end
+    ISTimedActionQueue = {
+        add = function(a)
+            if rejectAdd then return nil end
+            queued[#queued + 1] = a
+            live[#live + 1] = a
+            return {}
+        end,
+        hasAction = function(a) return liveIndex(a) ~= -1 end,
+        getTimedActionQueue = function()
+            return { queue = live, indexOf = function(_, a) return liveIndex(a) end, removeFromQueue = function(_, a) dequeue(a) end }
+        end,
+    }
+    -- 原版尋路：記下往哪走；forceStop＝走到一半被中斷（離開佇列）
+    local function pathAction(kind, player, target, arg)
+        local a = { Type = "ISPathFindAction", kind = kind, character = player, target = target, arg = arg }
+        function a:setOnComplete(f) self.onDone = f end
+        function a:setOnFail(f) self.onFailed = f end
+        function a:forceStop() self.forced = true dequeue(self) end
+        return a
+    end
+    ISPathFindAction = {
+        pathAdjacentToSquares = function(_, player, squares, diag) return pathAction("adj", player, squares, diag) end,
+        pathToVehicleArea = function(_, player, vehicle, area) return pathAction("car", player, vehicle, area) end,
+    }
+    -- 原版搬運：carry＝做完（東西進背包、離開佇列）
+    ISInventoryTransferUtil = { newInventoryTransferAction = function(player, it, src, dest)
+        return { Type = "ISInventoryTransferAction", character = player, item = it, src = src, dest = dest }
     end }
+    local function carry(a)
+        if type(a.src) == "table" then a.src:Remove(a.item) end
+        a.dest:AddItem(a.item)
+        dequeue(a)
+    end
+    -- 原版准不准他拿那一格（別人的安全屋）：W.noLoot 列的不准
+    local savedAllowLoot = SafeHouse.isSafehouseAllowLoot
+    SafeHouse.isSafehouseAllowLoot = function(sq) return not W.noLoot[sq] end
     ISBaseTimedAction = { Type = "ISBaseTimedAction" }
     ISBaseTimedAction.__index = ISBaseTimedAction
     function ISBaseTimedAction:derive(name)
@@ -592,7 +638,8 @@ return function(T)
     P.pick(m, place)
     check(m.sel == place.p and P.takeBlock(m, m.sel) == nil, "選二樓架子那處：屋主站在範圍裡可以拿")
     m.bits = MEMBER
-    check(P.takeBlock(m, m.sel) == "IGUI_MSH_Perm_Denied", "沒有遠距拿取權限：寫缺哪個權限")
+    check(P.takeBlock(m, m.sel) == "IGUI_MSH_Storage_StandNext",
+        "沒有遠距拿取權限、架子在二樓（不在旁邊）：寫要走到容器旁邊（使用者 2026-10-21：站在旁邊就照原版拿）")
     m.bits = MSH.SHARE_ALL
     me.x = 199.5
     T.advance(600)
@@ -649,11 +696,16 @@ return function(T)
     T.tick()
     check(homing.active, "離開正上下方：人物旁的箭頭再出現")
     me.x, me.y, me.z = 203.5, 201.5, 0
+    car.access = true
     T.advance(300)
     T.tick()
     check(P.guide == nil and count(markers.arrows) == 0 and count(markers.homing) == 0 and loot.forced == trunk and hooked() == 0,
         "到了（同一層 1 格內）：收掉標示、戰利品視窗切到那個容器、拿掉 OnTick")
     check(loot.refreshed == 1, "到了馬上重整戰利品視窗（原版只在轉向、換格子時才真的切過去）")
+    car.access, loot.forced = nil, nil
+    P.startGuide(m, carPlace)
+    check(P.guide == nil and loot.forced == nil and toasts[#toasts] == "IGUI_MSH_Storage_ArrivedShut",
+        "到了車旁、後車廂關著（原版拿不到，戰利品視窗不列它）：寫要站到那一側打開，不寫已切到")
     me.x, me.y = 200.5, 200.5
     P.startGuide(m, carPlace)
     me.dead = true
@@ -831,6 +883,250 @@ return function(T)
     P.gridOpt, PZAPI, me.x, me.y = nil, savedPZ, 201.5, 201.5
     caps.tileGrid, ui.TileGrid, ui.Tabs = nil, nil, nil
 
+    T.section("物品搜尋面板：站在旁邊拿（原版搬運，只指引也行；使用者 2026-10-21）")
+    T.sandbox("StorageMode", 2)
+    local function reopen()
+        if P.model ~= nil then P.close(P.model) end
+        m = P.open({ detail = detail })
+        for _ = 1, 10 do T.tick() end
+    end
+    -- 選某組的某一處（只有一處的組點了就選好）
+    local function choose(name, kind, z)
+        for _, r in ipairs(m.rows) do
+            if r.kind == "group" and r.v.g.name == name and m.open ~= r.v.g then P.pick(m, r) break end
+        end
+        for _, r in ipairs(m.rows) do
+            if r.kind == "place" and r.v.g.name == name and r.p.kind == kind and r.p.z == z then P.pick(m, r) break end
+        end
+        return m.sel
+    end
+    local function askFor(n)
+        P.askTake(m)
+        dialogs[#dialogs].onResult(true, tostring(n))
+    end
+    local function said(key) return m.msg ~= nil and string.find(m.msg, key, 1, true) ~= nil end
+    -- harness 的 getText 對結果代碼一律回通用那句（Client.codeText 找不到翻譯）：記下送進去的代碼來比
+    local codeText, lastCode = MSH.Client.codeText, nil
+    MSH.Client.codeText = function(c, d) lastCode = c return codeText(c, d) end
+    do
+        reopen()
+        local at, pv2 = choose("Nails", "box", 0), m.view
+        check(at ~= nil and at.c == counter and P.takeBlock(m, at) == nil and pv2.btnTake.visible and pv2.btnTake.enabled
+            and pv2.btnWalk.visible and pv2.btnWalk.enabled, "只指引也有〔拿取...〕〔自動走過去〕；站在櫃台那格，〔拿取...〕能按")
+        choose("Nails", "box", 1)
+        check(P.takeBlock(m, m.sel) == "IGUI_MSH_Storage_StandNext" and not pv2.btnTake.enabled
+            and hasLine("IGUI_MSH_Storage_StandNext"), "二樓的架子（別層）：〔拿取...〕停用，按鈕下面寫要走到容器旁邊")
+        check(P.takeBlock(m, choose("Nails", "bag", 0)) == "IGUI_MSH_Storage_BagInBox",
+            "櫃台裡的背包：站在旁邊也不能拿，寫要先把背包拿出來（原版搬不出來，sh-walkto-1021c）")
+        me.x = 202.5
+        W.walls["202,201,0>201,201,0"] = true
+        check(P.takeBlock(m, at) == "IGUI_MSH_Storage_StandNext", "站在隔壁、中間隔著牆或關著的門（canReachTo）：不算在旁邊")
+        W.walls = {}
+        check(P.takeBlock(m, at) == nil, "站在隔壁、中間沒擋東西：算在旁邊")
+        W.noLoot[square(201, 201, 0)] = true
+        check(P.takeBlock(m, at) == "IGUI_MSH_Storage_StandNext", "原版不准他拿那一格（別人的安全屋，isSafehouseAllowLoot）：不算")
+        W.noLoot = {}
+        me.vehicle = car
+        check(P.takeBlock(m, at) == "IGUI_MSH_Storage_StandNext", "坐在車上：不算在旁邊（原版戰利品視窗也不列）")
+        me.vehicle = nil
+        -- 人沒動、能不能拿變了（別人開了門）：照樣重排（2026-10-21 審查）
+        choose("Nails", "box", 0)
+        W.walls["202,201,0>201,201,0"] = true
+        T.advance(600)
+        T.tick()
+        local shutBefore = not pv2.btnTake.enabled
+        W.walls = {}
+        T.advance(600)
+        T.tick()
+        check(shutBefore and pv2.btnTake.enabled, "站在隔壁沒動、中間的門被打開：〔拿取...〕跟著能按")
+        -- 帶路的「到了」也照這個：隔著牆不算到，門開了才算（自動走失敗或被取消後也一樣，2026-10-21 審查）
+        W.walls["202,201,0>201,201,0"] = true
+        loot.forced = nil
+        P.startGuide(m, at)
+        local stillGuiding = P.guide ~= nil
+        W.walls = {}
+        T.advance(300)
+        T.tick()
+        check(stillGuiding and P.guide == nil and loot.forced == counter, "隔著牆 1 格內：還不算到；中間沒擋了才到、切戰利品視窗")
+        me.x = 201.5
+
+        T.sandbox("StorageMode", 3)
+        m.bits = MEMBER
+        choose("Nails", "box", 0)
+        check(P.takeBlock(m, m.sel) == nil, "伺服器開了遠距拿取、自己沒有遠距拿取權限：站在旁邊照樣能拿")
+        T.clientSent = {}
+        local nq = #queued
+        askFor(2)
+        local a1, a2 = queued[nq + 1], queued[nq + 2]
+        check(#queued == nq + 2 and a1.Type == "ISInventoryTransferAction" and a1.src == counter and a1.dest == me:getInventory()
+            and a2.src == counter and a2.item ~= a1.item and #T.clientSent == 0, "拿 2 個：排兩個原版搬運（櫃台→背包），不送伺服器")
+        check(P.taking ~= nil and P.takeBlock(m, m.sel) == "" and not pv2.btnWalk.enabled, "拿的時候：〔拿取...〕〔自動走過去〕都停用")
+        m.bits = MSH.SHARE_ALL
+        T.sandbox("StorageMode", 2)
+        P.close(m)
+        check(hooked() == 1, "拿到一半關面板：照樣掛著 OnTick（等原版動作做完才數）")
+        carry(a1)
+        T.tick()
+        check(P.taking ~= nil, "還有一個在佇列：繼續等")
+        carry(a2)
+        T.tick()
+        check(P.taking == nil and hooked() == 0 and toasts[#toasts] == "IGUI_MSH_Storage_Got",
+            "都離開佇列：數進了背包的，面板關著就用 Toast 寫結果，拿掉 OnTick")
+
+        local light = item("Nails", 0.01)
+        fill(counter, { light })
+        reopen()
+        choose("Nails", "box", 0)
+        rejectAdd, lastCode = true, nil
+        askFor(1)
+        rejectAdd = false
+        check(P.taking == nil and lastCode == MSH.CODE.TAKE_STOPPED, "原版不收（拖著屍體、睡著）：不會卡在拿取中，寫拿取中斷")
+
+        local heavy, l2, l3 = item("Nails", 30), item("Nails", 0.01), item("Nails", 0.01)
+        fill(counter, { heavy, l2, l3 })
+        reopen()
+        choose("Nails", "box", 0)
+        counter:Remove(l3)
+        nq = #queued
+        askFor(4)
+        local t4 = P.taking
+        check(t4 ~= nil and #queued == nq + 2 and queued[nq + 1].item == light and queued[nq + 2].item == l2 and t4.full == 1
+            and t4.gone == 1, "4 個裡 1 個放不下、1 個被拿走了：只排放得下又還在的 2 個")
+        carry(queued[nq + 1])
+        dequeue(queued[nq + 2])
+        T.tick()
+        check(P.taking == nil and said("IGUI_MSH_Storage_Got") and said("IGUI_MSH_Storage_GotFull")
+            and said("IGUI_MSH_Storage_GotGone") and said("IGUI_MSH_Code_TAKE_STOPPED"),
+            "第 2 個還沒搬就走開（原版中斷）：寫拿到幾個、放不下、不在了，最後寫拿取中斷")
+
+        reopen()
+        choose("Nails", "box", 0)
+        lockWith(counter, 99)
+        nq, lastCode = #queued, nil
+        askFor(2)
+        check(#queued == nq and P.taking == nil and lastCode == MSH.CODE.GONE,
+            "對話框開著時容器被鎖上（自己打不開）：一個都不搬，寫東西不在了")
+        counter.parent, lastCode = nil, nil
+        askFor(1)
+        check(#queued == nq and lastCode == MSH.CODE.NO_ROOM, "要拿的那個背包放不下：寫背包放不下")
+
+        me.x, me.y = 202.5, 202.5
+        choose("Apple", "floor", 0)
+        local refreshed = loot.refreshed
+        askFor(1)
+        local fa = queued[nq + 1]
+        check(fa ~= nil and fa.src == "floor" and fa.item.name == "Apple" and loot.refreshed == refreshed + 1,
+            "地上的：先重整戰利品視窗，再從它的「地上」容器搬")
+        dequeue(fa)
+        T.tick()
+        me.x, me.y = 201.5, 201.5
+        -- 前面已經有一個原版搬運（同一個來源、同一個背包）在跑：原版把面板排的併進它的 queueList，自己的動作拿出佇列並 wipe。
+        -- 要等那個搬完才結算（2026-10-21 審查）
+        local l4 = item("Nails", 0.01)
+        fill(counter, { l4 })
+        reopen()
+        choose("Nails", "box", 0)
+        local host = { Type = "ISInventoryTransferAction", item = item("Rope", 0.5), queueList = {} }
+        live[#live + 1] = host
+        nq = #queued
+        askFor(3)
+        local mine = { queued[nq + 1], queued[nq + 2] }
+        host.queueList[1] = { items = { mine[1].item, mine[2].item } }
+        dequeue(mine[1])
+        dequeue(mine[2])
+        T.tick()
+        check(#queued == nq + 2 and P.taking ~= nil, "面板排的被前面的原版搬運併走：那個還在搬就繼續等，不寫拿取中斷")
+        for _, a in ipairs(mine) do
+            counter:Remove(a.item)
+            me:getInventory():AddItem(a.item)
+        end
+        dequeue(host)
+        T.tick()
+        check(P.taking == nil and m.msg == "IGUI_MSH_Storage_Got IGUI_MSH_Storage_GotFull", "那個搬完：數到 2 個、1 個放不下")
+        MSH.Client.codeText = codeText
+    end
+
+    T.section("物品搜尋面板：〔自動走過去〕排原版尋路；途中 1 格內不算到；走不過去寫原因；被停下只剩箭頭")
+    do
+        reopen()
+        local up = choose("Nails", "box", 1)
+        local nq = #queued
+        P.startWalk(m, up)
+        local wa = queued[nq + 1]
+        check(wa ~= nil and wa.kind == "adj" and wa.target[1] == square(202, 201, 1) and wa.arg == true and P.guide ~= nil
+            and count(markers.arrows) == 1 and not m.view.btnWalk.enabled and P.takeBlock(m, up) == "",
+            "走到二樓架子旁：排原版尋路（那格四周、可走斜線），同時亮箭頭；走的時候兩顆按鈕停用")
+        me.x, me.y, me.z = 202.5, 202.5, 1
+        T.advance(300)
+        T.tick()
+        check(P.guide ~= nil and P.walking ~= nil, "途中走到 1 格內：還不算到（可能隔著牆，等尋路做完）")
+        loot.forced = nil
+        wa.onDone()
+        dequeue(wa)
+        check(P.guide == nil and P.walking == nil and loot.forced == shelves and m.msg == "IGUI_MSH_Storage_Arrived",
+            "尋路做完：收掉箭頭、戰利品視窗切到那個容器、寫到了")
+        me.x, me.y, me.z = 201.5, 201.5, 0
+        nq = #queued
+        P.startWalk(m, up)
+        wa = queued[nq + 1]
+        wa.onFailed()
+        dequeue(wa)
+        check(P.walking == nil and P.guide ~= nil and m.msg == "IGUI_MSH_Storage_WalkFailed" and m.view.btnWalk.enabled,
+            "走不過去（上鎖的門、關著的窗、沒有路）：寫原因、箭頭留著，〔自動走過去〕能再按")
+        nq = #queued
+        P.startWalk(m, up)
+        dequeue(queued[nq + 1])
+        T.advance(300)
+        T.tick()
+        check(P.walking == nil and P.guide ~= nil and m.msg == nil, "按方向鍵或取消（原版停下、不叫 onFail）：只剩箭頭，不寫走不過去")
+        nq = #queued
+        P.startWalk(m, up)
+        wa = queued[nq + 1]
+        wa.action = {}
+        P.stopGuide()
+        check(wa.forced and P.walking == nil and P.guide == nil, "走到一半按〔停止指引〕：照原版中斷那趟尋路")
+        nq = #queued
+        P.startWalk(m, up)
+        wa = queued[nq + 1]
+        P.stopGuide()
+        check(not wa.forced and not ISTimedActionQueue.hasAction(wa), "還沒輪到（排在別的動作後面）就停止：從佇列拿掉")
+        -- 車上置物位置裡的背包（那處的 c 是零件容器、kind 是 bag）：也走到那個置物位置的區域（2026-10-21 審查）
+        nq = #queued
+        P.startWalk(m, { key = "carbag", kind = "bag", c = trunk, x = 203, y = 200, z = 0, title = "t", n = 1, ids = {} })
+        check(queued[nq + 1] ~= nil and queued[nq + 1].kind == "car" and queued[nq + 1].arg == "TruckBed",
+            "車上背包裡的：同樣走到後車廂那一側")
+        P.stopGuide()
+        loot.forced = nil
+        nq = #queued
+        P.startWalk(m, choose("Nails", "box", 0))
+        check(#queued == nq and P.guide == nil and loot.forced == counter and m.msg == "IGUI_MSH_Storage_Arrived",
+            "已經站在旁邊：不走，直接切戰利品視窗")
+        P.startWalk(m, choose("Gas Can", "car", 0))
+        wa = queued[nq + 1]
+        check(wa ~= nil and wa.kind == "car" and wa.target == car and wa.arg == "TruckBed", "車上的：走到那個置物位置的區域（同原版）")
+        wa.onDone()
+        dequeue(wa)
+        check(P.guide == nil and m.msg == "IGUI_MSH_Storage_ArrivedShut", "走到了但後車廂關著：寫要打開，不寫已切到")
+        car.access, loot.forced = true, nil
+        P.startWalk(m, m.sel)
+        check(#queued == nq + 1 and P.guide == nil and loot.forced == trunk,
+            "後車廂開著、站在那一側（原版拿得到）：不走，直接切戰利品視窗")
+        car.access = nil
+        me.vehicle = car
+        nq = #queued
+        P.startWalk(m, up)
+        check(#queued == nq and P.guide ~= nil and P.walking == nil, "開著車：不排尋路，只亮箭頭")
+        me.vehicle = nil
+        rejectAdd = true
+        P.startWalk(m, up)
+        rejectAdd = false
+        check(P.walking == nil and P.guide ~= nil and m.msg == "IGUI_MSH_Storage_WalkFailed",
+            "原版不收這趟尋路（睡著、拖著屍體）：只亮箭頭、寫走不過去")
+        P.stopGuide()
+        P.close(m)
+        check(hooked() == 0, "停止指引、關面板：拿掉 OnTick")
+    end
+
     local MW = MSH.ManagerWindow
     check(MW.canSearch(detail), "管理視窗：模式不是關閉、這間 active、框架夠新 → 有〔搜尋物品〕")
     T.sandbox("StorageMode", 1)
@@ -842,5 +1138,6 @@ return function(T)
     detail.lifecycle = "active"
     check(not MW.canSearch(detail) and P.open({ detail = detail }) == nil, "框架沒有下拉選單：不給按鈕、也不開面板")
 
+    SafeHouse.isSafehouseAllowLoot = savedAllowLoot
     for _, k in ipairs(NAMES) do _G[k] = saved[k] end
 end

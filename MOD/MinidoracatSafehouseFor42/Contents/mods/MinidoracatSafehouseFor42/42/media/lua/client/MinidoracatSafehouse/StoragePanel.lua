@@ -6,8 +6,9 @@
 --   掃描分幀（StorageScan.BUDGET_MS）；開著時每 DIST_MS 看一次玩家換了格子沒有，換了才重算距離；帶路每 GUIDE_MS 看一次。
 -- 帶路：原版方向箭頭（WorldMarkers addDirectionArrow，放大到 ARROW px；在畫面內停在目標上方、畫面外貼著邊緣、別層換上下樓
 --   圖示）；人物旁邊再加一個繞著人物轉、指向目標的箭頭（addPlayerHomingPoint，原版採集與教學用的那個；使用者 2026-10-20：
---   「人物旁邊也要有方向箭頭指引吧」）；同一層再加地面圈（別層畫圈會浮在半空，sh-storage-1020a）。走到 1 格內、同一層就結束，
---   戰利品視窗切到那個容器（ISInventoryPage:setForceSelectedContainer）；面板關了也繼續帶，按〔停止指引〕或 GUIDE_MAX_MS 後結束。
+--   「人物旁邊也要有方向箭頭指引吧」）；同一層再加地面圈（別層畫圈會浮在半空，sh-storage-1020a）。走到旁邊（P.near；車是 1 格
+--   內）就結束，戰利品視窗切到那個容器（ISInventoryPage:setForceSelectedContainer）；面板關了也繼續帶，按〔停止指引〕或
+--   GUIDE_MAX_MS 後結束。
 -- 遠距拿取（沙盒「可以遠距拿」、有 TAKE、站在這間裡或沙盒 StorageReach 放寬的安全屋外幾格內）：storageBegin 回原版搬運時間，
 --   本地跑一個只在客戶端的計時動作（類別沒有 complete，LuaTimedActionNew.java:78-80；走動就中斷），跑完送 storageTake
 --   （兩段的原因見 server Storage.lua）。
@@ -16,6 +17,10 @@
 --   一處；放在好幾處時緊接在網格下面把各處畫成卡片讓玩家換（使用者 2026-10-21 實機：「可選擇的區塊好像不太明顯」，設計稿
 --   temp/plan-storage-places-1021）。換顯示方式不重掃，搜尋字、篩選與選取都留著；記在 ModOptions `StorageGrid`
 --   （和地面範圍同一頁，第一次是清單）。
+-- 近身拿取與自動走過去（使用者 2026-10-21：只指引時也要能填數量拿，「但是也是要在正常範圍內才行」；「是否可以加上內建的
+--   自動走過去的按鈕?」；設計稿 temp/plan-storage-walk-1021，三項照建議）：站在容器旁邊（P.near，同原版戰利品視窗列得出的
+--   範圍）時〔拿取...〕走原版搬運（P.nearTake），哪種模式、有沒有遠距拿取權限都行；〔自動走過去〕排原版尋路（P.startWalk），
+--   同時亮箭頭。
 -- 框架缺席或太舊：管理視窗不給〔搜尋物品〕（P.available），面板也不開。
 -- 載入時不碰 ISPanel、框架或 getPlayer（harness T.bootClient 會載入本檔）；ISPanel 與計時動作的子類在第一次用到時才建。
 
@@ -83,12 +88,17 @@ function P.setGridPref(on)
     if not ok then MSH.log("ModOptions save failed: " .. tostring(err)) end
 end
 
--- 事件只在開著或帶路時掛（使用者 2026-10-15：「只有需要查的時候才查」，2026-10-20 同樣要求評估效能）
+-- 事件只在開著、帶路或站在旁邊拿的時候掛（使用者 2026-10-15：「只有需要查的時候才查」，2026-10-20 同樣要求評估效能）
 P.fnTick = P.fnTick or function() MSH.StoragePanel.tick() end
 local function hook(on)
     if (P.hooked == true) == on then return end
     P.hooked = on
     if on then Events.OnTick.Add(P.fnTick) else Events.OnTick.Remove(P.fnTick) end
+end
+
+-- 要不要掛：面板開著、在帶路，或站在旁邊拿還沒拿完（P.nearTick 等原版動作離開佇列才數背包，面板關了也要等）
+local function needTick()
+    return P.model ~= nil or P.guide ~= nil or (P.taking ~= nil and P.taking.near == true)
 end
 
 -- ===== 文字（harness 測）=====
@@ -139,19 +149,42 @@ function P.selText(g, p, pz)
     return getText("IGUI_MSH_Storage_NameCount", g.name, p.n) .. sep .. p.title .. sep .. P.whereText(p, pz)
 end
 
--- 不能遠距拿的原因：nil＝可以；""＝按鈕停用但不另外寫（還沒選、正在拿）；其他＝寫在按鈕下面
+-- 站在旁邊：同一層、相鄰 8 格、兩格之間沒有牆或關著的門、原版准他拿那一格、人不在車上。就是原版戰利品視窗列得出那個
+-- 容器的範圍（ISInventoryPage.lua:1667-1688；sh-walkto-1021c 實測兩者一致）
+function P.near(p)
+    local player = getSpecificPlayer(0)
+    if player == nil or p == nil or player:getVehicle() ~= nil then return false end
+    local px, py, pz = math.floor(player:getX()), math.floor(player:getY()), math.floor(player:getZ())
+    if pz ~= p.z or math.abs(px - p.x) > 1 or math.abs(py - p.y) > 1 then return false end
+    local cell = getCell()
+    local cur, sq = cell:getGridSquare(px, py, pz), cell:getGridSquare(p.x, p.y, p.z)
+    if cur == nil or sq == nil or (sq ~= cur and not cur:canReachTo(sq)) then return false end
+    return SafeHouse.isSafehouseAllowLoot(sq, player)
+end
+
+-- 遠距拿取（伺服器搬）：沙盒可以遠距拿、自己有遠距拿取權限；還要站在範圍裡（m.inside）
+function P.remoteOK(m)
+    return MSH.Settings.storageMode() == MSH.Settings.STORAGE.REMOTE and MSH.hasBit(m.bits, MSH.SHARE.TAKE)
+end
+
+-- 不能拿的原因：nil＝可以；""＝按鈕停用但不另外寫（還沒選、正在拿、正在自動走）；其他＝寫在按鈕下面。
+-- 能拿有兩條路：遠距拿取照舊；站在旁邊走原版搬運，只指引的伺服器、沒有遠距拿取權限的成員都行（使用者 2026-10-21）。
+-- 家具裡的背包原版搬不出來（sh-walkto-1021c 等到逾時一件沒拿到；戰利品視窗也不列它），寫原因
 function P.takeBlock(m, p)
-    if p == nil or P.taking ~= nil then return "" end
+    if p == nil or P.taking ~= nil or P.walking ~= nil then return "" end
     if p.walk then return getText("IGUI_MSH_Storage_WalkOnly") end
-    if not MSH.hasBit(m.bits, MSH.SHARE.TAKE) then
-        return getText("IGUI_MSH_Perm_Denied", getText("IGUI_MSH_Share_Bit_TAKE"))
+    local remote = P.remoteOK(m)
+    if remote and m.inside then return nil end
+    if P.near(p) then
+        if p.kind == "bag" then return getText("IGUI_MSH_Storage_BagInBox") end
+        return nil
     end
-    if not m.inside then
+    if remote then
         local reach = MSH.Settings.storageReach()
         if reach > 0 then return getText("IGUI_MSH_Storage_StandNear", reach) end
         return getText("IGUI_MSH_Storage_StandInside")
     end
-    return nil
+    return getText("IGUI_MSH_Storage_StandNext")
 end
 
 -- 要拿幾個：1 到 max 的整數；不合回 nil
@@ -309,6 +342,9 @@ function P.where(m, now)
             relayout = true
         end
     end
+    -- 能不能拿也看門、牆、車（P.near）：人沒動、別人開了門也要重排（2026-10-21 審查）
+    local v = m.view
+    if not relayout and v ~= nil and P.takeBlock(m, m.sel) ~= v.why then relayout = true end
     if relayout then P.changed(m) end
 end
 
@@ -328,6 +364,8 @@ function P.tick()
         g.nextAt = now + P.GUIDE_MS
         P.guideTick(g, now)
     end
+    local t = P.taking
+    if t ~= nil and t.near then P.nearTick(t) end
 end
 
 -- 點一列：組＝展開／收起（只有一處就直接選它）；處＝選它
@@ -426,7 +464,22 @@ local function ring(g, on)
     end
 end
 
+-- 自動走到一半要停（〔停止指引〕、換指引別處、帶路逾時、管理員改成關閉）：還沒輪到的從佇列拿掉，走到一半的照原版中斷
+local function stopWalk()
+    local w = P.walking
+    if w == nil then return end
+    P.walking = nil
+    local a = w.action
+    if not ISTimedActionQueue.hasAction(a) then return end
+    if a.action ~= nil then
+        a:forceStop()
+    else
+        ISTimedActionQueue.getTimedActionQueue(a.character):removeFromQueue(a)
+    end
+end
+
 function P.stopGuide(quiet)
+    stopWalk()
     local g = P.guide
     if g == nil then return end
     P.guide = nil
@@ -434,13 +487,19 @@ function P.stopGuide(quiet)
     if g.arrow ~= nil then wm:removeDirectionArrow(g.arrow) end
     if g.homing ~= nil then wm:removeHomingPoint(g.homing) end
     if g.ring ~= nil then wm:removeGridSquareMarker(g.ring) end
-    hook(P.model ~= nil)
+    hook(needTick())
     if not quiet then P.refresh() end
 end
 
 -- 到了：收掉標示，戰利品視窗切到那個容器（地上的切到地上；背包裡的切到裝它的容器）
 function P.arrive(g)
     P.stopGuide(true)
+    -- 車上的置物位置，原版要站在那一側、車門或後車廂開著才拿得到（Vehicles.ContainerAccess），不然戰利品視窗不列它：照實寫
+    -- （walkbtn-mp 第一輪：後車廂關著，面板卻寫已切到；〔指引我過去〕到車旁也一樣）
+    local part, player = P.carPart(g), getSpecificPlayer(0)
+    if part ~= nil and player ~= nil and not part:getVehicle():canAccessContainer(part:getIndex(), player) then
+        return P.report(getText("IGUI_MSH_Storage_ArrivedShut", g.title), "warning")
+    end
     local c = g.c
     if g.kind == "floor" and ISInventoryPage ~= nil and ISInventoryPage.GetFloorContainer ~= nil then
         c = ISInventoryPage.GetFloorContainer(0)
@@ -456,10 +515,15 @@ end
 function P.guideTick(g, now)
     local p = getSpecificPlayer(0)
     if p == nil or p:isDead() or now > g.endAt then return P.stopGuide() end
+    -- 自動走被方向鍵、取消或別的動作清掉了（原版這時不叫 onFail，ISPathFindAction.lua:10-14）：只剩箭頭
+    local w = P.walking
+    if w ~= nil and not ISTimedActionQueue.hasAction(w.action) then P.onWalkEnd(w, nil) end
     local px, py, pz = math.floor(p:getX()), math.floor(p:getY()), math.floor(p:getZ())
     ring(g, pz == g.z)
     local d = math.max(math.abs(px - g.x), math.abs(py - g.y))
-    if pz == g.z and d <= 1 then return P.arrive(g) end
+    -- 到了：家具、地上的要拿得到（P.near：隔著牆或關著的門不算，戰利品視窗也不列它；自動走失敗或被取消後也照這個，2026-10-21
+    -- 審查），車是 1 格內（拿不拿得到 P.arrive 照實寫）。自動走的途中不在這裡算，走到容器旁才算（P.onWalkEnd）
+    if pz == g.z and d <= 1 and P.walking == nil and (P.carPart(g) ~= nil or P.near(g)) then return P.arrive(g) end
     -- 人物旁的箭頭只看平面（引擎不管樓層）：目標在正上下方時它沒有方向可指，收起來，交給方向箭頭的上下樓圖示
     if g.homing ~= nil then g.homing:setActive(d > 1) end
     if d ~= g.d or pz ~= g.pz then
@@ -468,7 +532,8 @@ function P.guideTick(g, now)
     end
 end
 
-function P.startGuide(m, p)
+-- walk：〔自動走過去〕排好的那一趟（P.startWalk），帶路途中跟著它
+function P.startGuide(m, p, walk)
     local player = getSpecificPlayer(0)
     if player == nil or p == nil then return end
     P.stopGuide(true)
@@ -489,10 +554,74 @@ function P.startGuide(m, p)
         g.homing:setRenderHeight(P.ARROW)
     end
     P.guide = g
+    P.walking = walk
     m.msg = nil
     hook(true)
     P.guideTick(g, now)
     P.changed(m)
+end
+
+-- ===== 自動走過去 =====
+-- 〔自動走過去〕（使用者 2026-10-21）：亮箭頭，再排原版尋路走到容器旁。家具、地上、人形模特兒走 pathAdjacentToSquares
+-- （容器那格四周站得住、沒隔著牆的格子，引擎挑最近走得到的；同原版 luautils.walkAdjObject），車走那個置物位置的區域
+-- （同原版 luautils.walkToContainer）。關著的門角色自己開；上鎖的門、關著的窗、沒有路就停下（sh-walkto-1021c），
+-- 這時寫原因、箭頭留著；按方向鍵或取消原版自己停下，只剩箭頭。
+
+-- 車上的那處（車的置物位置，或放在裡面的背包：背包那處的 c 是裝它的零件容器，2026-10-21 審查）：那個零件
+function P.carPart(p)
+    if p.c == nil or (p.kind ~= "car" and p.kind ~= "bag") then return nil end
+    local part = p.c:getVehiclePart()
+    if part == nil or part:getVehicle() == nil then return nil end
+    return part
+end
+
+-- 已經在那處旁邊：車看原版拿不拿得到那個零件的容器，其他照戰利品視窗的範圍
+function P.there(player, p)
+    local part = P.carPart(p)
+    if part ~= nil then return part:getVehicle():canAccessContainer(part:getIndex(), player) end
+    return P.near(p)
+end
+
+function P.walkAction(player, p)
+    local part = P.carPart(p)
+    -- 有置物區域才走得過去；沒有就照一般格子走到車旁
+    if part ~= nil and part:getArea() ~= nil then
+        return ISPathFindAction:pathToVehicleArea(player, part:getVehicle(), part:getArea())
+    end
+    local sq = getCell():getGridSquare(p.x, p.y, p.z)
+    if sq == nil then return nil end
+    return ISPathFindAction:pathAdjacentToSquares(player, { sq }, true)
+end
+
+function P.startWalk(m, p)
+    local player = getSpecificPlayer(0)
+    if player == nil or p == nil then return end
+    P.stopGuide(true)   -- 上一趟的箭頭與自動走先停；要在排新動作之前（中斷會清掉整個佇列）
+    if P.there(player, p) then return P.arrive(p) end
+    if player:getVehicle() ~= nil then return P.startGuide(m, p) end   -- 開著車：原版尋路不走，只亮箭頭
+    local w = {}
+    local a = P.walkAction(player, p)
+    if a ~= nil then
+        a:setOnComplete(function() MSH.StoragePanel.onWalkEnd(w, true) end)
+        a:setOnFail(function() MSH.StoragePanel.onWalkEnd(w, false) end)
+    end
+    -- 四周沒有站得住的格子，或原版不收（睡著、拖著屍體）：只亮箭頭、寫原因
+    if a == nil or ISTimedActionQueue.add(a) == nil then
+        P.startGuide(m, p)
+        return P.say(m, getText("IGUI_MSH_Storage_WalkFailed"), "warning")
+    end
+    w.action = a
+    P.startGuide(m, p, w)
+end
+
+-- 自動走結束：ok＝走到（同帶路到了：切戰利品視窗）；false＝走不過去（寫原因、箭頭留著）；nil＝被方向鍵、取消或別的動作停下
+function P.onWalkEnd(w, ok)
+    if P.walking ~= w then return end
+    P.walking = nil
+    local g = P.guide
+    if ok and g ~= nil then return P.arrive(g) end
+    if ok == false then return P.report(getText("IGUI_MSH_Storage_WalkFailed"), "warning") end
+    P.refresh()
 end
 
 -- ===== 遠距拿取 =====
@@ -550,7 +679,13 @@ function P.begin(m, p, name, input)
     local max = math.min(p.n, MSH.LIMIT.STORAGE_PICKS)
     local n = P.count(input, max)
     if n == nil then return P.say(m, getText("IGUI_MSH_Storage_BadCount", max), "errorText") end
-    if P.takeBlock(m, p) ~= nil then return end
+    -- 對話框開著的時候走開了、門關上了：照樣寫原因，不拿
+    local why = P.takeBlock(m, p)
+    if why ~= nil then
+        if why ~= "" then P.say(m, why, "warning") end
+        return
+    end
+    if not (P.remoteOK(m) and m.inside) then return P.nearTake(m, p, name, n) end
     local ids = {}
     for i = 1, n do ids[i] = p.ids[i] end
     local t = { claimId = m.claimId, name = name, title = p.title, n = n }
@@ -607,6 +742,109 @@ function P.onTaken(t, res)
     if m ~= nil and m.claimId == t.claimId then m.rescanAt = getTimestampMs() + P.RESCAN_MS end
     if not res.ok then return P.reportCode(res) end
     P.report(P.resultText(t, res), "text")
+end
+
+-- ===== 站在旁邊拿 =====
+-- （使用者 2026-10-21：只指引時也要能填數量拿，「但是也是要在正常範圍內才行」）走原版搬運：戰利品視窗拿東西那一支，時間、
+-- 重量與伺服器的檢查都照原版，同類小東西原版自己併成一次搬（ISInventoryTransferAction:checkQueueList）。走動就中斷，
+-- 拿到的留在背包。sh-walkto-1021c：家具、地上拿得到；家具裡的背包拿不到（P.takeBlock 先擋）。
+
+-- 那一格上還在的這件與它的容器（掃描後可能被拿走或換了容器）。上了鎖、自己打不開的容器不拿：原版只在戰利品視窗擋，
+-- 伺服器的搬運不查鎖（MSH.lockedFor）
+local function itemAt(sq, kind, id, player)
+    if kind == "floor" then
+        local wos = sq:getWorldObjects()
+        for i = 0, wos:size() - 1 do
+            local it = wos:get(i):getItem()
+            if it ~= nil and it:getID() == id then return it end
+        end
+        return nil
+    end
+    local objs = sq:getObjects()
+    for i = 0, objs:size() - 1 do
+        local o = objs:get(i)
+        for ci = 0, o:getContainerCount() - 1 do
+            local c = o:getContainerByIndex(ci)
+            local it = c ~= nil and c:getItemWithID(id) or nil
+            if it ~= nil then
+                if MSH.lockedFor(c, player) then return nil end
+                return it, c
+            end
+        end
+    end
+    return nil
+end
+
+-- 照掃描記下的 id 找出還在的，背包放得下的一件排一個原版搬運。地上的照原版先重整戰利品視窗，那格的東西才會在它的
+-- 「地上」容器裡（ISInventoryPage.lua:1693-1697）
+function P.nearTake(m, p, name, n)
+    local player = getSpecificPlayer(0)
+    local sq = player ~= nil and getCell():getGridSquare(p.x, p.y, p.z) or nil
+    if sq == nil then return P.reportCode({ code = MSH.CODE.GONE }) end
+    local inv, room, floor = player:getInventory(), P.freeWeight(player), nil
+    if p.kind == "floor" then
+        local loot = getPlayerLoot(0)
+        if loot ~= nil then loot:refreshBackpacks() end
+        floor = ISInventoryPage.GetFloorContainer(0)
+    end
+    local t = { claimId = m.claimId, name = name, title = p.title, near = true, player = player, ids = {}, idSet = {},
+        full = 0, gone = 0 }
+    for i = 1, n do
+        local it, c = itemAt(sq, p.kind, p.ids[i], player)
+        if it == nil then
+            t.gone = t.gone + 1
+        elseif it:getUnequippedWeight() > room then
+            t.full = t.full + 1
+        else
+            local a = ISInventoryTransferUtil.newInventoryTransferAction(player, it, c or floor, inv)
+            if ISTimedActionQueue.add(a) == nil then break end   -- 原版不收（睡著、拖著屍體）：後面的也不排
+            room = room - it:getUnequippedWeight()
+            t.ids[#t.ids + 1], t.idSet[it:getID()] = it:getID(), true
+        end
+    end
+    if #t.ids == 0 then
+        if t.gone == n then return P.reportCode({ code = MSH.CODE.GONE }) end
+        if t.full + t.gone == n then return P.reportCode({ code = MSH.CODE.NO_ROOM }) end
+        return P.reportCode({ code = MSH.CODE.TAKE_STOPPED })
+    end
+    t.n = #t.ids
+    P.taking = t
+    m.msg = nil
+    hook(true)
+    P.changed(m)
+end
+
+-- 這幾件還在佇列上的哪個原版搬運裡：自己排的那個，或被前面同一個來源、同一個背包的搬運併走的（checkQueueList 把它們的物品
+-- 放進那個動作的 queueList，自己排的動作拿出佇列並 wipe；只追自己排的會在前一個搬完之前就結算，2026-10-21 審查）
+local function moving(q, idSet)
+    for _, a in ipairs(q.queue) do
+        if a.Type == "ISInventoryTransferAction" then
+            if a.item ~= nil and idSet[a.item:getID()] then return true end
+            for _, e in ipairs(a.queueList or {}) do
+                for _, it in ipairs(e.items or {}) do
+                    if idSet[it:getID()] then return true end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- 佇列上沒有搬運帶著這幾件了（做完、走動中斷或被清掉）：數有幾件進了背包，寫結果、稍後重掃
+function P.nearTick(t)
+    if moving(ISTimedActionQueue.getTimedActionQueue(t.player), t.idSet) then return end
+    P.taking = nil
+    hook(needTick())
+    local inv, got = t.player:getInventory(), 0
+    for _, id in ipairs(t.ids) do
+        if inv:containsID(id) then got = got + 1 end
+    end
+    local m = P.model
+    if m ~= nil and m.claimId == t.claimId then m.rescanAt = getTimestampMs() + P.RESCAN_MS end
+    if got == 0 then return P.reportCode({ code = MSH.CODE.TAKE_STOPPED }) end
+    local text = P.resultText(t, { got = got, n = got })
+    if got < #t.ids then text = text .. " " .. getText("IGUI_MSH_Code_TAKE_STOPPED") end
+    P.report(text, "text")
 end
 
 -- ===== 畫面 =====
@@ -768,22 +1006,20 @@ function P.layout(v)
             y = para(v, getText("IGUI_MSH_Storage_NoMatch"), "textMuted", y)
         end
     end
-    -- 選取、〔指引我過去〕〔拿取...〕；不能拿的原因寫在按鈕下面
+    -- 選取、〔指引我過去〕〔自動走過去〕〔拿取...〕；不能拿的原因寫在按鈕下面。〔拿取...〕每種模式都有（使用者 2026-10-21：
+    -- 只指引時站在旁邊也能拿），自動走的途中停用〔自動走過去〕
     y = y + 2
     if m.sel ~= nil and m.selGroup ~= nil then
         y = para(v, P.selText(m.selGroup, m.sel, m.pz), "text", y)
     else
         y = para(v, getText("IGUI_MSH_Storage_PickHint"), "textMuted", y)
     end
-    local btns = { v.btnGuide }
     v.btnGuide:setEnabled(m.sel ~= nil)
-    local why = nil
-    if remote then
-        why = P.takeBlock(m, m.sel)
-        v.btnTake:setEnabled(why == nil)
-        btns[#btns + 1] = v.btnTake
-    end
-    y = row(v, btns, y)
+    v.btnWalk:setEnabled(m.sel ~= nil and P.walking == nil and P.taking == nil)
+    local why = P.takeBlock(m, m.sel)
+    v.why = why   -- P.where 拿來比：人沒動、能不能拿變了也重排
+    v.btnTake:setEnabled(why == nil)
+    y = row(v, { v.btnGuide, v.btnWalk, v.btnTake }, y)
     if why ~= nil and why ~= "" then y = para(v, why, "warning", y, "warning") end
     -- 正在拿（別間的也寫：〔拿取...〕停用的原因）、帶路中、上一個結果
     local t = P.taking
@@ -992,6 +1228,7 @@ function P.build(m, UI)
     v.btnRescan = button(getText("IGUI_MSH_Storage_Rescan"), "reload", nil, function() P.rescan(m) end)
     v.btnClear = button(getText("IGUI_MSH_Storage_ClearSearch"), "close", nil, function() P.clearQuery(m) end)
     v.btnGuide = button(getText("IGUI_MSH_Storage_Guide"), "locate", "primary", function() P.startGuide(m, m.sel) end)
+    v.btnWalk = button(getText("IGUI_MSH_Storage_Walk"), nil, nil, function() P.startWalk(m, m.sel) end)
     v.btnTake = button(getText("IGUI_MSH_Storage_Take"), nil, nil, function() P.askTake(m) end)
     v.btnStop = button(getText("IGUI_MSH_Storage_StopGuide"), "close", nil, function() P.stopGuide() end)
     v.search = UI.TextField.new({ x = PAD, y = 0, width = v.innerW, placeholder = getText("IGUI_MSH_Storage_SearchHint"),
@@ -1046,7 +1283,7 @@ function P.build(m, UI)
         return lst
     end
     v.list = newList(false)
-    v.hideable = { v.btnClear, v.btnStop, v.btnTake, v.list }
+    v.hideable = { v.btnClear, v.btnStop, v.list }
     if v.viewTabs ~= nil then
         v.tileW, v.tileH = P.tileWidth(v), 12 + P.TILE_ICON + 3 * v.lineH
         v.grid = UI.TileGrid.new({ x = PAD, y = 0, width = v.innerW, height = v.tileH, tileW = v.tileW, tileH = v.tileH,
@@ -1080,7 +1317,7 @@ function P.close(m)
     if m == nil or m.closed then return end
     m.closed = true
     if P.model == m then P.model = nil end
-    hook(P.guide ~= nil)
+    hook(needTick())
     local v = m.view
     m.view = nil
     if v ~= nil and v.win ~= nil then

@@ -33,6 +33,7 @@ description=[*] [b]Custom area[/b]: drag or walk to two corners to mark the area
 description=[*] [b]Avoids roads, resource points and no-build zones[/b]: roads, parking lots, buildings such as military, police and medical sites, and no-build zones set by admins cannot be claimed
 description=[*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building and farming separately
 description=[*] [b]Manager window[/b]: rename, share or release your safehouses, set a respawn point, and see nearby safehouses and no-build zones on the ground
+description=[*] [b]Item search[/b]: search every container in your safehouse and follow an arrow or walk there automatically; when the server allows it, take items straight from where you stand inside
 description=[*] [b]Vanilla protection[/b]: non-members cannot enter or take items, but zombies can still spawn inside
 description=[*] [b]No driving in[/b]: if anyone aboard can't enter, the vehicle can't drive in, trailers included
 description=[*] [b]Admin panel[/b]: adjust every rule in game, including deeds, exclusions and paid slots

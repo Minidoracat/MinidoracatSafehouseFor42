@@ -260,6 +260,13 @@ function T.container(kind)
             end
         end
     end
+    -- 照 id 找：只看這一層，不往背包裡找（ItemContainer.java:3112-3144）
+    function c:getItemWithID(id)
+        for _, x in ipairs(self.items) do if x.id == id then return x end end
+        return nil
+    end
+    function c:containsID(id) return self:getItemWithID(id) ~= nil end
+    function c:getVehiclePart() return self.vpart end   -- 車的零件容器才有（家具、背包是 nil）
     -- 深度優先：先自己，再巢狀背包（ItemContainer.java:1551）
     function c:getFirstTypeRecurse(t)
         for _, x in ipairs(self.items) do
