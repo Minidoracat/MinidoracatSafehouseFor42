@@ -6,7 +6,8 @@
 return function(T)
     local check = T.check
     local NAMES = { "getCell", "getTextOrNull", "CharacterTrait", "getWorldMarkers", "getPlayerLoot", "ISInventoryPage",
-        "ISTimedActionQueue", "ISBaseTimedAction", "ISPanel", "ISButton", "getTextManager", "getCore", "UIFont", "MinidoracatUI" }
+        "ISTimedActionQueue", "ISBaseTimedAction", "ISPanel", "ISButton", "getTextManager", "getCore", "UIFont", "MinidoracatUI",
+        "CatLangFor42", "Translator" }
     local saved = {}
     for _, k in ipairs(NAMES) do saved[k] = _G[k] end
     getTextOrNull = function() return nil end
@@ -370,6 +371,44 @@ return function(T)
     lo = scanAll()
     check(lo.locked == 1 and lo.items == 9, "身上有這台車的鑰匙：車上的照列")
     car.locked = false
+
+    T.section("物品搜尋：伺服器寫死的名稱先交給翻譯包修（CatLangFor42.fixItemNames；遊戲語言不是英文才叫）")
+    local lang, batches, renamed = "CH", {}, {}
+    Translator = { getLanguage = function() return { name = function() return lang end } end }
+    CatLangFor42 = { fixItemNames = function(list)
+        local names = {}
+        for i, it in ipairs(list) do
+            names[i] = it.name
+            renamed[#renamed + 1] = { it = it, name = it.name }
+            it.name = "CH-" .. it.name
+        end
+        batches[#batches + 1] = table.concat(names, "+")
+    end }
+    local function groupNames(o)
+        local list = {}
+        for i, g in ipairs(o.groups) do list[i] = g.name end
+        return table.concat(list, ",")
+    end
+    local fixedNames = groupNames(scanAll())
+    local joined = "|" .. table.concat(batches, "|") .. "|"
+    for i = #renamed, 1, -1 do renamed[i].it.name = renamed[i].name end
+    check(fixedNames == "CH-Apple,CH-Duffel,CH-Gas Can,CH-Jacket,CH-Nails,CH-Rope",
+        "繁中：容器、背包裡的、地上、人形模特兒、車上的都先修名稱再分組（" .. fixedNames .. "）")
+    check(string.find(joined, "|Nails+Nails+Duffel+Nails+Rope|", 1, true) ~= nil and string.find(joined, "Gold", 1, true) == nil,
+        "一個容器連同背包裡的整批交一次；上了鎖的容器不列也不修（" .. joined .. "）")
+    lang, batches = "EN", {}
+    check(groupNames(scanAll()) == "Apple,Duffel,Gas Can,Jacket,Nails,Rope" and #batches == 0, "英文：不叫翻譯包，名稱照原樣")
+    lang = "CH"
+    local calls, printed = 0, #T.prints
+    CatLangFor42.fixItemNames = function() calls = calls + 1 error("boom") end
+    local brokenNames = groupNames(scanAll())
+    local loggedFail = false
+    for i = printed + 1, #T.prints do
+        if string.find(T.prints[i], "CatLangFor42.fixItemNames failed", 1, true) then loggedFail = true end
+    end
+    check(brokenNames == "Apple,Duffel,Gas Can,Jacket,Nails,Rope" and calls == 1 and loggedFail,
+        "翻譯包出錯：寫一行 log，這次掃描不再叫它，名稱照原樣列完（叫了 " .. calls .. " 次）")
+    CatLangFor42, Translator = nil, nil
 
     T.section("物品搜尋：關鍵字、分類、樓層、排序與距離")
     SS.measure(out, 203, 202)

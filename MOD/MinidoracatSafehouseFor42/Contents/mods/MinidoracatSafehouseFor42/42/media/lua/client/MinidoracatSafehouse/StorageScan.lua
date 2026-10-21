@@ -6,8 +6,8 @@
 --   樓層照每個 chunk 的 getMinLevel／getMaxLevel（IsoChunk.java:3106/3110，sh-storage-1020b 同一套）。
 -- 分幀（使用者 2026-10-20：「記得要幫我評估是否會影響到客戶端或伺服器端的性能」）：一欄一欄掃，每個 tick 最多 BUDGET_MS
 --   （sh-storperf-1020a：96×96、186 個容器、4,024 件一次掃完 38 ms；每 tick 3 ms 分 14 個 tick，最長的一個 tick 4 ms）。
--- 同名物品併成一組（顯示名稱，和玩家在物品欄看到的一樣）；組裡再分「在哪裡」（place）：一個容器、容器裡的一個背包、
---   一格地上、車的一個零件。
+-- 同名物品併成一組（顯示名稱，和玩家在物品欄看到的一樣；名稱先照 SS.nameFixer 請翻譯包修）；組裡再分「在哪裡」（place）：
+--   一個容器、容器裡的一個背包、一格地上、車的一個零件。
 -- 載入時不碰框架或 getPlayer（harness T.bootClient 會載入本檔）。
 
 if not isClient() then return end
@@ -43,6 +43,17 @@ function SS.catText(cat)
     return getTextOrNull("IGUI_ItemCat_" .. tostring(cat)) or tostring(cat)
 end
 
+-- 伺服器組名時寫死的語言（例：屠宰的「Pork Belly (Poor Cut)」）：本體翻譯包（CatLangFor42）要玩家打開容器才換成本機
+--   語言，搜尋列的多是沒打開過的容器（使用者 2026-10-21：「參考中文化那邊的作法，根據使用者語系才觸發」）。有它的
+--   CatLangFor42.fixItemNames、遊戲語言不是英文時，掃到的物品先整批交給它修（打開容器時它做的同一件事，只改本機）；
+--   英文玩家拿到的本來就是英文，不修也不多花時間。回 nil＝不修
+function SS.nameFixer()
+    local api = CatLangFor42
+    if type(api) ~= "table" or type(api.fixItemNames) ~= "function" then return nil end
+    if Translator.getLanguage():name() == "EN" then return nil end
+    return api.fixItemNames
+end
+
 -- ===== 掃描 =====
 
 local function addItem(out, it, at)
@@ -67,6 +78,29 @@ local function addItem(out, it, at)
     out.items = out.items + 1
 end
 
+-- 一批物品交給翻譯包修名稱；它出錯就這次掃描不再叫它，名稱照原樣列
+local function fixNames(out, list)
+    local ok, err = pcall(out.fix, list)
+    if not ok then
+        out.fix = nil
+        MSH.log("CatLangFor42.fixItemNames failed: " .. tostring(err))
+    end
+end
+
+-- 一個容器裡的東西加上背包往裡一層的（同 addContainer 列的範圍）一起修，背包的標題也用修好的名字
+local function fixContainerNames(out, items, n)
+    local list = {}
+    for k = 0, n - 1 do
+        local it = items:get(k)
+        list[#list + 1] = it
+        if instanceof(it, "InventoryContainer") then
+            local inner = it:getInventory():getItems()
+            for j = 0, inner:size() - 1 do list[#list + 1] = inner:get(j) end
+        end
+    end
+    fixNames(out, list)
+end
+
 -- 一個容器：裡面的東西，加上背包裡的（往裡一層，背包算另一處）。沒有東西又沒人開過＝還不知道裡面有什麼
 local function addContainer(out, c, key, title, kind, x, y, z, walk)
     out.containers = out.containers + 1
@@ -76,6 +110,7 @@ local function addContainer(out, c, key, title, kind, x, y, z, walk)
         if not c:isExplored() then out.unexplored = out.unexplored + 1 end
         return
     end
+    if out.fix ~= nil then fixContainerNames(out, items, n) end
     local at = { key = key, kind = kind, title = title, x = x, y = y, z = z, c = c, walk = walk }
     for k = 0, n - 1 do
         local it = items:get(k)
@@ -132,10 +167,13 @@ local function scanSquare(out, sq, x, y, z)
     local n = wos:size()
     if n > 0 then
         local at = { key = base .. ",f", kind = "floor", title = getText("IGUI_ContainerTitle_floor"), x = x, y = y, z = z }
+        local list = {}
         for i = 0, n - 1 do
             local it = wos:get(i):getItem()
-            if it ~= nil then addItem(out, it, at) end
+            if it ~= nil then list[#list + 1] = it end
         end
+        if out.fix ~= nil and #list > 0 then fixNames(out, list) end
+        for _, it in ipairs(list) do addItem(out, it, at) end
     end
     if z == 0 then
         local v = sq:getVehicleContainer()
@@ -166,8 +204,8 @@ end
 
 -- 開始掃一間（rects＝這間的各塊；who＝看的人，判斷鎖）。之後每個 tick 叫 SS.step，掃完回 true、job.out 是結果
 function SS.start(rects, who)
-    local out = { groups = {}, byName = {}, cars = {}, who = who, items = 0, containers = 0, unloaded = 0, unexplored = 0,
-        locked = 0 }
+    local out = { groups = {}, byName = {}, cars = {}, who = who, fix = SS.nameFixer(), items = 0, containers = 0,
+        unloaded = 0, unexplored = 0, locked = 0 }
     return { rects = rects, ri = 1, col = 0, out = out }
 end
 
@@ -186,7 +224,7 @@ function SS.step(job, budget)
         end
     end
     local out = job.out
-    out.byName, out.cars, out.who = nil, nil, nil
+    out.byName, out.cars, out.who, out.fix = nil, nil, nil, nil
     for _, g in ipairs(out.groups) do g.byKey = nil end   -- 只有掃描時要用
     MSH.sortSafe(out.groups, function(a, b) return a.lname < b.lname end)
     job.done = true
