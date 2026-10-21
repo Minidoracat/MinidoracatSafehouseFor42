@@ -782,6 +782,7 @@
     "IGUI_MSH_Storage_NameCount": "%1 ×%2",
     "IGUI_MSH_Storage_Count": "×%1",
     "IGUI_MSH_Storage_Places": "%1か所",
+    "IGUI_MSH_Storage_PlacesPick": "%1 ×%2 は %3か所にあります。1か所選んでください。",
     "IGUI_MSH_Storage_Nearest": "最寄り %1マス",
     "IGUI_MSH_Storage_Tiles": "%1マス",
     "IGUI_MSH_Storage_InBag": "%1（%2の中）",

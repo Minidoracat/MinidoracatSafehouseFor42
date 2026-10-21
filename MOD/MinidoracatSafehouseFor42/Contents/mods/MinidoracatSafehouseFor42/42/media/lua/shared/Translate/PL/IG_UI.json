@@ -782,6 +782,7 @@
     "IGUI_MSH_Storage_NameCount": "%1 ×%2",
     "IGUI_MSH_Storage_Count": "×%1",
     "IGUI_MSH_Storage_Places": "Miejsca: %1",
+    "IGUI_MSH_Storage_PlacesPick": "%1 ×%2 · miejsca: %3. Wybierz jedno.",
     "IGUI_MSH_Storage_Nearest": "najbliżej (pola): %1",
     "IGUI_MSH_Storage_Tiles": "pola: %1",
     "IGUI_MSH_Storage_InBag": "%1 (w: %2)",

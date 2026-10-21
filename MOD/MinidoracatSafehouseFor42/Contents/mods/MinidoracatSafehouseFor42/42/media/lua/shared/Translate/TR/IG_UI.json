@@ -782,6 +782,7 @@
     "IGUI_MSH_Storage_NameCount": "%1 ×%2",
     "IGUI_MSH_Storage_Count": "×%1",
     "IGUI_MSH_Storage_Places": "%1 yer",
+    "IGUI_MSH_Storage_PlacesPick": "%1 ×%2 %3 yerde. Birini seçin.",
     "IGUI_MSH_Storage_Nearest": "en yakını %1 kare",
     "IGUI_MSH_Storage_Tiles": "%1 kare",
     "IGUI_MSH_Storage_InBag": "%1 (%2 içinde)",

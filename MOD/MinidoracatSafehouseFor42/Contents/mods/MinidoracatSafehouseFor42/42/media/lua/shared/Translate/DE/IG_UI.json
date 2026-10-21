@@ -782,6 +782,7 @@
     "IGUI_MSH_Storage_NameCount": "%1 ×%2",
     "IGUI_MSH_Storage_Count": "×%1",
     "IGUI_MSH_Storage_Places": "%1 Orte",
+    "IGUI_MSH_Storage_PlacesPick": "%1 ×%2 an %3 Orten gefunden. Wähle einen aus.",
     "IGUI_MSH_Storage_Nearest": "nächster: %1 Kacheln",
     "IGUI_MSH_Storage_Tiles": "%1 Kacheln",
     "IGUI_MSH_Storage_InBag": "%1 (in %2)",

@@ -782,6 +782,7 @@
     "IGUI_MSH_Storage_NameCount": "%1 ×%2",
     "IGUI_MSH_Storage_Count": "×%1",
     "IGUI_MSH_Storage_Places": "%1 個地方",
+    "IGUI_MSH_Storage_PlacesPick": "%1 ×%2 放在 %3 個地方，點一處選它",
     "IGUI_MSH_Storage_Nearest": "最近 %1 格",
     "IGUI_MSH_Storage_Tiles": "%1 格",
     "IGUI_MSH_Storage_InBag": "%1（在%2裡）",

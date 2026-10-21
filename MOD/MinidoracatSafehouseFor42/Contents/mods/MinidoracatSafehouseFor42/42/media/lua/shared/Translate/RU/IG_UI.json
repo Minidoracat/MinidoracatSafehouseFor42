@@ -782,6 +782,7 @@
     "IGUI_MSH_Storage_NameCount": "%1 ×%2",
     "IGUI_MSH_Storage_Count": "×%1",
     "IGUI_MSH_Storage_Places": "Мест: %1",
+    "IGUI_MSH_Storage_PlacesPick": "%1 ×%2 · мест: %3. Выберите одно.",
     "IGUI_MSH_Storage_Nearest": "ближайшее, клеток: %1",
     "IGUI_MSH_Storage_Tiles": "клеток: %1",
     "IGUI_MSH_Storage_InBag": "%1 (лежит в: %2)",

@@ -413,7 +413,7 @@ return function(T)
         return setmetatable({ x = x or 0, y = y or 0, width = w or 60, height = h or 20, visible = true, kids = {} }, self)
     end
     for _, k in ipairs({ "initialise", "addToUIManager", "removeFromUIManager", "bringToTop", "setTooltip", "drawText",
-        "drawTextureScaledAspect", "setOptions", "setSelectedIndex", "fitWidth", "scrollToIndex" }) do
+        "drawTextureScaledAspect", "setOptions", "fitWidth", "scrollToIndex" }) do
         E[k] = function() end
     end
     function E:addChild(k) self.kids[#self.kids + 1] = k end
@@ -432,6 +432,9 @@ return function(T)
     function E:setItems(items) self.items = items end
     function E:setSelected(id) self.selected = id end
     function E:setText(t) self.text = t end
+    function E:setSelectedIndex(i) self.selectedIndex = i end
+    function E:isSelected(i) return self.selectedIndex == i end
+    function E:isMouseOver() return false end
     ISPanel, ISButton = cls(E), cls(E)
     UIFont = { Small = "Small", Medium = "Medium" }
     getTextManager = function()
@@ -447,10 +450,17 @@ return function(T)
     local caps = { toast = true }
     for _, c in ipairs(MSH.StoragePanel.CAPS) do caps[c] = true end
     local colors = {}
-    for _, t in ipairs({ "text", "textMuted", "warning", "errorText", "hover", "selected" }) do colors[t] = { r = 1, g = 1, b = 1 } end
+    for _, t in ipairs({ "text", "textMuted", "warning", "errorText", "hover", "selected", "card" }) do colors[t] = { r = 1, g = 1, b = 1 } end
+    -- 畫了什麼：theme:fill／border 記成「fill:card」「border:accent」（卡片底是色票表，其他是 token 名）
+    local paint = {}
+    local function painter(kind)
+        return function(_, _, _, _, _, _, color) paint[#paint + 1] = kind .. ":" .. (color == colors.card and "card" or tostring(color)) end
+    end
     local dialogs, toasts = {}, {}
     MinidoracatUI = { v1 = { API_MAJOR = 1, API_REVISION = 20, CAPABILITIES = caps,
-        Theme = { defaultPalette = function() return {} end, create = function() return { colors = colors } end },
+        Theme = { defaultPalette = function() return {} end,
+            create = function() return { colors = colors, fill = painter("fill"), border = painter("border") } end },
+        Skin = { shapeOf = function() return "control" end },
         Text = { fit = function(s) return s end, wrap = function(s) return { s } end },
         Icons = { draw = function() end }, Focus = { invalidate = function() end },
         Window = { new = make }, Button = { new = make }, TextField = { new = make }, VirtualList = { new = make },
@@ -741,16 +751,45 @@ return function(T)
     local far = { places = { { z = 0, dist = 5 }, { z = 1, dist = 9 } }, dist = 5 }
     check(select(2, P.groupWhere(far, 0, false)) == "IGUI_MSH_Storage_Tiles"
         and select(2, P.groupWhere(far, 0, true)) == "IGUI_MSH_Storage_Nearest", "網格一格窄，距離只寫幾格；清單寫最近幾格")
+    -- 走到 (203, 200)：釘子那三處（櫃台、櫃台裡的背包、二樓架子）離他 2、2、1 格。各處只在篩選時照距離排（走動不重排），
+    -- 最近的那處現在排第三列
+    me.x, me.y = 203.5, 200.5
+    T.advance(600)
+    T.tick()
+    local nailsTile = nil
+    for i, view in ipairs(m.views) do if view.g.name == "Nails" then nailsTile = i end end
+    pv.grid.onPick(pv.grid.target, m.views[nailsTile], nailsTile, pv.grid)
+    check(m.placeIndex == 3 and m.sel == m.placeRows[3].p and m.sel.dist == 1 and pv.placeList.selectedIndex == 3
+        and pv.btnGuide.enabled, "點放在好幾處的那格：先選好最近的一處（照現在的距離，不是第一列），〔指引我過去〕馬上能按")
+    local function lineY(text)
+        for _, l in ipairs(m.view.lines) do if l.text == text then return l.y end end
+    end
+    local head, note = lineY("IGUI_MSH_Storage_PlacesPick"), lineY("IGUI_MSH_Storage_Unexplored")
+    check(head ~= nil and note ~= nil and head > pv.grid.y + pv.grid.height and head < pv.placeList.y
+        and pv.placeList.y + pv.placeList.height < note,
+        "各處緊接在網格下面：先寫「點一處選它」再列各處，「還沒有人打開過」那行排在它們後面")
+    local function painted(list, index)
+        local cell = list.createCell(list)
+        cell.width, cell.height = list.width, pv.rowH
+        list.bindCell(list, cell, list.items[index], index)
+        paint = {}
+        cell:render()
+        return table.concat(paint, ",")
+    end
+    local picked = painted(pv.placeList, 3)
+    check(picked == "fill:card,fill:selected,border:accent" and painted(pv.placeList, 1) == "fill:card",
+        "各處畫成卡片：選到的那處疊選取色、框金色，其他的只有卡片底（" .. picked .. "）")
     pv.viewTabs.onSelect(pv.viewTabs.target, "list", pv.viewTabs)
     check(not m.grid and pv.list.visible and not pv.grid.visible and not pv.placeList.visible and m.sel ~= nil
         and P.gridOpt.v == false, "切回清單：選的那處留著，記回清單")
+    check(painted(pv.list, m.selIndex) == "fill:selected", "清單照舊：選到的那列只換底色，沒有卡片與金框")
     pv.viewTabs.onSelect(pv.viewTabs.target, "grid", pv.viewTabs)
     P.close(m)
     m = P.open({ detail = detail })
     check(m.grid and m.view.viewTabs.selected == "grid" and m.view.grid.visible and not m.view.list.visible,
         "重開面板：照上次選的，直接是網格")
     P.close(m)
-    P.gridOpt, PZAPI = nil, savedPZ
+    P.gridOpt, PZAPI, me.x, me.y = nil, savedPZ, 201.5, 201.5
     caps.tileGrid, ui.TileGrid, ui.Tabs = nil, nil, nil
 
     local MW = MSH.ManagerWindow

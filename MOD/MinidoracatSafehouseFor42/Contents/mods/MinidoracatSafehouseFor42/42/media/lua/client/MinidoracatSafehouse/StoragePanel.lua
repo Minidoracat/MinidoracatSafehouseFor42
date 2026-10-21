@@ -12,8 +12,9 @@
 --   本地跑一個只在客戶端的計時動作（類別沒有 complete，LuaTimedActionNew.java:78-80；走動就中斷），跑完送 storageTake
 --   （兩段的原因見 server Storage.lua）。
 -- 清單或網格（使用者 2026-10-21：「希望能支持經濟系統那樣的切換網格顯示」；設計稿 temp/plan-storage-grid-1020，三項照建議）：
---   搜尋框右邊〔清單｜網格〕，網格一組一格（框架 rev 22 的 TileGrid；框架沒有就只有清單）。點一格選那一組，只有一處就直接選它，
---   放在好幾處時網格下面列出各處讓玩家挑。換顯示方式不重掃，搜尋字、篩選與選取都留著；記在 ModOptions `StorageGrid`
+--   搜尋框右邊〔清單｜網格〕，網格一組一格（框架 rev 22 的 TileGrid；框架沒有就只有清單）。點一格選那一組，也先選好它最近的
+--   一處；放在好幾處時緊接在網格下面把各處畫成卡片讓玩家換（使用者 2026-10-21 實機：「可選擇的區塊好像不太明顯」，設計稿
+--   temp/plan-storage-places-1021）。換顯示方式不重掃，搜尋字、篩選與選取都留著；記在 ModOptions `StorageGrid`
 --   （和地面範圍同一頁，第一次是清單）。
 -- 框架缺席或太舊：管理視窗不給〔搜尋物品〕（P.available），面板也不開。
 -- 載入時不碰 ISPanel、框架或 getPlayer（harness T.bootClient 會載入本檔）；ISPanel 與計時動作的子類在第一次用到時才建。
@@ -348,14 +349,23 @@ function P.pick(m, row)
     P.changed(m)
 end
 
--- 點一格（滑鼠、Enter、手把 A）：選那一組，再點不收起（清單點已展開的組才收起）；只有一處就直接選它，
--- 已經選的那處還在這組裡就留著
+-- 最近的一處（同距離取前面的）。各處只在篩選時照距離排，玩家走動後不重排（SS.viewDist），所以照現在的距離找
+local function nearest(places)
+    local best = nil
+    for _, p in ipairs(places) do
+        if best == nil or p.dist < best.dist then best = p end
+    end
+    return best
+end
+
+-- 點一格（滑鼠、Enter、手把 A）：選那一組，再點不收起（清單點已展開的組才收起）；換了一組就先選好它最近的一處
+-- （只有一處就是那處；使用者 2026-10-21 裁定，設計稿 temp/plan-storage-places-1021），已經選的那處還在這組裡就留著
 function P.pickTile(m, view)
     if view == nil then return end
     local g = view.g
     if m.open ~= g then m.sel = nil end
     m.open, m.selGroup = g, g
-    if #view.places == 1 then m.sel = view.places[1] end
+    if m.sel == nil then m.sel = nearest(view.places) end
     m.msg = nil
     P.rebuild(m)
     P.changed(m)
@@ -728,6 +738,21 @@ function P.layout(v)
     end
     box:setVisible(true)
     y = y + h + GAP
+    -- 網格：選的那組放在好幾處時，緊接在網格下面列出各處（近的在前）讓玩家換，標題寫「點一處選它」（使用者 2026-10-21
+    -- 實機：「可選擇的區塊好像不太明顯」；原本排在掃描說明下面，看起來像說明的一部分，設計稿 temp/plan-storage-places-1021）
+    if m.grid and #m.placeRows > 1 then
+        local ov = m.openView
+        y = para(v, getText("IGUI_MSH_Storage_PlacesPick", ov.g.name, ov.n, #ov.places), "text", y)
+        local pl = v.placeList
+        local ph = math.min(#m.placeRows, P.PLACE_ROWS) * (v.rowH + 2) + 2
+        pl:setX(PAD)
+        pl:setY(y)
+        if pl.width ~= v.innerW or pl.height ~= ph then pl:resize(v.innerW, ph) end
+        pl:setItems(m.placeRows)
+        pl:setSelectedIndex(m.placeIndex)
+        pl:setVisible(true)
+        y = y + ph + GAP
+    end
     -- 掃描的說明：沒載入、沒人開過、上了鎖、空的、找不到
     local out = m.out
     if out ~= nil and m.job == nil then
@@ -742,21 +767,6 @@ function P.layout(v)
         elseif #m.views == 0 then
             y = para(v, getText("IGUI_MSH_Storage_NoMatch"), "textMuted", y)
         end
-    end
-    -- 網格：選的那組放在好幾處時列出各處（近的在前）讓玩家挑，緊接在選取那一行與按鈕上面（設計稿 2026-10-21）
-    if m.grid and #m.placeRows > 1 then
-        local ov = m.openView
-        y = para(v, getText("IGUI_MSH_Storage_NameCount", ov.g.name, ov.n) .. sep .. getText("IGUI_MSH_Storage_Places", #ov.places),
-            "text", y + 2)
-        local pl = v.placeList
-        local ph = math.min(#m.placeRows, P.PLACE_ROWS) * (v.rowH + 2) + 2
-        pl:setX(PAD)
-        pl:setY(y)
-        if pl.width ~= v.innerW or pl.height ~= ph then pl:resize(v.innerW, ph) end
-        pl:setItems(m.placeRows)
-        pl:setSelectedIndex(m.placeIndex)
-        pl:setVisible(true)
-        y = y + ph + GAP
     end
     -- 選取、〔指引我過去〕〔拿取...〕；不能拿的原因寫在按鈕下面
     y = y + 2
@@ -837,23 +847,34 @@ function P.bindCell(v, cell, item, index)
     end
     local tm = getTextManager()
     local Text = v.UI.Text
-    local textX = 8 + cell.indent + ICON + 6
-    local rightW = math.min(tm:MeasureStringX(FONT, right), math.floor((cell.width - textX) / 2))
+    cell.textX = cell.flat and 10 or 8 + cell.indent + ICON + 6   -- 卡片（cell.flat）沒有物品圖那一格，字靠左
+    local rightW = math.min(tm:MeasureStringX(FONT, right), math.floor((cell.width - cell.textX) / 2))
     cell.right = Text.fit(right, rightW, FONT)
     cell.rightW = tm:MeasureStringX(FONT, cell.right)
     local chevW = cell.chevron ~= nil and ICON + 6 or 0
-    cell.title = Text.fit(title, cell.width - textX - cell.rightW - 14 - chevW, FONT)
+    cell.title = Text.fit(title, cell.width - cell.textX - cell.rightW - 14 - chevW, FONT)
     cell.tooltip = nil
     if cell.title ~= title or cell.right ~= right then cell.tooltip = title .. getText("IGUI_MSH_Storage_Sep") .. right end
 end
 
+-- 清單列：選到的、滑鼠移上去的換底色。網格下面的各處（cell.flat）畫成和格子一樣的卡片（畫法同框架 TileGrid，
+-- TileGrid.lua:198-217；使用者 2026-10-21 裁定）：卡片底，選到的疊 selected 再框金色（accent），滑鼠移上去變亮，亮底上的灰字改白
 function P.drawCell(cell)
     local item, v = cell.row, cell.view
     if item == nil then return end
     local c, fh = v.colors, v.fh
-    if cell.list:isSelected(cell.index) then
+    local picked, over = cell.list:isSelected(cell.index), cell:isMouseOver()
+    if cell.flat then
+        local shape, w, h = v.UI.Skin.shapeOf(v.theme, "control"), cell.width - 4, cell.height - 2   -- 同格子：卡片之間空 4 px
+        v.theme:fill(cell, 2, 1, w, h, c.card or c.well, shape)
+        if picked then
+            v.theme:fill(cell, 2, 1, w, h, "selected", shape)
+            v.theme:border(cell, 2, 1, w, h, "accent", shape)
+        end
+        if over then v.theme:fill(cell, 2, 1, w, h, "hover", shape) end
+    elseif picked then
         v.theme:fill(cell, 0, 0, cell.width, cell.height, "selected")
-    elseif cell:isMouseOver() then
+    elseif over then
         v.theme:fill(cell, 0, 0, cell.width, cell.height, "hover")
     end
     local ty = math.floor((cell.height - fh) / 2)
@@ -861,8 +882,9 @@ function P.drawCell(cell)
     if cell.tex ~= nil then
         cell:drawTextureScaledAspect(cell.tex, x, math.floor((cell.height - ICON) / 2), ICON, ICON, 1, 1, 1, 1)
     end
-    local t, mu = c.text, c.textMuted
-    cell:drawText(cell.title, x + ICON + 6, ty, t.r, t.g, t.b, t.a or 1, FONT)
+    local t = c.text
+    local mu = (cell.flat and (picked or over)) and t or c.textMuted
+    cell:drawText(cell.title, cell.textX, ty, t.r, t.g, t.b, t.a or 1, FONT)
     local rx = cell.width - 8 - cell.rightW
     if cell.chevron ~= nil then
         rx = rx - ICON - 6
@@ -1006,7 +1028,7 @@ function P.build(m, UI)
         v.filters[i] = { label = label, labelW = tm:MeasureStringX(FONT, label), dd = f[2] }
     end
     local c = v.colors
-    -- flat：網格下面那張各處的清單（不縮排）
+    -- flat：網格下面那張各處的清單（不縮排、畫成卡片，P.drawCell）
     local function newList(flat)
         local lst = UI.VirtualList.new({ x = PAD, y = 0, width = v.innerW, height = v.rowH, rowHeight = v.rowH, padding = 2,
             createCell = function(l)

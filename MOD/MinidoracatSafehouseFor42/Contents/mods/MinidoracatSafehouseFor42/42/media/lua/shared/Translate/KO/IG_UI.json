@@ -782,6 +782,7 @@
     "IGUI_MSH_Storage_NameCount": "%1 ×%2",
     "IGUI_MSH_Storage_Count": "×%1",
     "IGUI_MSH_Storage_Places": "%1곳",
+    "IGUI_MSH_Storage_PlacesPick": "%1 ×%2: %3곳에 있습니다. 한 곳을 고르세요.",
     "IGUI_MSH_Storage_Nearest": "가장 가까운 곳 %1타일",
     "IGUI_MSH_Storage_Tiles": "%1타일",
     "IGUI_MSH_Storage_InBag": "%1 (%2 안)",
