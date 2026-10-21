@@ -2,6 +2,6 @@ name=Minidoracat Safehouse for B42
 id=MinidoracatSafehouseFor42
 description=[B42]提供分級地契、自訂安全屋區域、陣營成員管理，以及道路與資源點排除的安全屋系統。By Minidoracat
 poster=poster.png
-modversion=42.21.0-0.8.1
+modversion=42.21.0-0.9.0
 versionMin=42.20.4
 require=MinidoracatUIFor42
