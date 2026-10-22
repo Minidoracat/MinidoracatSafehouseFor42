@@ -12,7 +12,9 @@
 --   圍起來的院子裡的棚子、屋頂才蓋一角的房間）回 PART_ROOF：那些邊在圍起來的範圍裡面，隔牆或把屋頂蓋滿都行。
 --   起點 NEAR 步內沒有屋頂＝室外（OUTSIDE）。
 --   缺口那條邊上有門的另外列（doors）：引擎只把有牆屬性（cutN／cutW）或門框型別的邊算牆，原版綠、白車庫門開著時的門片
---   沒有牆屬性，Knox Pass 的模型門關著也沒有（使用者 2026-10-15 正式服回報車庫門被列成缺牆）。客戶端照開著／關著寫原因。
+--   沒有牆屬性，Knox Pass 的模型門關著也沒有（使用者 2026-10-15 正式服回報車庫門被列成缺牆）。客戶端照開著／關著寫原因；
+--   關著也不算牆的原版車庫門鏈（Knox Pass 兩層樓的門、閘門）另外標，裝了 4 版 Knox Pass 的客戶端提讀頭的「算室內」開關
+--   （使用者 2026-10-22 裁定）。
 --   關著的門片照格子現在的物件該算牆、引擎記的卻是缺口（原版右鍵開關門不通知 IsoRegions，紀錄停在上次的樣子）：查到
 --   時由伺服器請引擎重算那幾格（玩家 2026-10-22 回報，使用者同日同意）。只在查詢時比對、只比對缺口上關著的門、只重算
 --   對不上的格子；門開著、紀錄卻是牆的另一個方向不修（房間封閉就不看門）。
@@ -157,8 +159,8 @@ end
 
 -- 一間的結果：verdict、z（哪一層）、size（格數）、roofs（有屋頂的格數）、walls（房子邊上有牆的邊數）、x, y（分析的
 -- 起點；起點沒有屋頂時是 NEAR 步內最近的有屋頂格子）、gaps（缺牆：x, y, side 三個一組）、doors（缺口那條邊上有門：
--- x, y, side, 開著 1／關著也不算牆 0／關著、紀錄過期 2 四個一組）、pillars（西邊的缺口那格有牆又有柱子：x, y,
--- 自動補的牆角 1／其他柱子 0 三個一組）、
+-- x, y, side, 開著 1／關著也不算牆 0／關著、紀錄過期 2／關著也不算牆的原版車庫門鏈 3 四個一組）、pillars（西邊的缺口那格
+-- 有牆又有柱子：x, y, 自動補的牆角 1／其他柱子 0 三個一組）、
 -- holes（缺屋頂：x, y 兩個一組）、gapCount（缺牆加上有門、有柱子的缺口）／doorCount／pillarCount／holeCount（全部的
 -- 數量；各清單最多 MAX_MARKS 筆）
 local function newRoom(x, y, z)
@@ -190,7 +192,7 @@ local function addHole(r, ctx, x, y)
 end
 
 -- 缺口那條邊上的門（引擎照缺口算的門：原版綠、白車庫門開著時沒有牆的屬性，Knox Pass 的模型門關著也沒有；一般的門
--- 裝在門框裡，門框本身就算牆，不會走到這裡）。回 true＝開著、false＝關著，沒有門回 nil
+-- 裝在門框裡，門框本身就算牆，不會走到這裡）。回那扇門，沒有門回 nil
 local function doorOn(cell, x, y, z, side)
     local sq = cell:getGridSquare(x, y, z)
     if sq == nil then return nil end
@@ -198,7 +200,7 @@ local function doorOn(cell, x, y, z, side)
     for i = 0, objs:size() - 1 do
         local o = objs:get(i)
         if (instanceof(o, "IsoDoor") or (instanceof(o, "IsoThumpable") and o:isDoor())) and o:getNorth() == (side == 1) then
-            return o:IsOpen()
+            return o
         end
     end
     return nil
@@ -235,15 +237,18 @@ local function stale(ctx, x, y, z, side)
     return true
 end
 
+-- 門的狀態（doors 的第四欄）：開著 1；關著時紀錄過期 2；關著也不算牆時，原版車庫門鏈（IsoDoor.getGarageDoorIndex，
+-- IsoDoor.java:3212-3239；Knox Pass 4 版的「算室內」只支援這種，Gates.lua G.indoorSupport）3，其他（柵欄門等）0
 local function addGap(r, ctx, x, y, d)
     r.gapCount = r.gapCount + 1
     local ex, ey, side = edgeOf(x, y, d)
-    local open = doorOn(ctx.cell, ex, ey, r.z, side)
-    if open ~= nil then
+    local door = doorOn(ctx.cell, ex, ey, r.z, side)
+    if door ~= nil then
         r.doorCount = r.doorCount + 1
         if r.doorCount > I.MAX_MARKS then return end
         local g, n = r.doors, #r.doors
-        g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, open and 1 or (stale(ctx, ex, ey, r.z, side) and 2 or 0)
+        g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, door:IsOpen() and 1
+            or stale(ctx, ex, ey, r.z, side) and 2 or IsoDoor.getGarageDoorIndex(door) ~= -1 and 3 or 0
         return
     end
     local pillar = side == 2 and pillarOn(ctx.cell, ex, ey, r.z) or nil

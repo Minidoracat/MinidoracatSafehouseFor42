@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "Ouverte, ce n'est pas un mur : fermez-la et revérifiez.",
     "IGUI_MSH_Indoor_DoorShut": "Porte qui ne compte pas comme un mur · cases : %1",
     "IGUI_MSH_Indoor_DoorShutFix": "Jamais un mur, même fermée : ajoutez un mur ou un cadre de porte à l'intérieur.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "Ajoutez un mur ou cochez « Compte comme intérieur » sur le lecteur Knox Pass.",
     "IGUI_MSH_Indoor_DoorStale": "Porte à l'enregistrement périmé · cases : %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Fermée mais enregistrée comme une brèche ; corrigé, nouvelle vérification.",
     "IGUI_MSH_Indoor_Pillar": "Mur avec un pilier · cases : %1",

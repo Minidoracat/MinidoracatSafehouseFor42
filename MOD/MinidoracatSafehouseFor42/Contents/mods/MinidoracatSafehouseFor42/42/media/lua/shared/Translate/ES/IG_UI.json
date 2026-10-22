@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "Abierta no es pared: ciérrala y vuelve a comprobar.",
     "IGUI_MSH_Indoor_DoorShut": "Puerta que no cuenta como pared · casillas: %1",
     "IGUI_MSH_Indoor_DoorShutFix": "Nunca es pared, ni cerrada: pon una pared o un marco de puerta por dentro.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "Pon una pared o marca \"Cuenta como interior\" en el lector Knox Pass.",
     "IGUI_MSH_Indoor_DoorStale": "Puerta con registro desfasado · casillas: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Cerrada pero registrada como hueco; corregido, se vuelve a comprobar.",
     "IGUI_MSH_Indoor_Pillar": "Pared con un poste · casillas: %1",

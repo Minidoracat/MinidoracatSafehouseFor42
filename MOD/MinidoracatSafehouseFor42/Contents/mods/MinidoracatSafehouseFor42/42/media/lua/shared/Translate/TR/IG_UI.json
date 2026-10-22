@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "Açıkken duvar değil: kapatıp tekrar kontrol edin.",
     "IGUI_MSH_Indoor_DoorShut": "Duvar sayılmayan kapı · kare: %1",
     "IGUI_MSH_Indoor_DoorShutFix": "Kapalıyken de duvar sayılmaz: içeriye bir duvar veya kapı çerçevesi yapın.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "Duvar yapın ya da Knox Pass okuyucusunda \"İç mekan sayılır\" seçeneğini açın.",
     "IGUI_MSH_Indoor_DoorStale": "Kaydı eski kalmış kapı · kare: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Kapalı ama boşluk olarak kayıtlıydı; düzeltildi, yeniden kontrol ediliyor.",
     "IGUI_MSH_Indoor_Pillar": "Direkli duvar · kare: %1",

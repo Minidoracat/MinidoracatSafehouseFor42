@@ -6,7 +6,7 @@ return function(T)
     local check = T.check
     local WALL_N, WALL_W, FLOOR = 1, 2, 16
     local saved = { getCell = getCell, IsoRegions = IsoRegions, IsoFlagType = IsoFlagType, IsoObjectType = IsoObjectType,
-        buildUtil = buildUtil }
+        buildUtil = buildUtil, IsoDoor = IsoDoor }
 
     -- 假 IsoRegions（getSquareFlags／getIsoWorldRegion／getChunkRegion）：flags["x,y,z"]＝位元和，沒有＝-1（沒資料）。
     -- region 照引擎：同一層不穿牆相連的格子；有一條走得過去的邊通到沒資料的格子＝不封閉；屋頂數＝正上方一層有地板的格數
@@ -198,13 +198,15 @@ return function(T)
         W.objs, W.westWall, W.removed, W.props, W.recalc = {}, {}, {}, {}, {}
         ground(0, 0, 40, 40, 0)
     end
-    -- 在 (x, y) 放一扇門：north＝北邊的門；class 預設 IsoDoor（IsoThumpable 用 isDoor 分辨，isDoor＝false＝不是門的物件）
+    -- 在 (x, y) 放一扇門：north＝北邊的門；class 預設 IsoDoor（IsoThumpable 用 isDoor 分辨，isDoor＝false＝不是門的物件）。
+    -- 回傳門：.garage＝原版車庫門鏈的第幾片（IsoDoor.getGarageDoorIndex，沒設＝-1）
     local function door(x, y, north, open, class, isDoor)
         local o = { __class = class or "IsoDoor" }
         function o.getNorth() return north end
         function o.IsOpen() return open end
         function o.isDoor() return isDoor ~= false end
         W.doors[k3(x, y, 0)] = { o }
+        return o
     end
     -- 清單換成集合字串比較："x,y" 或 "x,yN"／"x,yW"（排序後以空白相接）
     local function sorted(list)
@@ -246,6 +248,7 @@ return function(T)
     IsoFlagType = { WallSE = "WallSE", solidfloor = "solidfloor", cutN = "cutN", cutW = "cutW", WindowN = "WindowN",
         windowN = "windowN", DoorWallN = "DoorWallN", WindowW = "WindowW", windowW = "windowW", DoorWallW = "DoorWallW" }
     IsoObjectType = { doorFrN = "doorFrN", doorFrW = "doorFrW" }
+    IsoDoor = { getGarageDoorIndex = function(o) return o.garage or -1 end }
     local cornerCalls = {}
     buildUtil = { checkCorner = function(x, y, z, north)
         cornerCalls[#cornerCalls + 1] = x .. "," .. y .. "," .. z .. (north and "N" or "W")
@@ -466,6 +469,24 @@ return function(T)
     check(#(fix or {}) == 6, "每次查詢最多比對 MAX_MARKS 扇關著的門")
     I.MAX_MARKS = marks0
 
+    T.section("室內檢查：關著也不算牆的車庫門鏈（Knox Pass 4 版「算室內」開關；使用者 2026-10-22 裁定面板要提）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 11, 13 do
+        wall(10, y, WALL_W, false)
+        door(10, y, false, false, "IsoDoor").garage = 14 - y   -- Knox Pass 兩層樓的門、閘門：原版車庫門鏈，關著也沒有牆屬性
+    end
+    wall(12, 10, WALL_N, false)
+    door(12, 10, true, false, "IsoThumpable")                    -- 柵欄門這類：不是車庫門鏈，Knox Pass 不支援那個開關
+    r = I.check(11, 11, 0).rooms[1]
+    check(doors(r) == "10,11W3 10,12W3 10,13W3 12,10N0", "關著也不算牆的車庫門鏈標 3，其他關著也不算牆的門照舊標 0")
+    W.props[k3(10, 11, 0)] = { cutW = true }
+    door(10, 12, false, true, "IsoDoor").garage = 2
+    res, skip, fix = I.check(11, 11, 0)
+    check(doors(res.rooms[1]) == "10,11W2 10,12W1 10,13W3 12,10N0" and triples(fix or {}) == "10,11,0",
+        "車庫門鏈開著照開著（1），格子該算牆的照紀錄過期（2）：只有關著也不算牆的才標 3")
+
     T.section("室內檢查：西牆那格有柱子（玩家 2026-10-19 回報「要敲掉木柱才會正常室內」）")
     fresh()
     box(10, 10, 13, 13)
@@ -607,7 +628,7 @@ return function(T)
     T.advance(1000)
     check(T.cmd(alice, "indoor", { x = 11, y = 11 }).code == "BAD_ARGS", "缺 z：BAD_ARGS")
 
-    getCell, IsoRegions = saved.getCell, saved.IsoRegions
+    getCell, IsoRegions, IsoDoor = saved.getCell, saved.IsoRegions, saved.IsoDoor
     IsoFlagType, IsoObjectType, buildUtil = saved.IsoFlagType, saved.IsoObjectType, saved.buildUtil
 
     -- ===== 客戶端面板 =====
@@ -939,6 +960,33 @@ return function(T)
     T.advance(P.GAP_MS)
     T.tick(1)
     check(not m.want and sends() == s0 + 1, "連著兩筆都帶 fixed（遊戲沒照算）：不再自動查")
+
+    T.section("室內檢查面板：關著也不算牆的車庫門鏈（Knox Pass 4 版「算室內」開關；使用者 2026-10-22 裁定「提」）")
+    local CHAIN = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,
+        partial = false, levels = { { z = 0, runs = RUNS44 } },
+        rooms = { { verdict = "OPEN", z = 0, x = 11, y = 11, size = 16, roofs = 16, walls = 13, gapCount = 3, doorCount = 3,
+            holeCount = 0, gaps = {}, holes = {}, doors = { 10, 11, 2, 3, 10, 12, 2, 3, 13, 10, 1, 0 } } } }
+    local knox0 = KnoxPassAPI
+    -- 客戶端的 KnoxPassAPI 換成 api 後重查一次，回兩列的「標題 修法」（列照距離排：車庫門鏈那段在前）
+    local function doorFixes(api)
+        KnoxPassAPI = api
+        T.advance(P.GAP_MS)
+        P.recheck(m)
+        T.tick(1)
+        reply(CHAIN)
+        local pool = v.issues.pool
+        return pool[1].title .. " " .. pool[1].sub .. " / " .. pool[2].title .. " " .. pool[2].sub
+    end
+    local function want(chainFix)
+        return "IGUI_MSH_Indoor_DoorShut|2 " .. chainFix .. " / IGUI_MSH_Indoor_DoorShut|1 IGUI_MSH_Indoor_DoorShutFix"
+    end
+    check(doorFixes(nil) == want("IGUI_MSH_Indoor_DoorShutFix") and #m.issues == 2 and m.issues[1].chain
+        and not m.issues[2].chain, "沒裝 Knox Pass：車庫門鏈另成一列，修法照舊")
+    check(doorFixes({ VERSION = 3 }) == want("IGUI_MSH_Indoor_DoorShutFix")
+        and doorFixes({}) == want("IGUI_MSH_Indoor_DoorShutFix"), "Knox Pass 3 版、沒寫版本（沒有那個開關）：照舊")
+    check(doorFixes({ VERSION = 4 }) == want("IGUI_MSH_Indoor_DoorShutFixKnox"),
+        "Knox Pass 4 版：車庫門鏈那列提讀頭的「算室內」，其他關著也不算牆的門照舊")
+    KnoxPassAPI = knox0
 
     T.section("室內檢查面板：西牆那格有柱子（玩家 2026-10-19 回報）")
     local PILLARS = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,

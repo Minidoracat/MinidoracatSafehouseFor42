@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "開著時不算牆，關上後按〔重新檢查〕。",
     "IGUI_MSH_Indoor_DoorShut": "不算牆的門 %1 格",
     "IGUI_MSH_Indoor_DoorShutFix": "這種門關著也不算牆：在門內加一道牆或門框。",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "加牆或門框，或在 Knox Pass 讀頭勾「算室內」。",
     "IGUI_MSH_Indoor_DoorStale": "紀錄過期的門 %1 格",
     "IGUI_MSH_Indoor_DoorStaleFix": "門關著卻記成缺口，已更正，稍後重新檢查。",
     "IGUI_MSH_Indoor_Pillar": "有柱子的牆 %1 格",

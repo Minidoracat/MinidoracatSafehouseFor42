@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "Offen keine Wand: schließen und erneut prüfen.",
     "IGUI_MSH_Indoor_DoorShut": "Tür, die nicht als Wand zählt · Kacheln: %1",
     "IGUI_MSH_Indoor_DoorShutFix": "Nie eine Wand, auch geschlossen: innen eine Wand oder einen Türrahmen bauen.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "Wand oder Türrahmen bauen oder am Knox Pass-Leser „Zählt als Innenraum“ aktivieren.",
     "IGUI_MSH_Indoor_DoorStale": "Tür mit veraltetem Eintrag · Kacheln: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Geschlossen, aber als Lücke erfasst; korrigiert, wird neu geprüft.",
     "IGUI_MSH_Indoor_Pillar": "Wand mit Pfosten · Kacheln: %1",

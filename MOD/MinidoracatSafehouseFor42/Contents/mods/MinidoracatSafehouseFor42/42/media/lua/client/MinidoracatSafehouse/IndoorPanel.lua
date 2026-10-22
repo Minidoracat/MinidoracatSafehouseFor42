@@ -124,11 +124,12 @@ function P.dist(row, px, py)
     return best or 0
 end
 
--- 缺口那條邊上有門（伺服器的 doors：x, y, side, 開著 1／關著也不算牆 0／關著、紀錄過期 2 四個一組）：三種各自併段，列成
--- kind = "door"（open＝開著；stale＝門關著、遊戲還記成缺口，伺服器已請遊戲重算，玩家 2026-10-22 回報）
-local DOOR_STATES = { 1, 0, 2 }   -- 列的順序：開著、不算牆、紀錄過期
+-- 缺口那條邊上有門（伺服器的 doors：x, y, side, 開著 1／關著也不算牆 0／關著、紀錄過期 2／關著也不算牆的原版車庫門鏈 3
+-- 四個一組）：四種各自併段，列成 kind = "door"（open＝開著；stale＝門關著、遊戲還記成缺口，伺服器已請遊戲重算，玩家
+-- 2026-10-22 回報；chain＝Knox Pass 兩層樓的門、閘門這類，修法看 Knox Pass 版本，bindCell）
+local DOOR_STATES = { 1, 0, 3, 2 }   -- 列的順序：開著、不算牆、不算牆的車庫門鏈、紀錄過期
 function P.doorRows(doors)
-    local groups, rows = { [0] = {}, {}, {} }, {}
+    local groups, rows = { [0] = {}, {}, {}, {} }, {}
     for i = 1, #doors, 4 do
         local t = groups[doors[i + 3]] or groups[0]
         local n = #t
@@ -136,7 +137,7 @@ function P.doorRows(doors)
     end
     for _, s in ipairs(DOOR_STATES) do
         for _, row in ipairs(P.segments(groups[s])) do
-            row.kind, row.open, row.stale = "door", s == 1, s == 2
+            row.kind, row.open, row.stale, row.chain = "door", s == 1, s == 2, s == 3
             rows[#rows + 1] = row
         end
     end
@@ -546,7 +547,11 @@ function P.bindCell(v, cell, item, index)
         elseif item.kind == "door" and item.stale then
             key, fix = "IGUI_MSH_Indoor_DoorStale", "IGUI_MSH_Indoor_DoorStaleFix" -- 關著、紀錄過期：伺服器已請遊戲重算
         elseif item.kind == "door" then
-            key, fix = "IGUI_MSH_Indoor_DoorShut", "IGUI_MSH_Indoor_DoorShutFix"   -- 關著也不算牆（Knox Pass 閘門等）
+            -- 關著也不算牆（Knox Pass 閘門等）。車庫門鏈在裝了 4 版 Knox Pass（讀頭有「算室內」開關）時多提開關；
+            -- 柵欄門這類 Knox Pass 不支援，提了會誤導（使用者 2026-10-22 裁定「裝了新版 Knox Pass 才換那一行」）
+            key = "IGUI_MSH_Indoor_DoorShut"
+            fix = item.chain and KnoxPassAPI ~= nil and (KnoxPassAPI.VERSION or 0) >= 4
+                and "IGUI_MSH_Indoor_DoorShutFixKnox" or "IGUI_MSH_Indoor_DoorShutFix"
         elseif item.kind == "pillar" then
             key, fix = "IGUI_MSH_Indoor_Pillar", "IGUI_MSH_Indoor_PillarFix"       -- 同一格的柱子讓牆不算：拆柱子
         elseif item.kind == "corner" then

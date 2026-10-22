@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "Not a wall while open: close it and check again.",
     "IGUI_MSH_Indoor_DoorShut": "Door that isn't a wall · tiles: %1",
     "IGUI_MSH_Indoor_DoorShutFix": "A gap even when closed: add a wall or frame inside.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "Add a wall, or tick Knox Pass \"Counts as indoors\".",
     "IGUI_MSH_Indoor_DoorStale": "Outdated door record · tiles: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Closed but recorded as a gap; fixed, checking again.",
     "IGUI_MSH_Indoor_Pillar": "Wall with a pillar · tiles: %1",

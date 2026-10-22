@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "開いていると壁扱いされません。閉めて再チェック。",
     "IGUI_MSH_Indoor_DoorShut": "壁扱いされないドア · %1マス",
     "IGUI_MSH_Indoor_DoorShutFix": "閉めても壁扱いされないドアです。内側に壁かドア枠を建ててください。",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "壁かドア枠を建てるか、Knox Pass リーダーで「屋内扱い」をオンにしてください。",
     "IGUI_MSH_Indoor_DoorStale": "記録が古いドア · %1マス",
     "IGUI_MSH_Indoor_DoorStaleFix": "閉まっているのにすき間扱いでした。修正して再チェックします。",
     "IGUI_MSH_Indoor_Pillar": "柱のある壁 · %1マス",

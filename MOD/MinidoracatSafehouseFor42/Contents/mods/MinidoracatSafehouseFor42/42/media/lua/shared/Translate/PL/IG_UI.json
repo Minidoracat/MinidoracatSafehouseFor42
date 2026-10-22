@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "Otwarte to nie ściana: zamknij i sprawdź ponownie.",
     "IGUI_MSH_Indoor_DoorShut": "Drzwi, które nie liczą się jako ściana · pola: %1",
     "IGUI_MSH_Indoor_DoorShutFix": "Nigdy nie jest ścianą, nawet zamknięte: postaw w środku ścianę lub framugę.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "Postaw ścianę lub framugę albo zaznacz „Liczy się jako wnętrze” w czytniku Knox Pass.",
     "IGUI_MSH_Indoor_DoorStale": "Drzwi z nieaktualnym zapisem · pola: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Zamknięte, ale zapisane jako luka; poprawione, sprawdzam ponownie.",
     "IGUI_MSH_Indoor_Pillar": "Ściana ze słupkiem · pola: %1",

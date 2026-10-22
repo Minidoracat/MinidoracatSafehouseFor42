@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "Открытая — не стена: закройте и проверьте снова.",
     "IGUI_MSH_Indoor_DoorShut": "Дверь, которая не считается стеной · клеток: %1",
     "IGUI_MSH_Indoor_DoorShutFix": "Не стена даже закрытой: поставьте внутри стену или дверной проём.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "Поставьте стену или включите «Считать помещением» на считывателе Knox Pass.",
     "IGUI_MSH_Indoor_DoorStale": "Дверь с устаревшей записью · клеток: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Закрыта, но записана как проём; исправлено, проверяем снова.",
     "IGUI_MSH_Indoor_Pillar": "Стена со столбом · клеток: %1",

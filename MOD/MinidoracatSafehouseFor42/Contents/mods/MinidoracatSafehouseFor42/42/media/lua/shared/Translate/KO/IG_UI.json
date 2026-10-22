@@ -734,6 +734,7 @@
     "IGUI_MSH_Indoor_DoorOpenFix": "열려 있으면 벽이 아닙니다. 닫고 다시 검사하세요.",
     "IGUI_MSH_Indoor_DoorShut": "벽으로 치지 않는 문 · %1타일",
     "IGUI_MSH_Indoor_DoorShutFix": "닫혀 있어도 벽이 아닌 문입니다. 안쪽에 벽이나 문틀을 세우세요.",
+    "IGUI_MSH_Indoor_DoorShutFixKnox": "벽이나 문틀을 세우거나 Knox Pass 리더기에서 \"실내로 인정\"을 켜세요.",
     "IGUI_MSH_Indoor_DoorStale": "기록이 오래된 문 · %1타일",
     "IGUI_MSH_Indoor_DoorStaleFix": "닫혔는데 틈으로 기록돼 있었습니다. 고쳤고 다시 검사합니다.",
     "IGUI_MSH_Indoor_Pillar": "기둥이 있는 벽 · %1타일",
