@@ -610,6 +610,7 @@ These stay where they are as vanilla safehouses; this mod neither manages nor de
 [/list]
 [list]
 [*] [b]List[/b]: the skip lines in Zomboid/Lua/MinidoracatSafehouse/<server name>/migration-completion.txt.
+[*] [b]They never expire[/b]: idle reclaim leaves them alone, and the vanilla expiry is off because SafeHouseRemovalTime must be 0, so they never go away on their own; the same goes for vanilla safehouses that appear after this mod is installed.
 [*] [b]Handling them[/b]: use vanilla admin tools if needed (mind the name-matching problem above).
 [/list]
 [h3]Rolling back[/h3]

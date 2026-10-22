@@ -610,6 +610,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [/list]
 [list]
 [*] [b]清單[/b]：Zomboid/Lua/MinidoracatSafehouse/<伺服器名>/migration-completion.txt 的 skip 列。
+[*] [b]不會到期[/b]：閒置收回不管它們，原版的到期刪除也因為 SafeHouseRemovalTime 必須是 0 而關著，所以不會自己消失；裝好本 MOD 之後才出現的原版安全屋也一樣。
 [*] [b]處理[/b]：需要時用原版管理員工具（注意原版指令的名稱比對問題）。
 [/list]
 [h3]還原[/h3]
