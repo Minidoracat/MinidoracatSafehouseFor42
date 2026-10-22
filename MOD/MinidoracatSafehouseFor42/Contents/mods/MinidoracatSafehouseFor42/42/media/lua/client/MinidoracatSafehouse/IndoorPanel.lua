@@ -11,7 +11,8 @@
 --   缺牆在 RenderOpaqueObjectsInWorld 疊一面亮紅色的牆影（RenderGhostTileColor，原版建造游標的畫法；renderIsoLine 在這裡
 --   畫不出來，sh-indoor-1015c）：貼圖是本 MOD 的白色牆面（實心外框＋半透明面，WallGhost{N,W}2x.png），不用原版木牆
 --   （使用者 2026-10-15：「應該明顯一點的亮紅色，然後不應該是用那個木板牆的樣子」）。只在玩家站在那一層時畫（疊色不測
---   深度，會蓋過樓上）。缺口那條邊上有門（車庫門開著、遊戲不算牆的門）另外列一種列，寫「開著的門」而不是「補上牆」。
+--   深度，會蓋過樓上）。缺口那條邊上有門（車庫門開著、遊戲不算牆的門）另外列一種列，寫「開著的門」而不是「補上牆」；
+--   門關著、遊戲還記成缺口的寫「紀錄過期的門」：伺服器查到就請遊戲重算（server/…/Indoor.lua），面板過了冷卻自己再查一次。
 --   西邊的缺口那格有牆又有柱子（遊戲整格有柱子就不算那格的西牆，玩家 2026-10-19 回報）也另外列：玩家自己蓋的柱子寫「有柱子的
 --   牆」、叫玩家拆柱子；蓋牆時遊戲自動補的牆角寫「自動補的牆角」，伺服器查到就拆（server/…/Indoor.lua），拆掉後面板照物件
 --   增減自己重查。
@@ -123,21 +124,21 @@ function P.dist(row, px, py)
     return best or 0
 end
 
--- 缺口那條邊上有門（伺服器的 doors：x, y, side, 開著 1／關著 0 四個一組）：開著的、關著的各自併段，列成 kind = "door"
+-- 缺口那條邊上有門（伺服器的 doors：x, y, side, 開著 1／關著也不算牆 0／關著、紀錄過期 2 四個一組）：三種各自併段，列成
+-- kind = "door"（open＝開著；stale＝門關著、遊戲還記成缺口，伺服器已請遊戲重算，玩家 2026-10-22 回報）
+local DOOR_STATES = { 1, 0, 2 }   -- 列的順序：開著、不算牆、紀錄過期
 function P.doorRows(doors)
-    local open, shut, rows = {}, {}, {}
+    local groups, rows = { [0] = {}, {}, {} }, {}
     for i = 1, #doors, 4 do
-        local t = doors[i + 3] == 1 and open or shut
+        local t = groups[doors[i + 3]] or groups[0]
         local n = #t
         t[n + 1], t[n + 2], t[n + 3] = doors[i], doors[i + 1], doors[i + 2]
     end
-    for _, row in ipairs(P.segments(open)) do
-        row.kind, row.open = "door", true
-        rows[#rows + 1] = row
-    end
-    for _, row in ipairs(P.segments(shut)) do
-        row.kind, row.open = "door", false
-        rows[#rows + 1] = row
+    for _, s in ipairs(DOOR_STATES) do
+        for _, row in ipairs(P.segments(groups[s])) do
+            row.kind, row.open, row.stale = "door", s == 1, s == 2
+            rows[#rows + 1] = row
+        end
     end
     return rows
 end
@@ -273,12 +274,16 @@ function P.onReply(m, seq, res)
         m.res, m.err = res, nil
         if res.rooms[m.cur] == nil then m.cur = 1 end
         P.refresh(m)
+        -- 伺服器剛請遊戲重算紀錄過期的門（fixed，玩家 2026-10-22 回報）：這筆是重算前的樣子，過了冷卻自己再查一次。
+        -- 連著兩筆都有就不再自動查（遊戲沒照算時不會一直查下去）
+        if res.fixed ~= nil and not m.fixedLast then ask(m, 0) end
+        m.fixedLast = res.fixed ~= nil
     else
         m.err = res.code
         if res.code == "NO_REPLY" and m.view ~= nil then ask(m, 0) end   -- 間隔滿了再試一次
     end
     if m.view == nil then
-        P.finishHalo(m)
+        if not m.want then P.finishHalo(m) end   -- 要自動再查的那次回來才說結論
         return
     end
     P.changed(m)
@@ -538,8 +543,10 @@ function P.bindCell(v, cell, item, index)
             key, fix = "IGUI_MSH_Indoor_Hole", "IGUI_MSH_Indoor_HoleFix"
         elseif item.kind == "door" and item.open then
             key, fix = "IGUI_MSH_Indoor_DoorOpen", "IGUI_MSH_Indoor_DoorOpenFix"   -- 開著的車庫門：關上就好
+        elseif item.kind == "door" and item.stale then
+            key, fix = "IGUI_MSH_Indoor_DoorStale", "IGUI_MSH_Indoor_DoorStaleFix" -- 關著、紀錄過期：伺服器已請遊戲重算
         elseif item.kind == "door" then
-            key, fix = "IGUI_MSH_Indoor_DoorShut", "IGUI_MSH_Indoor_DoorShutFix"   -- 關著也不算牆（Knox Pass 模型門等）
+            key, fix = "IGUI_MSH_Indoor_DoorShut", "IGUI_MSH_Indoor_DoorShutFix"   -- 關著也不算牆（Knox Pass 閘門等）
         elseif item.kind == "pillar" then
             key, fix = "IGUI_MSH_Indoor_Pillar", "IGUI_MSH_Indoor_PillarFix"       -- 同一格的柱子讓牆不算：拆柱子
         elseif item.kind == "corner" then
@@ -724,7 +731,7 @@ local function openUnsafe(opts)
     if m ~= nil then
         -- 已經開著：換查這一格（還在等的那筆回來時丟掉）
         m.x, m.y, m.z, m.seq = x, y, z, m.seq + 1
-        m.res, m.err, m.cur = nil, nil, 1
+        m.res, m.err, m.cur, m.fixedLast = nil, nil, 1, nil
         m.fromManager = m.fromManager or opts.fromManager == true
         P.refresh(m)
         ask(m, 0)

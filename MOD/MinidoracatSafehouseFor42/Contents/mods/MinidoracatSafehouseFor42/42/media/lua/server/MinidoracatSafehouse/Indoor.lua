@@ -13,6 +13,9 @@
 --   起點 NEAR 步內沒有屋頂＝室外（OUTSIDE）。
 --   缺口那條邊上有門的另外列（doors）：引擎只把有牆屬性（cutN／cutW）或門框型別的邊算牆，原版綠、白車庫門開著時的門片
 --   沒有牆屬性，Knox Pass 的模型門關著也沒有（使用者 2026-10-15 正式服回報車庫門被列成缺牆）。客戶端照開著／關著寫原因。
+--   關著的門片照格子現在的物件該算牆、引擎記的卻是缺口（原版右鍵開關門不通知 IsoRegions，紀錄停在上次的樣子）：查到
+--   時由伺服器請引擎重算那幾格（玩家 2026-10-22 回報，使用者同日同意）。只在查詢時比對、只比對缺口上關著的門、只重算
+--   對不上的格子；門開著、紀錄卻是牆的另一個方向不修（房間封閉就不看門）。
 --   缺口在西邊、那格有西牆又有柱子的也另外列（pillars）：引擎整格有 WallSE（柱子的圖塊屬性）就不算那格的西牆
 --   （IsoRegions.java:336），牆在也照缺口算（玩家 2026-10-19 回報）。柱子是蓋牆時遊戲自動補的牆角（buildUtil.addCorner
 --   的 isCorner）就由伺服器拆掉（使用者 2026-10-19 裁定；那格有西牆時牆角多餘，拆前拆後畫面只差柱頂幾個像素，
@@ -137,7 +140,8 @@ end
 local function newCtx(x, y, z)
     local cache = {}
     local ctx = { left = I.LIMIT, cell = getCell(), minX = x, minY = y, minZ = z, maxX = x, maxY = y, maxZ = z,
-        partial = false, holes = {}, foot = {}, footList = {}, regions = {}, corners = {} }
+        partial = false, holes = {}, foot = {}, footList = {}, regions = {}, corners = {}, fix = {}, fixSeen = {},
+        doorChecks = 0 }
     function ctx.roofed(rx, ry, rz)
         local c = at(cache, rz)
         local k = key(rx, ry)
@@ -153,12 +157,27 @@ end
 
 -- 一間的結果：verdict、z（哪一層）、size（格數）、roofs（有屋頂的格數）、walls（房子邊上有牆的邊數）、x, y（分析的
 -- 起點；起點沒有屋頂時是 NEAR 步內最近的有屋頂格子）、gaps（缺牆：x, y, side 三個一組）、doors（缺口那條邊上有門：
--- x, y, side, 開著 1／關著 0 四個一組）、pillars（西邊的缺口那格有牆又有柱子：x, y, 自動補的牆角 1／其他柱子 0 三個一組）、
+-- x, y, side, 開著 1／關著也不算牆 0／關著、紀錄過期 2 四個一組）、pillars（西邊的缺口那格有牆又有柱子：x, y,
+-- 自動補的牆角 1／其他柱子 0 三個一組）、
 -- holes（缺屋頂：x, y 兩個一組）、gapCount（缺牆加上有門、有柱子的缺口）／doorCount／pillarCount／holeCount（全部的
 -- 數量；各清單最多 MAX_MARKS 筆）
 local function newRoom(x, y, z)
     return { x = x, y = y, z = z, size = 0, roofs = 0, walls = 0, gaps = {}, gapCount = 0, doors = {}, doorCount = 0,
         pillars = {}, pillarCount = 0, holes = {}, holeCount = 0 }
+end
+
+-- 這格照現在的物件該有的 region 位元，照 IsoRegions.calculateSquareFlags（IsoRegions.java:322-349；它是 protected，
+-- Lua 叫不到）：地板 16、北牆 1（北邊有窗或門框的牆 +4）、西牆 2（+8），整格有 WallSE（柱子）不算西牆，樓梯 32
+function I.regionFlags(sq)
+    local f = sq:has(IsoFlagType.solidfloor) and FLOOR or 0
+    if sq:has(IsoFlagType.cutN) or sq:has(IsoObjectType.doorFrN) then
+        f = f + ((sq:has(IsoFlagType.WindowN) or sq:has(IsoFlagType.windowN) or sq:has(IsoFlagType.DoorWallN)) and 5 or 1)
+    end
+    if not sq:has(IsoFlagType.WallSE) and (sq:has(IsoFlagType.cutW) or sq:has(IsoObjectType.doorFrW)) then
+        f = f + ((sq:has(IsoFlagType.WindowW) or sq:has(IsoFlagType.windowW) or sq:has(IsoFlagType.DoorWallW)) and 10 or 2)
+    end
+    if sq:HasStairsNorth() or sq:HasStairsWest() then f = f + STAIR end
+    return f
 end
 
 local function addHole(r, ctx, x, y)
@@ -199,6 +218,23 @@ local function pillarOn(cell, x, y, z)
     return "corner"
 end
 
+-- 缺口上關著的門片那格照現在的物件該算牆（regionFlags 有那一邊的位元；side 的值就是那一邊牆的位元，1 北、2 西），
+-- 引擎記的卻是缺口（走得過去才會走到這裡）＝紀錄過期，記進 ctx.fix 由 I.query 請引擎重算。沒有那一邊的位元＝這種門
+-- 關著也不算牆（Knox Pass 閘門、兩層樓的門），不修。引擎沒資料的格子不碰；每次查詢最多比對 MAX_MARKS 扇
+local function stale(ctx, x, y, z, side)
+    if ctx.doorChecks >= I.MAX_MARKS or flags(x, y, z) < 0 then return false end
+    ctx.doorChecks = ctx.doorChecks + 1
+    local sq = ctx.cell:getGridSquare(x, y, z)
+    if sq == nil or not has(I.regionFlags(sq), side) then return false end
+    local seen, k = at(ctx.fixSeen, z), key(x, y)
+    if not seen[k] then   -- 同一格北、西兩邊都是門時只重算一次
+        seen[k] = true
+        local f, n = ctx.fix, #ctx.fix
+        f[n + 1], f[n + 2], f[n + 3] = x, y, z
+    end
+    return true
+end
+
 local function addGap(r, ctx, x, y, d)
     r.gapCount = r.gapCount + 1
     local ex, ey, side = edgeOf(x, y, d)
@@ -207,7 +243,7 @@ local function addGap(r, ctx, x, y, d)
         r.doorCount = r.doorCount + 1
         if r.doorCount > I.MAX_MARKS then return end
         local g, n = r.doors, #r.doors
-        g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, open and 1 or 0
+        g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, open and 1 or (stale(ctx, ex, ey, r.z, side) and 2 or 0)
         return
     end
     local pillar = side == 2 and pillarOn(ctx.cell, ex, ey, r.z) or nil
@@ -518,8 +554,8 @@ end
 -- 查一格：{ verdict, x, y, z, rooms, levels, minX, minY, minZ, maxX, maxY, maxZ, partial }。rooms[1] 是那一格所在的
 -- 房間，之後是同一層、樓上、樓下的其他房間（MAP_ROOM、BASEMENT、OUTSIDE 沒有 rooms）；levels＝各層走過的範圍
 -- { z, runs }（由低到高）；partial＝走到上限，有房間或缺口沒列到。地圖的地下室有 RoomDef（Basements），先看地圖房間；
--- 其他地下（z < 0）不進 IsoRegions（IsoRegionWorker 只收 z >= 0），遊戲永遠不算室內。第二個回傳值＝要拆自動牆角的
--- 格子（x, y, z 三個一組；不在回覆裡，查詢只讀不改，I.query 交給佇列）
+-- 其他地下（z < 0）不進 IsoRegions（IsoRegionWorker 只收 z >= 0），遊戲永遠不算室內。查詢只讀不改，要改的另外回
+-- （x, y, z 三個一組，不在回覆裡，I.query 處理）：第二個回傳值＝要拆自動牆角的格子，第三個＝紀錄過期、要請引擎重算的門片格子
 function I.check(x, y, z)
     local res = { x = x, y = y, z = z, rooms = {}, levels = {} }
     local ctx = newCtx(x, y, z)
@@ -548,7 +584,7 @@ function I.check(x, y, z)
     end
     res.minX, res.minY, res.minZ = ctx.minX, ctx.minY, ctx.minZ
     res.maxX, res.maxY, res.maxZ, res.partial = ctx.maxX, ctx.maxY, ctx.maxZ, ctx.partial
-    return res, ctx.corners
+    return res, ctx.corners, ctx.fix
 end
 
 function I.query(ctx)
@@ -559,8 +595,9 @@ function I.query(ctx)
         return MSH.Srv.fail(CODE.TOO_FAR)
     end
     local t0 = getTimestampMs()
-    local res, corners = I.check(a.x, a.y, a.z)
+    local res, corners, fix = I.check(a.x, a.y, a.z)
     for i = 1, #corners, 3 do I.queueCorner(corners[i], corners[i + 1], corners[i + 2]) end
+    if #fix > 0 then res.fixed = I.recalc(fix, a.x, a.y, a.z) end   -- 回覆照查的當下，客戶端過了冷卻再查
     local ms = getTimestampMs() - t0
     if ms >= I.SLOW_MS then
         MSH.log("indoor check " .. a.x .. "," .. a.y .. "," .. a.z .. " took " .. ms .. " ms, rooms=" .. #res.rooms)
@@ -570,6 +607,21 @@ end
 
 MSH.Srv.define("indoor", { kind = "query", cooldownMs = 1000, fields = { x = "int", y = "int", z = "int" },
     run = function(ctx) return MSH.Indoor.query(ctx) end })
+
+-- 請引擎照格子現在的物件重算這幾格（x, y, z 三個一組）的牆紀錄，照 Knox Pass Gates.syncRegions：squareChanged 只在算出的
+-- 位元和共用的 previousFlags 不同時才排工作（IsoRegions.java:309-320），先 setPreviousFlags(nil) 把它歸 0（要重算的是
+-- 關著的門片，有牆位元，不會是 0）。引擎在背景執行緒重算那個 chunk、存檔、送給每位在線玩家一份（IsoRegionWorker.java:
+-- 215-262、314-338，同玩家蓋一面牆），所以只修對不上的格子。回排了幾格；記一行 log（查詢的那格）
+function I.recalc(list, x, y, z)
+    local cell, n = getCell(), 0
+    for i = 1, #list, 3 do
+        IsoRegions.setPreviousFlags(nil)
+        IsoRegions.squareChanged(cell:getGridSquare(list[i], list[i + 1], list[i + 2]))
+        n = n + 1
+    end
+    MSH.log("indoor: recalculated " .. n .. " door tile(s) near " .. x .. "," .. y .. "," .. z)
+    return n
+end
 
 -- ===== 自動牆角 =====
 

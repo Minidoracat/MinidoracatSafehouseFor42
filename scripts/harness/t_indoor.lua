@@ -5,11 +5,15 @@
 return function(T)
     local check = T.check
     local WALL_N, WALL_W, FLOOR = 1, 2, 16
-    local saved = { getCell = getCell, IsoRegions = IsoRegions, IsoFlagType = IsoFlagType, buildUtil = buildUtil }
+    local saved = { getCell = getCell, IsoRegions = IsoRegions, IsoFlagType = IsoFlagType, IsoObjectType = IsoObjectType,
+        buildUtil = buildUtil }
 
     -- 假 IsoRegions（getSquareFlags／getIsoWorldRegion／getChunkRegion）：flags["x,y,z"]＝位元和，沒有＝-1（沒資料）。
     -- region 照引擎：同一層不穿牆相連的格子；有一條走得過去的邊通到沒資料的格子＝不封閉；屋頂數＝正上方一層有地板的格數
-    local W = { flags = {}, map = {}, doors = {}, regions = nil, objs = {}, westWall = {}, removed = {} }
+    -- props["x,y,z"]＝那格現在的物件真正有的屬性（覆蓋用；沒寫的照記著的位元，見 truth），recalc＝引擎排了重算的格子，
+    -- prev＝IsoRegions 共用的 previousFlags（squareChanged 只在算出的位元和它不同時才排工作，IsoRegions.java:309-320）
+    local W = { flags = {}, map = {}, doors = {}, regions = nil, objs = {}, westWall = {}, removed = {}, props = {},
+        recalc = {}, prev = 0 }
     local function k3(x, y, z) return x .. "," .. y .. "," .. z end
     local function fl(x, y, z) return W.flags[k3(x, y, z)] or -1 end
     local function bit(f, b) return f >= 0 and math.floor(f / b) % 2 == 1 end
@@ -94,6 +98,32 @@ return function(T)
         return W.regions[k3(x, y, z)]
     end
     W.reads = 0
+    -- 格子上的柱子（WallSE）與真的西牆（getWall(false) 找得到）：W.objs[k]＝物件清單，W.westWall[k]＝有真的西牆。
+    -- 西牆位元照引擎（IsoRegions.java:336）：那格有柱子就不設；拆物件時照同一條重算（RemoveTileObject）
+    local function anySE(list)
+        for _, o in ipairs(list or {}) do
+            if o.isWallSE() then return true end
+        end
+        return false
+    end
+    -- 格子現在的屬性：props 有寫的照它，柱子照物件，其他照記著的位元（記錄沒過期的格子）
+    local function truth(x, y, z, f)
+        local k = k3(x, y, z)
+        local p = W.props[k]
+        if p ~= nil and p[f] ~= nil then return p[f] end
+        if f == "WallSE" then return anySE(W.objs[k]) end
+        if f == "solidfloor" then return bit(fl(x, y, z), FLOOR) end
+        if f == "cutN" then return bit(fl(x, y, z), WALL_N) end
+        if f == "cutW" then return bit(fl(x, y, z), WALL_W) end
+        return false
+    end
+    -- 引擎照格子現在的屬性算的位元（IsoRegions.calculateSquareFlags 的地板、北牆、西牆；柱子讓西牆不算）
+    local function calc(x, y, z)
+        local f = truth(x, y, z, "solidfloor") and FLOOR or 0
+        if truth(x, y, z, "cutN") then f = f + WALL_N end
+        if truth(x, y, z, "cutW") and not truth(x, y, z, "WallSE") then f = f + WALL_W end
+        return f
+    end
     IsoRegions = {
         getSquareFlags = function(x, y, z)
             W.reads = W.reads + 1
@@ -104,15 +134,16 @@ return function(T)
             local r = region(x, y, z)
             return r and r.chunk or nil
         end,
+        setPreviousFlags = function(sq) W.prev = sq and calc(sq:getX(), sq:getY(), sq:getZ()) or 0 end,
+        -- 真的引擎在背景執行緒重算、之後的查詢才看得到；這裡當場改（查詢的回覆在呼叫之前就算好了）
+        squareChanged = function(sq)
+            local x, y, z = sq:getX(), sq:getY(), sq:getZ()
+            local f = calc(x, y, z)
+            if f == W.prev then return end
+            W.flags[k3(x, y, z)], W.regions, W.prev = f, nil, 0
+            W.recalc[#W.recalc + 1] = k3(x, y, z)
+        end,
     }
-    -- 格子上的柱子（WallSE）與真的西牆（getWall(false) 找得到）：W.objs[k]＝物件清單，W.westWall[k]＝有真的西牆。
-    -- 西牆位元照引擎（IsoRegions.java:336）：那格有柱子就不設；拆物件時照同一條重算（RemoveTileObject）
-    local function anySE(list)
-        for _, o in ipairs(list or {}) do
-            if o.isWallSE() then return true end
-        end
-        return false
-    end
     local function engineW(x, y, z)
         local k = k3(x, y, z)
         setBit(x, y, z, WALL_W, W.westWall[k] == true and not anySE(W.objs[k]))
@@ -144,7 +175,9 @@ return function(T)
                 getSpecialObjects = function()
                     return { size = function() return #objs end, get = function(_, i) return objs[i + 1] end }
                 end,
-                has = function(_, f) return f == IsoFlagType.WallSE and anySE(W.objs[k]) end,
+                has = function(_, f) return truth(x, y, z, f) end,
+                HasStairsNorth = function() return false end,
+                HasStairsWest = function() return false end,
                 getWall = function(_, north) return (not north and W.westWall[k]) and {} or nil end,
                 getObjects = function()
                     local l = W.objs[k] or NO_OBJECTS
@@ -162,7 +195,7 @@ return function(T)
     end
     local function fresh()
         W.flags, W.map, W.doors, W.regions = {}, {}, {}, nil
-        W.objs, W.westWall, W.removed = {}, {}, {}
+        W.objs, W.westWall, W.removed, W.props, W.recalc = {}, {}, {}, {}, {}
         ground(0, 0, 40, 40, 0)
     end
     -- 在 (x, y) 放一扇門：north＝北邊的門；class 預設 IsoDoor（IsoThumpable 用 isDoor 分辨，isDoor＝false＝不是門的物件）
@@ -209,7 +242,10 @@ return function(T)
     end
 
     -- 原版 buildUtil.checkCorner（蓋牆、門框、窗框、圍籬放好物件後呼叫；本 MOD 開服時包它）：記呼叫
-    IsoFlagType = { WallSE = "WallSE" }
+    -- 旗標用名字當值（假格子的 has 照 truth 查）
+    IsoFlagType = { WallSE = "WallSE", solidfloor = "solidfloor", cutN = "cutN", cutW = "cutW", WindowN = "WindowN",
+        windowN = "windowN", DoorWallN = "DoorWallN", WindowW = "WindowW", windowW = "windowW", DoorWallW = "DoorWallW" }
+    IsoObjectType = { doorFrN = "doorFrN", doorFrW = "doorFrW" }
     local cornerCalls = {}
     buildUtil = { checkCorner = function(x, y, z, north)
         cornerCalls[#cornerCalls + 1] = x .. "," .. y .. "," .. z .. (north and "N" or "W")
@@ -368,6 +404,68 @@ return function(T)
         "門與缺牆各自最多 MAX_MARKS 筆，數量照實數")
     I.MAX_MARKS = marks0
 
+    T.section("室內檢查：門關著、紀錄卻是缺口（玩家 2026-10-22 回報；使用者同日同意由伺服器重算）")
+    -- x, y, z 三個一組的清單換成排序後的字串
+    local function triples(list)
+        local out = {}
+        for i = 1, #list, 3 do out[#out + 1] = list[i] .. "," .. list[i + 1] .. "," .. list[i + 2] end
+        return sorted(out)
+    end
+    local function printed(fragment)
+        for _, line in ipairs(T.prints) do
+            if string.find(line, fragment, 1, true) then return true end
+        end
+        return false
+    end
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 11, 13 do
+        wall(10, y, WALL_W, false)                    -- 紀錄停在門開著的時候（原版右鍵關門不通知引擎）
+        door(10, y, false, false)
+        W.props[k3(10, y, 0)] = { cutW = true }      -- 門片現在關著：格子有西牆的屬性
+    end
+    wall(12, 10, WALL_N, false)
+    door(12, 10, true, false, "IsoThumpable")         -- 關著也沒有牆屬性的門（Knox Pass 閘門、兩層樓的門）
+    local skip, fix
+    res, skip, fix = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(r.verdict == "OPEN" and doors(r) == "10,11W2 10,12W2 10,13W2 12,10N0"
+        and triples(fix or {}) == "10,11,0 10,12,0 10,13,0" and #W.recalc == 0 and res.fixed == nil,
+        "check 只讀：紀錄過期的門片標 2、要重算的格子另外回；關著也不算牆的門標 0、不重算")
+    W.prev = 18   -- 上一次排工作留下的位元剛好等於這幾格該有的：沒先歸 0 就排不進去
+    local carl = T.player({ name = "carl", x = 11.5, y = 11.5 })
+    res = T.cmd(carl, "indoor", { x = 11, y = 11, z = 0 })
+    check(res.ok and res.verdict == "OPEN" and res.fixed == 3 and sorted(W.recalc) == "10,11,0 10,12,0 10,13,0"
+        and bit(fl(10, 12, 0), WALL_W) and printed("indoor: recalculated 3 door tile(s)"),
+        "查詢：回覆照查的當下、帶 fixed＝3，三格請引擎重算（先把 previousFlags 歸 0），記一行 log")
+    T.advance(1000)
+    W.recalc = {}
+    res = T.cmd(carl, "indoor", { x = 11, y = 11, z = 0 })
+    check(res.ok and res.fixed == nil and #W.recalc == 0 and doors(res.rooms[1]) == "12,10N0",
+        "再查：紀錄對上了不再重算；只剩關著也不算牆的門")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    door(10, 11, false, true)
+    W.props[k3(10, 11, 0)] = { cutW = false }        -- 門開著、紀錄還是牆（另一個方向，不修）
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 11, y = 11, z = 0 })
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil and #W.recalc == 0,
+        "門開著、紀錄還是牆：房間照樣算室內，不重算任何格子")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 11, 13 do
+        wall(10, y, WALL_W, false)
+        door(10, y, false, false)
+        W.props[k3(10, y, 0)] = { cutW = true }
+    end
+    I.MAX_MARKS = 2
+    res, skip, fix = I.check(11, 11, 0)
+    check(#(fix or {}) == 6, "每次查詢最多比對 MAX_MARKS 扇關著的門")
+    I.MAX_MARKS = marks0
+
     T.section("室內檢查：西牆那格有柱子（玩家 2026-10-19 回報「要敲掉木柱才會正常室內」）")
     fresh()
     box(10, 10, 13, 13)
@@ -510,7 +608,7 @@ return function(T)
     check(T.cmd(alice, "indoor", { x = 11, y = 11 }).code == "BAD_ARGS", "缺 z：BAD_ARGS")
 
     getCell, IsoRegions = saved.getCell, saved.IsoRegions
-    IsoFlagType, buildUtil = saved.IsoFlagType, saved.buildUtil
+    IsoFlagType, IsoObjectType, buildUtil = saved.IsoFlagType, saved.IsoObjectType, saved.buildUtil
 
     -- ===== 客戶端面板 =====
     local G = { "MinidoracatUI", "ISPanel", "ISButton", "getCore", "getTextManager", "UIFont", "getText", "IsoSprite",
@@ -571,6 +669,11 @@ return function(T)
         partial = false, levels = { { z = 0, runs = RUNS44 } },
         rooms = { { verdict = "ROOM", z = 0, x = 11, y = 11, size = 16, roofs = 16, walls = 16, gaps = {}, gapCount = 0,
             holes = {}, holeCount = 0 } } }
+    -- 伺服器剛請遊戲重算兩格紀錄過期的門（玩家 2026-10-22 回報）：這筆是重算前的樣子，另有一扇關著也不算牆的門
+    local STALE = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,
+        partial = false, levels = { { z = 0, runs = RUNS44 } }, fixed = 2,
+        rooms = { { verdict = "OPEN", z = 0, x = 11, y = 11, size = 16, roofs = 16, walls = 13, gapCount = 3, doorCount = 3,
+            holeCount = 0, gaps = {}, holes = {}, doors = { 10, 11, 2, 2, 10, 12, 2, 2, 13, 10, 1, 0 } } } }
 
     T.section("室內檢查面板：關著時零成本（使用者 2026-10-15：「平常不用一直掃」）")
     check(not hooked(), "沒開面板：OnTick、物件增減、畫牆影的事件都沒掛")
@@ -585,6 +688,17 @@ return function(T)
     reply(ROOM)
     check(halo[#halo] == "good:IGUI_MSH_Indoor_Head_ROOM" and P.model == nil and not hooked(),
         "回覆到了：頭上說結論（算室內用好的顏色），事件拿掉")
+    P.open({})
+    local halos = #halo
+    reply(STALE)
+    check(#halo == halos and P.model ~= nil and P.model.want and hooked(),
+        "回覆帶 fixed（伺服器剛請遊戲重算）：先不說結論，記著要再查")
+    T.advance(P.GAP_MS)
+    T.tick(1)
+    n = sends()
+    reply(ROOM)
+    check(n == 3 and halo[#halo] == "good:IGUI_MSH_Indoor_Head_ROOM" and P.model == nil and not hooked(),
+        "過了冷卻自己再查一次，那次的結論寫在頭上，事件拿掉")
 
     T.section("室內檢查面板：節流（同時一筆、回覆後滿 GAP_MS、物件增減等 SETTLE_MS）")
     local function class(base)
@@ -656,9 +770,10 @@ return function(T)
     } }
     Cl._theme = nil
     local tw = T.tintWorld()   -- 地板染色的假世界（也換掉 getCore 與鏡頭）
+    local base = sends()
     local m = P.open({})
     local v = m and m.view
-    check(v ~= nil and hooked() and sends() == 2, "開（有框架）：建窗、掛事件、馬上送一筆")
+    check(v ~= nil and hooked() and sends() == base + 1, "開（有框架）：建窗、掛事件、馬上送一筆")
     local function lineOf(text)
         for _, l in ipairs(v.lines) do if l.text == text then return l end end
         return nil
@@ -666,27 +781,27 @@ return function(T)
     check(lineOf("IGUI_MSH_Indoor_Checking") ~= nil, "等回覆時寫「檢查中...」")
     P.recheck(m)
     T.tick(5)
-    check(sends() == 2, "等回覆時再按〔重新檢查〕：不送第二筆，記著")
+    check(sends() == base + 1, "等回覆時再按〔重新檢查〕：不送第二筆，記著")
     reply(ROOM)
     local head = lineOf("IGUI_MSH_Indoor_Head_ROOM")
     check(head ~= nil and head.token == "text" and head.icon == "check" and lineOf("IGUI_MSH_Indoor_Checking") ~= nil,
         "回覆到了：寫結論（打勾）；記著的那次還要查")
     T.tick(10)
-    check(sends() == 2, "回覆後 1 秒內：不送（伺服器冷卻 1 秒，間隔從回覆算）")
+    check(sends() == base + 1, "回覆後 1 秒內：不送（伺服器冷卻 1 秒，間隔從回覆算）")
     T.tick(2)
-    check(sends() == 3, "回覆後滿 GAP_MS：送記著的那一次")
+    check(sends() == base + 2, "回覆後滿 GAP_MS：送記著的那一次")
     reply(ROOM)
     T.advance(P.GAP_MS)
     P.onObject(obj(30, 30))
     P.onObject(obj(12, 12, -1))
     P.onObject(obj(12, 12, 0, "IsoWorldInventoryObject"))
     T.tick(10)
-    check(sends() == 3, "檢查範圍外（外框外超過 NEAR 格）、下面一層、地上的物品：不重查")
+    check(sends() == base + 2, "檢查範圍外（外框外超過 NEAR 格）、下面一層、地上的物品：不重查")
     P.onObject(obj(13 + P.NEAR, 12, 1))
     T.tick(6)
-    check(sends() == 3 and m.want, "範圍附近（樓上的屋頂也算）有物件增減：先等 SETTLE_MS")
+    check(sends() == base + 2 and m.want, "範圍附近（樓上的屋頂也算）有物件增減：先等 SETTLE_MS")
     T.tick(2)
-    check(sends() == 4, "等滿 SETTLE_MS：送一筆")
+    check(sends() == base + 3, "等滿 SETTLE_MS：送一筆")
     reply(ROOM)
 
     T.section("室內檢查面板：問題列與地上標示")
@@ -803,6 +918,27 @@ return function(T)
     ghosts = {}
     T.fire("RenderOpaqueObjectsInWorld", 0)
     check(#ghosts == 4, "有門的缺口一樣畫牆影")
+
+    T.section("室內檢查面板：門關著、紀錄卻是缺口（玩家 2026-10-22 回報）")
+    T.advance(P.GAP_MS)
+    P.recheck(m)
+    T.tick(1)
+    local s0 = sends()
+    reply(STALE)
+    check(#m.issues == 2 and m.issues[1].stale and m.issues[1].n == 2 and m.issues[2].kind == "door"
+        and not m.issues[2].open and not m.issues[2].stale, "紀錄過期的門、關著也不算牆的門各自併段")
+    check(v.issues.pool[1].title == "IGUI_MSH_Indoor_DoorStale|2" and v.issues.pool[1].sub == "IGUI_MSH_Indoor_DoorStaleFix"
+        and v.issues.pool[2].title == "IGUI_MSH_Indoor_DoorShut|1" and v.issues.pool[2].sub == "IGUI_MSH_Indoor_DoorShutFix",
+        "紀錄過期那列說已經更正、稍後再查；不算牆那列說原因與做法")
+    T.tick(5)
+    check(m.want and sends() == s0 and lineOf("IGUI_MSH_Indoor_Checking") ~= nil, "冷卻內不送，寫「檢查中...」")
+    T.advance(P.GAP_MS)
+    T.tick(1)
+    check(sends() == s0 + 1, "過了冷卻自己再查一次")
+    reply(STALE)
+    T.advance(P.GAP_MS)
+    T.tick(1)
+    check(not m.want and sends() == s0 + 1, "連著兩筆都帶 fixed（遊戲沒照算）：不再自動查")
 
     T.section("室內檢查面板：西牆那格有柱子（玩家 2026-10-19 回報）")
     local PILLARS = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,
