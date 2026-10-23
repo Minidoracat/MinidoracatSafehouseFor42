@@ -95,6 +95,16 @@ if first and PZAPI and PZAPI.ModOptions then
     end
     R.fillOpt = opts:addTickBox("RangesFill", "IGUI_MSH_Options_RangesFill", false, "IGUI_MSH_Manager_RangesFill_tooltip")
     opts.apply = function() MSH.Ranges.changed() end
+    -- 原版主選單沒有任何 MOD 建選項時按套用，會把整個 ModOptions.ini 清成 0 byte，這一頁的值就全回預設：框架 rev 23 的
+    -- ModOptionsBackup 補回（../MinidoracatUIFor42/docs/ARCHITECTURE.md §3.23）。放 OnGameBoot：StoragePanel 的 StorageGrid
+    -- 那時也加完了，又早於 MainOptions 建立時的 load（OnMainMenuEnter），補回的值才會被那次 load 套上
+    Events.OnGameBoot.Add(function()
+        local UI = MSH.Client.ui({ "modOptionsBackup" }, 23)
+        local restored = UI and UI.ModOptionsBackup and UI.ModOptionsBackup.protect(opts)
+        if type(restored) == "number" and restored > 0 then
+            MSH.log("restored " .. restored .. " settings from the backup (ModOptions.ini was wiped)")
+        end
+    end)
 end
 
 -- 開關或開放範圍變了：重算，管理視窗跟著重排

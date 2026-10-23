@@ -12,6 +12,13 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版本號遵循 `{PZ版本}-{主版本}.{次版本}.{修訂}` 格式。
 
+## [Unreleased]
+
+### 修正
+
+- **在主選單的選項按了套用之後，本 MOD 的設定進遊戲全部回到預設**：這是原版的問題，主選單當下沒有啟用任何帶選項的模組時（例如模組只在進伺服器時才載入），按〔套用〕會把所有模組的選項清空，地面範圍顯示的各個開關、物品搜尋的清單／網格都會回到預設。現在進遊戲時會自動補回上次的設定。需要 Minidoracat UI Library 也更新到新版才會生效。
+  > 技術要點：用 Minidoracat UI Library 的 `UI.ModOptionsBackup`（API rev 23，capability `modOptionsBackup`），備份在 `Zomboid/Lua/MinidoracatUI/ModOptions_MinidoracatSafehouse.ini`；框架較舊時照舊、不補回。
+
 ## [42.21.0-0.11.0] - 2026-10-23
 
 ### 新增
