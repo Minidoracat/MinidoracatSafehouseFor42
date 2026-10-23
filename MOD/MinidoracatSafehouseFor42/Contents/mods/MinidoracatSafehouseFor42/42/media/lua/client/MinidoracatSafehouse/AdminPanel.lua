@@ -1,5 +1,5 @@
--- MinidoracatSafehouse/AdminPanel.lua：管理員面板（計畫 §10.6）。UI.Tabs 五頁：規則（含伺服器狀態、遷移狀態與
---   targeted recovery）、地契、排除（含禁建區個數與〔管理禁建區〕→ ZoneList.lua）、玩家、付費。設定頁〔套用變更〕只送有改動的鍵（adminSetOptions），伺服器整批驗證、
+-- MinidoracatSafehouse/AdminPanel.lua：管理員面板（計畫 §10.6）。UI.Tabs 六頁：規則（含伺服器狀態、遷移狀態與
+--   targeted recovery）、地契、排除（含禁建區個數與〔管理禁建區〕→ ZoneList.lua）、玩家、原版安全屋（Foreign.lua）、付費。設定頁〔套用變更〕只送有改動的鍵（adminSetOptions），伺服器整批驗證、
 --   存檔後回快照；本機先逐欄檢查（Settings.validateChanges 同一套規則）並把錯誤標在欄位上，伺服器回的 BAD_OPTION
 --   { key, reason } 也標回該欄。付費頁照等級各送一次 adminSetPlan（帶該級 expectedRevision），逐級回錯、不互相連帶。
 -- 玩家頁照 Economy 身分清單（ECAdminIdentity.lua:71 QUERY_DEBOUNCE_MS、:205 loginsKey、:230 pump、:243-247 debounce）：
@@ -31,7 +31,7 @@ MSH.AdminPanel = AP
 local K = MSH.SlotsWindow.kit
 local Settings = MSH.Settings
 
-AP.TABS = { "rules", "deeds", "exclusions", "players", "paid" }
+AP.TABS = { "rules", "deeds", "exclusions", "players", "foreign", "paid" }
 AP.QUERY_DEBOUNCE_MS = 650   -- Economy QUERY_DEBOUNCE_MS
 AP.GAP_MS = 650              -- 兩次 adminPlayers 至少隔這麼久（伺服器 cooldownMs = 500）
 AP.FILTERS = { "all", "owners", "overrides" }
@@ -305,17 +305,21 @@ end
 
 function AP.build(UI)
     local theme = MSH.Client.theme(UI)
-    local x, y, W, H = K.center(AP.panelWidth(), AP.PANEL_H)
     local P = { UI = UI, theme = theme, pages = {}, pager = AP.pager(), current = "rules", tips = {} }
-    -- 可拉右下角改大小（使用者 2026-10-11）：寬不小於開窗時的寬（地契表格要這麼寬），高到 AP.MIN_H
+    local items = {}
+    for i, id in ipairs(AP.TABS) do items[i] = { id = id, label = getText("IGUI_MSH_Admin_Tab_" .. id) } end
+    -- 不給寬度：框架照字寬排出整列（Tabs 不縮字，放不下就畫出框外），面板至少這麼寬（西語六頁實測右緣 752，預設面板的分頁列只有 756，2026-10-23）
+    P.tabs = UI.Tabs.new({ items = items, selected = "rules", theme = theme,
+        target = P, onSelect = function(target, id) AP.select(target, id) end })
+    local x, y, W, H = K.center(math.max(AP.panelWidth(), P.tabs:getWidth() + 2 * K.PAD), AP.PANEL_H)
+    -- 可拉右下角改大小（使用者 2026-10-11）：寬不小於開窗時的寬（地契表格、分頁列要這麼寬），高到 AP.MIN_H
     P.win = UI.Window.new(MSH.Client.windowOpts(UI, { x = x, y = y, width = W, height = H,
         title = getText("IGUI_MSH_Admin_Title"), theme = theme, resizable = true, minWidth = W, minHeight = AP.MIN_H,
         onResize = function() AP.resize(P) end, onClose = function() AP.hideTips(P) end }))
     local top = P.win:contentTop()
-    local items = {}
-    for i, id in ipairs(AP.TABS) do items[i] = { id = id, label = getText("IGUI_MSH_Admin_Tab_" .. id) } end
-    P.tabs = UI.Tabs.new({ x = K.PAD, y = top + 4, width = W - 2 * K.PAD, items = items, selected = "rules", theme = theme,
-        target = P, onSelect = function(target, id) AP.select(target, id) end })
+    P.tabs:setX(K.PAD)
+    P.tabs:setY(top + 4)
+    P.tabs:setWidth(W - 2 * K.PAD)
     P.win:addChild(P.tabs)
     local barH = 2 * K.fontH(UIFont.Small) + 44
     local bodyY = P.tabs:getY() + P.tabs:getHeight() + 4
@@ -398,11 +402,11 @@ end
 function AP.loadForeign(P)
     MSH.Client.send("adminForeign", {}, function(res)
         P.foreign = res.ok and res or { error = res.code }
-        AP.layoutPage(P, "rules")
+        AP.layoutPage(P, "foreign")
     end)
 end
 
--- 伺服器提示多了原版屋（Client 事件 "alert"）：開著的面板重抓那一段
+-- 伺服器提示多了原版屋（Client 事件 "alert"）：開著的面板重抓原版安全屋頁
 function AP.onAlert(a)
     local P = AP.instance
     if type(a) == "table" and a.code == "FOREIGN_APPEARED" and AP.visible(P) then AP.loadForeign(P) end
@@ -441,6 +445,8 @@ function AP.layoutPage(P, id)
         AP.layoutPlayers(P, pg)
     elseif id == "paid" then
         AP.layoutPaid(P, pg)
+    elseif id == "foreign" then
+        AP.layoutForeign(P, pg)
     elseif P.values == nil then
         F:text("load", P.loadError and AP.codeText(P.loadError) or getText("IGUI_MSH_Admin_Loading"),
             P.loadError and "errorText" or "textMuted")
@@ -466,7 +472,7 @@ function AP.layoutBar(P)
     local F = P.barFlow
     F:begin(P.bar:getWidth())
     local ctrls = {}
-    if P.current ~= "players" then
+    if P.current ~= "players" and P.current ~= "foreign" then
         local apply = F:button("apply", getText("IGUI_MSH_Admin_Apply"), P, AP.onApply, "primary")
         apply:setEnabled(P.busy == nil and (P.current ~= "paid" or (P.plans ~= nil and P.plans.economy == "READY")))
         ctrls[1] = apply
@@ -748,7 +754,6 @@ function AP.layoutStatus(P, pg)
             AP.timeText(lr.at)), "textMuted")
     end
     AP.layoutMigration(P, pg)
-    AP.layoutForeign(P, pg)
     AP.layoutRecovery(P, pg)
 end
 
@@ -965,14 +970,12 @@ function AP.layoutRecovery(P, pg)
     if unconfirmed then F:text("cr:hint", getText("IGUI_MSH_Admin_CrashHint"), "textMuted") end
 end
 
--- 原版安全屋（不歸本 MOD 管、不會被閒置收回；使用者 2026-10-23 設計稿 safehouse-foreign-1023）：遷移那一行之後、
--- 需要處理的安全屋之前。每間一列標題＋〔傳送〕〔釋出...〕，下面三行：屋主、成員數、大小、左上角；多久沒人進去
--- （超過 IdleDays 用 warning，也寫出天數：不只靠顏色）；來源
+-- 原版安全屋頁（不歸本 MOD 管、不會被閒置收回；使用者 2026-10-23 設計稿 safehouse-foreign-1023，同日改成自己一頁：
+-- 間數多時不跟規則頁的設定混在一起）。每間一列標題＋〔傳送〕〔釋出...〕，下面三行：屋主、成員數、大小、左上角；
+-- 多久沒人進去（超過 IdleDays 用 warning，也寫出天數：不只靠顏色）；來源
 AP.DAY_MS = 86400000
 function AP.layoutForeign(P, pg)
     local F, f = pg.flow, P.foreign
-    F.y = F.y + K.GAP
-    F:text("h:fo", getText("IGUI_MSH_Admin_ForeignHead"), "text", UIFont.Medium)
     if f == nil then return F:text("fo", getText("IGUI_MSH_Admin_Loading"), "textMuted") end
     if f.error ~= nil then return F:text("fo", AP.codeText(f.error), "errorText") end
     if f.count == 0 then return F:text("fo", getText("IGUI_MSH_Admin_ForeignNone"), "textMuted") end

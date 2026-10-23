@@ -485,10 +485,10 @@ The admin panel reminds you if these differ; nothing is disabled.
 [*] [b]Apply[/b]: press "Apply changes"; changes are written to the server's sandbox settings at once and synced to online players.
 [*] [b]Window size[/b]: drag the bottom-right corner to resize.
 [/list]
-[h3]Five tabs[/h3]
+[h3]Six tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works); also the server settings status, takeover results, vanilla safehouses and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works); also the server settings status, takeover results and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
@@ -499,6 +499,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [/list]
 [*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod); no-build zones: "Manage no-build zones" hides the panel and opens the no-build zone window on the right side of the screen. Each zone in the list shows its top-left corner, outline and piece count; you can search names, press "Teleport" to go to its center (needs the teleport-to-coordinates permission) and "Delete" (asks first); safehouses already inside a zone are listed under it (they aren't removed, so the admin decides what to do). While the window is open, zones are drawn bright red on the ground and the one you teleported to is yellow. "Add no-build zone" opens the same area tool as creating a safehouse (drag or walk to two corners, add or cut pieces), then you name it and press "Save zone"; saving or canceling brings you back to the zone window. Up to 100 zones; closing the zone window returns to the admin panel.
 [*] [b]Players[/b]: server-side paged search (50 per page); "Tier 1 free slots…" changes one player's tier 1 free slots (tier 1 only; leave it empty to use the server default), view, or release on their behalf (logged to the audit log).
+[*] [b]Vanilla safehouses[/b]: vanilla safehouses this mod doesn't manage; see "Vanilla safehouses" below.
 [*] [b]Paid slots[/b] (with Economy available): buy price, rent per period and insurance per day for each enabled tier, plus shared currency, period, grace, reminder and auto-renew.
 [list]
 [*] Only currencies enabled in the Economy are listed; you're warned if the current one gets disabled.
@@ -513,7 +514,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [/list]
 [h3]Vanilla safehouses[/h3]
 [list]
-[*] [b]Where[/b]: "Vanilla safehouses" on the Rules tab lists the vanilla safehouses this mod doesn't manage (left over from the takeover, or created after this mod was installed).
+[*] [b]Where[/b]: the admin panel's Vanilla safehouses tab lists the vanilla safehouses this mod doesn't manage (left over from the takeover, or created after this mod was installed).
 [*] [b]Each row shows[/b]: owner, member count, size, coordinates, how long nobody has gone in (server downtime counts here, unlike idle release), and where it came from; the ones past the idle release days are marked. Up to 20 are listed, longest unvisited first.
 [*] [b]"Teleport"[/b]: takes you to its center (needs the teleport-to-coordinates permission).
 [*] [b]"Release…"[/b]: removes that safehouse's protection; what's inside stays where it is, and it can't be undone.
@@ -620,7 +621,7 @@ These stay where they are as vanilla safehouses; this mod doesn't manage them or
 [list]
 [*] [b]List[/b]: the skip lines in Zomboid/Lua/MinidoracatSafehouse/<server name>/migration-completion.txt.
 [*] [b]They never expire[/b]: idle reclaim leaves them alone, and the vanilla expiry is off because SafeHouseRemovalTime must be 0, so they never go away on their own; the same goes for vanilla safehouses that appear after this mod is installed.
-[*] [b]Handling them[/b]: "Teleport" there to take a look, or "Release…" them, from "Vanilla safehouses" on the admin panel's Rules tab.
+[*] [b]Handling them[/b]: "Teleport" there to take a look, or "Release…" them, from the admin panel's Vanilla safehouses tab.
 [/list]
 [h3]Rolling back[/h3]
 [list]

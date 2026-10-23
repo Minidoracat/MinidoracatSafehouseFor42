@@ -90,7 +90,11 @@ local function fakeUI()
         Text = { fit = function(s) return s end, wrap = function(s) return { s } end },
         Window = { new = function(o) return make(Win, o) end },
         ScrollPanel = { new = function(o) return make(Scroll, o) end },
-        Tabs = { new = function(o) return make(Tabs, o, 24) end },
+        Tabs = { new = function(o)
+            local e = make(Tabs, o, 24)
+            if o.width == nil then e.width = fw.tabsW or e.width end   -- 沒給寬度＝整列字寬（同框架 layoutTabs）；長語言改 fw.tabsW
+            return e
+        end },
         Button = { new = function(o) return make(Button, o, 26) end },
         TextField = { new = function(o) return make(Field, o, 22) end },
         Checkbox = { new = function(o) return make(Check, o, 20) end },
@@ -286,13 +290,14 @@ return function(T)
     local rules = P.pages.rules and P.pages.rules.flow and P.pages.rules.flow.pool or {}
     check(rules["mw#1"] ~= nil and rules["ma#1"] ~= nil and rules["ms#1"] ~= nil and rules["mf#1"] ~= nil
         and rules["mr#1"] == nil, "遷移區：等待原因、已接管、依原因略過、清單檔位置；沒有修補就不顯示")
-    -- 原版安全屋（Foreign.lua，使用者 2026-10-23 設計稿 safehouse-foreign-1023）
+    -- 原版安全屋頁（Foreign.lua，使用者 2026-10-23 設計稿 safehouse-foreign-1023；同日改成自己一頁）
     local function sends(command)
         local n = 0
         for _, s in ipairs(T.clientSent) do if s.command == command then n = n + 1 end end
         return n
     end
-    check(lastCmd("adminForeign") ~= nil and rules["fo#1"] ~= nil and rules["fo#1"].text == "IGUI_MSH_Admin_Loading",
+    local fp = P.pages.foreign and P.pages.foreign.flow and P.pages.foreign.flow.pool or {}
+    check(lastCmd("adminForeign") ~= nil and fp["fo#1"] ~= nil and fp["fo#1"].text == "IGUI_MSH_Admin_Loading",
         "開面板也查原版安全屋；回覆前寫載入中")
     answer("adminForeign", { count = 3, stale = 1, idleDays = 14, more = 1, list = {
         { rect = { x = 10700, y = 9824, w = 8, h = 8 }, owner = "zed", title = "Zed old base", members = 0, created = 111,
@@ -300,24 +305,27 @@ return function(T)
         { rect = { x = 10900, y = 9750, w = 6, h = 6 }, owner = "x.y", title = "", members = 3, created = 222,
             idleMs = 3 * 3600000, origin = "skip", reason = "BAD_OWNER" } } })
     local warnC, mutedC = P.theme.colors.warning, P.theme.colors.textMuted
-    check(rules["h:fo#1"] ~= nil and rules["fo#1"].text == "IGUI_MSH_Admin_ForeignStale" and rules["fo#1"].color == warnC
-        and rules["fo:m#1"] ~= nil and rules["fo:m#1"]:isVisible(), "標題、總數與超過天數（warning）、還有幾間沒列")
-    check(rules["h:fo#1"]:getY() > rules["mg#1"]:getY() and rules["h:fo#1"]:getY() < rules["h:rec#1"]:getY(),
-        "排在遷移那一行與需要處理的安全屋之間")
-    check(rules.fo1.text == "Zed old base" and rules.fo2.text == "x.y" and rules["fo1:b#1"].text == "IGUI_MSH_Admin_ForeignStaleRow"
-        and rules["fo1:b#1"].color == warnC and rules["fo2:b#1"].text == "IGUI_MSH_Admin_ForeignIdleHours"
-        and rules["fo2:b#1"].color == mutedC, "每間一列（沒標題用屋主）；超過天數那行 warning、也寫天數，其餘 textMuted")
-    check(rules["fo1:c#1"].text == "IGUI_MSH_Admin_Foreign_later" and rules["fo2:c#1"].text == "IGUI_MSH_Admin_ForeignSkip_BAD_OWNER",
+    check(fp["fo#1"].text == "IGUI_MSH_Admin_ForeignStale" and fp["fo#1"].color == warnC
+        and fp["fo:m#1"] ~= nil and fp["fo:m#1"]:isVisible(), "總數與超過天數（warning）、還有幾間沒列")
+    check(rules["fo#1"] == nil and rules.fo1 == nil, "原版安全屋自己一頁：規則頁沒有這一段")
+    AP.select(P, "foreign")
+    check(not P.barFlow.pool.apply:isVisible() and P.barFlow.pool.reload:isVisible(),
+        "原版安全屋頁沒東西可套用：底列只有〔重新載入〕")
+    AP.select(P, "deeds")
+    check(fp.fo1.text == "Zed old base" and fp.fo2.text == "x.y" and fp["fo1:b#1"].text == "IGUI_MSH_Admin_ForeignStaleRow"
+        and fp["fo1:b#1"].color == warnC and fp["fo2:b#1"].text == "IGUI_MSH_Admin_ForeignIdleHours"
+        and fp["fo2:b#1"].color == mutedC, "每間一列（沒標題用屋主）；超過天數那行 warning、也寫天數，其餘 textMuted")
+    check(fp["fo1:c#1"].text == "IGUI_MSH_Admin_Foreign_later" and fp["fo2:c#1"].text == "IGUI_MSH_Admin_ForeignSkip_BAD_OWNER",
         "來源：之後才出現／接管時留下的原因")
-    check(rules.fo1t.enabled == false and rules["fo:tp#1"] ~= nil and rules["fo:tp#1"]:isVisible() and rules.fo1r.enabled ~= false,
+    check(fp.fo1t.enabled == false and fp["fo:tp#1"] ~= nil and fp["fo:tp#1"]:isVisible() and fp.fo1r.enabled ~= false,
         "帳號沒有傳送權限：〔傳送〕停用並寫原因；〔釋出...〕可按")
-    fw.click(rules.fo1r)
+    fw.click(fp.fo1r)
     check(fw.dialog ~= nil and fw.dialog.danger == true and fw.dialog.confirmText == "IGUI_MSH_Admin_ReleaseConfirm",
         "〔釋出...〕先開 danger 確認框，確認鈕不帶刪節號")
     local foreignAsks = sends("adminForeign")
     fw.dialog.onResult(false)
     check(lastCmd("adminForeignRelease") == nil, "取消：不送")
-    fw.click(rules.fo1r)
+    fw.click(fp.fo1r)
     fw.dialog.onResult(true)
     local relSent = lastCmd("adminForeignRelease")
     check(relSent ~= nil and relSent.args.owner == "zed" and relSent.args.created == 111 and relSent.args.rect.x == 10700
@@ -325,11 +333,11 @@ return function(T)
     answer("adminForeignRelease", { title = "Zed old base" })
     check(sends("adminForeign") == foreignAsks + 1, "釋出之後重抓原版安全屋")
     answer("adminForeign", { count = 0, stale = 0, idleDays = 14, more = 0, list = {} })
-    check(rules["fo#1"].text == "IGUI_MSH_Admin_ForeignNone" and not rules.fo1:isVisible() and not rules["fo:i#1"]:isVisible(),
+    check(fp["fo#1"].text == "IGUI_MSH_Admin_ForeignNone" and not fp.fo1:isVisible() and not fp["fo:i#1"]:isVisible(),
         "0 間：只寫「沒有」，列與說明都收起")
     foreignAsks = sends("adminForeign")
     T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "FOREIGN_APPEARED", detail = "1" })
-    check(sends("adminForeign") == foreignAsks + 1, "面板開著時收到多了原版屋的提示：重抓那一段")
+    check(sends("adminForeign") == foreignAsks + 1, "面板開著時收到多了原版屋的提示：重抓原版安全屋頁")
     T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "INTERFERENCE", detail = "9" })
     check(sends("adminForeign") == foreignAsks + 1, "其他提示不重抓")
     local deeds = P.pages.deeds.flow.pool
@@ -675,6 +683,18 @@ return function(T)
     check(#pushers4 == 1 and countCmd("slots") == n + 1 and cm.slots ~= nil and cm.slots.tiers[2].usable == 1,
         "建立面板打開時就登記 Economy 推送：別處付款後，開著的建立面板拿到新名額")
     CP.model = nil
+
+    T.section("AdminPanel：分頁列照字寬排")
+    -- 框架 Tabs 不縮字、放不下就畫出框外：整列比預設面板寬時面板跟著變寬（西語六頁實測右緣 752，離預設面板的 756 只差 4）。
+    -- 假量字拿鍵名當字，地契表格本來就撐到螢幕上限：這裡讓表格不比預設寬，只看分頁列
+    local realPanelWidth = AP.panelWidth
+    AP.panelWidth = function() return AP.PANEL_W end
+    fw.tabsW = 1000
+    AP.instance = nil
+    local PT = AP.open({ tab = "rules" })
+    check(PT.tabs.width >= 1000 and PT.tabs.x + PT.tabs.width <= PT.win.width,
+        "分頁列比預設面板寬：面板跟著變寬，整列在框內（面板 " .. PT.win.width .. "）")
+    fw.tabsW, AP.panelWidth = nil, realPanelWidth
 
     T.section("AdminPanel：譯文變長時欄寬、按鈕寬與面板寬跟著量測")
     -- 量測模型：fakeUI 的 MeasureStringX＝字數 × 7。放法文／俄文長度等級的譯文，placeholder 比原本固定欄寬 52 長
