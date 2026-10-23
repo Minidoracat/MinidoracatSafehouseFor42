@@ -122,6 +122,12 @@ S.TYPES = {
         local b = MSH.Rect.bounds(v)
         return b.w <= MSH.LIMIT.ZONE_SIDE and b.h <= MSH.LIMIT.ZONE_SIDE
     end,
+    -- 原版屋（Foreign.lua 釋出）的範圍：只拿來比對、不掃地板，所以不受 96 的限制；範圍不合法（BAD_RECT）的原版屋也要指得到，
+    -- 只要求四個整數
+    nativeRect = function(v)
+        return type(v) == "table" and exactKeys(v, RECT_KEYS) and MSH.isInt(v.x) and MSH.isInt(v.y)
+            and MSH.isInt(v.w) and MSH.isInt(v.h)
+    end,
     zoneId = function(v) return MSH.isInt(v) and v >= 1 and v < 1e9 end,
     deedType = function(v) return MSH.tierOfDeed(v) ~= nil end,
     title = function(v) return type(v) == "string" and #v <= 120 and not MSH.hasControl(v) end,

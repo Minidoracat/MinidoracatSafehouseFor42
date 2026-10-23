@@ -59,11 +59,12 @@ function C.theme(UI)
 end
 
 -- 一句提示：框架 Toast（toast capability）；框架缺席退回角色頭上的紅字（HaloTextHelper.java:139，ISWorldObjectContextMenu.lua:1038）。
--- 單行會截掉長字（2026-10-11 法文實機「Vous n'avez pas la permission « Cu…」）；maxLines 自 rev 5（框架 ARCHITECTURE §3.4）
-function C.toast(text, player)
+-- 單行會截掉長字（2026-10-11 法文實機「Vous n'avez pas la permission « Cu…」）；maxLines 自 rev 5（框架 ARCHITECTURE §3.4）。
+-- title、lines 可省略（框架 Toast.show 的 title 與 maxLines；頭上紅字不帶標題）
+function C.toast(text, player, title, lines)
     local UI = C.ui({ "toast" }, 1)
     if UI ~= nil then
-        UI.Toast.show({ message = text, maxLines = 3 })
+        UI.Toast.show({ message = text, maxLines = lines or 3, title = title })
         return
     end
     player = player or getSpecificPlayer(0)
@@ -337,7 +338,16 @@ function C.bitsAt(x, y)
     return row and row.bits or 0, id
 end
 
--- 伺服器推送：changed（自己相關的安全屋變了，重抓清單）、denied（細分權限拒絕，各視窗或提示自行顯示）
+-- 伺服器給在線管理員的提示（Audit.alertAdmins：code、detail）：每個碼一句「發生什麼、到哪裡處理」，不認得的碼寫通用句
+function C.alertText(code, detail)
+    local key = "IGUI_MSH_Alert_" .. tostring(code)
+    local text = getText(key, tostring(detail or "-"))
+    if text == key then text = getText("IGUI_MSH_Alert_Generic", tostring(code)) end
+    return text
+end
+
+-- 伺服器推送：changed（自己相關的安全屋變了，重抓清單）、denied（細分權限拒絕，各視窗或提示自行顯示）、
+-- alert（只送給在線管理員；開著的管理員面板聽 "alert" 事件重抓）
 function C.onServerCommand(module, command, args)
     if module ~= MSH.MODULE or type(args) ~= "table" then return end
     if command == "result" then
@@ -347,6 +357,10 @@ function C.onServerCommand(module, command, args)
         C.refreshList()
     elseif command == "denied" then
         C.emit("denied", args)
+    elseif command == "alert" then
+        -- 管理員提示是兩句（發生什麼、到哪裡處理），ES、DE 等語言 3 行放不下（Toast 寬 300，i18n_width 量過）
+        C.toast(C.alertText(args.code, args.detail), nil, getText("IGUI_MSH_Alert_Title"), 5)
+        C.emit("alert", args)
     end
 end
 

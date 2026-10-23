@@ -33,6 +33,7 @@ P.asked = P.asked or {}        -- 送出中的 request 要的 owner 字串（回
 P.sentAt = P.sentAt or nil     -- 上次送出 request 的時間
 P.inflight = P.inflight or false
 P.stale = P.stale or false     -- 上次送出之後原生清單變過
+P.rev = P.rev or 0             -- 每收到一次回覆加 1：存了屋主名的畫面（Entry 原版安全屋清單的列）照它重組
 
 -- 送出 request（節流在呼叫端判斷）；ModData 不存在或呼叫失敗只記 log，不丟錯。
 -- ModData.request：ModData.java:48-50 → GlobalModData.java:153-168（只在 GameClient.client 時送封包）
@@ -94,7 +95,7 @@ function P.onReceive(tag, data)
             end
         end
     end
-    P.names = names
+    P.names, P.rev = names, P.rev + 1
     for owner in pairs(P.asked) do
         if names[owner] == nil then P.missing[owner] = true end
     end

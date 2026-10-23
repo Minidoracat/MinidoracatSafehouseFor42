@@ -488,7 +488,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [h3]Five tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works); also the server settings status, takeover results and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works); also the server settings status, takeover results, vanilla safehouses and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
@@ -510,6 +510,15 @@ The admin panel reminds you if these differ; nothing is disabled.
 [*] [b]Where[/b]: "Claims needing attention" on the Rules tab.
 [*] [b]"Rebind"[/b]: rebinds the owner and restores protection.
 [*] [b]"Release…"[/b]: protection ends at once and can't be undone.
+[/list]
+[h3]Vanilla safehouses[/h3]
+[list]
+[*] [b]Where[/b]: "Vanilla safehouses" on the Rules tab lists the vanilla safehouses this mod doesn't manage (left over from the takeover, or created after this mod was installed).
+[*] [b]Each row shows[/b]: owner, member count, size, coordinates, how long nobody has gone in (server downtime counts here, unlike idle release), and where it came from; the ones past the idle release days are marked. Up to 20 are listed, longest unvisited first.
+[*] [b]"Teleport"[/b]: takes you to its center (needs the teleport-to-coordinates permission).
+[*] [b]"Release…"[/b]: removes that safehouse's protection; what's inside stays where it is, and it can't be undone.
+[*] [b]Notice[/b]: when new vanilla safehouses show up on the server, online admins get a notice in the top-right corner.
+[*] [b]Vanilla safehouse list[/b]: this mod's safehouses show their real owner and member count followed by "(this mod)", one row per piece with the piece number; pressing "View" on someone else's opens the Players tab of this mod's admin panel with that owner expanded.
 [/list]
 [h3]Don't use vanilla admin commands[/h3]
 [list]
@@ -601,7 +610,7 @@ If you install this mod mid-save, the safehouses already in the save (made by Be
 [*] [b]Crash after takeover[/b]: if the server crashes before the world saves, it's repaired automatically on the next start. Anything that really doesn't match shows under "Claims needing attention"; press "Rebind" or "Release…".
 [/list]
 [h3]Left as vanilla safehouses[/h3]
-These stay where they are as vanilla safehouses; this mod neither manages nor deletes them:
+These stay where they are as vanilla safehouses; this mod doesn't manage them or delete them on its own:
 [list]
 [*] Invalid area or invalid owner name.
 [*] Same area or same top-left corner as another safehouse.
@@ -611,7 +620,7 @@ These stay where they are as vanilla safehouses; this mod neither manages nor de
 [list]
 [*] [b]List[/b]: the skip lines in Zomboid/Lua/MinidoracatSafehouse/<server name>/migration-completion.txt.
 [*] [b]They never expire[/b]: idle reclaim leaves them alone, and the vanilla expiry is off because SafeHouseRemovalTime must be 0, so they never go away on their own; the same goes for vanilla safehouses that appear after this mod is installed.
-[*] [b]Handling them[/b]: use vanilla admin tools if needed (mind the name-matching problem above).
+[*] [b]Handling them[/b]: "Teleport" there to take a look, or "Release…" them, from "Vanilla safehouses" on the admin panel's Rules tab.
 [/list]
 [h3]Rolling back[/h3]
 [list]

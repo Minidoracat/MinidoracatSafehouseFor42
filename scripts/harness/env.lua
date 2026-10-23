@@ -368,6 +368,7 @@ function getOnlinePlayers()
     return T.javaList(T.online)
 end
 function getSpecificPlayer(i) return T.online[i + 1] end
+function getPlayer() return T.online[1] end   -- IsoPlayer.getInstance：本機 0 號玩家
 
 -- 伺服器：sendServerCommand(player, module, command, args)；不帶 player＝廣播給全部客戶端
 function sendServerCommand(a, b, c, d)

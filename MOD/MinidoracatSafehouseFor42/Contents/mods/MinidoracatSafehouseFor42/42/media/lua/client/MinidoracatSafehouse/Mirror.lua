@@ -2,7 +2,8 @@
 -- Client.takeZones，和 zones 查詢的回覆同一條路；計畫 §6.3、§7.1）。
 -- upsert 走原生 SafehouseSync（伺服器 kickUserFromSafehouse 觸發），不需要這裡處理；原生沒有 remove 廣播，
 -- 伺服器送自訂 nativeRemove。只移除 owner 恰好等於 @MSH:<claimId> 的本地物件：SafehouseSync（RELIABLE 非 ORDERED）
--- 和自訂指令沒有順序保證，同 rect 可能已是新 claim，所以不比 rect；foreign 一律不動、永不清空整份清單。
+-- 和自訂指令沒有順序保證，同 rect 可能已是新 claim，所以不比 rect；永不清空整份清單。foreign 只在管理員釋出原版屋
+-- （伺服器 Foreign.lua 的 foreignRemove）時移除範圍與屋主都相同的那間。
 -- 晚到的舊 SafehouseSync 會把屋加回來（SafehouseSyncPacket.java:87-89）：每個 remove 保留 60 秒 tombstone，
 -- 期間 OnSafehousesChanged 再移除；之後靠校正兜底（native2-mp 2026-10-10 實測）。
 -- 校正：首次在 OnGameStart 掛的一次性 OnTick（OnGameStart 當下送會走錯路徑，pitfalls.md「MP client 不可在
@@ -24,6 +25,7 @@ M.PERIOD_MS = 600000
 M.RETRY_MS = 5500          -- 伺服器校正 cooldown 5 秒（Calibrate.lua），太快重送會被丟、沒有回覆；從上一筆回覆算
 M.TIMEOUT_MS = 10000       -- 這麼久沒回覆就不再等（同 Client.TIMEOUT_MS）
 M.tombs = M.tombs or {}    -- claimId → tombstone 到期時間
+M.ftombs = M.ftombs or {}  -- 原版屋（foreignRemove）"x,y,w,h|owner" → { exp, x, y, w, h, owner }
 M.purging = false
 
 -- 本地 SafeHouse 清單（SafeHouse.getSafehouseList SafeHouse.java:652、getOwner :656）
@@ -33,11 +35,10 @@ end
 
 -- 先收集再逐一移除（native2-mp removeOwned）。客戶端 removeSafeHouse 會同步觸發 OnSafehousesChanged
 -- （SafeHouse.java:306-320），purging 旗標擋掉自己觸發的巢狀事件。
-local function removeOwned(claimId)
-    local owner = MSH.marker(claimId)
+local function removeWhere(match, arg)
     local hit = {}
     for _, h in ipairs(localHouses()) do
-        if h:getOwner() == owner then hit[#hit + 1] = h end
+        if match(h, arg) then hit[#hit + 1] = h end
     end
     if #hit == 0 then return 0 end
     M.purging = true
@@ -48,6 +49,15 @@ local function removeOwned(claimId)
     if not ok then MSH.log("mirror remove failed: " .. tostring(err)) end
     return #hit
 end
+
+local function ownedBy(h, owner) return h:getOwner() == owner end
+
+-- 原版屋：範圍與屋主都相同。不比建立時間：SafehouseSync 不帶它（SafehouseSyncPacket.java:43-83），客戶端那份是本機建立時間
+local function sameForeign(h, t)
+    return h:getOwner() == t.owner and h:getX() == t.x and h:getY() == t.y and h:getW() == t.w and h:getH() == t.h
+end
+
+local function removeOwned(claimId) return removeWhere(ownedBy, MSH.marker(claimId)) end
 
 local function removeWithTomb(claimId, now)
     M.tombs[claimId] = now + M.TOMB_MS
@@ -69,6 +79,17 @@ function M.onNativeRemove(args)
     if not MSH.isInt(args.claimId) then return end
     removeWithTomb(args.claimId, getTimestampMs())
     track(args.bootId, args.seq)
+end
+
+-- 管理員面板釋出原版屋（伺服器 Foreign.lua）：同 nativeRemove 留 TOMB_MS 的 tombstone（晚到的舊 SafehouseSync 會加回來）
+-- ponytail: 同步不帶建立時間，60 秒內同屋主在同範圍又建一間時，這個客戶端也會把新屋拿掉（伺服器照留，重新登入或下次同步
+-- 那間時回來；PlayerSafehouse 關著，只有管理員或其他 MOD 建得出來）。真的發生再讓校正請求也回 foreign 的指紋
+function M.onForeignRemove(args)
+    if not (MSH.isInt(args.x) and MSH.isInt(args.y) and MSH.isInt(args.w) and MSH.isInt(args.h)
+        and type(args.owner) == "string") then return end
+    local t = { exp = getTimestampMs() + M.TOMB_MS, x = args.x, y = args.y, w = args.w, h = args.h, owner = args.owner }
+    M.ftombs[args.x .. "," .. args.y .. "," .. args.w .. "," .. args.h .. "|" .. args.owner] = t
+    removeWhere(sameForeign, t)
 end
 
 -- 校正結果：照 remove 清單移除（同樣留 tombstone），序號基準換成伺服器回覆當下的值
@@ -114,6 +135,8 @@ function M.onServerCommand(module, command, args)
     if module ~= MSH.MODULE or type(args) ~= "table" then return end
     if command == "nativeRemove" then
         M.onNativeRemove(args)
+    elseif command == "foreignRemove" then
+        M.onForeignRemove(args)
     elseif command == "result" and args.command == "calibrate" then
         M.onCalibrated(args)
     elseif command == "sandboxSync" then
@@ -133,6 +156,12 @@ function M.onSafehousesChanged()
     end
     for _, id in ipairs(expired) do M.tombs[id] = nil end
     for _, id in ipairs(live) do removeOwned(id) end
+    local gone, back = {}, {}
+    for key, t in pairs(M.ftombs) do
+        if now >= t.exp then gone[#gone + 1] = key else back[#back + 1] = t end
+    end
+    for _, key in ipairs(gone) do M.ftombs[key] = nil end
+    for _, t in ipairs(back) do removeWhere(sameForeign, t) end
 end
 
 -- 送校正：本地 owner 是標記的原生安全屋（最多 CALIBRATE_MAX 筆）；查詢不帶 requestId。

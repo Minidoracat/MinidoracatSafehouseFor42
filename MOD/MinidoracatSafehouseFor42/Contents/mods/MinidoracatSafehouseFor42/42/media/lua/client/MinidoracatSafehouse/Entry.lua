@@ -1,7 +1,8 @@
 -- MinidoracatSafehouse/Entry.lua：客戶端入口與原版 cutover（M3；計畫 §10.2、§10.8）。
 --   User Panel 永遠多一顆量過寬度的「安全屋管理」→ 管理視窗；條件不讀 SafeHouse.hasSafehouse（沒有安全屋也要能開 empty state）。
 --   原版安全屋視窗（User Panel SAFEHOUSEPANEL、世界右鍵「檢視安全屋」、管理員安全屋清單〔檢視〕）遇到 managed house
---   （owner＝@MSH:<id>）改開管理視窗並選中那間；原版「建立安全屋」右鍵選項一律拿掉，管理員區域編輯器對 managed house 的
+--   （owner＝@MSH:<id>）改開管理視窗並選中那間（管理員看別人的屋改開管理員面板的玩家頁）；原版安全屋清單的本 MOD 列
+--   改寫真正屋主與人數；原版「建立安全屋」右鍵選項一律拿掉，管理員區域編輯器對 managed house 的
 --   改名／移交／放棄／成員／離開／重生控制項隱藏。這些只讓誠實玩家不誤觸 anti-cheat（decisions.md「原版安全屋封包」），
 --   惡意封包靠伺服器收斂（§2、§6.3）。
 --   家族工具列 Dock（id safehouse、order 60：UI repo ARCHITECTURE §3.16 登記）；地契物品說明（§10.8）。
@@ -79,11 +80,95 @@ end
 -- 世界右鍵 ISWorldObjectContextMenu.lua:526-531（選項由 ISWorldObjectContextMenuLogic.java:1002-1015 加）、
 -- 管理員清單 ISSafehousesList.lua:104-109。攔 addToUIManager 是唯一共同點：managed 就不上畫面、改開管理視窗。
 -- new 已把 ISSafehouseUI.instance 指向這個不會出現的面板（ISSafehouseUI.lua:380），清掉免得 OnSafehousesChanged 操作它。
+-- 管理視窗只列我的與分享給我的（ManagerWindow.lua W:applyWant），名單裡沒有自己的屋會開成自己的第一間（2026-10-23 E2E
+-- sh-fb-before-1023b）：管理員看別人的屋改開管理員面板的玩家頁、搜尋並展開屋主（設計稿 safehouse-foreign-1023 第 4.4 項）；
+-- 屋主名還沒查到（PublicApi 第一次查）時只開玩家頁
 function E.safehouseUIAdd(ui, original)
-    local id = E.managedId(ui.safehouse)
+    local house = ui.safehouse
+    local id = E.managedId(house)
     if id == nil then return original(ui) end
     if ISSafehouseUI.instance == ui then ISSafehouseUI.instance = nil end
-    E.openManager(id)
+    local AP = MSH.AdminPanel
+    if E.isListed(house) or AP == nil or not AP.isAdmin() then return E.openManager(id) end
+    AP.open({ tab = "players", player = MSH.PublicApi.ownerName(house:getOwner()) })
+end
+
+-- 原生名單＝屋主＋成員（Native.desiredPlayers）：在名單裡＝我的或分享給我的（Ranges.kindOf 同一個判斷）
+function E.isListed(house)
+    local p = getSpecificPlayer(0)
+    local me = p and p:getUsername()
+    return me ~= nil and house:getPlayers():contains(me)
+end
+
+-- ===== 原版安全屋清單（管理員面板〔安全屋清單〕，ISSafehousesList.lua:59-84）=====
+-- 原版每個原生畫一列「標題 - N 玩家 - 擁有者: owner」，N＝名單人數＋1（:81）。本 MOD 的屋 owner 是服務帳號、名單已含真正屋主，
+-- 所以改寫真正屋主（PublicApi.ownerName）與名單人數（不含服務帳號），後面用 textMuted 加「（本 MOD）」／「（本 MOD · 第 n/m 塊）」
+-- （使用者 2026-10-23 設計稿第 4 項）。選取、〔檢視〕〔傳送〕照原版：畫這一列時把清單的 drawText 暫時換成 E.drawRow，
+-- 只換原版那一次 drawText 的字。列的字在重排後第一次畫時組好、存在列上（render 不組字串），屋主對照換新（PublicApi.rev，
+-- 例：重新綁定）後重組；屋主名還沒查到時照原版畫。
+E.MUTED = 0.62   -- 框架 dark 主題 textMuted（MinidoracatUI V1.lua）
+E.row = { text = "", tag = "", tagX = 0, draw = nil }
+
+-- 原版重排（開窗、OnSafehousesChanged）之後：標出本 MOD 的列，第幾塊／共幾塊照清單順序數同一個標記
+function E.markRows(listUI)
+    local items = listUI.datas and listUI.datas.items
+    if type(items) ~= "table" then return end
+    local total, nth = {}, {}
+    for _, it in ipairs(items) do
+        local id = E.managedId(it.item)
+        it.mshId = id or false
+        if id then total[id] = (total[id] or 0) + 1 end
+    end
+    for _, it in ipairs(items) do
+        local id = it.mshId
+        if id then
+            nth[id] = (nth[id] or 0) + 1
+            it.mshPiece, it.mshPieces = nth[id], total[id]
+        end
+    end
+end
+
+-- 本 MOD 那一列的字（存進列：mshText、mshTag、mshTagX、組字時的屋主對照版本 mshRev）；屋主名還沒查到回 false
+function E.rowText(list, it)
+    local house = it.item
+    local marker = house:getOwner()
+    local owner = MSH.PublicApi.ownerName(marker)
+    if owner == nil then return false end
+    local n, l = 0, house:getPlayers()
+    for i = 0, l:size() - 1 do
+        if tostring(l:get(i)) ~= marker then n = n + 1 end
+    end
+    local text = tostring(house:getTitle()) .. " - " .. getText("IGUI_FactionUI_FactionsListPlayers", n, owner)
+    it.mshText, it.mshRev = text, MSH.PublicApi.rev
+    it.mshTag = (it.mshPieces or 1) > 1 and getText("IGUI_MSH_Entry_ListPiece", it.mshPiece, it.mshPieces)
+        or getText("IGUI_MSH_Entry_ListTag")
+    it.mshTagX = getTextManager():MeasureStringX(list.font or UIFont.Small, text .. " ")
+    return true
+end
+
+-- 原版那一次 self:drawText(字, 10, y + 2, 1, 1, 1, a, self.font)（:81）換成這兩段；row.draw 是清單原本的 drawText
+function E.drawRow(list, _, x, y, r, g, b, a, font)
+    local row = E.row
+    row.draw(list, row.text, x, y, r, g, b, a, font)
+    row.draw(list, row.tag, x + row.tagX, y, E.MUTED, E.MUTED, E.MUTED, a, font)
+end
+
+function E.listRow(list, y, item, alt, draw)
+    if not item.mshId or ((item.mshText == nil or item.mshRev ~= MSH.PublicApi.rev) and not E.rowText(list, item)) then
+        return draw(list, y, item, alt)
+    end
+    -- 其他 MOD 替這個清單設的 drawText（通常沒有：用 ISUIElement 的）畫完還回去，本 MOD 的字也經過它
+    local own = rawget(list, "drawText")
+    local row = E.row
+    row.text, row.tag, row.tagX, row.draw = item.mshText, item.mshTag, item.mshTagX, own or ISUIElement.drawText
+    list.drawText = E.drawRow
+    local ok, res = pcall(draw, list, y, item, alt)
+    list.drawText = own
+    if not ok then
+        MSH.log("safehouse list row failed: " .. tostring(res))
+        return y + list.itemheight
+    end
+    return res
 end
 
 -- 管理員區域編輯器的安全屋細節（MultiplayerZoneEditorMode_Safehouse.lua:200-560）：prerender 對管理員把放棄、移交設回可見
@@ -284,6 +369,17 @@ function E.install()
         local add = ISSafehouseUI.addToUIManager -- 繼承自 ISUIElement.lua:1365
         function ISSafehouseUI:addToUIManager()
             return MSH.Entry.safehouseUIAdd(self, add)
+        end
+    end
+    if ISSafehousesList then
+        local populate, draw = ISSafehousesList.populateList, ISSafehousesList.drawDatas
+        function ISSafehousesList:populateList()
+            populate(self)
+            MSH.Entry.markRows(self)
+        end
+        -- initialise 把 drawDatas 指給清單的 doDrawItem（:30），self 是清單（ISScrollingListBox）；OnGameStart 換掉來得及
+        function ISSafehousesList.drawDatas(list, y, item, alt)
+            return MSH.Entry.listRow(list, y, item, alt, draw)
         end
     end
     local Details = MultiplayerZoneEditorMode_Safehouse_Details

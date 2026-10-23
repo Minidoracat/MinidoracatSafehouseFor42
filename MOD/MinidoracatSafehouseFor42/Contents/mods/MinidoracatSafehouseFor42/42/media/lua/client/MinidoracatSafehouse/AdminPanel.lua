@@ -286,8 +286,21 @@ function AP.open(opts)
     P.win:setVisible(true)
     P.win:bringToTop()
     AP.select(P, opts.tab or P.current)
+    if opts.player ~= nil then AP.showPlayer(P, opts.player) end
     AP.reload(P)
     return P
+end
+
+-- 從原版清單〔檢視〕別人的屋（Entry.safehouseUIAdd）：玩家頁搜尋那位屋主並展開。篩選回「全部玩家」（停在「有自訂上限」時
+-- 搜不到沒設上限的屋主，2026-10-23 審查）；先記成已經打完字（不等 650 ms 停頓），搜尋框的 onChange 再送同一個字時
+-- pagerType 不重算時間
+function AP.showPlayer(P, name)
+    AP.pagerSet(P.pager, "filter", "all")
+    AP.pagerType(P.pager, name, getTimestampMs() - AP.QUERY_DEBOUNCE_MS)
+    P.selected = name
+    local search = P.pages.players.flow.pool.search
+    if search ~= nil then search:setText(name) end
+    AP.layoutPage(P, "players")
 end
 
 function AP.build(UI)
@@ -347,7 +360,7 @@ function AP.select(P, id)
     AP.layoutPage(P, id)
 end
 
--- 全部重抓：選項（含 health）、付費方案、非 active 的紀錄、遷移狀態、禁建區；玩家頁重抓目前那一頁
+-- 全部重抓：選項（含 health）、付費方案、非 active 的紀錄、遷移狀態、原版安全屋、禁建區；玩家頁重抓目前那一頁
 function AP.reload(P)
     MSH.Client.send("adminOptions", {}, function(res)
         if res.ok then
@@ -369,8 +382,8 @@ function AP.reload(P)
         P.migration = res.ok and res.migration or nil
         AP.layoutPage(P, "rules")
     end)
+    AP.loadForeign(P)
     AP.pagerInvalidate(P.pager)
-    AP.layoutAll(P)
 end
 
 function AP.loadClaims(P)
@@ -379,6 +392,20 @@ function AP.loadClaims(P)
         P.crash = res.ok and res.crash or nil
         AP.layoutPage(P, "rules")
     end)
+end
+
+-- 原版安全屋（Foreign.lua adminForeign）：讀不到時寫原因碼
+function AP.loadForeign(P)
+    MSH.Client.send("adminForeign", {}, function(res)
+        P.foreign = res.ok and res or { error = res.code }
+        AP.layoutPage(P, "rules")
+    end)
+end
+
+-- 伺服器提示多了原版屋（Client 事件 "alert"）：開著的面板重抓那一段
+function AP.onAlert(a)
+    local P = AP.instance
+    if type(a) == "table" and a.code == "FOREIGN_APPEARED" and AP.visible(P) then AP.loadForeign(P) end
 end
 
 -- 禁建區清單（adminZones：zones、max）：排除頁只寫個數；讀不到時留著上一次的個數、另寫原因
@@ -721,6 +748,7 @@ function AP.layoutStatus(P, pg)
             AP.timeText(lr.at)), "textMuted")
     end
     AP.layoutMigration(P, pg)
+    AP.layoutForeign(P, pg)
     AP.layoutRecovery(P, pg)
 end
 
@@ -937,6 +965,86 @@ function AP.layoutRecovery(P, pg)
     if unconfirmed then F:text("cr:hint", getText("IGUI_MSH_Admin_CrashHint"), "textMuted") end
 end
 
+-- 原版安全屋（不歸本 MOD 管、不會被閒置收回；使用者 2026-10-23 設計稿 safehouse-foreign-1023）：遷移那一行之後、
+-- 需要處理的安全屋之前。每間一列標題＋〔傳送〕〔釋出...〕，下面三行：屋主、成員數、大小、左上角；多久沒人進去
+-- （超過 IdleDays 用 warning，也寫出天數：不只靠顏色）；來源
+AP.DAY_MS = 86400000
+function AP.layoutForeign(P, pg)
+    local F, f = pg.flow, P.foreign
+    F.y = F.y + K.GAP
+    F:text("h:fo", getText("IGUI_MSH_Admin_ForeignHead"), "text", UIFont.Medium)
+    if f == nil then return F:text("fo", getText("IGUI_MSH_Admin_Loading"), "textMuted") end
+    if f.error ~= nil then return F:text("fo", AP.codeText(f.error), "errorText") end
+    if f.count == 0 then return F:text("fo", getText("IGUI_MSH_Admin_ForeignNone"), "textMuted") end
+    F:text("fo:i", getText("IGUI_MSH_Admin_ForeignIntro"), "textMuted")
+    if f.stale > 0 then
+        F:text("fo", getText("IGUI_MSH_Admin_ForeignStale", f.count, f.stale, f.idleDays), "warning")
+    else
+        F:text("fo", getText("IGUI_MSH_Admin_ForeignCount", f.count), "text")
+    end
+    local canTp = MSH.ZoneList ~= nil and MSH.ZoneList.canTeleport()
+    for i, r in ipairs(f.list) do AP.foreignRow(P, F, i, r, f.idleDays, canTp) end
+    if f.more > 0 then F:text("fo:m", getText("IGUI_MSH_Admin_ForeignMore", f.more, #f.list), "textMuted") end
+    if not canTp then F:text("fo:tp", getText("IGUI_MSH_ZoneList_NoTeleport"), "textMuted") end
+end
+
+function AP.foreignRow(P, F, i, r, days, canTp)
+    local k, rc = "fo" .. i, r.rect
+    local tp = F:button(k .. "t", getText("IGUI_MSH_ZoneList_Teleport"), P, AP.onForeignTeleport)
+    local rel = F:button(k .. "r", getText("IGUI_MSH_Admin_ForceRelease"), P, AP.onForeignRelease, "danger")
+    tp.internal, rel.internal = r, r
+    tp:setEnabled(canTp)
+    rel:setEnabled(P.busy == nil)
+    F:row({ F:label(k, AP.foreignName(r)), tp, rel })
+    F:text(k .. ":a", getText("IGUI_MSH_Admin_ForeignWho", r.owner, r.members, rc.w, rc.h, rc.x, rc.y), "textMuted")
+    local stale = days > 0 and r.idleMs > days * AP.DAY_MS
+    F:text(k .. ":b", stale and getText("IGUI_MSH_Admin_ForeignStaleRow", math.floor(r.idleMs / AP.DAY_MS), days)
+        or AP.idleText(r.idleMs), stale and "warning" or "textMuted")
+    local why = r.origin == "skip" and getText("IGUI_MSH_Admin_ForeignSkip_" .. tostring(r.reason))
+        or getText("IGUI_MSH_Admin_Foreign_" .. tostring(r.origin))
+    F:text(k .. ":c", why, "textMuted")
+end
+
+function AP.foreignName(r) return r.title ~= "" and r.title or r.owner end
+
+-- 多久沒人進去：滿 1 天寫天數、滿 1 小時寫小時，不到 1 小時另一句
+function AP.idleText(ms)
+    local h = math.floor(ms / 3600000)
+    if h >= 24 then return getText("IGUI_MSH_Admin_ForeignIdleDays", math.floor(h / 24)) end
+    if h >= 1 then return getText("IGUI_MSH_Admin_ForeignIdleHours", h) end
+    return getText("IGUI_MSH_Admin_ForeignIdleRecent")
+end
+
+-- 〔傳送〕：同禁建區視窗送原版 /teleportto 到範圍中央那格（ZoneList.sendTeleport；沒有 TeleportToCoordinates 時按鈕停用）
+function AP.onForeignTeleport(P, b)
+    local r, ZL = b.internal, MSH.ZoneList
+    if ZL == nil or not ZL.canTeleport() then return end
+    local x, y = r.rect.x + math.floor(r.rect.w / 2), r.rect.y + math.floor(r.rect.h / 2)
+    ZL.sendTeleport(x, y)
+    AP.say(P, getText("IGUI_MSH_ZoneList_Teleported", AP.foreignName(r), x, y), "text")
+end
+
+-- 〔釋出...〕：danger 確認框，確定才送 adminForeignRelease（伺服器要範圍、屋主、原版建立時間都對上才移除）
+function AP.onForeignRelease(P, b)
+    local r = b.internal
+    local name = AP.foreignName(r)
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_ForeignReleaseTitle"), theme = P.theme,
+        danger = true, text = getText("IGUI_MSH_Admin_ForeignReleaseText", name, r.owner),
+        confirmText = getText("IGUI_MSH_Admin_ReleaseConfirm"), cancelText = getText("UI_Cancel"),
+        onResult = function(ok)
+            if not ok then return end
+            local args = { rect = MSH.Rect.copy(r.rect), owner = r.owner, created = r.created }
+            AP.mutate(P, "adminForeignRelease", args, function(res)
+                if res.ok then
+                    AP.say(P, getText("IGUI_MSH_Admin_ForeignReleased", name), "text")
+                else
+                    AP.say(P, AP.codeText(res.code), "errorText")
+                end
+                AP.loadForeign(P)
+            end)
+        end }))
+end
+
 function AP.lifeText(lc) return getText("IGUI_MSH_Admin_Life_" .. tostring(lc)) end
 
 function AP.recoverDone(P, res)
@@ -968,10 +1076,10 @@ end
 
 function AP.onForceRelease(P, b)
     local c = b.internal
-    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_ForceRelease"), theme = P.theme,
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_ReleaseConfirm"), theme = P.theme,
         danger = true,
         text = getText("IGUI_MSH_Admin_ForceReleaseText", c.claimId, tostring(c.owner or "-")),
-        confirmText = getText("IGUI_MSH_Admin_ForceRelease"), cancelText = getText("UI_Cancel"),
+        confirmText = getText("IGUI_MSH_Admin_ReleaseConfirm"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
             if ok then
                 AP.mutate(P, "adminRecover", { claimId = c.claimId, action = "release" },
@@ -1485,10 +1593,10 @@ end
 -- 代為放棄：danger 對話框；帶畫面上那一版的 revision，期間被改過就 STALE_REVISION、不放棄
 function AP.onRelease(P, b)
     local c = b.internal
-    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_Release"), theme = P.theme,
+    P.UI.Dialog.show(MSH.Client.windowOpts(P.UI, { title = getText("IGUI_MSH_Admin_ReleaseForOwnerConfirm"), theme = P.theme,
         danger = true,
         text = getText("IGUI_MSH_Admin_ReleaseText", b.owner, tostring(c.title or ""), c.claimId),
-        confirmText = getText("IGUI_MSH_Admin_Release"), cancelText = getText("UI_Cancel"),
+        confirmText = getText("IGUI_MSH_Admin_ReleaseForOwnerConfirm"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
             if not ok then return end
             AP.mutate(P, "adminRelease", { claimId = c.claimId, expectedRevision = c.revision }, function(res)
@@ -1736,4 +1844,5 @@ end
 
 if first then
     Events.OnTick.Add(function() MSH.AdminPanel.onTick() end)
+    MSH.Client.on("alert", "adminPanel", function(a) MSH.AdminPanel.onAlert(a) end)
 end

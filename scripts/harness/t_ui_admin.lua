@@ -286,6 +286,52 @@ return function(T)
     local rules = P.pages.rules and P.pages.rules.flow and P.pages.rules.flow.pool or {}
     check(rules["mw#1"] ~= nil and rules["ma#1"] ~= nil and rules["ms#1"] ~= nil and rules["mf#1"] ~= nil
         and rules["mr#1"] == nil, "遷移區：等待原因、已接管、依原因略過、清單檔位置；沒有修補就不顯示")
+    -- 原版安全屋（Foreign.lua，使用者 2026-10-23 設計稿 safehouse-foreign-1023）
+    local function sends(command)
+        local n = 0
+        for _, s in ipairs(T.clientSent) do if s.command == command then n = n + 1 end end
+        return n
+    end
+    check(lastCmd("adminForeign") ~= nil and rules["fo#1"] ~= nil and rules["fo#1"].text == "IGUI_MSH_Admin_Loading",
+        "開面板也查原版安全屋；回覆前寫載入中")
+    answer("adminForeign", { count = 3, stale = 1, idleDays = 14, more = 1, list = {
+        { rect = { x = 10700, y = 9824, w = 8, h = 8 }, owner = "zed", title = "Zed old base", members = 0, created = 111,
+            idleMs = 30 * 86400000, origin = "later" },
+        { rect = { x = 10900, y = 9750, w = 6, h = 6 }, owner = "x.y", title = "", members = 3, created = 222,
+            idleMs = 3 * 3600000, origin = "skip", reason = "BAD_OWNER" } } })
+    local warnC, mutedC = P.theme.colors.warning, P.theme.colors.textMuted
+    check(rules["h:fo#1"] ~= nil and rules["fo#1"].text == "IGUI_MSH_Admin_ForeignStale" and rules["fo#1"].color == warnC
+        and rules["fo:m#1"] ~= nil and rules["fo:m#1"]:isVisible(), "標題、總數與超過天數（warning）、還有幾間沒列")
+    check(rules["h:fo#1"]:getY() > rules["mg#1"]:getY() and rules["h:fo#1"]:getY() < rules["h:rec#1"]:getY(),
+        "排在遷移那一行與需要處理的安全屋之間")
+    check(rules.fo1.text == "Zed old base" and rules.fo2.text == "x.y" and rules["fo1:b#1"].text == "IGUI_MSH_Admin_ForeignStaleRow"
+        and rules["fo1:b#1"].color == warnC and rules["fo2:b#1"].text == "IGUI_MSH_Admin_ForeignIdleHours"
+        and rules["fo2:b#1"].color == mutedC, "每間一列（沒標題用屋主）；超過天數那行 warning、也寫天數，其餘 textMuted")
+    check(rules["fo1:c#1"].text == "IGUI_MSH_Admin_Foreign_later" and rules["fo2:c#1"].text == "IGUI_MSH_Admin_ForeignSkip_BAD_OWNER",
+        "來源：之後才出現／接管時留下的原因")
+    check(rules.fo1t.enabled == false and rules["fo:tp#1"] ~= nil and rules["fo:tp#1"]:isVisible() and rules.fo1r.enabled ~= false,
+        "帳號沒有傳送權限：〔傳送〕停用並寫原因；〔釋出...〕可按")
+    fw.click(rules.fo1r)
+    check(fw.dialog ~= nil and fw.dialog.danger == true and fw.dialog.confirmText == "IGUI_MSH_Admin_ReleaseConfirm",
+        "〔釋出...〕先開 danger 確認框，確認鈕不帶刪節號")
+    local foreignAsks = sends("adminForeign")
+    fw.dialog.onResult(false)
+    check(lastCmd("adminForeignRelease") == nil, "取消：不送")
+    fw.click(rules.fo1r)
+    fw.dialog.onResult(true)
+    local relSent = lastCmd("adminForeignRelease")
+    check(relSent ~= nil and relSent.args.owner == "zed" and relSent.args.created == 111 and relSent.args.rect.x == 10700
+        and relSent.args.rect.w == 8, "確認後送 adminForeignRelease（範圍、屋主、建立時間）")
+    answer("adminForeignRelease", { title = "Zed old base" })
+    check(sends("adminForeign") == foreignAsks + 1, "釋出之後重抓原版安全屋")
+    answer("adminForeign", { count = 0, stale = 0, idleDays = 14, more = 0, list = {} })
+    check(rules["fo#1"].text == "IGUI_MSH_Admin_ForeignNone" and not rules.fo1:isVisible() and not rules["fo:i#1"]:isVisible(),
+        "0 間：只寫「沒有」，列與說明都收起")
+    foreignAsks = sends("adminForeign")
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "FOREIGN_APPEARED", detail = "1" })
+    check(sends("adminForeign") == foreignAsks + 1, "面板開著時收到多了原版屋的提示：重抓那一段")
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "INTERFERENCE", detail = "9" })
+    check(sends("adminForeign") == foreignAsks + 1, "其他提示不重抓")
     local deeds = P.pages.deeds.flow.pool
     local function shown(key) return deeds[key] ~= nil and deeds[key]:isVisible() end
     check(shown("f:Tier1Side") and shown("f:Tier3RentSlots") and not shown("f:Tier4Side") and not shown("warn1#1")
@@ -409,7 +455,8 @@ return function(T)
     fw.click(pp.pv1)
     check(pp["pc1:1r"] ~= nil and pp["pc1:1r"]:isVisible(), "〔查看〕列出該玩家的安全屋")
     fw.click(pp["pc1:1r"])
-    check(fw.dialog ~= nil and fw.dialog.danger == true, "代為放棄先開 danger 對話框")
+    check(fw.dialog ~= nil and fw.dialog.danger == true and fw.dialog.confirmText == "IGUI_MSH_Admin_ReleaseForOwnerConfirm",
+        "代為放棄先開 danger 對話框，確認鈕不帶刪節號")
     fw.dialog.onResult(true)
     sent = lastCmd("adminRelease")
     check(sent ~= nil and sent.args.claimId == 4 and sent.args.expectedRevision == 6, "確認後送 adminRelease（帶 revision）")
@@ -419,6 +466,19 @@ return function(T)
     sent = lastCmd("adminSetOverride")
     check(sent ~= nil and sent.args.targetUsername == "eve" and sent.args.n == 3, "改個人上限送 adminSetOverride")
     answer("adminSetOverride", {})
+    -- 從原版安全屋清單〔檢視〕別人的屋（Entry.safehouseUIAdd → AP.open{ player }）
+    fw.click(pp["flt:overrides"])
+    AP.open({ tab = "players", player = "kim" })
+    check(P.current == "players" and P.selected == "kim" and pp.search ~= nil and pp.search:getText() == "kim",
+        "開玩家頁、搜尋框填屋主、要展開那一位")
+    T.advance(1000)
+    AP.onTick()
+    local q = lastCmd("adminPlayers")
+    check(q ~= nil and q.args.query == "kim" and q.args.page == 1, "不等打字停頓：下一個 tick 就送搜尋")
+    check(q ~= nil and q.args.filter == "all", "停在「有自訂上限」篩選時也回到全部玩家（屋主不一定設了上限）")
+    answer("adminPlayers", { rows = { { name = "kim", used = 1, free = 1, override = -1,
+        claims = { { claimId = 2, title = "L", revision = 3, lifecycle = "active", tier = 1 } } } }, page = 1, pages = 1, total = 1 })
+    check(pp["pc1:1r"] ~= nil and pp["pc1:1r"]:isVisible(), "回覆到了直接展開，列出那位的安全屋與〔代為放棄...〕")
 
     -- 名額視窗：假 Economy 客戶端
     local calls = {}

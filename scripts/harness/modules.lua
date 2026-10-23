@@ -28,6 +28,7 @@ return {
     { dir = "server", name = "MinidoracatSafehouse/Indoor" },
     { dir = "server", name = "MinidoracatSafehouse/Vehicles" },
     { dir = "server", name = "MinidoracatSafehouse/Storage" },
+    { dir = "server", name = "MinidoracatSafehouse/Foreign" },
     { dir = "client", name = "MinidoracatSafehouse/Mirror" },
     { dir = "client", name = "MinidoracatSafehouse/PublicApi" },
     { dir = "client", name = "MinidoracatSafehouse/Client" },

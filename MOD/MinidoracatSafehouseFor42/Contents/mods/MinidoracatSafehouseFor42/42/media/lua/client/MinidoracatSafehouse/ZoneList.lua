@@ -53,6 +53,11 @@ function ZL.canTeleport()
     return role ~= nil and role:hasCapability(cap) == true
 end
 
+-- 原版 /teleportto 到那格中央（管理員面板的原版安全屋〔傳送〕也用它）
+function ZL.sendTeleport(x, y)
+    SendCommandToServer(string.format("/teleportto %d.5,%d.5,0", x, y))
+end
+
 local function rectsOf(z)
     return type(z.rects) == "table" and z.rects or EMPTY
 end
@@ -129,7 +134,7 @@ function ZL.teleport(m, zoneId)
     local z = ZL.find(m, zoneId)
     if z == nil or #rectsOf(z) == 0 then return false end
     local x, y = ZL.target(z)
-    SendCommandToServer(string.format("/teleportto %d.5,%d.5,0", x, y))
+    ZL.sendTeleport(x, y)
     m.selected = zoneId
     ZL.say(m, getText("IGUI_MSH_ZoneList_Teleported", ZL.nameOf(z), x, y), "text")
     return true

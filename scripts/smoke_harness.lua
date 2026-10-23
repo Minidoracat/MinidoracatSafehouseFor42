@@ -34,6 +34,7 @@ local SCENARIOS = {
     "t_journal",
     "t_admin",
     "t_zones",
+    "t_foreign",
     "t_deeds",
     "t_recipes",
     "t_mirror",
