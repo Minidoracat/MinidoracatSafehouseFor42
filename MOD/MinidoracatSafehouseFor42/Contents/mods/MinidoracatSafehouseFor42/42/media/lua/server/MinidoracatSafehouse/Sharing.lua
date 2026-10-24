@@ -412,7 +412,7 @@ end
 function Sh.shareFaction(ctx)
     local rec, code = target(ctx, "owner")
     if rec == nil then return S.fail(code) end
-    if not MSH.Settings.get().allowFactionShare then return S.fail(CODE.FACTION_DISABLED) end
+    if not MSH.Settings.allowFactionShare() then return S.fail(CODE.FACTION_DISABLED) end
     local bits = Sh.normalize(ctx.args.bits)
     if bits == nil or MSH.maskBits(bits, MSH.SHARE_FACTION_MAX) ~= bits then return S.fail(CODE.BAD_ARGS) end
     local f = Sh.factionOf(ctx.who)
@@ -445,7 +445,7 @@ function Sh.resumeFaction(ctx)
     if rec == nil then return S.fail(code) end
     local fs = rec.factionShare
     if type(fs) ~= "table" then return S.fail(CODE.BAD_USER) end
-    if not MSH.Settings.get().allowFactionShare then return S.fail(CODE.FACTION_DISABLED) end
+    if not MSH.Settings.allowFactionShare() then return S.fail(CODE.FACTION_DISABLED) end
     local f = type(fs.name) == "string" and Faction.getFaction(fs.name) or nil   -- Faction.java:140
     if f == nil then return S.fail(CODE.FACTION_GONE) end
     if not (f:isOwner(ctx.who) or f:isMember(ctx.who)) then return S.fail(CODE.NO_FACTION) end

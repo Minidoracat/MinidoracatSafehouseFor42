@@ -100,7 +100,7 @@ end
 -- 陣營分享目前有效時的成員：領袖＋players（Faction.java:241）；分享無效或全服關閉 AllowFactionShare 回 nil
 function N.factionMembers(rec)
     local f = N.faction(rec)
-    if f == nil or not MSH.Settings.get().allowFactionShare then return nil end
+    if f == nil or not MSH.Settings.allowFactionShare() then return nil end
     local leader = f:getOwner()
     local out, seen = { leader }, { [leader] = true }
     for _, raw in ipairs(MSH.toArray(f:getPlayers())) do

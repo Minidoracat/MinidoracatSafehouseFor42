@@ -158,7 +158,8 @@ function S.readable()
     return sandboxTable() ~= nil
 end
 
--- 只讀一鍵（管理視窗、物品搜尋每次排版都問，不必整份 get）；不合法照預設
+-- 只讀一鍵（管理視窗、物品搜尋每次排版都問；伺服器收斂與分享輪檢每間陣營分享都問，不必整份 get）；不合法照預設
+-- （bool、enum 和 get 相同；int 超出範圍時 get 夾值、這裡取預設）
 local function one(key)
     local sb = sandboxTable()
     local v = sb and sb[key]
@@ -169,6 +170,7 @@ end
 
 function S.storageMode() return one("StorageMode") end
 function S.storageReach() return one("StorageReach") end
+function S.allowFactionShare() return one("AllowFactionShare") end
 
 -- 讀出整份設定；不合法的值夾回範圍並附警告（每次呼叫都重讀，面板或原版畫面改值後立即生效）
 -- 回傳 cfg, warnings（{ "Key" , ... }）

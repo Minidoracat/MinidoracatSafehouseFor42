@@ -91,10 +91,10 @@ local function eachRecord(fn)
     end
 end
 
--- 名單、標題收斂（native 已確認是這筆紀錄的）。回傳是否需要廣播。
+-- 名單、標題收斂（native 已確認是這筆紀錄的）。回傳是否需要廣播。want／wanted 是 Native.desiredPlayers 的陣列與集合，
+-- 呼叫端每筆紀錄算一次、各塊共用（同一輪持鎖，各塊之間不會變）。
 -- owner 標記出現在 players（load() 沒有 setOwner，§2.1；或 owner packet 把舊 owner 加回成員）：安靜移除、不算 drift。
-local function fixNative(rec, house, now, st)
-    local N = MSH.Native
+local function fixNative(rec, house, want, wanted, now, st)
     local marker = MSH.marker(rec.claimId)
     local dirty = false
     -- getTitle／setTitle：SafeHouse.java:727-733
@@ -102,8 +102,6 @@ local function fixNative(rec, house, now, st)
         house:setTitle(rec.title)
         dirty = true
     end
-    local want, wanted = N.desiredPlayers(rec), {}
-    for _, u in ipairs(want) do wanted[u] = true end
     local have = {}
     -- getPlayers 回 live ArrayList（SafeHouse.java:640-642）：先複製再邊走邊移除
     for _, raw in ipairs(MSH.toArray(house:getPlayers())) do
@@ -248,10 +246,18 @@ local function convergeActive(id, rec, idx, now, st)
         R.markQuarantined(rec, why)   -- DUPLICATE（同一塊兩個原生）或 MISMATCH：不猜（§6.2）
         return
     end
+    -- 名單只在有塊在時算（塊全缺時不碰陣營，Native.faction 會更新 factionRefs）
+    local want, wanted
     for i, e in ipairs(entries) do
-        if e and fixNative(rec, e.house, now, st) then
-            st.changed[id .. ":" .. i] = e.house
-            st.drift[id] = true
+        if e then
+            if want == nil then
+                want, wanted = MSH.Native.desiredPlayers(rec), {}
+                for _, u in ipairs(want) do wanted[u] = true end
+            end
+            if fixNative(rec, e.house, want, wanted, now, st) then
+                st.changed[id .. ":" .. i] = e.house
+                st.drift[id] = true
+            end
         end
     end
     if why == nil then
