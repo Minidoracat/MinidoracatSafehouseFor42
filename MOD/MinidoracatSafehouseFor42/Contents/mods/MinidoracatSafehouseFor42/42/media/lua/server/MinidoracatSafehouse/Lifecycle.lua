@@ -22,11 +22,15 @@ local CODE = MSH.CODE
 -- 這筆紀錄的原生：以標記找，每個原生都要對得上其中一塊（範圍＋建立時間）。
 -- 回傳 entries（和 rec.rects 同序，缺的塊是 false）, 狀態：nil（每塊都在）、MISSING（有塊不在，在的都對得上）、
 -- DUPLICATE（同一塊有兩個原生）、MISMATCH（有標記但對不上任何一塊）；後兩種 entries 是 nil
-function L.findNatives(rec, idx)
+-- into：可省，給了就把結果填進這個陣列重用（收斂每輪每間都找一次，用完就丟；呼叫端不得留著它）
+local NONE = {}
+function L.findNatives(rec, idx, into)
     local N = MSH.Native
-    local out, missing = {}, false
-    for i = 1, #rec.rects do out[i] = false end
-    for _, e in ipairs(idx.byClaim[rec.claimId] or {}) do
+    local out, missing = into or {}, false
+    local n = #rec.rects
+    for i = 1, n do out[i] = false end
+    for i = #out, n + 1, -1 do out[i] = nil end
+    for _, e in ipairs(idx.byClaim[rec.claimId] or NONE) do
         local i = N.pieceOf(rec, e)
         if i == nil then return nil, "MISMATCH" end
         if out[i] then return nil, "DUPLICATE" end

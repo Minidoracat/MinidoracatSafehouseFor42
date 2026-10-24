@@ -44,9 +44,30 @@ end
 
 -- 掃一次原生清單建索引：每輪 reconcile 與每次建立各掃一次（§6.2）
 -- entry = { house, rect, owner, claimId（owner 是標記時）, onlineId }
+-- 每次呼叫都照順序重讀每個原生的 owner、範圍與 onlineId（setX／setOwner 等都是 Lua 叫得到的，SafeHouse.java:600-627），
+-- 全部和上次的索引相同就回同一個 idx：收斂每 SWEEP_MS 一輪，常態沒有變動，不必每輪重配 table、組 rectKey、解析標記。
+-- 呼叫端只讀 idx 與 entry、不改它們（改了，下一個拿到同一份的呼叫端就看到改過的）。
+N.indexCache = nil
+
+local function unchanged(idx, list, n)
+    if idx == nil or idx.count ~= n then return false end
+    local all = idx.all
+    for i = 0, n - 1 do
+        local house, e = list:get(i), all[i + 1]
+        if e.house ~= house or e.owner ~= house:getOwner() or e.onlineId ~= house:getOnlineID() then return false end
+        local r = e.rect
+        if r.x ~= house:getX() or r.y ~= house:getY() or r.w ~= house:getW() or r.h ~= house:getH() then return false end
+    end
+    return true
+end
+
 function N.index()
+    local list = SafeHouse.getSafehouseList()   -- SafeHouse.java:652-654（live ArrayList）
+    local n = list:size()
+    if unchanged(N.indexCache, list, n) then return N.indexCache end
     local idx = { all = {}, byClaim = {}, byRect = {}, foreign = {}, onlineIds = {}, count = 0 }
-    for _, house in ipairs(N.list()) do
+    for i = 0, n - 1 do
+        local house = list:get(i)
         local owner = house:getOwner()
         local e = { house = house, rect = N.rectOf(house), owner = owner, claimId = MSH.claimIdOf(owner),
             onlineId = house:getOnlineID() }
@@ -65,6 +86,7 @@ function N.index()
             idx.foreign[#idx.foreign + 1] = e
         end
     end
+    N.indexCache = idx
     return idx
 end
 
@@ -97,19 +119,38 @@ function N.faction(rec)
     return f, nil
 end
 
--- 陣營分享目前有效時的成員：領袖＋players（Faction.java:241）；分享無效或全服關閉 AllowFactionShare 回 nil
+-- 陣營分享目前有效時的成員：領袖＋players（Faction.java:241）；分享無效或全服關閉 AllowFactionShare 回 nil。
+-- 回傳的陣列只讀：每次都重讀領袖與 players，和這間上次讀到的逐一相同就回上次那個陣列（收斂每輪、分享每秒都問），
+-- 不同就換新的。快取照 claimId 放 N.members，Server 每分鐘清空。
+N.members = {}
+
+local function sameMembers(c, leader, l, n)
+    if c == nil or c.leader ~= leader or c.n ~= n then return false end
+    local raw = c.raw
+    for i = 0, n - 1 do
+        if tostring(l:get(i)) ~= raw[i + 1] then return false end
+    end
+    return true
+end
+
 function N.factionMembers(rec)
     local f = N.faction(rec)
     if f == nil or not MSH.Settings.allowFactionShare() then return nil end
     local leader = f:getOwner()
-    local out, seen = { leader }, { [leader] = true }
-    for _, raw in ipairs(MSH.toArray(f:getPlayers())) do
-        local u = tostring(raw)
+    local l = f:getPlayers()
+    local n = l:size()
+    local c = N.members[rec.claimId]
+    if sameMembers(c, leader, l, n) then return c.out end
+    local out, seen, raw = { leader }, { [leader] = true }, {}
+    for i = 0, n - 1 do
+        local u = tostring(l:get(i))
+        raw[i + 1] = u
         if not seen[u] then
             seen[u] = true
             out[#out + 1] = u
         end
     end
+    if rec.claimId ~= nil then N.members[rec.claimId] = { leader = leader, n = n, raw = raw, out = out } end
     return out
 end
 
@@ -125,20 +166,58 @@ end
 
 -- 這筆紀錄應該在原生名單裡的人：屋主＋帶 MEMBER 的指定玩家＋投影中的陣營成員（§4.4）。
 -- Reconcile、Admin 修名單、Sharing 都以它為準，所以收斂與分享同步不會一加一減。
+-- 回傳陣列與同一批名字的集合（收斂與分享同步拿集合比對，不必再建一次）；兩個都只讀。
+-- 上次算的結果照 claimId 留在 N.desired：每次呼叫都比對輸入（同一筆紀錄、屋主、每個 grant 的名字與位元、這次重讀的
+-- 陣營投影），全部相同就回上次那兩個 table，不同就重算、換新的（不改舊的）。陣營投影每次照樣重讀
+-- （N.faction 會更新 factionRefs，行為不變）。收斂每輪每間都叫，常態沒有變動。Server 每分鐘清空（放棄的不留著）。
+N.desired = {}
+local NO_GRANTS = {}
+
+local function addName(out, seen, u)
+    if type(u) == "string" and u ~= "" and not seen[u] then
+        seen[u] = true
+        out[#out + 1] = u
+    end
+end
+
+local function sameList(a, b)
+    if a == nil or b == nil then return a == b end
+    if #a ~= #b then return false end
+    for i = 1, #a do
+        if a[i] ~= b[i] then return false end
+    end
+    return true
+end
+
+local function cacheHit(c, rec, projected)
+    if c == nil or c.rec ~= rec or c.owner ~= rec.owner then return false end
+    local users, bits, n = c.users, c.bits, 0
+    for i, g in ipairs(rec.grants or NO_GRANTS) do
+        if i > c.n or g.user ~= users[i] or g.bits ~= bits[i] then return false end
+        n = i
+    end
+    return n == c.n and sameList(projected, c.proj)
+end
+
 function N.desiredPlayers(rec)
-    local out, seen = {}, {}
-    local function add(u)
-        if type(u) == "string" and u ~= "" and not seen[u] then
-            seen[u] = true
-            out[#out + 1] = u
-        end
+    local projected = N.projectedMembers(rec)
+    local c = N.desired[rec.claimId]
+    if cacheHit(c, rec, projected) then return c.out, c.seen end
+    local out, seen, users, bits, n = {}, {}, {}, {}, 0
+    addName(out, seen, rec.owner)
+    local member = MSH.SHARE.MEMBER
+    for i, g in ipairs(rec.grants or NO_GRANTS) do
+        users[i], bits[i], n = g.user, g.bits, i
+        if MSH.hasBit(g.bits, member) then addName(out, seen, g.user) end
     end
-    add(rec.owner)
-    for _, g in ipairs(rec.grants or {}) do
-        if MSH.hasBit(g.bits, MSH.SHARE.MEMBER) then add(g.user) end
+    if projected ~= nil then
+        for _, u in ipairs(projected) do addName(out, seen, u) end
     end
-    for _, u in ipairs(N.projectedMembers(rec) or {}) do add(u) end
-    return out
+    if rec.claimId ~= nil then
+        N.desired[rec.claimId] = { rec = rec, owner = rec.owner, n = n, users = users, bits = bits, proj = projected,
+            out = out, seen = seen }
+    end
+    return out, seen
 end
 
 -- 這間佔掉的原生名單名字數：每塊的原生各放一份名單，登入時 MetaDataPacket 整份送（§4.2）；malformed 沒有塊

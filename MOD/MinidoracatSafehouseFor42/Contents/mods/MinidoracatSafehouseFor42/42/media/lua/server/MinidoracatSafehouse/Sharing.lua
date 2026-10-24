@@ -108,8 +108,7 @@ end
 -- 呼叫端持鎖；撤銷與廣播 defer。idx 可省（指令自己掃一次原生清單）。
 function Sh.apply(rec, old, defer, idx)
     local id = rec.claimId
-    local after = N.desiredPlayers(rec)
-    local want = toSet(after)
+    local after, want = N.desiredPlayers(rec)
     local prev = Sh.last[id]
     Sh.last[id] = want
     local affected, changed = {}, false
@@ -488,7 +487,10 @@ local function syncOne(rec, st)
             suspended = true
         end
     end
-    if not suspended and sameSet(toSet(N.desiredPlayers(rec)), Sh.last[rec.claimId]) then return end
+    if not suspended then
+        local _, want = N.desiredPlayers(rec)
+        if sameSet(want, Sh.last[rec.claimId]) then return end
+    end
     st.idx = st.idx or N.index()
     local affected, changed = Sh.apply(rec, nil, st.defer, st.idx)
     if suspended or changed then

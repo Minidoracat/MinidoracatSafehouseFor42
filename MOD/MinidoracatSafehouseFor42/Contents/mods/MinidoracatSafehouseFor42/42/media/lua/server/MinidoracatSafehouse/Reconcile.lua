@@ -82,26 +82,65 @@ local function clearQuietInterference(now)
     end
 end
 
--- 走訪 registry 的整數鍵紀錄（不排序：收斂與順序無關，省掉每輪 1,280 筆的排序）。malformed（沒有合法 rect）略過。
--- 走訪中 markReleased 會把 md.claims[id] 設 nil：pairs 走的是開始時的 key 快照，已刪的 key 取值為 nil
--- （反編譯 pz/se/krka/kahlua/j2se/KahluaTableImpl.java:152-180，下面的 type 檢查略過它）。
-local function eachRecord(fn)
+-- 這一輪要收斂的紀錄（active、lapsed、releasing），每輪開頭走訪 registry 一次填進共用陣列（不排序：收斂與順序無關，
+-- 省掉每輪 1,280 筆的排序；不每輪重配）。malformed（沒有合法 rect）略過。後面三步（owner drift、inactive、active）
+-- 都走這份，各自當下再看 lifecycle 與 md.claims[id] 是不是還是它：inactive 那步 markReleased 會把 md.claims[id] 設 nil。
+local live, liveN = {}, 0
+local function collectLive()
+    local n = 0
     for id, rec in pairs(MSH.Registry.md.claims) do
-        if MSH.isInt(id) and type(rec) == "table" and rec.claimId == id and not rec.malformed then fn(id, rec) end
+        if MSH.isInt(id) and type(rec) == "table" and rec.claimId == id and not rec.malformed then
+            local lc = rec.lifecycle
+            if lc == LC.ACTIVE or lc == LC.LAPSED or lc == LC.RELEASING then
+                n = n + 1
+                live[n] = rec
+            end
+        end
     end
+    for i = n + 1, liveN do live[i] = nil end
+    liveN = n
+end
+
+local function current(rec)
+    return MSH.Registry.md.claims[rec.claimId] == rec
+end
+
+-- 原生名單已經剛好是 want（同樣多人、每人都在 wanted、沒有重複、沒有標記）：常態每輪都是這樣，
+-- 直接讀 live list 比對、不複製；對不上才走下面的完整收斂。seen／names 是共用的暫存，用完照 names 逐一清空
+-- （不在 pairs 走訪中刪鍵：Kahlua 走訪中改表不安全）。
+local seen, names = {}, {}
+local function rosterClean(l, want, wanted, marker)
+    local n = l:size()
+    if n ~= #want then return false end
+    local ok, k = true, 0
+    for i = 0, n - 1 do
+        local u = tostring(l:get(i))
+        if u == marker or not wanted[u] or seen[u] then
+            ok = false
+            break
+        end
+        seen[u] = true
+        k = k + 1
+        names[k] = u
+    end
+    for i = 1, k do
+        seen[names[i]] = nil
+        names[i] = nil
+    end
+    return ok
 end
 
 -- 名單、標題收斂（native 已確認是這筆紀錄的）。回傳是否需要廣播。want／wanted 是 Native.desiredPlayers 的陣列與集合，
--- 呼叫端每筆紀錄算一次、各塊共用（同一輪持鎖，各塊之間不會變）。
+-- marker 是這間的標記；呼叫端每筆紀錄算一次、各塊共用（同一輪持鎖，各塊之間不會變）。
 -- owner 標記出現在 players（load() 沒有 setOwner，§2.1；或 owner packet 把舊 owner 加回成員）：安靜移除、不算 drift。
-local function fixNative(rec, house, want, wanted, now, st)
-    local marker = MSH.marker(rec.claimId)
+local function fixNative(rec, house, want, wanted, marker, now, st)
     local dirty = false
     -- getTitle／setTitle：SafeHouse.java:727-733
     if house:getTitle() ~= rec.title then
         house:setTitle(rec.title)
         dirty = true
     end
+    if rosterClean(house:getPlayers(), want, wanted, marker) then return dirty end
     local have = {}
     -- getPlayers 回 live ArrayList（SafeHouse.java:640-642）：先複製再邊走邊移除
     for _, raw in ipairs(MSH.toArray(house:getPlayers())) do
@@ -144,12 +183,13 @@ end
 local function fixOwners(idx, now, st)
     local N = MSH.Native
     local fixed = false
-    eachRecord(function(id, rec)
-        local lc = rec.lifecycle
-        local list = idx.byClaim[id] or {}
-        if (lc == LC.ACTIVE or lc == LC.LAPSED or lc == LC.RELEASING) and #list < #rec.rects then
+    for k = 1, liveN do
+        local rec = live[k]
+        local id, lc = rec.claimId, rec.lifecycle
+        local list = idx.byClaim[id]
+        if (list and #list or 0) < #rec.rects then
             local have = {}
-            for _, e in ipairs(list) do
+            for _, e in ipairs(list or {}) do
                 local i = N.pieceOf(rec, e)
                 if i then have[i] = true end
             end
@@ -172,7 +212,7 @@ local function fixOwners(idx, now, st)
                 end
             end
         end
-    end)
+    end
     return fixed
 end
 
@@ -239,22 +279,29 @@ local function convergeTombs(idx, now, st)
     end
 end
 
+-- 每輪每間都用的暫存：findNatives 的結果陣列（只在這次 convergeActive 內用）、標記字串（claimId 不重用）
+local entriesScratch, markers = {}, {}
+
 local function convergeActive(id, rec, idx, now, st)
     local R, L = MSH.Registry, MSH.Lifecycle
-    local entries, why = L.findNatives(rec, idx)
+    local entries, why = L.findNatives(rec, idx, entriesScratch)
     if entries == nil then
         R.markQuarantined(rec, why)   -- DUPLICATE（同一塊兩個原生）或 MISMATCH：不猜（§6.2）
         return
     end
     -- 名單只在有塊在時算（塊全缺時不碰陣營，Native.faction 會更新 factionRefs）
-    local want, wanted
+    local want, wanted, marker
     for i, e in ipairs(entries) do
         if e then
             if want == nil then
-                want, wanted = MSH.Native.desiredPlayers(rec), {}
-                for _, u in ipairs(want) do wanted[u] = true end
+                want, wanted = MSH.Native.desiredPlayers(rec)
+                marker = markers[id]
+                if marker == nil then
+                    marker = MSH.marker(id)
+                    markers[id] = marker
+                end
             end
-            if fixNative(rec, e.house, want, wanted, now, st) then
+            if fixNative(rec, e.house, want, wanted, marker, now, st) then
                 st.changed[id .. ":" .. i] = e.house
                 st.drift[id] = true
             end
@@ -319,17 +366,23 @@ end
 -- 一輪收斂；呼叫端持鎖。先移除該移除的（重畫留下的舊原生可能與新 claim 重疊），重建索引後再處理 active。
 local function pass(now, st)
     local N = MSH.Native
+    collectLive()
     local idx = N.index()
     if fixOwners(idx, now, st) then idx = N.index() end
     local first = idx
     convergeTombs(idx, now, st)
-    eachRecord(function(id, rec)
-        if rec.lifecycle == LC.LAPSED or rec.lifecycle == LC.RELEASING then convergeInactive(id, rec, idx, now, st) end
-    end)
+    for i = 1, liveN do
+        local rec = live[i]
+        local lc = rec.lifecycle
+        if (lc == LC.LAPSED or lc == LC.RELEASING) and current(rec) then
+            convergeInactive(rec.claimId, rec, idx, now, st)
+        end
+    end
     if st.removed then idx = N.index() end
-    eachRecord(function(id, rec)
-        if rec.lifecycle == LC.ACTIVE then convergeActive(id, rec, idx, now, st) end
-    end)
+    for i = 1, liveN do
+        local rec = live[i]
+        if rec.lifecycle == LC.ACTIVE and current(rec) then convergeActive(rec.claimId, rec, idx, now, st) end
+    end
     return first
 end
 

@@ -426,4 +426,64 @@ return function(T)
     check(R.tombstoneCount() == soft, "壓回軟上限（實際 " .. R.tombstoneCount() .. "）")
     check(R.tomb(1) ~= nil and R.tomb(2) ~= nil, "沒跨過重開的不刪（即使最舊）")
     check(R.tomb(oldest) == nil and R.tomb(oldest + 5) == nil and R.tomb(oldest + 6) ~= nil, "從最舊、合格的開始刪 6 筆")
+
+    -- 2026-10-25 收斂的成本：原生索引、desiredPlayers、陣營成員、R.list、Settings.get 都在輸入沒變時回上次的結果。
+    -- 每項都要「改了，下一輪就照新的做」，和不快取時一樣（快取若少比對一樣東西，這裡會抓到）
+    T.section("收斂的快取：原生、名單、陣營、設定改了，下一輪就照新的")
+    MSH = T.boot()
+    R, N = MSH.Registry, MSH.Native
+    local M, U = MSH.SHARE.MEMBER, MSH.SHARE.USE
+    local cr, ch = mk(MSH, 600, "alice", { { user = "bob", bits = M + U } })
+    sweepNow()
+    local idxA = N.index()
+    check(N.index() == idxA, "原生沒變：同一份索引")
+    ch.players:add("alice")                   -- 名單人數對、但少了 bob、alice 重複
+    ch.players:remove("bob")
+    sweepNow()
+    check(ch.players:contains("bob"), "名單人數一樣但有重複、少一人：照樣補回")
+    cr.grants[1].bits = U                     -- 直接改 grant 的位元（同一個 table）：拿掉 MEMBER
+    sweepNow()
+    check(not ch.players:contains("bob"), "grant 位元就地改掉 MEMBER：下一輪移出名單")
+    cr.grants[1].bits = M + U
+    sweepNow()
+    check(ch.players:contains("bob"), "改回來：下一輪補回")
+    local fac = T.faction("Cache", "alice", { "alice", "fm1" })
+    cr.factionShare = { name = "Cache", leader = "alice", bits = M + U, state = "GRANTED" }
+    N.factionRefs[cr.claimId] = fac
+    sweepNow()
+    check(ch.players:contains("fm1"), "陣營分享：成員投影進名單")
+    fac.players:add("fm2")
+    sweepNow()
+    check(ch.players:contains("fm2"), "陣營多一人：下一輪投影進去")
+    fac.players:remove("fm1")
+    fac.players:add("fm3")                    -- 人數不變、換人
+    sweepNow()
+    check(not ch.players:contains("fm1") and ch.players:contains("fm3"), "陣營換人（人數不變）：下一輪換過來")
+    T.sandbox("AllowFactionShare", false)
+    sweepNow()
+    check(not ch.players:contains("fm2") and not ch.players:contains("fm3") and ch.players:contains("bob"),
+        "全服關閉陣營分享：下一輪停止投影")
+    T.sandbox("AllowFactionShare", true)
+    sweepNow()
+    check(ch.players:contains("fm3"), "重新開啟：下一輪投影回來")
+    ch.x = ch.x + 1                           -- 引擎的 setX（Lua 叫得到，SafeHouse.java:600-602）
+    sweepNow()
+    check(N.index() ~= idxA and cr.lifecycle == "quarantined" and cr.quarantineReason == "MISMATCH",
+        "原生範圍被改：索引重建、對不上就隔離（同不快取時）")
+    local cfg = MSH.Settings.get()
+    check(MSH.Settings.get() == cfg, "沙盒沒變：Settings.get 回同一份")
+    T.sandbox("ClaimGap", 7)
+    check(MSH.Settings.get().claimGap == 7 and MSH.Settings.get() ~= cfg, "改了 ClaimGap：下一次 Settings.get 就是新值")
+    T.sandbox("ClaimGap", 99)
+    local cfg2, warn2 = MSH.Settings.get()
+    check(cfg2.claimGap == 16 and warn2[1] == "ClaimGap", "超出範圍：照樣夾值並警告")
+    local list = R.list()
+    check(R.list() == list, "registry 沒變：R.list 回同一份")
+    local dave, ch2 = mk(MSH, 700, "dave")
+    check(R.list() ~= list and #R.list() == #list + 1 and #list == 1 and ch2 ~= nil, "新增一筆：R.list 換成新的、舊的不動")
+    R.get(cr.claimId).malformed = true
+    check(#R.list() == 1 and R.liveCount() == 2, "標成 malformed：不在 R.list、仍算佔位")
+    R.markReleased(dave, "RELEASED", T.now)   -- 筆數不變、換了一筆：照樣換新
+    local erin = mk(MSH, 800, "erin")
+    check(#R.list() == 1 and R.list()[1] == erin, "放棄一筆又新增一筆（筆數不變）：R.list 是新的那筆")
 end

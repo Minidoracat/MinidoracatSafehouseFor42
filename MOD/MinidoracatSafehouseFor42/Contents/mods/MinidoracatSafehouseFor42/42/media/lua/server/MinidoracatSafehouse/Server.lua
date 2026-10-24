@@ -49,23 +49,34 @@ function S.define(name, spec)
 end
 
 -- kind：startup（開服 OnLoadedMapZones 後依 order 執行）、tick（每 tick）、minute（每分鐘）、serverStarted
+-- 排好的清單照 kind 快取（tick 每幀都跑，不每幀排序）；登記時清掉那一種的快取
+S.sorted = {}
 function S.hook(kind, name, fn, order)
     S.hooks[kind][name] = { fn = fn, order = order or 50 }
+    S.sorted[kind] = nil
+end
+
+local function sortedHooks(kind)
+    local list = S.sorted[kind]
+    if list ~= nil then return list end
+    list = {}
+    for name, h in pairs(S.hooks[kind]) do list[#list + 1] = { name = name, h = h } end
+    MSH.sortSafe(list, function(a, b)
+        if a.h.order ~= b.h.order then return a.h.order < b.h.order end
+        return a.name < b.name
+    end)
+    S.sorted[kind] = list
+    return list
 end
 
 local function runHooks(kind, ...)
-    local list = {}
-    for name, h in pairs(S.hooks[kind]) do list[#list + 1] = { name = name, fn = h.fn, order = h.order } end
-    MSH.sortSafe(list, function(a, b)
-        if a.order ~= b.order then return a.order < b.order end
-        return a.name < b.name
-    end)
-    for _, h in ipairs(list) do
+    for _, x in ipairs(sortedHooks(kind)) do
+        local h = x.h
         local ok, err = pcall(h.fn, ...)
         if not ok then
-            MSH.Audit.throttled("HOOK|" .. kind .. "|" .. h.name, 60000, "INTERNAL_ERROR",
-                { code = kind, detail = h.name .. ": " .. tostring(err) }, getTimestampMs())
-            MSH.log(kind .. " hook " .. h.name .. " failed: " .. tostring(err))
+            MSH.Audit.throttled("HOOK|" .. kind .. "|" .. x.name, 60000, "INTERNAL_ERROR",
+                { code = kind, detail = x.name .. ": " .. tostring(err) }, getTimestampMs())
+            MSH.log(kind .. " hook " .. x.name .. " failed: " .. tostring(err))
         end
     end
 end
@@ -278,6 +289,8 @@ local function pruneCaches(now)
         if #keep == 0 then S.cache[who] = nil end
     end
     S.rate, S.cooldown = {}, {}
+    -- Native 的名單快取（desiredPlayers、factionMembers）：放棄的紀錄不留著，下一輪收斂重算
+    MSH.Native.desired, MSH.Native.members = {}, {}
     for name, at in pairs(S.unverified) do
         if now - at > 60000 then S.unverified[name] = nil end
     end

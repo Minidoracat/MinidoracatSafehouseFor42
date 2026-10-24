@@ -173,12 +173,27 @@ function S.storageReach() return one("StorageReach") end
 function S.allowFactionShare() return one("AllowFactionShare") end
 
 -- 讀出整份設定；不合法的值夾回範圍並附警告（每次呼叫都重讀，面板或原版畫面改值後立即生效）
--- 回傳 cfg, warnings（{ "Key" , ... }）
+-- 回傳 cfg, warnings（{ "Key" , ... }）。呼叫端只讀、不改：每次呼叫都逐鍵比對 SandboxVars 的原值，和上一次
+-- 算的時候全部相同就回同一份 cfg、warnings（比對一鍵只是一次 ~=，比整份驗證、組 tiers 便宜）；有一鍵不同就重算。
+local last = { sb = nil, vals = {}, cfg = nil, warnings = nil }
+
+local function unchanged(sbt, sb)
+    if last.cfg == nil or last.sb ~= sbt then return false end
+    local vals = last.vals
+    for i = 1, #OPTIONS do
+        if sb[OPTIONS[i].key] ~= vals[i] then return false end
+    end
+    return true
+end
+
 function S.get()
-    local sb = sandboxTable() or {}
-    local raw, warnings = {}, {}
-    for _, o in ipairs(OPTIONS) do
+    local sbt = sandboxTable()
+    local sb = sbt or {}
+    if unchanged(sbt, sb) then return last.cfg, last.warnings end
+    local raw, warnings, vals = {}, {}, {}
+    for i, o in ipairs(OPTIONS) do
         local v = sb[o.key]
+        vals[i] = v
         if v == nil or not typeOk(o, v) then
             if v ~= nil then warnings[#warnings + 1] = o.key end
             v = o.default
@@ -246,6 +261,7 @@ function S.get()
             craft = raw["Tier" .. n .. "Craft"],
         }
     end
+    last.sb, last.vals, last.cfg, last.warnings = sbt, vals, cfg, warnings
     return cfg, warnings
 end
 

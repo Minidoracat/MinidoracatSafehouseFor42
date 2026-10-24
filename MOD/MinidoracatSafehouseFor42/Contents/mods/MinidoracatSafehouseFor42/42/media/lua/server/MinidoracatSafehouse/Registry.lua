@@ -246,13 +246,31 @@ function R.get(id)
 end
 
 -- 依 claimId 由小到大走訪佔位中的紀錄；沒有合法 rect 的 malformed 紀錄不在內（見 listAll）
+-- 每次呼叫照樣走訪 md.claims 數出符合的紀錄、逐筆確認上一次排好的結果裡有它（claimId 也沒變）；同一批就回同一份陣列，
+-- 省掉每次整份排序（指令、名額與每分鐘的工作都會叫，byOwner 也走這裡）。回傳的陣列呼叫端只讀；有變動時換新陣列，
+-- 不改舊的（手上拿著舊陣列走訪的呼叫端不受影響）。
+local listCache = { md = nil, at = nil, list = nil }
+
 function R.list()
-    local out = {}
-    if R.md == nil then return out end
-    for id, rec in pairs(R.md.claims) do
+    local md = R.md
+    if md == nil then return {} end
+    local c = listCache
+    local at = c.md == md and c.at or nil
+    local n, same = 0, at ~= nil
+    for id, rec in pairs(md.claims) do
+        if MSH.isInt(id) and type(rec) == "table" and not rec.malformed then
+            n = n + 1
+            if same and at[rec] ~= rec.claimId then same = false end
+        end
+    end
+    if same and n == #c.list then return c.list end
+    local out, pos = {}, {}
+    for id, rec in pairs(md.claims) do
         if MSH.isInt(id) and type(rec) == "table" and not rec.malformed then out[#out + 1] = rec end
     end
     MSH.sortSafe(out, function(a, b) return a.claimId < b.claimId end)
+    for _, rec in ipairs(out) do pos[rec] = rec.claimId end
+    c.md, c.at, c.list = md, pos, out
     return out
 end
 
@@ -323,8 +341,14 @@ function R.isLive(rec)
 end
 
 -- 佔位的紀錄：released 已搬到 tombstone，claims 裡全部佔位（lapsed 照樣擋別人，§1.3）；malformed 也算一筆
+-- （＝#listAll()，只數不排序）
 function R.liveCount()
-    return #R.listAll()
+    local n = 0
+    if R.md == nil then return n end
+    for id, rec in pairs(R.md.claims) do
+        if MSH.isInt(id) and type(rec) == "table" then n = n + 1 end
+    end
+    return n
 end
 
 function R.tombstoneCount()
