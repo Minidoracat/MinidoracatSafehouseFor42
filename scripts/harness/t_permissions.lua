@@ -40,6 +40,7 @@ return function(T)
     -- 每個類別的目標欄位（照各類別 :new）
     local TARGET = {
         ISToggleLightAction = function(x, y) return { object = T.worldObject(x, y) } end,
+        ISLightActions = function(x, y) return { mode = "RemoveLightBulb", lightswitch = T.worldObject(x, y) } end,
         ISToggleStoveAction = function(x, y) return { object = T.worldObject(x, y) } end,
         ISRadioAction = function(x, y) return { device = T.worldObject(x, y) } end,
         ISPlugGenerator = function(x, y) return { generator = T.worldObject(x, y) } end,
@@ -60,8 +61,8 @@ return function(T)
         ISWaterPlantAction = function(x, y) return { sq = T.gridSquare(x, y) } end,
     }
     local CATEGORY = {
-        USE = { "ISToggleLightAction", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator", "ISActivateGenerator",
-            "ISAddFuel", "ISFixGenerator", "ISFluidTransferAction" },
+        USE = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator",
+            "ISActivateGenerator", "ISAddFuel", "ISFixGenerator", "ISFluidTransferAction" },
         MOVE = { "ISMoveablesAction", "ISTakeGenerator" },
         BUILD = { "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction", "ISUnbarricadeAction" },
         FARM = { "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction", "ISWaterPlantAction" },
@@ -177,6 +178,56 @@ return function(T)
     check(T.ran["Actions.build"] == 2, "有 BUILD、範圍外：照原版")
     Actions.build(bare, { x = "105", y = 105, z = 0 })
     check(T.ran["Actions.build"] == 3, "座標不是數字：不判定、照原版")
+    -- 格子不存在的樓層：照座標判斷
+    T.unloaded["105,105"] = true
+    Actions.build(bare, { x = 105, y = 105, z = 3 })
+    check(T.ran["Actions.build"] == 3, "格子不存在的樓層：沒有 BUILD 照樣被拒")
+    Actions.build(full, { x = 105, y = 105, z = 3 })
+    check(T.ran["Actions.build"] == 4, "格子不存在的樓層：有 BUILD 照原版")
+    T.unloaded["105,105"] = nil
+
+    -- 多格物件：每一格都查（claim 範圍 100..109）。item 照原版類別會用到的欄位與方法
+    local function built(actor, item, x, y, north)
+        local before = T.ran["Actions.build"] or 0
+        Actions.build(actor, { x = x, y = y, z = 0, north = north, item = item })
+        return (T.ran["Actions.build"] or 0) > before
+    end
+    local function tile(sprite, blocking)
+        return { getSpriteName = function() return sprite end, isBlocking = function() return blocking end }
+    end
+    local function entity(tiles, w, h, layers)   -- tiles[zz][yy][xx]；ISBuildIsoEntity 的 face
+        local face = { getzLayers = function() return layers end, getWidth = function() return w end,
+            getHeight = function() return h end,
+            getTileInfo = function(_, xx, yy, zz) local t = tiles[zz + 1][yy + 1]; return t and t[xx + 1] end }
+        return { getFace = function() return face end }
+    end
+    local wide = entity({ { { tile("a"), tile("b") } } }, 2, 1, 1)
+    check(not built(bare, wide, 99, 105) and (deniedOf(bare) or {}).bit == B.BUILD, "entity 兩格、第二格在 claim：被拒")
+    check(built(full, wide, 99, 105), "entity 兩格、有 BUILD：照原版")
+    check(built(bare, entity({ { { tile("a"), tile(nil, false) } } }, 2, 1, 1), 99, 105),
+        "entity 第二格沒有圖塊也不擋路：不算佔用（同原版 isValid）")
+    check(not built(bare, entity({ { { tile("a"), tile(nil, true) } } }, 2, 1, 1), 99, 105), "entity 第二格只擋路：照樣算佔用")
+    check(not built(bare, entity({ { { tile("a") } }, { { tile("b"), tile("c") } } }, 2, 1, 2), 99, 105),
+        "entity 上一層多出的格子：照樣算")
+    local stairs = {   -- ISWoodenStairs.lua:227-262：西向往 x 減、北向往 y 減，頂端那格在上一層
+        getSquare2Pos = function(_, s, n) if n then return s:getX(), s:getY() - 1, s:getZ() end return s:getX() - 1, s:getY(), s:getZ() end,
+        getSquare3Pos = function(_, s, n) if n then return s:getX(), s:getY() - 2, s:getZ() end return s:getX() - 2, s:getY(), s:getZ() end,
+        getSquareTopPos = function(_, s, n) if n then return s:getX(), s:getY() - 3, s:getZ() + 1 end return s:getX() - 3, s:getY(), s:getZ() + 1 end,
+    }
+    check(not built(bare, stairs, 112, 105, false), "樓梯西向：頂端那格（x−3）在 claim，被拒")
+    check(built(bare, stairs, 112, 105, true), "樓梯北向：四格都在範圍外，照原版（north 決定方向）")
+    local door = { getSquare4Pos = function(_, s, n) if n then return s:getX() + 3, s:getY(), s:getZ() end return s:getX(), s:getY() - 3, s:getZ() end }
+    check(not built(bare, door, 97, 105, true), "雙開門第 4 格在 claim：被拒")
+    check(not built(bare, { def = { name = "hutch", extraSprites = { { sprite = "s", xoffset = 1, yoffset = 0 } } } }, 99, 105),
+        "兔籠 extraSprites 的格子在 claim：被拒")
+    local ramp = { which = "west20", addRampObject = function() end }   -- ISBuildRampCursor.lua:21-27
+    check(not built(bare, ramp, 115, 105) and built(bare, { which = "west20" }, 115, 105),
+        "坡道游標 20 格壓到 claim：被拒；沒有坡道方法的同名欄位不算")
+    check(built(bare, { getSquare2Pos = function() error("boom") end }, 99, 105), "取範圍的方法丟錯：只剩錨點，錨點在範圍外照原版")
+    -- 一格在自己有 BUILD 的 claim、一格在別人的 claim
+    local neighbor = mk(MSH, { x = 110, y = 100, w = 10, h = 10 }, "neighbor", MSH.SOURCE.DEED, {})
+    check(not built(full, wide, 109, 105) and (deniedOf(full) or {}).claimId == neighbor.claimId,
+        "兩格分屬兩間：沒有 BUILD 的那間擋下（denied 帶那間的 claimId）")
     SFarmingSystemCommands.seed(bare, { x = 105, y = 105, z = 0 })
     check(T.ran["farm.seed"] == nil, "沒有 FARM：農務指令不執行")
     SFarmingSystemCommands.seed(farmer, { x = 105, y = 105, z = 0 })
@@ -219,6 +270,41 @@ return function(T)
         if string.find(line, "ISToggleLightAction@" .. rec.claimId, 1, true) and string.find(line, "^DENY\tbare\t") then n = n + 1 end
     end
     check(n == 1, "同一人同一動作在一分鐘內只寫一行（帶次數）")
+
+    T.section("Permissions：伺服器公開 API v1.denies")
+    local v1 = MSH.v1
+    check(v1.API_MAJOR == 1 and v1.API_REVISION >= 2 and v1.CAPABILITIES.denies == true and type(v1.denies) == "function",
+        "v1：API_MAJOR 1、API_REVISION ≥ 2、CAPABILITIES.denies")
+    check(v1.BITS.USE == B.USE and v1.BITS.MOVE == B.MOVE and v1.BITS.BUILD == B.BUILD and v1.BITS.FARM == B.FARM,
+        "v1.BITS 就是分享位元")
+    local BUILD = v1.BITS.BUILD
+    check(v1.denies(bare, 50, 50, 0, BUILD) == false, "無主地：false")
+    check(v1.denies(owner, 105, 105, 0, BUILD) == false and v1.denies(full, 105, 105, 0, BUILD) == false,
+        "屋主與有 BUILD 的成員：false")
+    local d1, c1 = v1.denies(bare, 105, 105, 0, BUILD)
+    check(d1 == true and c1 == "PERM_DENIED" and (deniedOf(bare) or {}).bit == B.BUILD, "別人的 claim 沒有 BUILD：true，推 denied")
+    T.unloaded["105,105"] = true
+    check(v1.denies(bare, 105.5, 105.5, 3, BUILD) == true, "格子不存在的樓層、小數座標：照 claim 判斷")
+    T.unloaded["105,105"] = nil
+    check(v1.denies(bare, 305, 105, 0, BUILD) == false, "原版安全屋（foreign）不判斷，呼叫端另查")
+    check(v1.denies(coop, 101, 101, 0, BUILD) == true, "分割畫面次玩家（沒有 principal）冒用屋主名字：true")
+    MSH.Audit.flush()
+    local logsBefore = #T.logs
+    local pd, pc = v1.denies(stranger, 105, 105, 0, v1.BITS.USE, { preview = true })
+    local pushed = deniedOf(stranger)
+    MSH.Audit.flush()
+    check(pd == true and pc == "PERM_DENIED" and pushed == nil and #T.logs == logsBefore, "preview：照樣判定，不寫稽核、不推送")
+    v1.denies(bare, 105, 105, 0, BUILD, { label = "Builder:complete" })
+    v1.denies(bare, 105, 105, 0, BUILD, { label = "Builder|x" })
+    MSH.Audit.flush()
+    check(logged("Builder:complete") and logged("Builder/x"), "opts.label 寫進稽核；裡面的 | 換成 /（稽核聚合鍵的分欄字元）")
+    local bad = true
+    for _, args in ipairs({ { nil, 105, 105, 0, BUILD }, { bare, "105", 105, 0, BUILD }, { bare, 105, 105, 0 / 0, BUILD },
+        { bare, 50, 50, 0, B.MEMBER }, { bare, 50, 50, 0, B.TAKE }, { bare, 50, 50, 0, BUILD, "preview" } }) do
+        local d, c = v1.denies(args[1], args[2], args[3], args[4], args[5], args[6])
+        bad = bad and d == true and c == "BAD_ARGS"
+    end
+    check(bad, "參數不對（沒有玩家、座標不是有限數字、不是 USE/MOVE/BUILD/FARM、opts 不是表）：true, BAD_ARGS")
 
     T.section("Permissions：重新開機後包裝照樣生效")
     MSH = T.boot()

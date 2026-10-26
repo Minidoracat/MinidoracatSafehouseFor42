@@ -220,7 +220,7 @@ Select a safehouse in the manager window and open "Members & sharing". To add so
 [table]
 [tr][th]Permission[/th][th]Allows[/th][/tr]
 [tr][td]Member[/td][td]Entering the safehouse, taking and putting items in containers[/td][/tr]
-[tr][td]Use appliances[/td][td]Appliances, including taking water, and wiring, switching, refueling and repairing generators[/td][/tr]
+[tr][td]Use appliances[/td][td]Appliances, including taking water, light bulbs and batteries in lamps, and wiring, switching, refueling and repairing generators[/td][/tr]
 [tr][td]Move furniture[/td][td]Moving furniture, including picking up generators[/td][/tr]
 [tr][td]Build[/td][td]Building, including dismantling[/td][/tr]
 [tr][td]Farm[/td][td]Farming[/td][/tr]

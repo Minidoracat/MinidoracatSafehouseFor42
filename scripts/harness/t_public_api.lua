@@ -1,6 +1,6 @@
--- 客戶端公開 API（PublicApi.lua；temp/handoff/minimap-safehouse-owner.md）：MinidoracatSafehouse.v1.ownerName 把
+-- 客戶端公開 API（PublicApi.lua；契約 docs/public-api.md）：MinidoracatSafehouse.v1.ownerName 把
 -- @MSH:<claimId> 換成真正屋主；資料來自 Global ModData 的回覆。request 同時一個；沒看過的 owner 查不到隔 30 秒，
--- 清單變過、只為了更新的隔 5 分鐘；回覆只判送出當下要的 owner。
+-- 清單變過、只為了更新的隔 5 分鐘；回覆只判送出當下要的 owner。v1.denies：游標預覽用的權限查詢（本機清單）。
 return function(T)
     local check = T.check
     local MSH = T.bootClient()
@@ -115,4 +115,27 @@ return function(T)
     SH.ownerName("@MSH:77")
     check(#requests == before + 1, "（對照）同一時間點 managed 的查詢會送")
     ModData = savedModData
+
+    T.section("PublicApi：客戶端 denies（游標預覽）")
+    check(SH.API_REVISION >= 2 and SH.CAPABILITIES.denies == true and SH.CAPABILITIES.ownerName == true
+        and SH.BITS.BUILD == MSH.SHARE.BUILD and SH.BITS.USE == MSH.SHARE.USE, "v1：rev ≥ 2、denies 與 ownerName、BITS")
+    SafeHouse.addSafeHouse(100, 100, 10, 10, MSH.marker(1))   -- 我的（清單裡 bits 全部）
+    SafeHouse.addSafeHouse(200, 100, 10, 10, MSH.marker(2))   -- 分享給我、只有成員
+    SafeHouse.addSafeHouse(300, 100, 10, 10, MSH.marker(3))   -- 別人的、不在我的清單
+    SafeHouse.addSafeHouse(400, 100, 10, 10, "carol")         -- 原版安全屋
+    MSH.Client.claims = { mine = {}, shared = {}, at = T.now, byId = {
+        [1] = { claimId = 1, bits = MSH.SHARE_ALL }, [2] = { claimId = 2, bits = MSH.SHARE.MEMBER } } }
+    local me, coop = T.player({ name = "me" }), T.player({ name = "me2", num = 1 })
+    local B = SH.BITS
+    local d3, c3 = SH.denies(me, 305.5, 105, 3, B.BUILD)
+    check(SH.denies(me, 50, 50, 0, B.BUILD) == false and SH.denies(me, 405, 105, 0, B.BUILD) == false,
+        "無主地、原版安全屋：false（原版的照原版查）")
+    check(SH.denies(me, 105, 105, 0, B.BUILD) == false and SH.denies(me, 205, 105, 0, B.USE) == true
+        and d3 == true and c3 == "PERM_DENIED", "自己的 false；只有成員缺 USE、別人的（樓上、小數座標）true")
+    check(SH.denies(coop, 105, 105, 0, B.BUILD) == true and SH.denies(coop, 50, 50, 0, B.BUILD) == false,
+        "分割畫面次玩家沒有清單：本 MOD 的範圍裡一律 true、範圍外 false（同伺服器）")
+    local _, cb = SH.denies(me, 105, 105, 0, MSH.SHARE.TAKE)
+    check(cb == "BAD_ARGS" and select(2, SH.denies(nil, 1, 1, 0, B.BUILD)) == "BAD_ARGS", "參數不對：true, BAD_ARGS")
+    MSH.Client.claims.byId[2].bits = MSH.SHARE.MEMBER + MSH.SHARE.USE
+    check(SH.denies(me, 205, 105, 0, B.USE) == false, "清單更新後（屋主給了 USE）：下一次查就是 false")
 end

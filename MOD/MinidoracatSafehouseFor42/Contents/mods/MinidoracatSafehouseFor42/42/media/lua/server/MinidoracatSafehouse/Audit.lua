@@ -30,9 +30,14 @@ function A.write(event, f)
     writeLog(A.LOGGER, line)
 end
 
--- 拒絕不逐包寫：同一 actor＋指令＋原因每分鐘一行（flush 時帶次數）
+-- 拒絕不逐包寫：同一 actor＋指令＋原因每分鐘一行（flush 時帶次數）。鍵用 | 分欄，各欄裡的 | 換成 /
+-- （動作名可由其他 MOD 經 v1.denies 的 opts.label 指定）
+local function denyPart(v)
+    return (string.gsub(MSH.logSafe(v or "?"), "|", "/"))
+end
+
 function A.deny(actor, command, code)
-    local key = MSH.logSafe(actor or "?") .. "|" .. MSH.logSafe(command or "?") .. "|" .. MSH.logSafe(code or "?")
+    local key = denyPart(actor) .. "|" .. denyPart(command) .. "|" .. denyPart(code)
     A.denyAgg[key] = (A.denyAgg[key] or 0) + 1
 end
 

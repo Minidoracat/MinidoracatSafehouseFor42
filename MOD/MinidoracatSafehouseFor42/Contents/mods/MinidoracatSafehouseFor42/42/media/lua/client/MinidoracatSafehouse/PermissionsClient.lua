@@ -27,9 +27,10 @@ end
 
 -- { 全域表名, 位元, { 處理函式欄位 } }：只列伺服器會擋的動作的入口（Permissions.lua 的包裝對象）
 PC.HANDLERS = {
-    { "ISWorldObjectContextMenu", BIT.USE, { "onToggleLight", "onToggleStove", "onStoveSetting", "onMicrowaveSetting",
+    { "ISWorldObjectContextMenu", BIT.USE, { "onToggleLight", "onLightBulb", "onLightModify", "onLightBattery",
+        "onToggleStove", "onStoveSetting", "onMicrowaveSetting",
         "onPlugGenerator", "onActivateGenerator", "doAddFuelGenerator", "onFixGenerator", "onTakeWater", "onDrink",
-        "onFluidTransfer" } },   -- :1328, 1189, 1203, 1196, 540, 547, 648（加油子選單的每一項）, 554, 2050, 2038, 2793
+        "onFluidTransfer" } },   -- :1328, 1353, 1365, 1378, 1189, 1203, 1196, 540, 547, 648（加油子選單的每一項）, 554, 2050, 2038, 2793
     { "ISWorldObjectContextMenu", BIT.MOVE, { "onTakeGenerator" } },                                  -- :665
     { "ISRadioAndTvMenu", BIT.USE, { "openTvPanel" } },                                               -- ISRadioAndTvMenu.lua:8（世界上的電視／收音機）
     { "ISDisassembleMenu", BIT.MOVE, { "disassemble" } },                                             -- ISDisassembleMenu.lua:83（ISMoveablesAction scrap）

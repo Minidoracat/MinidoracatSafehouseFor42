@@ -220,7 +220,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3819478078
 [table]
 [tr][th]權限[/th][th]可以做的事[/th][/tr]
 [tr][td]成員[/td][td]進出安全屋、拿放容器裡的東西[/td][/tr]
-[tr][td]用電器[/td][td]用電器，含取水，以及發電機的接線、開關、加油與修理[/td][/tr]
+[tr][td]用電器[/td][td]用電器，含取水、燈具的燈泡與電池，以及發電機的接線、開關、加油與修理[/td][/tr]
 [tr][td]搬家具[/td][td]搬家具，含搬走發電機[/td][/tr]
 [tr][td]建造[/td][td]建造，含拆除[/td][/tr]
 [tr][td]農耕[/td][td]農耕[/td][/tr]

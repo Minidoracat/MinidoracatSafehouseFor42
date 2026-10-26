@@ -791,7 +791,8 @@ end
 
 -- ===== 原版 timed action 與伺服器處理器（Permissions 包裝的對象；每次開機重建，包裝不會疊加）=====
 -- 原函式被呼叫就在 T.ran["類別.函式"] 加一；實例用 T.action(類別名, 欄位)，metatable 就是類別（ISBaseTimedAction.lua:173-176）。
-T.TIMED_ACTIONS = { "ISToggleLightAction", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator", "ISActivateGenerator",
+T.TIMED_ACTIONS = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator",
+    "ISActivateGenerator",
     "ISAddFuel", "ISFixGenerator", "ISTakeGenerator",
     "ISFluidTransferAction", "ISMoveablesAction", "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction",
     "ISUnbarricadeAction", "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction",

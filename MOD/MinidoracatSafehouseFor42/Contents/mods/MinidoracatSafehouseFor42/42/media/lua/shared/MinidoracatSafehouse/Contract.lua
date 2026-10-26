@@ -71,6 +71,9 @@ MSH.SHARE_LEGACY = 1 + 2 + 4 + 8 + 16
 -- 主代理 2026-10-20）
 MSH.SHARE_FACTION_MAX = 1 + 2 + 4 + 8 + 16 + 128
 
+-- 公開 API v1.denies 能查的位元（伺服器 Permissions.lua、客戶端 PublicApi.lua 共用；契約 docs/public-api.md）
+MSH.API_BITS = { USE = MSH.SHARE.USE, MOVE = MSH.SHARE.MOVE, BUILD = MSH.SHARE.BUILD, FARM = MSH.SHARE.FARM }
+
 -- 結果碼：伺服器只回這些字串；客戶端照碼顯示「原因＋動作」（M3）。
 MSH.CODE = {
     OK = "OK",
@@ -162,6 +165,14 @@ end
 -- 權限位元測試（Kahlua 沒有位元運算子）
 function MSH.hasBit(bits, bit)
     return MSH.isInt(bits) and bits >= 0 and math.floor(bits / bit) % 2 == 1
+end
+
+-- v1.denies(player, x, y, z, bit[, opts]) 的參數檢查（兩端共用）：有玩家、座標是有限數字、bit 是 API_BITS 之一、opts 是表或 nil
+function MSH.apiArgsOk(player, x, y, z, bit, opts)
+    local B = MSH.API_BITS
+    return player ~= nil and MSH.isFinite(x) and MSH.isFinite(y) and MSH.isFinite(z)
+        and (bit == B.USE or bit == B.MOVE or bit == B.BUILD or bit == B.FARM)
+        and (opts == nil or type(opts) == "table")
 end
 
 -- bits 只留 mask 也有的位元（位元 AND；Kahlua 沒有位元運算子）

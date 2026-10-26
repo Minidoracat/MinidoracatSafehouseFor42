@@ -1,8 +1,9 @@
--- MinidoracatSafehouse/PublicApi.lua：給其他 MOD 用的客戶端公開 API（MinidoracatSafehouse.v1）。
--- 契約：temp/handoff/minimap-safehouse-owner.md（使用者 2026-10-11 裁定小地圖標籤顯示真正屋主）。
---   v1 = { API_MAJOR = 1, API_REVISION = 1, CAPABILITIES = { ownerName = true }, ownerName = fn }
+-- MinidoracatSafehouse/PublicApi.lua：給其他 MOD 用的客戶端公開 API（MinidoracatSafehouse.v1）。對外契約：docs/public-api.md。
+--   v1 = { API_MAJOR = 1, API_REVISION = 2, CAPABILITIES = { ownerName = true, denies = true }, BITS, ownerName, denies }
 --   ownerName(owner)：owner 是原生 SafeHouse:getOwner() 的字串；managed（@MSH:<claimId>）回真正屋主帳號名，
 --     資料還沒到或不是 managed 回 nil。不配置 table、不丟錯，每幀呼叫也可以（查本機快取）。
+--   denies(player, x, y, z, bit[, opts])：和伺服器同簽名，只給游標預覽這類提示用（本機的原生清單＋自己的安全屋清單，
+--     MSH.Client.bitsAt）；不寫稽核、不推通知，opts 不影響結果。伺服器的 v1.denies（Permissions.lua）才是防線。
 -- 資料來源：公開的 Global ModData（MSH.TAG，伺服器 registry，claims[claimId].owner）。客戶端 ModData.request 整張表，
 --   伺服器只回給要的人（GlobalModData.java:153-200）；回覆觸發 OnReceiveGlobalModData(tag, table|false)
 --   （GlobalModDataPacket.java:45-55）。收到時只複製「@MSH:<claimId> → 屋主名」，不留整張表的參照。
@@ -107,13 +108,29 @@ function P.onSafehousesChanged()
     P.stale = true
 end
 
+-- 客戶端 denies：判斷同伺服器的 P.deniesAt（managed 範圍裡缺這個位元＝拒絕）。只有 0 號玩家有安全屋清單（Client.lua），
+-- 分割畫面第 2–4 位玩家在 managed 範圍裡一律拒絕，和伺服器（沒有 principal）一樣。
+function P.denies(player, x, y, z, bit, opts)
+    if not MSH.apiArgsOk(player, x, y, z, bit, opts) then return true, MSH.CODE.BAD_ARGS end
+    local CL = MSH.Client
+    if CL == nil then return false end
+    local bits = CL.bitsAt(math.floor(x), math.floor(y))
+    if bits == nil then return false end
+    if player:getPlayerNum() ~= 0 then bits = 0 end
+    if MSH.hasBit(bits, bit) then return false end
+    return true, MSH.CODE.PERM_DENIED
+end
+
 local v1 = MSH.v1 or {}
 MSH.v1 = v1
 v1.API_MAJOR = 1
-v1.API_REVISION = 1
+v1.API_REVISION = math.max(v1.API_REVISION or 0, 2)
 v1.CAPABILITIES = v1.CAPABILITIES or {}
 v1.CAPABILITIES.ownerName = true
+v1.CAPABILITIES.denies = true
+v1.BITS = MSH.API_BITS
 v1.ownerName = P.ownerName
+v1.denies = function(...) return MSH.PublicApi.denies(...) end
 
 if first then
     -- OnReceiveGlobalModData：LuaEventManager.java:817；OnSafehousesChanged：:775；OnTick：:593

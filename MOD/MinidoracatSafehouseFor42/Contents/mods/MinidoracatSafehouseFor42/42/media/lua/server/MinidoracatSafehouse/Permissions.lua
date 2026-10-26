@@ -7,8 +7,10 @@
 --   （:97, 134），KahluaTableImpl.rawget 找不到會往 metatable 找（KahluaTableImpl.java:98），實例的 metatable 就是類別
 --   （ISBaseTimedAction.lua:173-176），所以在類別上換函式就生效。
 -- 取水 ISTakeWaterAction 在 serverStart 擋（animEvent 分段轉水，ISTakeWaterAction.lua:31-48, 151-161）；Actions.build
--- 不呼叫原函式（BuildAction.java:108-117 不看回傳值）；爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1096-1107）。
+-- 不呼叫原函式（BuildAction.java:108-117 不看回傳值），照座標查建造物件會寫入的每一格（P.buildCells）；
+-- 爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1096-1107）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
+-- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
 if isClient() then return end
 
@@ -59,6 +61,8 @@ end
 -- { 類別名, 位元, 取目標 }：欄位出處是各類別 :new 裡的那一行
 P.WRAPS = {
     { "ISToggleLightAction", BIT.USE, function(a) return P.squareOf(a.object) end },        -- ISToggleLightAction.lua:45
+    -- 裝上、取下燈泡與電池、改裝燈具（complete 才改燈，ISLightActions.lua:25-34）
+    { "ISLightActions", BIT.USE, function(a) return P.squareOf(a.lightswitch) end },          -- ISLightActions.lua:110
     { "ISToggleStoveAction", BIT.USE, function(a) return P.squareOf(a.object) end },        -- ISToggleStoveAction.lua:37
     { "ISRadioAction", BIT.USE, function(a) return P.squareOf(a.device) end },              -- ISRadioAction.lua:197
     { "ISPlugGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },         -- ISPlugGenerator.lua:53
@@ -98,10 +102,10 @@ function P.claimAt(x, y)
     return nil
 end
 
--- 拒絕回 true（並記錄、排推送）；不在 managed claim、沒有 actor 或目標 → false（照原版）
-function P.denies(player, sq, bit, label)
-    if player == nil or sq == nil then return false end
-    local rec = P.claimAt(sq:getX(), sq:getY())
+-- 拒絕回 true（並記錄、排推送）；不在 managed claim → false（照原版）。只看座標（claim 是平面範圍、每層都算），
+-- 不需要格子存在。preview＝預檢：判定相同，不寫稽核、不推送。
+function P.deniesAt(player, x, y, bit, label, preview)
+    local rec = P.claimAt(x, y)
     if rec == nil then return false end
     local who = MSH.Identity.principal(player)
     local bits = nil
@@ -110,9 +114,74 @@ function P.denies(player, sq, bit, label)
         bits = b
     end
     if MSH.hasBit(bits, bit) then return false end
-    MSH.Audit.deny(who or MSH.Identity.claimedName(player), label .. "@" .. tostring(rec.claimId), MSH.CODE.PERM_DENIED)
-    P.outbox[player] = { code = MSH.CODE.PERM_DENIED, bit = bit, claimId = rec.claimId }
+    if not preview then
+        MSH.Audit.deny(who or MSH.Identity.claimedName(player), label .. "@" .. tostring(rec.claimId), MSH.CODE.PERM_DENIED)
+        P.outbox[player] = { code = MSH.CODE.PERM_DENIED, bit = bit, claimId = rec.claimId }
+    end
     return true
+end
+
+-- timed action 與指令的目標格；沒有 actor 或目標 → false（照原版）
+function P.denies(player, sq, bit, label)
+    if player == nil or sq == nil then return false end
+    return P.deniesAt(player, sq:getX(), sq:getY(), bit, label)
+end
+
+-- ===== 建造的佔用範圍 =====
+
+-- 原版多格建造類別算其餘各格的方法：只讀 square:getX/getY/getZ（ISWoodenStairs.lua:227-262、ISDoubleDoor.lua:263-298、
+-- ISDoubleTileFurniture.lua:159、ISEmptyGraves.lua:188），錨點格可能還不存在，所以傳座標替身。
+-- 樓梯頂端那格：AddStairs 會在那裡補地板（IsoGridSquare.java:4907-4931）。
+local POS_FNS = { "getSquare2Pos", "getSquare3Pos", "getSquare4Pos", "getSquareTopPos" }
+
+-- 建造物件 create(x, y, z, north) 會寫入的每一格的 x, y（扁平 x1, y1, x2, y2…；第一組是錨點）。claim 是平面範圍，
+-- 樓層不必列。認不得的類別只有錨點。item 是伺服器重建的建造物件（BuildAction.java:121-162），
+-- 取範圍的方法丟錯也只剩錨點（pcall）。ponytail: 照方法名認類別，子類別改寫 create 的範圍算不到；遇到再加。
+function P.buildCells(item, x, y, z, north)
+    local cells = { x, y }
+    if type(item) ~= "table" then return cells end
+    local function add(cx, cy)
+        if MSH.isFinite(cx) and MSH.isFinite(cy) then
+            cells[#cells + 1] = math.floor(cx)
+            cells[#cells + 1] = math.floor(cy)
+        end
+    end
+    -- entity：照 face 逐格（ISBuildIsoEntity:create :579-592；isValid :458-474 同一個判斷）
+    if type(item.getFace) == "function" then
+        local ok, face = pcall(item.getFace, item)
+        if ok and face ~= nil then
+            for zz = 0, face:getzLayers() - 1 do
+                for xx = 0, face:getWidth() - 1 do
+                    for yy = 0, face:getHeight() - 1 do
+                        local info = face:getTileInfo(xx, yy, zz)
+                        if info and (info:getSpriteName() or info:isBlocking()) then add(x + xx, y + yy) end
+                    end
+                end
+            end
+        end
+    end
+    local pos = { getX = function() return x end, getY = function() return y end, getZ = function() return z end }
+    for _, name in ipairs(POS_FNS) do
+        if type(item[name]) == "function" then
+            local ok, cx, cy = pcall(item[name], item, pos, north)
+            if ok then add(cx, cy) end
+        end
+    end
+    -- 兔籠：IsoHutch 照 def.extraSprites 的 xoffset／yoffset 建其餘各格（IsoHutch.java:87-115）
+    local def = item.def
+    if type(def) == "table" and type(def.extraSprites) == "table" then
+        for _, s in pairs(def.extraSprites) do
+            if type(s) == "table" and MSH.isFinite(s.xoffset) and MSH.isFinite(s.yoffset) then add(x + s.xoffset, y + s.yoffset) end
+        end
+    end
+    -- 原版坡道游標：一直線 20 格（ISBuildRampCursor.lua:5-36；north20／south20 同一段，west20／east20 同一段）
+    if type(item.addRampObject) == "function" then
+        local w = item.which
+        for i = 1, 19 do
+            if w == "north20" or w == "south20" then add(x, y - i) elseif w == "west20" or w == "east20" then add(x - i, y) end
+        end
+    end
+    return cells
 end
 
 -- 放在 tick：不在任何呼叫端的鎖或原版處理途中送網路（契約：網路送出延後）
@@ -169,7 +238,8 @@ local function wrapTakeWater()
     end
 end
 
--- 全域 Actions.build（ActionManager.lua:26-32）：拒絕時不呼叫原函式；客戶端照樣顯示完成，靠 denied 推送說明
+-- 全域 Actions.build（ActionManager.lua:26-32）：任一格拒絕就不呼叫原函式；客戶端照樣顯示完成，靠 denied 推送說明。
+-- 只看座標，不需要格子存在（P.deniesAt）。
 local function wrapBuild()
     if type(Actions) ~= "table" or type(Actions.build) ~= "function" then
         MSH.log("permissions: Actions.build missing, not wrapped")
@@ -177,8 +247,12 @@ local function wrapBuild()
     end
     local orig = Actions.build
     Actions.build = function(character, args)
-        if type(args) == "table" and P.denies(character, P.squareAt(args.x, args.y, args.z), BIT.BUILD, "Actions.build") then
-            return
+        if type(args) == "table" and character ~= nil
+            and MSH.isFinite(args.x) and MSH.isFinite(args.y) and MSH.isFinite(args.z) then
+            local cells = P.buildCells(args.item, math.floor(args.x), math.floor(args.y), math.floor(args.z), args.north == true)
+            for i = 1, #cells, 2 do
+                if P.deniesAt(character, cells[i], cells[i + 1], BIT.BUILD, "Actions.build") then return end
+            end
         end
         return orig(character, args)
     end
@@ -240,3 +314,23 @@ if first then
         MSH.Permissions.onClientCommand(module, command, player, args)
     end)
 end
+
+-- ===== 伺服器公開 API：MinidoracatSafehouse.v1（契約 docs/public-api.md）=====
+-- 客戶端也有一支同簽名的 denies（client/…/PublicApi.lua，只給預覽提示用）；兩邊是不同的 Lua 狀態，各自補自己的 v1。
+
+-- denies(player, x, y, z, bit[, opts]) → denied, code。參數不對時拒絕（true, BAD_ARGS），不丟錯。
+function P.apiDenies(player, x, y, z, bit, opts)
+    if not MSH.apiArgsOk(player, x, y, z, bit, opts) then return true, MSH.CODE.BAD_ARGS end
+    local label = opts ~= nil and type(opts.label) == "string" and opts.label or "v1.denies"
+    if P.deniesAt(player, x, y, bit, label, opts ~= nil and opts.preview == true) then return true, MSH.CODE.PERM_DENIED end
+    return false
+end
+
+local v1 = MSH.v1 or {}
+MSH.v1 = v1
+v1.API_MAJOR = 1
+v1.API_REVISION = math.max(v1.API_REVISION or 0, 2)
+v1.CAPABILITIES = v1.CAPABILITIES or {}
+v1.CAPABILITIES.denies = true
+v1.BITS = MSH.API_BITS
+v1.denies = function(...) return MSH.Permissions.apiDenies(...) end
