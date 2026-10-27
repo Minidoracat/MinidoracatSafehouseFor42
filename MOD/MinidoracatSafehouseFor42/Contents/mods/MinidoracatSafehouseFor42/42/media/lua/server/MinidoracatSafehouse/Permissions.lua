@@ -136,7 +136,7 @@ local POS_FNS = { "getSquare2Pos", "getSquare3Pos", "getSquare4Pos", "getSquareT
 
 -- 建造物件 create(x, y, z, north) 會寫入的每一格的 x, y（扁平 x1, y1, x2, y2…；第一組是錨點）。claim 是平面範圍，
 -- 樓層不必列。認不得的類別只有錨點。item 是伺服器重建的建造物件（BuildAction.java:121-162），
--- 取範圍的方法丟錯也只剩錨點（pcall）。ponytail: 照方法名認類別，子類別改寫 create 的範圍算不到；遇到再加。
+-- 呼叫物件方法的每一段都 pcall：丟錯就略過那段，錨點照查。ponytail: 照方法名認類別，子類別改寫 create 的範圍算不到；遇到再加。
 function P.buildCells(item, x, y, z, north)
     local cells = { x, y }
     if type(item) ~= "table" then return cells end
@@ -146,10 +146,13 @@ function P.buildCells(item, x, y, z, north)
             cells[#cells + 1] = math.floor(cy)
         end
     end
-    -- entity：照 face 逐格（ISBuildIsoEntity:create :579-592；isValid :458-474 同一個判斷）
+    -- entity：照 face 逐格（ISBuildIsoEntity:create :579-592；isValid :458-474 同一個判斷）。其他 MOD 的 getFace 不一定是
+    -- FaceScript：Knox Buildworks 只回 getFaceName（KBWBuildingObject.lua:693-696），0.12.0 在這裡丟錯，連屋主都蓋不了。
+    -- 先看方法在不在：pcall 接住的錯照樣在伺服器 log 印堆疊（KahluaThread.java:953-963）
     if type(item.getFace) == "function" then
-        local ok, face = pcall(item.getFace, item)
-        if ok and face ~= nil then
+        pcall(function()
+            local face = item:getFace()
+            if face == nil or type(face.getzLayers) ~= "function" then return end
             for zz = 0, face:getzLayers() - 1 do
                 for xx = 0, face:getWidth() - 1 do
                     for yy = 0, face:getHeight() - 1 do
@@ -158,7 +161,21 @@ function P.buildCells(item, x, y, z, north)
                     end
                 end
             end
-        end
+        end)
+    end
+    -- Knox Buildworks：create 照 getFootprint() 的 dx／dy 放有 sprite 的格、補建有 sprite 或 blocks 的格
+    -- （KBWBuildingObject.lua:715-723, 1413-1416）。footprint 照 nSprite 選面（:685-688）：伺服器用 new 從 direction
+    -- 重建（:470-486），但牆類的 create 先照 north 改 nSprite（:1313-1316）。direction 與 north 是封包裡兩個欄位，
+    -- 改過的客戶端可以送不一致的，所以牆類照 create 的規則算、算完還原
+    if type(item.getFootprint) == "function" then
+        local saved = item.nSprite
+        if item.isWallLike == true then item.nSprite = north and 2 or 1 end
+        pcall(function()
+            for _, t in ipairs(item:getFootprint() or {}) do
+                if type(t) == "table" and (t.sprite or t.blocks) then add(x + (t.dx or 0), y + (t.dy or 0)) end
+            end
+        end)
+        item.nSprite = saved
     end
     local pos = { getX = function() return x end, getY = function() return y end, getZ = function() return z end }
     for _, name in ipairs(POS_FNS) do

@@ -224,6 +224,49 @@ return function(T)
     check(not built(bare, ramp, 115, 105) and built(bare, { which = "west20" }, 115, 105),
         "坡道游標 20 格壓到 claim：被拒；沒有坡道方法的同名欄位不算")
     check(built(bare, { getSquare2Pos = function() error("boom") end }, 99, 105), "取範圍的方法丟錯：只剩錨點，錨點在範圍外照原版")
+    -- 其他 MOD 的建造物件（Knox Buildworks，KBWBuildingObject.lua:685-696）：getFace 只回 getFaceName，佔用格在 getFootprint。
+    -- 丟錯回 nil：0.12.0 在 face 迴圈丟錯，原函式沒跑、也沒有 denied（玩家回報屋主自己也蓋不了）
+    local function knox(cells)
+        return { getFace = function() return { getFaceName = function() return "s" end } end,
+            getFootprint = function() return cells end }
+    end
+    local function knoxBuilt(actor, item, x, y, north)
+        local ok, res = pcall(built, actor, item, x, y, north)
+        if ok then return res end
+        return nil
+    end
+    local kA = { dx = 0, dy = 0, dz = 0, sprite = "a", blocks = true }
+    local knoxWide = knox({ kA, { dx = 1, dy = 0, dz = 0, sprite = "b", blocks = true } })
+    -- pcall 接住的錯照樣在伺服器 log 印堆疊（KahluaThread.flushErrorMessage）：數這兩次建造途中接住了幾個錯
+    local realPcall, caught = pcall, 0
+    pcall = function(...)
+        local r = table.pack(realPcall(...))
+        if not r[1] then caught = caught + 1 end
+        return table.unpack(r, 1, r.n)
+    end
+    local ownerIn, bareEdge = knoxBuilt(owner, knox({ kA }), 105, 105), knoxBuilt(bare, knoxWide, 99, 105)
+    pcall = realPcall
+    check(ownerIn == true, "getFace 不是 FaceScript（Knox）：屋主在自己的 claim 照原版")
+    check(bareEdge == false and (deniedOf(bare) or {}).bit == B.BUILD, "Knox 兩格、第二格在 claim：被拒")
+    check(caught == 0, "Knox 的物件不靠丟錯略過（接住的錯照樣印進伺服器 log）")
+    check(knoxBuilt(full, knoxWide, 99, 105) == true, "Knox 兩格、有 BUILD：照原版")
+    check(knoxBuilt(bare, knox({ kA, { dx = 1, dy = 0, dz = 0, empty = true, blocks = false } }), 99, 105) == true,
+        "Knox 第二格沒有圖塊也不擋路：不算佔用（create 只補建有 sprite 或 blocks 的格）")
+    -- 牆類（雙開門、雙開大門）：footprint 照 nSprite 選面，西向（1）沿 y 四格、北向（2）沿 x 四格。create 先照封包的
+    -- north 改 nSprite（KBWBuildingObject.lua:1313-1316），改過的客戶端可以送西向的 direction 配 north＝true
+    local gate = { isWallLike = true, nSprite = 1, getFootprint = function(self)
+        local cells = {}
+        for i = 0, 3 do
+            cells[#cells + 1] = self.nSprite == 2 and { dx = i, dy = 0, sprite = "g" } or { dx = 0, dy = i, sprite = "g" }
+        end
+        return cells
+    end }
+    check(knoxBuilt(bare, gate, 99, 105, true) == false and (deniedOf(bare) or {}).bit == B.BUILD,
+        "Knox 牆類照 north 選面：direction 西向、north＝true 時照北向四格查，壓到 claim 被拒")
+    check(knoxBuilt(bare, gate, 99, 105, false) == true, "Knox 牆類西向四格都在範圍外：照原版")
+    check(knoxBuilt(bare, gate, 105, 98, false) == false, "Knox 牆類西向沿 y 四格，後兩格壓到 claim：被拒")
+    check(knoxBuilt(bare, { getFootprint = function() error("boom") end }, 99, 105) == true,
+        "getFootprint 丟錯：只剩錨點，錨點在範圍外照原版")
     -- 一格在自己有 BUILD 的 claim、一格在別人的 claim
     local neighbor = mk(MSH, { x = 110, y = 100, w = 10, h = 10 }, "neighbor", MSH.SOURCE.DEED, {})
     check(not built(full, wide, 109, 105) and (deniedOf(full) or {}).claimId == neighbor.claimId,
