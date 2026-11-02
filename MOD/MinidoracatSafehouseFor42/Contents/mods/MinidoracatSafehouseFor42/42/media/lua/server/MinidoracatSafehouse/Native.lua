@@ -44,28 +44,33 @@ end
 
 -- 掃一次原生清單建索引：每輪 reconcile 與每次建立各掃一次（§6.2）
 -- entry = { house, rect, owner, claimId（owner 是標記時）, onlineId }
--- 每次呼叫都照順序重讀每個原生的 owner、範圍與 onlineId（setX／setOwner 等都是 Lua 叫得到的，SafeHouse.java:600-627），
+-- 每次呼叫都重讀每個原生的 owner、範圍與 onlineId（setX／setOwner 等都是 Lua 叫得到的，SafeHouse.java:600-627），
 -- 全部和上次的索引相同就回同一個 idx：收斂每 SWEEP_MS 一輪，常態沒有變動，不必每輪重配 table、組 rectKey、解析標記。
+-- 清單本身（哪些物件、什麼順序）和建索引時存的 Java 複本 idx.snap 比 ArrayList.equals：一次引擎呼叫走完整份
+-- （SafeHouse 沒有覆寫 equals，比的是同一個物件，SafeHouse.java／Invite.java），不必逐個 list:get(i)。
 -- 呼叫端只讀 idx 與 entry、不改它們（改了，下一個拿到同一份的呼叫端就看到改過的）。
 N.indexCache = nil
 
-local function unchanged(idx, list, n)
-    if idx == nil or idx.count ~= n then return false end
+local function unchanged(idx, list)
+    if idx == nil or not list:equals(idx.snap) then return false end
     local all = idx.all
-    for i = 0, n - 1 do
-        local house, e = list:get(i), all[i + 1]
-        if e.house ~= house or e.owner ~= house:getOwner() or e.onlineId ~= house:getOnlineID() then return false end
-        local r = e.rect
-        if r.x ~= house:getX() or r.y ~= house:getY() or r.w ~= house:getW() or r.h ~= house:getH() then return false end
+    for i = 1, #all do
+        local e = all[i]
+        local house, r = e.house, e.rect
+        if e.owner ~= house:getOwner() or e.onlineId ~= house:getOnlineID()
+            or r.x ~= house:getX() or r.y ~= house:getY() or r.w ~= house:getW() or r.h ~= house:getH() then
+            return false
+        end
     end
     return true
 end
 
 function N.index()
     local list = SafeHouse.getSafehouseList()   -- SafeHouse.java:652-654（live ArrayList）
+    if unchanged(N.indexCache, list) then return N.indexCache end
     local n = list:size()
-    if unchanged(N.indexCache, list, n) then return N.indexCache end
-    local idx = { all = {}, byClaim = {}, byRect = {}, foreign = {}, onlineIds = {}, count = 0 }
+    local idx = { all = {}, byClaim = {}, byRect = {}, foreign = {}, onlineIds = {}, count = 0, snap = ArrayList.new() }
+    idx.snap:addAll(list)
     for i = 0, n - 1 do
         local house = list:get(i)
         local owner = house:getOwner()
@@ -120,37 +125,31 @@ function N.faction(rec)
 end
 
 -- 陣營分享目前有效時的成員：領袖＋players（Faction.java:241）；分享無效或全服關閉 AllowFactionShare 回 nil。
--- 回傳的陣列只讀：每次都重讀領袖與 players，和這間上次讀到的逐一相同就回上次那個陣列（收斂每輪、分享每秒都問），
--- 不同就換新的。快取照 claimId 放 N.members，Server 每分鐘清空。
+-- 回傳的陣列只讀：每次都重讀 players，和這間上次讀到的 Java 複本 ArrayList.equals 相同（一次引擎呼叫）、領袖也相同
+-- 就回上次那個陣列（收斂每輪、分享每秒都問），不同就換新的。領袖用 fs.leader：N.faction 剛確認過 f:getOwner() 等於它。
+-- 快取照 claimId 放 N.members，Server 每分鐘清空。
 N.members = {}
-
-local function sameMembers(c, leader, l, n)
-    if c == nil or c.leader ~= leader or c.n ~= n then return false end
-    local raw = c.raw
-    for i = 0, n - 1 do
-        if tostring(l:get(i)) ~= raw[i + 1] then return false end
-    end
-    return true
-end
 
 function N.factionMembers(rec)
     local f = N.faction(rec)
     if f == nil or not MSH.Settings.allowFactionShare() then return nil end
-    local leader = f:getOwner()
+    local leader = rec.factionShare.leader
     local l = f:getPlayers()
-    local n = l:size()
     local c = N.members[rec.claimId]
-    if sameMembers(c, leader, l, n) then return c.out end
-    local out, seen, raw = { leader }, { [leader] = true }, {}
-    for i = 0, n - 1 do
+    if c ~= nil and c.leader == leader and l:equals(c.snap) then return c.out end
+    local out, seen = { leader }, { [leader] = true }
+    for i = 0, l:size() - 1 do
         local u = tostring(l:get(i))
-        raw[i + 1] = u
         if not seen[u] then
             seen[u] = true
             out[#out + 1] = u
         end
     end
-    if rec.claimId ~= nil then N.members[rec.claimId] = { leader = leader, n = n, raw = raw, out = out } end
+    if rec.claimId ~= nil then
+        local snap = ArrayList.new()
+        snap:addAll(l)
+        N.members[rec.claimId] = { leader = leader, snap = snap, out = out }
+    end
     return out
 end
 
@@ -180,8 +179,10 @@ local function addName(out, seen, u)
     end
 end
 
+-- 陣營投影沒變時 factionMembers 回同一個陣列：先比是不是同一個，不必逐個比
 local function sameList(a, b)
-    if a == nil or b == nil then return a == b end
+    if a == b then return true end
+    if a == nil or b == nil then return false end
     if #a ~= #b then return false end
     for i = 1, #a do
         if a[i] ~= b[i] then return false end

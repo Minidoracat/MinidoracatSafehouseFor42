@@ -447,6 +447,23 @@ return function(T)
     cr.grants[1].bits = M + U
     sweepNow()
     check(ch.players:contains("bob"), "改回來：下一輪補回")
+    -- 2026-11-03：名單、陣營成員、原生清單改成和上一輪的 Java 複本 ArrayList.equals；上一輪乾淨（複本已存）之後再改
+    sweepNow()
+    ch.players:remove("bob")
+    ch.players:add("mallory")                 -- 人數不變、換成不該在的人
+    sweepNow()
+    check(ch.players:contains("bob") and not ch.players:contains("mallory"), "上一輪乾淨之後名單換人（人數不變）：下一輪換回來")
+    ch:setPlayers(T.javaList({ "alice", "bob", "eve" }))   -- 整份 list 換掉
+    sweepNow()
+    check(not ch.players:contains("eve") and ch.players:contains("bob") and ch.players:size() == 2,
+        "setPlayers 換成另一份 list：下一輪照新的那份收斂")
+    sweepNow()                                -- 名單乾淨、複本已存（下一輪名單走 equals）
+    ch:setTitle("hacked")
+    sweepNow()
+    check(ch.title == cr.title, "上一輪名單乾淨之後只改原生標題：下一輪改回")
+    cr.title = "renamed"                      -- 紀錄的標題就地改
+    sweepNow()
+    check(ch.title == "renamed", "上一輪名單乾淨之後紀錄標題就地改：下一輪照新的設")
     local fac = T.faction("Cache", "alice", { "alice", "fm1" })
     cr.factionShare = { name = "Cache", leader = "alice", bits = M + U, state = "GRANTED" }
     N.factionRefs[cr.claimId] = fac
@@ -466,6 +483,21 @@ return function(T)
     T.sandbox("AllowFactionShare", true)
     sweepNow()
     check(ch.players:contains("fm3"), "重新開啟：下一輪投影回來")
+    fac.owner = "newlead"                     -- 換領袖、成員名單不變（新領袖原本不在 players）
+    cr.factionShare = { name = "Cache", leader = "newlead", bits = M + U, state = "GRANTED" }   -- 同 resumeFaction 記下新領袖
+    sweepNow()
+    check(ch.players:contains("newlead") and ch.players:contains("alice"), "陣營換領袖、成員名單不變：下一輪照新領袖投影")
+    local fx = SafeHouse.addSafeHouse(950, 950, 5, 5, "zed")   -- 原版屋
+    local idxB = N.index()
+    local pos
+    for i, h in ipairs(T.houses) do if h == fx then pos = i end end
+    local twin = T.house(950, 950, 5, 5, "zed")                -- 欄位全同、不同物件，放在同一個位置
+    T.houses[pos] = twin
+    local idxC = N.index()
+    check(idxC ~= idxB and idxC.all[pos].house == twin, "原生清單同位置換成欄位全同的另一個物件：索引重建、指向新物件")
+    T.houses[pos], T.houses[pos - 1] = T.houses[pos - 1], T.houses[pos]
+    local idxD = N.index()
+    check(idxD ~= idxC and idxD.all[pos].house == idxC.all[pos - 1].house, "原生清單順序對調：索引重建、照新順序")
     ch.x = ch.x + 1                           -- 引擎的 setX（Lua 叫得到，SafeHouse.java:600-602）
     sweepNow()
     check(N.index() ~= idxA and cr.lifecycle == "quarantined" and cr.quarantineReason == "MISMATCH",

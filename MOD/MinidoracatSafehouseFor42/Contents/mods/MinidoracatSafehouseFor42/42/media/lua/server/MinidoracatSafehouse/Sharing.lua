@@ -470,7 +470,9 @@ function Sh.suspend(rec, why)
     MSH.Audit.write("FACTION_SUSPENDED", { actor = rec.owner, claimId = rec.claimId, code = why, detail = fs.name })
 end
 
+-- Sh.last 存的就是上次 desiredPlayers 回的集合：沒變時是同一個 table，不必逐個比
 local function sameSet(a, b)
+    if a == b then return true end
     if b == nil then return false end
     for u in pairs(a) do if not b[u] then return false end end
     for u in pairs(b) do if not a[u] then return false end end

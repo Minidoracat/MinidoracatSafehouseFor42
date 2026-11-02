@@ -48,7 +48,7 @@ function T.logged(fragment)
     return false
 end
 
--- ===== java 風格清單（size()/get(i) 0-based；add／remove／contains 照 ArrayList）=====
+-- ===== java 風格清單（size()/get(i) 0-based；add／remove／contains／addAll／equals 照 ArrayList）=====
 function T.javaList(items)
     items = items or {}
     local l = { _raw = items }
@@ -64,6 +64,18 @@ function T.javaList(items)
             if x == v then table.remove(items, i) return true end
         end
         return false
+    end
+    function l:addAll(other)
+        for i = 0, other:size() - 1 do items[#items + 1] = other:get(i) end
+        return other:size() > 0
+    end
+    -- AbstractList.equals：同樣多、逐個 equals（字串比值、物件比同一個）
+    function l:equals(other)
+        if type(other) ~= "table" or type(other.size) ~= "function" or other:size() ~= #items then return false end
+        for i, x in ipairs(items) do
+            if other:get(i - 1) ~= x then return false end
+        end
+        return true
     end
     function l:isEmpty() return #items == 0 end
     return l
@@ -418,6 +430,7 @@ function T.house(x, y, w, h, owner)
     -- setOwner 會把新 owner 從 players 移除（SafeHouse.java:660-662）
     function hs:setOwner(o) self.players:remove(o) self.owner = o end
     function hs:getPlayers() return self.players end
+    function hs:setPlayers(l) self.players = l end   -- SafeHouse.java:644-646：換掉整份 list
     function hs:addPlayer(u) if not self.players:contains(u) then self.players:add(u) end end
     -- removePlayer 同時清原版重生旗標（SafeHouse.java:299-303）
     function hs:removePlayer(u) self.players:remove(u) self.respawn:remove(u) end

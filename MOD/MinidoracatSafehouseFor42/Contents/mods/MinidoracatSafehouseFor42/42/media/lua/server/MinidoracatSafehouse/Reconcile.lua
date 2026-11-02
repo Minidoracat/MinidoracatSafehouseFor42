@@ -105,9 +105,9 @@ local function current(rec)
     return MSH.Registry.md.claims[rec.claimId] == rec
 end
 
--- 原生名單已經剛好是 want（同樣多人、每人都在 wanted、沒有重複、沒有標記）：常態每輪都是這樣，
--- 直接讀 live list 比對、不複製；對不上才走下面的完整收斂。seen／names 是共用的暫存，用完照 names 逐一清空
--- （不在 pairs 走訪中刪鍵：Kahlua 走訪中改表不安全）。
+-- 原生名單已經剛好是 want（同樣多人、每人都在 wanted、沒有重複、沒有標記）：直接讀 live list 比對；
+-- 對不上才走下面的完整收斂。常態每輪由 cleanRoster 的複本 equals 先擋掉，只有那裡對不上才走到這裡。
+-- seen／names 是共用的暫存，用完照 names 逐一清空（不在 pairs 走訪中刪鍵：Kahlua 走訪中改表不安全）。
 local seen, names = {}, {}
 local function rosterClean(l, want, wanted, marker)
     local n = l:size()
@@ -130,17 +130,33 @@ local function rosterClean(l, want, wanted, marker)
     return ok
 end
 
+-- 上一輪確認剛好是 want 的名單：索引 entry → { want, snap＝那時 live list 的 Java 複本 }。這輪同一份 want、
+-- live list 和複本 ArrayList.equals 相同（一次引擎呼叫，不逐個 l:get(i)）＝rosterClean 這輪也成立：它只看名單內容、
+-- want／wanted（desiredPlayers 輸入一變就換新的 table，不改舊的）與標記（照 claimId，同一個 entry 不變）。
+-- 索引換新時整份清掉（pass 的 active 迴圈開頭）：舊索引的 entry 不會再被查到，只是不讓它們留在記憶體。
+local cleanRoster, cleanIdx = {}, nil
+
 -- 名單、標題收斂（native 已確認是這筆紀錄的）。回傳是否需要廣播。want／wanted 是 Native.desiredPlayers 的陣列與集合，
 -- marker 是這間的標記；呼叫端每筆紀錄算一次、各塊共用（同一輪持鎖，各塊之間不會變）。
 -- owner 標記出現在 players（load() 沒有 setOwner，§2.1；或 owner packet 把舊 owner 加回成員）：安靜移除、不算 drift。
-local function fixNative(rec, house, want, wanted, marker, now, st)
+local function fixNative(rec, e, want, wanted, marker, now, st)
+    local house = e.house
     local dirty = false
     -- getTitle／setTitle：SafeHouse.java:727-733
     if house:getTitle() ~= rec.title then
         house:setTitle(rec.title)
         dirty = true
     end
-    if rosterClean(house:getPlayers(), want, wanted, marker) then return dirty end
+    local l = house:getPlayers()
+    local c = cleanRoster[e]
+    if c ~= nil and c.want == want and l:equals(c.snap) then return dirty end
+    if rosterClean(l, want, wanted, marker) then
+        local snap = ArrayList.new()
+        snap:addAll(l)
+        cleanRoster[e] = { want = want, snap = snap }
+        return dirty
+    end
+    cleanRoster[e] = nil
     local have = {}
     -- getPlayers 回 live ArrayList（SafeHouse.java:640-642）：先複製再邊走邊移除
     for _, raw in ipairs(MSH.toArray(house:getPlayers())) do
@@ -301,7 +317,7 @@ local function convergeActive(id, rec, idx, now, st)
                     markers[id] = marker
                 end
             end
-            if fixNative(rec, e.house, want, wanted, marker, now, st) then
+            if fixNative(rec, e, want, wanted, marker, now, st) then
                 st.changed[id .. ":" .. i] = e.house
                 st.drift[id] = true
             end
@@ -379,6 +395,7 @@ local function pass(now, st)
         end
     end
     if st.removed then idx = N.index() end
+    if idx ~= cleanIdx then cleanRoster, cleanIdx = {}, idx end
     for i = 1, liveN do
         local rec = live[i]
         if rec.lifecycle == LC.ACTIVE and current(rec) then convergeActive(rec.claimId, rec, idx, now, st) end
