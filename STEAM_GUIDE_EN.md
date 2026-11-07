@@ -47,7 +47,7 @@ Admins choose how many tiers are enabled (3 by default, up to 8) and can change 
 [/table]
 [list]
 [*] [b]Area is the main limit[/b]: the area can be any shape as long as the total tiles stay within the max area.
-[*] [b]Outline limit[/b]: the rectangle around the whole safehouse can't be wider or longer than this; by default it's twice the side of a square of the same area, and never more than 96 x 96.
+[*] [b]Outline limit[/b]: the rectangle around the whole safehouse can't be wider or longer than this; by default it's twice the side of a square of the same area, up to 96, and admins can raise it to 150. With Avoid roads on, outlines over 96 tiles need players to stand in the middle of the area to create them, and players on low screen resolutions may not manage at all; over 144, even 1920×1080 or larger may fail (the game only loads the map near players; each tile added to Road margin lowers both numbers by 2).
 [*] [b]How big is tier 1[/b]: about one house with its yard.
 [*] [b]Large areas[/b]: town roads cut the land into small plots, so tier 3 and up mostly fit in the countryside.
 [*] [b]Slots[/b]: each tier has three numbers, free, buyable and rentable slots; a player's maximum for the tier is the three added together. See "Paid slots".
@@ -151,7 +151,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [tr][td]The area covers a road that safehouses can't include.[/td][td]Move the area off the road or make it smaller.[/td][/tr]
 [tr][td]The area covers a resource site.[/td][td]Move the area off the resource site or make it smaller.[/td][/tr]
 [tr][td]The area covers the no-build zone "name" set by an admin.[/td][td]Move the area out of the no-build zone or make it smaller.[/td][/tr]
-[tr][td]Part of the area isn't loaded on the server yet.[/td][td]Stay near the area for a moment and try again.[/td][/tr]
+[tr][td]Part of the area is too far from you, and the server hasn't loaded the map there.[/td][td]Walk inside the area near its middle, wait a moment, then press "Check again". With an outline over 96 tiles, it may fail even from the middle (more likely on lower screen resolutions and bigger outlines): shrink the outline to 96 or less, or split it into two adjoining safehouses.[/td][/tr]
 [tr][td]Resource site data is still loading.[/td][td]Try again in a moment.[/td][/tr]
 [tr][td]You have no slots left for this tier.[/td][td]Get a slot for this tier, or abandon a safehouse you no longer need.[/td][/tr]
 [tr][td]You've reached the per-player limit for this tier.[/td][td]Use a deed of another tier, or abandon a safehouse of this tier.[/td][/tr]
@@ -492,7 +492,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
-[*] Each tier's max area (with its "same as" size, updating as you type), outline limit and loot chance.
+[*] Each tier's max area (with its "same as" size, updating as you type), outline limit and loot chance. With Avoid roads on, an outline over 96 shows a warning under that row, and the reason and what to do appear under the table (the free-mode outline on the Rules tab too).
 [*] Crafting difficulty: hover the Crafting cell to preview the recipe.
 [*] The slot columns "Free", "Buy" and "Rent" take numbers (free safehouses per player, max bought, max rented at the same time); "Max/player" shows the three added together.
 [*] With a supported Economy, an extra "List in the Economy shop" button.

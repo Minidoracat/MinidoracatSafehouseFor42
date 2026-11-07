@@ -59,7 +59,7 @@ return function(T)
     local nine = {}
     for i = 1, MSH.LIMIT.MAX_PIECES + 1 do nine[i] = r(199 + i, 200, 1, 1) end
     rejects(nine, "BAD_ARGS", nil, "超過硬上限的塊數：協定就擋")
-    rejects({ r(200, 200, 60, 2), r(260, 200, 40, 2) }, "BAD_ARGS", nil, "外框超過 96：協定就擋")
+    rejects({ r(200, 200, 90, 2), r(290, 200, 61, 2) }, "BAD_ARGS", nil, "外框超過 HARD_SIDE（151）：協定就擋")
     rejects({ r(200, 200, 24, 2), r(224, 200, 25, 2) }, "TOO_BIG", nil, "每塊都不大，外框寬 49 超過 1 級外框上限 48")
     T.sandbox("Tier1Area", 100)
     rejects({ r(200, 200, 10, 10), r(210, 200, 2, 2) }, "TOO_BIG", nil, "面積看各塊總和：104 超過 100")

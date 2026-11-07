@@ -467,14 +467,30 @@ local PAD, GAP, ICON = 12, 6, 16
 local W_MIN, W_MAX = 420, 560
 local FONT = UIFont and UIFont.Small
 
--- 原因碼 → 原因、動作（本地碼用自己的鍵，其餘照 Client.codeText；detail＝伺服器的檢查項目或失敗結果）
-function P.reasonOf(code, detail)
+-- 原因碼 → 原因、動作（本地碼用自己的鍵，其餘照 Client.codeText；detail＝伺服器的檢查項目或失敗結果）。
+-- NOT_LOADED 在建立時寫成遊戲載入範圍的限制與做法（使用者 2026-11-08：「無法建立的時候也要顯示原因」）。side＝範圍外框
+-- 的長邊：超過 Settings.loadSide 才多寫「縮小或分成兩間」（better-interface 2026-11-08：96 × 96 站在角落時叫人縮到 96 以內
+-- 會誤導）；沒有範圍（禁建區面板）只寫走到中間。物品搜尋的 NOT_LOADED 照 Client.codeText 的通用句
+function P.reasonOf(code, detail, side)
     if P.LOCAL_CODES[code] then
         local akey = "IGUI_MSH_Create_Action_" .. code
         local action = getText(akey)
         return getText("IGUI_MSH_Create_Reason_" .. code), action ~= akey and action or nil
     end
+    if code == CODE.NOT_LOADED then
+        local edge, recheck = MSH.Settings.loadSide(MSH.Settings.get().roadMargin), getText("IGUI_MSH_Create_Recheck")
+        local action = side ~= nil and side > edge and getText("IGUI_MSH_Create_Action_NOT_LOADED", tostring(edge), recheck)
+            or getText("IGUI_MSH_Create_Action_NOT_LOADED_Near", recheck)
+        return getText("IGUI_MSH_Create_Reason_NOT_LOADED"), action
+    end
     return MSH.Client.codeText(code, detail)
+end
+
+-- 範圍外框的長邊（還沒有範圍時 nil）
+function P.outlineSide(m)
+    if m.rects == nil or #m.rects == 0 then return nil end
+    local b = MSH.Rect.bounds(m.rects)
+    return math.max(b.w, b.h)
 end
 
 local function wrap(v, text, width)
@@ -493,7 +509,7 @@ local function para(v, text, token, icon, y)
 end
 
 local function reasonLines(v, code, token, y, detail)
-    local reason, action = P.reasonOf(code, detail)
+    local reason, action = P.reasonOf(code, detail, P.outlineSide(v.m))
     y = para(v, reason, token, "warning", y)
     if action ~= nil then y = para(v, action, "textMuted", nil, y) end
     return y
@@ -623,6 +639,13 @@ local function layoutSelecting(v, y, list)
         y = para(v, getText("IGUI_MSH_Select_PieceLimit", max), "textMuted", nil, y)
     end
     if bad then y = para(v, getText("IGUI_MSH_Select_Err_" .. res.err, max), "errorText", "warning", y) end
+    -- 外框超過 Settings.loadSide、又在上限內：先提醒要站在範圍中間（使用者 2026-11-08）。只有開著避開道路時預檢才逐格讀地圖
+    local cfg = MSH.Settings.get()
+    local edge = MSH.Settings.loadSide(cfg.roadMargin)
+    if res.err == nil and not v.over and (res.w > edge or res.h > edge) and cfg.avoidRoads then
+        y = para(v, getText("IGUI_MSH_Select_BigWarn", tostring(edge), getText("IGUI_MSH_Select_Done"),
+            getText(m.mode == "redraw" and "IGUI_MSH_Create_ConfirmRedraw" or "IGUI_MSH_Create_Confirm")), "warning", "warning", y)
+    end
     v.sizeY, v.sizeW, v.sizeH, v.sizeText = y, nil, nil, nil
     y = y + v.lineH + 4
     b.add:setActive(not s.cut)
@@ -666,12 +689,13 @@ local function layoutPreview(v, y, list)
     if m.checks == nil then
         y = para(v, getText("IGUI_MSH_Create_Checking"), "textMuted", nil, y)
     else
+        local side = P.outlineSide(m)
         for _, c in ipairs(m.checks) do
             local label = getText("IGUI_MSH_Create_Check_" .. tostring(c.name))
             if c.ok then
                 y = para(v, label, "text", "check", y)
             else
-                local reason, action = P.reasonOf(c.code, c)
+                local reason, action = P.reasonOf(c.code, c, side)
                 y = para(v, getText("IGUI_MSH_Create_CheckFail", label, reason), "errorText", "warning", y)
                 if action ~= nil then y = para(v, action, "textMuted", nil, y) end
                 if c.code == CODE.QUOTA_FULL then

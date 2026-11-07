@@ -133,7 +133,7 @@ function AP.nobodyCanBuild(free, buy, rent, economyReady)
     return free <= 0 and (buy + rent <= 0 or not economyReady)
 end
 
--- 地契頁一格名額數字（免費／可買／可租）：輸入框目前的字，不是非負整數就當 0（只拿來算「每人最多」與警告，送出仍照原字檢查）
+-- 地契頁、規則頁一格數字（名額三欄、外框）：輸入框目前的字，不是非負整數就當 0（只拿來算「每人最多」與警告，送出仍照原字檢查）
 function AP.slotNum(pg, key)
     local v = tonumber(MSH.trim(pg.fields[key].el:getText()))
     return (v ~= nil and v >= 0 and v == math.floor(v)) and v or 0
@@ -673,10 +673,13 @@ function AP.layoutRules(P, pg)
             ctrls = { AP.boolField(P, pg, key) }
         elseif key == "FreeMaxArea" then
             ctrls = { AP.numField(P, pg, key, AP.fieldW(key, 70), AP.onRelayout), AP.areaEqLabel(pg, key) }
+        elseif key == "FreeMaxSide" then
+            ctrls = { AP.numField(P, pg, key, AP.fieldW(key, 70), AP.onRelayout) }
         else
             ctrls = { AP.numField(P, pg, key, AP.fieldW(key, 70)) }
         end
         AP.formRow(pg, key, lw, ctrls)
+        if key == "FreeMaxSide" and AP.bigSideWarn(P, pg, key) then AP.bigSideHelp(P, pg) end
     end
     -- 每間最多塊數調高有代價（使用者 2026-10-12：「寫清楚注意事項」）：注意事項直接寫在最後一列底下，不只放滑鼠提示
     F:text("piecesHelp", getText("Sandbox_MinidoracatSafehouse_MaxPieces_tooltip"), "textMuted")
@@ -1180,10 +1183,29 @@ function AP.areaEqLabel(pg, key)
     return pg.flow:label("aq:" .. key, text, "textMuted")
 end
 
--- 最寬的樣子「（約 96 × 96）」：數字最多兩位（面積上限 9,216＝96²），每位用最寬的數字量
+-- 最寬的樣子「（約 150 × 150）」：數字最多三位（面積上限 LIMIT.HARD_AREA＝150²），每位用最寬的數字量
 function AP.areaEqW()
     return K.textW(UIFont.Small, getText("IGUI_MSH_Admin_AreaEq", getText("IGUI_MSH_AreaSquareAbout", "")))
-        + 4 * AP.numberTextW(0, 9)
+        + 6 * AP.numberTextW(0, 9)
+end
+
+-- 外框超過 Settings.loadSide 時，那一列底下用 warning 色寫一行並回 true（使用者 2026-11-08：「當有人填寫超過那個值的時候,
+-- 要加上醒目的文字提醒」）；為什麼與怎麼辦由呼叫端在表格（規則頁是那一列）底下寫一次 AP.bigSideHelp，不在每列重複。
+-- 照輸入框目前的字，外框框的 onEdit 重排整頁，所以打字時就出現、存好的值超過時也一直在；超過選項上限的值〔套用變更〕
+-- 時會標錯，不另外警告。只有開著避開道路才逐格讀地圖；這兩項照伺服器存好的值（排除頁改了要先〔套用變更〕，切回這頁時
+-- 重排才跟著變）
+function AP.bigSideWarn(P, pg, key)
+    local side = AP.slotNum(pg, key)
+    local edge = Settings.loadSide(AP.effective(P.values, "RoadMargin"))
+    local warn = side > edge and side <= Settings.BY_KEY[key].max and AP.effective(P.values, "AvoidRoads")
+    if warn then pg.flow:text("big:" .. key, getText("IGUI_MSH_Admin_BigSide", side, edge), "warning") end
+    return warn
+end
+
+function AP.bigSideHelp(P, pg)
+    local margin = AP.effective(P.values, "RoadMargin")
+    pg.flow:text("bigHelp", getText("IGUI_MSH_Admin_BigSideHelp", Settings.loadSide(margin), Settings.loadSide(margin, true)),
+        "textMuted")
 end
 
 -- 欄位 x 位置與寬度：表頭、該欄控制項（列標「N 級」取 8 級、製作取四個難度名稱最寬者、輸入框、開關）都量進去。
@@ -1237,7 +1259,9 @@ function AP.layoutDeeds(P, pg)
     F.y = hy + K.fontH(UIFont.Small) + 4
     -- 只排啟用的等級：移除的那級欄位不在這一輪（f.gen 不同），〔套用變更〕不會送它沒套用的改動。
     -- 存值照實顯示（不夾範圍），列數不超過上限
-    for n = 1, math.min(k, MSH.MAX_TIER) do AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn) end
+    local big = false
+    for n = 1, math.min(k, MSH.MAX_TIER) do big = AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn) or big end
+    if big then AP.bigSideHelp(P, pg) end
     local add = F:button("tierAdd", getText(k < MSH.MAX_TIER and "IGUI_MSH_Admin_TierAdd" or "IGUI_MSH_Admin_TierMax",
         k < MSH.MAX_TIER and k + 1 or MSH.MAX_TIER), P, AP.onTierAdd)
     add:setEnabled(k < MSH.MAX_TIER)
@@ -1257,7 +1281,7 @@ function AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn)
     local ctrls = {
         Tier = tl,
         Area = AP.numField(P, pg, p .. "Area", AP.deedFieldW("Area"), AP.onRelayout),
-        Side = AP.numField(P, pg, p .. "Side", AP.deedFieldW("Side")),
+        Side = AP.numField(P, pg, p .. "Side", AP.deedFieldW("Side"), AP.onRelayout),
         Loot = AP.numField(P, pg, p .. "LootChance", AP.deedFieldW("Loot")),
         Craft = AP.craftButton(P, pg, n, ws.Craft),
         Free = AP.numField(P, pg, p .. "FreeSlots", AP.deedFieldW("Free"), AP.onRelayout),
@@ -1283,6 +1307,7 @@ function AP.layoutDeedRow(P, pg, n, econ, xs, ws, lootOn)
     if AP.nobodyCanBuild(free, buy, rent, econ) then
         F:text("warn" .. n, getText("IGUI_MSH_Admin_NobodyCanBuild", n), "warning")
     end
+    return AP.bigSideWarn(P, pg, p .. "Side")
 end
 
 -- 製作難度：點一下換下一個（不開放→寬鬆→標準→嚴格）；滑鼠移過去預覽選中難度的配方（不開放時預覽標準版，§7.7）。
@@ -1485,6 +1510,8 @@ function AP.onApply(P)
     end)
 end
 
+-- 每則原因都是整句（句尾已有「。」或「.」），用空格串起來：清單分隔「、」會變成「。、」（2026-11-08 E2E 截圖：外框、面積
+-- 都填超過上限時底列寫成「須介於 1 到 9216。、…」）；Lua 原始碼不能寫「。」去掉句尾（Kahlua 截斷非 ASCII 字面值）
 function AP.showErrors(P, pg, errs)
     pg.errors = errs
     local parts = {}
@@ -1492,7 +1519,7 @@ function AP.showErrors(P, pg, errs)
         if errs[o.key] then parts[#parts + 1] = getText("IGUI_MSH_Admin_FieldError", AP.optionLabel(o.key), AP.errorText(o.key, errs[o.key])) end
     end
     AP.layoutPage(P, pg.id)
-    AP.say(P, table.concat(parts, getText("IGUI_MSH_Admin_ListSep")), "errorText")
+    AP.say(P, table.concat(parts, " "), "errorText")
 end
 
 -- ===== 玩家頁 =====

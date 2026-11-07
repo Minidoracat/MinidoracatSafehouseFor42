@@ -24,7 +24,7 @@ S.DEFAULT_RESOURCE_CATS = "military;police;gunstore;medical;pharmacy;fire;gas;pr
 
 -- 各級預設面積（使用者 2026-10-13 採用重新評估的建議表）：邊長 24、32、40、48、56、64、80、96 的正方形格數。1 級圈得下
 -- 房子連院子（原版地圖 88%），預設開放的 1–3 級最大 1,600；4,096 以上在城鎮多半圈不成一塊（被路切斷），放到 6 級以上。
--- 外框（整間的外接矩形）上限是同面積正方形邊長的 2 倍、最多 96（使用者 2026-10-12 選「以格數為主，外框放寬成 2 倍」：
+-- 外框（整間的外接矩形）預設上限是同面積正方形邊長的 2 倍、預設最多 96（使用者 2026-10-12 選「以格數為主，外框放寬成 2 倍」：
 -- L、U 形的外框比同面積的正方形大；外框不整個拿掉是因為闖入者會被傳到那一塊的左上角外面、伺服器只載入玩家附近的格子、
 -- 細長的範圍能圍住一大片地）。掉落機率每級約除以 3（使用者 2026-10-13：比逐級減半再陡），但 DeedLoot 預設關閉、
 -- 開了才照這些機率掉落；製作 1 級標準、其餘不開放（使用者 2026-10-10 裁定 craftdefault）
@@ -42,8 +42,8 @@ local TIER_DEFAULT = {
 -- type: bool | int | double | enum | string；enum 的值是 1..values
 local OPTIONS = {
     { key = "CreateMode", type = "enum", values = 2, default = S.CREATE.DEED },
-    { key = "FreeMaxArea", type = "int", min = 1, max = 9216, default = 576 },
-    { key = "FreeMaxSide", type = "int", min = 1, max = 96, default = 48 },
+    { key = "FreeMaxArea", type = "int", min = 1, max = MSH.LIMIT.HARD_AREA, default = 576 },
+    { key = "FreeMaxSide", type = "int", min = 1, max = MSH.LIMIT.HARD_SIDE, default = 48 },
     { key = "ClaimGap", type = "int", min = 0, max = 16, default = 2 },
     -- 屋主和自己在同一個陣營的安全屋（使用者 2026-10-15：「幫我增加同陣營的間隔設定，預設0」）；0＝可以緊鄰、不能重疊
     { key = "FactionClaimGap", type = "int", min = 0, max = 16, default = 0 },
@@ -80,8 +80,8 @@ local OPTIONS = {
 }
 for n = 1, MSH.MAX_TIER do
     local d = TIER_DEFAULT[n]
-    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Area", type = "int", min = 1, max = 9216, default = d.area, tier = n }
-    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Side", type = "int", min = 1, max = 96, default = d.side, tier = n }
+    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Area", type = "int", min = 1, max = MSH.LIMIT.HARD_AREA, default = d.area, tier = n }
+    OPTIONS[#OPTIONS + 1] = { key = "Tier" .. n .. "Side", type = "int", min = 1, max = MSH.LIMIT.HARD_SIDE, default = d.side, tier = n }
 end
 -- 名額每一級各自三個數（使用者 2026-10-15 選 B）：免費幾間、每人最多買斷幾個、每人最多租用幾個；這一級每人最多
 -- 幾間＝三個相加。0＝這一級不給。免費預設只有 1 級 1 間（和舊版「每人免費 1 間」一樣多）。租用上限 10＝經濟中心每個
@@ -318,4 +318,10 @@ function S.sizeLimit(cfg, source, tier)
     end
     local t = cfg.tiers[tier]
     return math.min(t.side, MSH.LIMIT.HARD_SIDE), math.min(t.area, MSH.LIMIT.HARD_AREA)
+end
+
+-- 外框超過這個邊長時，開著避開道路的預檢與建立站在中間也可能讀到沒載入的格子（Contract.lua 的 LIMIT.LOAD_READ）；
+-- hd＝1920×1080 以上的螢幕，否則是任何螢幕都成立的值
+function S.loadSide(roadMargin, hd)
+    return (hd and MSH.LIMIT.LOAD_READ_HD or MSH.LIMIT.LOAD_READ) - 2 * roadMargin
 end

@@ -72,13 +72,15 @@ function C.checkDeed(v)
     if v.deedType == nil then return CODE.NO_DEED end
     v.source, v.tier = SRC.DEED, MSH.tierOfDeed(v.deedType)
     v.item = v.player:getInventory():getFirstTypeRecurse(v.deedType)   -- IsoGameCharacter.java:3322
+    -- 沒有這張地契或這一級停用時記 v.badDeed：預檢照樣報大小與名額，但不照這一級的上限掃地圖（客戶端能指定任何等級）
+    v.badDeed = v.item == nil or v.tier > cfg.tiersEnabled
     if v.item == nil then return CODE.NO_DEED end
     if v.tier > cfg.tiersEnabled then return CODE.TIER_DISABLED, { tier = v.tier } end
     return nil
 end
 
 -- 形狀：塊數（沙盒 MaxPieces）、不重疊、連成一片、沒有洞（MSH.Rect.shapeError；客戶端框選工具用同一套規則）。
--- 不合規則時記 v.badShape，預檢略過逐格掃地圖的檢查（C.STEPS needsShape）
+-- 不合規則時記 v.badShape，預檢略過逐格掃地圖的檢查（C.STEPS scan）
 function C.checkShape(v)
     local why = Rect.shapeError(v.rects, v.cfg.maxPieces)
     if why then
@@ -88,11 +90,13 @@ function C.checkShape(v)
     return nil
 end
 
--- 大小看整間：外框邊長與各塊面積總和（使用者 2026-10-11 裁定：多塊不會比方形拿到更多地）
+-- 大小看整間：外框邊長與各塊面積總和（使用者 2026-10-11 裁定：多塊不會比方形拿到更多地）。
+-- 超過時記 v.badSize，預檢略過逐格掃地圖的檢查（C.STEPS scan）
 function C.checkSize(v)
     local maxSide, maxArea = MSH.Settings.sizeLimit(v.cfg, v.source, v.tier)
     local b = Rect.bounds(v.rects)
     if b.w > maxSide or b.h > maxSide or Rect.listArea(v.rects) > maxArea then
+        v.badSize = true
         return CODE.TOO_BIG, { maxSide = maxSide, maxArea = maxArea }
     end
     return nil
@@ -310,8 +314,10 @@ function C.checkCapacity(v)
 end
 
 -- 建立的檢查順序；name 是預檢回報的分組（同組只報第一個失敗）；needsTier：等級未知時預檢略過；
--- needsShape：形狀不合規則時略過（逐格掃地圖的道路與資源點：重疊的塊會讓同一片地掃好幾次，
--- 不合規則的預檢不能拿來放大伺服器的工作量，2026-10-11 審查）；active：回 false 時整組不跑、預檢也不列
+-- scan：逐格掃地圖的道路與資源點（禁建區一起），等級未知、沒有那張地契或等級停用、形狀不合規則或超過該級上限時略過：
+-- 重疊的塊會讓同一片地掃好幾次（2026-10-11 審查），協定層的 HARD_SIDE 也比各級預設大（2026-11-08 放寬到 150），
+-- 不合規則的預檢不能拿來放大伺服器的工作量；
+-- active：回 false 時整組不跑、預檢也不列
 C.STEPS = {
     { name = "identity", fn = C.checkIdentity },
     { name = "onsite", fn = C.checkOnSite },
@@ -323,9 +329,9 @@ C.STEPS = {
     { name = "title", fn = C.checkTitle },
     { name = "overlap", fn = C.checkOverlap },
     { name = "occupancy", fn = C.checkOccupancy },
-    { name = "zones", fn = C.checkZones, needsShape = true, active = C.hasZones },
-    { name = "roads", fn = C.checkRoads, needsShape = true },
-    { name = "resources", fn = C.checkResources, needsShape = true },
+    { name = "zones", fn = C.checkZones, scan = true, active = C.hasZones },
+    { name = "roads", fn = C.checkRoads, scan = true },
+    { name = "resources", fn = C.checkResources, scan = true },
     { name = "quota", fn = C.checkCapacity, needsTier = true },
 }
 
@@ -333,7 +339,9 @@ C.STEPS = {
 function C.validate(v, collect)
     local byName = {}
     for _, s in ipairs(C.STEPS) do
-        if not (s.needsTier and v.tier == nil) and not (s.needsShape and v.badShape) and (s.active == nil or s.active(v)) then
+        local skip = (s.needsTier and v.tier == nil)
+            or (s.scan and (v.tier == nil or v.badDeed or v.badShape or v.badSize))
+        if not skip and (s.active == nil or s.active(v)) then
             local code, detail = s.fn(v)
             if collect == nil then
                 if code then return code, detail end

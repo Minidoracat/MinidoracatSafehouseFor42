@@ -386,8 +386,9 @@ return function(T)
     check(res.ok and res.pass == false, "預檢失敗但指令本身成功")
     check(byName.onsite.code == "NOT_ON_SITE" and byName.deed.code == "NO_DEED" and byName.size.code == "TOO_BIG"
         and byName.overlap.code == "ONLINE_ID_COLLISION" and byName.size.maxSide == 64, "同時回報不在場、沒地契、太大、撞號")
-    check(byName.identity.ok and byName.quota.ok and byName.title.ok and byName.occupancy.ok and byName.roads.ok
-        and byName.resources.ok, "其他檢查通過")
+    check(byName.identity.ok and byName.quota.ok and byName.title.ok and byName.occupancy.ok, "其他檢查通過")
+    check(byName.roads == nil and byName.resources == nil,
+        "超過該級上限：不掃道路與資源點（協定層 HARD_SIDE 比各級上限大，預檢不能拿來放大伺服器的工作量）")
     check(#T.houses == houses and #T.syncs == syncs and recCount() == 0 and deeds(kai, D1) == 1
         and R.binding("kai") == nil, "預檢不建原生、不扣地契、不寫綁定")
     res = T.cmd(kai, "preview", { rects = { rect(4000, 4000, 81, 10) }, deedType = D2 })
@@ -396,6 +397,51 @@ return function(T)
     kai.x, kai.y = 4105, 4105
     res = T.cmd(kai, "preview", { rects = { rect(4100, 4100, 10, 10) }, deedType = D1 })
     check(res ~= nil and res.ok and res.pass == true and #res.checks == 10, "全部通過：10 組檢查")
+    T.advance(500)
+    local reads = T.squareReads
+    local hard = MSH.LIMIT.HARD_SIDE
+    res = T.cmd(kai, "preview", { rects = { rect(4100, 4100, hard, hard) } })
+    byName = {}
+    for _, c in ipairs(res.checks or {}) do byName[c.name] = c end
+    check(res.ok and byName.deed.code == "NO_DEED" and byName.roads == nil and T.squareReads == reads,
+        "沒帶地契（等級未知）：HARD_SIDE 見方的範圍也不掃地圖")
+    -- 掃地圖前的三道防線各自擋得住（審查第 2 輪：一個情境同時缺兩個條件時，拿掉其中一道測試照樣綠）
+    local kib = T.player({ name = "kib", x = 4305, y = 4305, items = { D4 } })
+    local function noScan(who, args, code, why)
+        T.advance(500)
+        local before = T.squareReads
+        res = T.cmd(who, "preview", args)
+        byName = {}
+        for _, c in ipairs(res.checks or {}) do byName[c.name] = c end
+        check(res.ok and (byName.deed.code == code or byName.size.code == code) and byName.roads == nil
+            and T.squareReads == before, why)
+    end
+    noScan(kai, { rects = { rect(4100, 4100, 20, 20) }, deedType = D2 }, "NO_DEED",
+        "指定身上沒有、但已啟用的 2 級地契：不照 2 級的上限掃地圖")
+    noScan(kib, { rects = { rect(4300, 4300, 20, 20) }, deedType = D4 }, "TIER_DISABLED",
+        "身上有 4 級地契、但 4 級停用：不掃地圖")
+    noScan(kai, { rects = { rect(4100, 4100, 60, 10) }, deedType = D1 }, "TOO_BIG",
+        "帶著有效的 1 級地契、範圍超過 1 級上限：不掃地圖")
+    T.advance(500)
+    T.sandbox("Tier1Side", hard)
+    T.sandbox("Tier1Area", hard * hard)
+    res = T.cmd(kai, "preview", { rects = { rect(4100, 4100, hard, 10) }, deedType = D1 })
+    byName = {}
+    for _, c in ipairs(res.checks or {}) do byName[c.name] = c end
+    check(res.ok and byName.size.ok and byName.roads ~= nil and T.squareReads > reads,
+        "管理員把 1 級外框調到 HARD_SIDE：同樣寬的範圍過了大小、照常掃道路")
+    T.advance(500)
+    kai.x, kai.y = 4161, 4148
+    res = T.cmd(kai, "create", { rects = { rect(4100, 4100, 122, 96) }, deedType = D1 })
+    local big = res.ok and R.get(res.claimId)
+    local bhs = big and T.houseOf("@MSH:" .. big.claimId)
+    check(big and big.rects[1].w == 122 and big.rects[1].h == 96 and bhs and bhs.w == 122 and bhs.h == 96,
+        "外框 122 × 96（Coded Gaming 的基地）：建立成功，紀錄與原生都是 122 × 96")
+    T.advance(500)
+    res = T.cmd(kai, "redraw", { claimId = big and big.claimId, rects = { rect(4100, 4100, hard, hard) },
+        expectedRevision = big and big.revision })
+    local ghs = res.ok and T.houseOf("@MSH:" .. res.claimId)
+    check(ghs and ghs.w == hard and ghs.h == hard, "重新框選放大到 HARD_SIDE 見方：原生跟著放大")
 
     T.section("放棄")
     boot({ sandbox = many() })

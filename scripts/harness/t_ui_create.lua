@@ -335,6 +335,45 @@ return function(T)
     check(ss == 0 and gs < 1, "框選畫面範圍沒變時每幀不配置、不碰地板（200 幀增加 " .. string.format("%.2f", gs)
         .. " KB、重設 " .. ss .. " 格）")
     check(P.undo(vm) and Sel.isEmpty(vm.sel), "〔復原〕退回上一步：範圍又是空的")
+    -- 外框超過 Settings.loadSide（預設 96）又在上限內：提醒要站在範圍中間（使用者 2026-11-08）；只有開著避開道路才提醒，超過上限時只寫錯誤
+    local function bigWarn(edge) return "IGUI_MSH_Select_BigWarn|" .. edge .. ",IGUI_MSH_Select_Done,IGUI_MSH_Create_Confirm" end
+    T.sandbox("Tier2Side", 150)
+    T.sandbox("Tier2Area", 22500)
+    p.x, p.y = 10, 10
+    Sel.mark(vm.sel, p)
+    p.x, p.y = 106, 19
+    P.applyPiece(vm)
+    frame()
+    check(lineTok(bigWarn(96)) == "warning", "外框 97 × 10、在上限內：用警告色寫要站在範圍中間，點名〔完成〕與送出建立的〔建立〕")
+    T.sandbox("RoadMargin", 4)
+    P.View.layout(v)
+    check(lineTok(bigWarn(90)) == "warning", "道路安全邊界 4（每塊往外多讀 4 格）：門檻跟著降到 90")
+    T.sandbox("RoadMargin", 0)
+    P.View.layout(v)
+    check(lineTok(bigWarn(98)) == nil and lineTok(bigWarn(96)) == nil, "道路安全邊界 0：門檻 98，外框 97 不提醒")
+    T.sandbox("RoadMargin", 1)
+    T.sandbox("AvoidRoads", false)
+    P.View.layout(v)
+    check(lineTok(bigWarn(96)) == nil, "沒開避開道路（不逐格讀地圖）：不提醒")
+    T.sandbox("AvoidRoads", true)
+    T.sandbox("Tier2Side", 40)
+    P.View.layout(v)
+    check(lineTok(bigWarn(96)) == nil and lineTok("IGUI_MSH_Select_Shape|97,10,970,1") == "errorText",
+        "超過這一級的外框上限：只寫錯誤、不另外提醒")
+    T.sandbox("Tier2Area", 1024)
+    local nlDetail = { name = "roads", ok = false, code = "NOT_LOADED", x = 1, y = 2 }
+    local nlNear = "IGUI_MSH_Create_Action_NOT_LOADED_Near|IGUI_MSH_Create_Recheck"
+    local nlReason, nlAction = P.reasonOf("NOT_LOADED", nlDetail, 97)
+    check(nlReason == "IGUI_MSH_Create_Reason_NOT_LOADED" and nlAction == "IGUI_MSH_Create_Action_NOT_LOADED|96,IGUI_MSH_Create_Recheck",
+        "建立時的 NOT_LOADED、外框 97：寫遊戲載入範圍的原因與做法（帶 96、點名〔重新預檢〕），不用物品搜尋的通用句")
+    check(select(2, P.reasonOf("NOT_LOADED", nlDetail, 96)) == nlNear and select(2, P.reasonOf("NOT_LOADED", nlDetail)) == nlNear,
+        "外框剛好 96、或不知道外框（禁建區面板）：只叫人走到中間再按〔重新預檢〕，不叫人縮到 96 以內")
+    T.sandbox("RoadMargin", 4)
+    check(select(2, P.reasonOf("NOT_LOADED", nlDetail, 91)) == "IGUI_MSH_Create_Action_NOT_LOADED|90,IGUI_MSH_Create_Recheck"
+        and select(2, P.reasonOf("NOT_LOADED", nlDetail, 90)) == nlNear,
+        "道路安全邊界 4：門檻降到 90，外框 91 才多寫縮小或分兩間")
+    T.sandbox("RoadMargin", 1)
+    check(P.undo(vm) and Sel.isEmpty(vm.sel), "（還原）〔復原〕退回空範圍")
     p.x, p.y = 10, 10
     Sel.mark(vm.sel, p)
     p.x, p.y = 17, 17
@@ -381,6 +420,17 @@ return function(T)
     local gp, sp = steady()
     check(sp == 0 and gp < 1, "預檢畫面每幀不配置、不碰地板（200 幀增加 " .. string.format("%.2f", gp) .. " KB、重設 "
         .. sp .. " 格）")
+    -- 預檢畫面的 NOT_LOADED 照這次範圍的外框寫做法（better-interface 2026-11-08）
+    local savedChecks, savedRects = vm.checks, vm.rects
+    local nlBig = "IGUI_MSH_Create_Action_NOT_LOADED|96,IGUI_MSH_Create_Recheck"
+    vm.checks = { { name = "roads", ok = false, code = "NOT_LOADED", x = 1, y = 2 } }
+    P.View.layout(v)
+    check(lineTok(nlNear) == "textMuted" and lineTok(nlBig) == nil, "預檢外框 8 × 8 沒載入：只叫人走到中間，不提縮小")
+    vm.rects = { { x = 10, y = 10, w = 97, h = 10 } }
+    P.View.layout(v)
+    check(lineTok(nlBig) == "textMuted" and lineTok(nlNear) == nil, "預檢外框 97 × 10 沒載入：多寫外框超過 96 時縮小或分兩間")
+    vm.checks, vm.rects = savedChecks, savedRects
+    P.View.layout(v)
     P.recheck(vm, T.now)
     T.tick(7)
     reply(lastSent(), { pass = true, checks = { { name = "roads", ok = true } } })

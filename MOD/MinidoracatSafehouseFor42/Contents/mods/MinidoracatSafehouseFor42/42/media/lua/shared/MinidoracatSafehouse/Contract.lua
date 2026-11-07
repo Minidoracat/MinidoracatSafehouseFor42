@@ -16,8 +16,17 @@ MSH.DEED_PREFIX = "MinidoracatSafehouse.Deed"
 MSH.MAX_TIER = 8
 
 MSH.LIMIT = {
-    HARD_SIDE = 96,                -- 任何等級的邊長上限
-    HARD_AREA = 9216,              -- 96 × 96
+    -- 任何等級的外框邊長與面積上限（使用者 2026-11-08 放寬：管理員可以把外框設到 150，各級預設照舊 ≤ 96）
+    HARD_SIDE = 150,
+    HARD_AREA = 22500,             -- 150 × 150
+    -- 開著避開道路時，預檢與建立逐格讀「每塊往外擴 RoadMargin 格」的範圍，讀到沒載入的格子就是 NOT_LOADED。伺服器
+    -- 載入玩家所在格前後各「客戶端區塊格數 ÷ 2 × 8」格涵蓋到的 64 × 64 載入單位（ServerMap.characterIn、CellSize）。
+    -- 區塊格數照螢幕算、最多 19（IsoChunkMap.CalcChunkWidth：1920×1080 以上都是 19），伺服器夾在 12–20
+    -- （GameServer.java:2808）：1280×720 以下前後各 48 格、1920×1080 以上 72 格，所以讀取寬 98／146 以內站在中間兩格之一
+    -- 一定載得到。外框的門檻＝這個寬 − 2 × RoadMargin（Settings.loadSide，預設 RoadMargin 1 時 96／144）；
+    -- 管理員面板、建立面板與 NOT_LOADED 的文字照它寫提醒（使用者 2026-11-08）
+    LOAD_READ = 98,
+    LOAD_READ_HD = 146,
     -- 協定、紀錄與容量預算接受的塊數上限＝沙盒 MaxPieces 的最大值；一間實際可以幾塊看 MaxPieces（預設 4，
     -- 使用者 2026-10-12：管理員可調高）。調低後已建好的照樣合法，所以紀錄與收斂只看這個硬上限
     MAX_PIECES = 8,

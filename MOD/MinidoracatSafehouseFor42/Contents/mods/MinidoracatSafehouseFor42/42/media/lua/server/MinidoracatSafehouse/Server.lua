@@ -97,12 +97,13 @@ S.TYPES = {
     int = MSH.isInt,
     claimId = function(v) return MSH.isInt(v) and v >= 1 and v < 1e9 end,
     revision = function(v) return MSH.isInt(v) and v >= 0 and v < 1e12 end,
-    -- 邊長在協定層就限 96：預檢與建立會逐格掃地板、查 RoomDef 與 MiniMap，範圍過大的封包能把主執行緒卡住
+    -- 邊長在協定層就限 HARD_SIDE：預檢與建立會逐格掃地板、查 RoomDef 與 MiniMap，範圍過大的封包能把主執行緒卡住
+    -- （實際掃不掃還要過該級上限：超過就不掃，Claims C.STEPS scan）
     rect = function(v)
         return type(v) == "table" and exactKeys(v, RECT_KEYS) and MSH.Rect.valid(v)
             and v.w <= MSH.LIMIT.HARD_SIDE and v.h <= MSH.LIMIT.HARD_SIDE
     end,
-    -- 多塊範圍：1–MAX_PIECES 塊、連續的整數鍵，每塊照 rect，外框也不超過 96（形狀規則由 Claims.checkShape 判）
+    -- 多塊範圍：1–MAX_PIECES 塊、連續的整數鍵，每塊照 rect，外框也不超過 HARD_SIDE（形狀規則由 Claims.checkShape 判）
     rects = function(v)
         if type(v) ~= "table" then return false end
         local n = 0
@@ -133,7 +134,7 @@ S.TYPES = {
         local b = MSH.Rect.bounds(v)
         return b.w <= MSH.LIMIT.ZONE_SIDE and b.h <= MSH.LIMIT.ZONE_SIDE
     end,
-    -- 原版屋（Foreign.lua 釋出）的範圍：只拿來比對、不掃地板，所以不受 96 的限制；範圍不合法（BAD_RECT）的原版屋也要指得到，
+    -- 原版屋（Foreign.lua 釋出）的範圍：只拿來比對、不掃地板，所以不受 HARD_SIDE 的限制；範圍不合法（BAD_RECT）的原版屋也要指得到，
     -- 只要求四個整數
     nativeRect = function(v)
         return type(v) == "table" and exactKeys(v, RECT_KEYS) and MSH.isInt(v.x) and MSH.isInt(v.y)

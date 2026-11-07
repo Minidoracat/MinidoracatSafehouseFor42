@@ -9,10 +9,10 @@ option MinidoracatSafehouse.CreateMode
 {type = enum, numValues = 2, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_CreateMode, valueTranslation = MinidoracatSafehouse_CreateMode,}
 
 option MinidoracatSafehouse.FreeMaxArea
-{type = integer, min = 1, max = 9216, default = 576, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_FreeMaxArea,}
+{type = integer, min = 1, max = 22500, default = 576, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_FreeMaxArea,}
 
 option MinidoracatSafehouse.FreeMaxSide
-{type = integer, min = 1, max = 96, default = 48, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_FreeMaxSide,}
+{type = integer, min = 1, max = 150, default = 48, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_FreeMaxSide,}
 
 option MinidoracatSafehouse.ClaimGap
 {type = integer, min = 0, max = 16, default = 2, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_ClaimGap,}
@@ -81,52 +81,52 @@ option MinidoracatSafehouse.TiersEnabled
 {type = integer, min = 1, max = 8, default = 3, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_TiersEnabled,}
 
 option MinidoracatSafehouse.Tier1Area
-{type = integer, min = 1, max = 9216, default = 576, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Area,}
+{type = integer, min = 1, max = 22500, default = 576, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Area,}
 
 option MinidoracatSafehouse.Tier1Side
-{type = integer, min = 1, max = 96, default = 48, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Side,}
+{type = integer, min = 1, max = 150, default = 48, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1Side,}
 
 option MinidoracatSafehouse.Tier2Area
-{type = integer, min = 1, max = 9216, default = 1024, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Area,}
+{type = integer, min = 1, max = 22500, default = 1024, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Area,}
 
 option MinidoracatSafehouse.Tier2Side
-{type = integer, min = 1, max = 96, default = 64, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Side,}
+{type = integer, min = 1, max = 150, default = 64, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier2Side,}
 
 option MinidoracatSafehouse.Tier3Area
-{type = integer, min = 1, max = 9216, default = 1600, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Area,}
+{type = integer, min = 1, max = 22500, default = 1600, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Area,}
 
 option MinidoracatSafehouse.Tier3Side
-{type = integer, min = 1, max = 96, default = 80, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Side,}
+{type = integer, min = 1, max = 150, default = 80, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier3Side,}
 
 option MinidoracatSafehouse.Tier4Area
-{type = integer, min = 1, max = 9216, default = 2304, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Area,}
+{type = integer, min = 1, max = 22500, default = 2304, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Area,}
 
 option MinidoracatSafehouse.Tier4Side
-{type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Side,}
+{type = integer, min = 1, max = 150, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier4Side,}
 
 option MinidoracatSafehouse.Tier5Area
-{type = integer, min = 1, max = 9216, default = 3136, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Area,}
+{type = integer, min = 1, max = 22500, default = 3136, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Area,}
 
 option MinidoracatSafehouse.Tier5Side
-{type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Side,}
+{type = integer, min = 1, max = 150, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier5Side,}
 
 option MinidoracatSafehouse.Tier6Area
-{type = integer, min = 1, max = 9216, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Area,}
+{type = integer, min = 1, max = 22500, default = 4096, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Area,}
 
 option MinidoracatSafehouse.Tier6Side
-{type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Side,}
+{type = integer, min = 1, max = 150, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier6Side,}
 
 option MinidoracatSafehouse.Tier7Area
-{type = integer, min = 1, max = 9216, default = 6400, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Area,}
+{type = integer, min = 1, max = 22500, default = 6400, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Area,}
 
 option MinidoracatSafehouse.Tier7Side
-{type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Side,}
+{type = integer, min = 1, max = 150, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier7Side,}
 
 option MinidoracatSafehouse.Tier8Area
-{type = integer, min = 1, max = 9216, default = 9216, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Area,}
+{type = integer, min = 1, max = 22500, default = 9216, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Area,}
 
 option MinidoracatSafehouse.Tier8Side
-{type = integer, min = 1, max = 96, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Side,}
+{type = integer, min = 1, max = 150, default = 96, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier8Side,}
 
 option MinidoracatSafehouse.Tier1FreeSlots
 {type = integer, min = 0, max = 100, default = 1, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_Tier1FreeSlots,}

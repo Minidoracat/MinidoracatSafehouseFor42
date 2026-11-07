@@ -375,7 +375,7 @@ return function(T)
     fw.click(deeds.tierAdd)
     fw.click(deeds.tierAdd)
     -- 面積框旁寫幾乘幾（使用者 2026-10-12：「旁邊可以括號是以幾乘幾計算的」），打字時跟著變、不是數字就空白；
-    -- 放在面積框右邊，最寬的「（約 96 × 96）」也不壓到外框那欄
+    -- 放在面積框右邊，最寬的「（150 × 150）」也不壓到外框那欄
     local realGetText = getText
     getText = function(k, ...)
         local a = { ... }
@@ -397,6 +397,50 @@ return function(T)
         "打成 1000：跟著改成（約 32 × 32），不壓到外框那欄")
     typeArea("abc")
     check(eq1.text == "", "不是數字：空白")
+    typeArea("22500")
+    check(eq1.text == "IGUI_MSH_Admin_AreaEq|IGUI_MSH_AreaSquare|150" and eq1.x + eq1.width <= xsEq.Side,
+        "打成上限 22500：（150 × 150）也不壓到外框那欄")
+    -- 外框超過 Settings.loadSide（預設道路安全邊界 1 時 96）那一列底下寫警告（使用者 2026-11-08：「當有人填寫超過那個值的時候,
+    -- 要加上醒目的文字提醒」）：打字時就出現、改回 96 就消失；規則頁的免費模式外框也一樣
+    local function typeInto(el, t)
+        el:setText(t)
+        el.onChange(el, t)
+    end
+    local side1 = deeds["f:Tier1Side"]
+    local side1Text = side1:getText()
+    typeInto(side1, "97")
+    check(shown("big:Tier1Side#1") and deeds["big:Tier1Side#1"].text == "IGUI_MSH_Admin_BigSide|97,96"
+        and shown("bigHelp#1") and deeds["bigHelp#1"].text == "IGUI_MSH_Admin_BigSideHelp|96,144",
+        "1 級外框打成 97：那一列底下寫警告（外框、96），表格底下寫一次說明（任何螢幕 96、1920×1080 以上 144）")
+    local side2 = deeds["f:Tier2Side"]
+    local side2Text = side2:getText()
+    typeInto(side2, "120")
+    check(shown("big:Tier2Side#1") and shown("big:Tier1Side#1") and deeds["bigHelp#2"] == nil,
+        "兩級都超過：兩列各一行警告，說明只寫一次")
+    typeInto(side2, side2Text)
+    typeInto(side1, "96")
+    check(not shown("big:Tier1Side#1") and not shown("bigHelp#1"), "改回 96：警告與說明都消失")
+    typeInto(side1, "151")
+    check(not shown("big:Tier1Side#1"), "超過選項上限 150：不寫這個警告（〔套用變更〕時標錯）")
+    P.values.RoadMargin = 4
+    typeInto(side1, "91")
+    check(shown("big:Tier1Side#1") and deeds["big:Tier1Side#1"].text == "IGUI_MSH_Admin_BigSide|91,90",
+        "道路安全邊界存成 4（每塊往外多讀 4 格）：門檻降到 90，外框 91 就警告")
+    P.values.RoadMargin = 1
+    P.values.AvoidRoads = false
+    typeInto(side1, "120")
+    check(not shown("big:Tier1Side#1"), "避開道路關著（不逐格讀地圖）：外框 120 也不警告")
+    P.values.AvoidRoads = true
+    typeInto(side1, side1Text)
+    local rulesP = P.pages.rules.flow.pool
+    local freeSide = rulesP["f:FreeMaxSide"]
+    local freeText = freeSide:getText()
+    typeInto(freeSide, "150")
+    check(rulesP["big:FreeMaxSide#1"] ~= nil and rulesP["big:FreeMaxSide#1"]:isVisible()
+        and rulesP["big:FreeMaxSide#1"].text == "IGUI_MSH_Admin_BigSide|150,96" and rulesP["bigHelp#1"] ~= nil
+        and rulesP["bigHelp#1"]:isVisible(), "規則頁免費模式外框打成 150：底下寫警告與說明")
+    typeInto(freeSide, freeText)
+    check(not rulesP["big:FreeMaxSide#1"]:isVisible() and not rulesP["bigHelp#1"]:isVisible(), "改回原值：警告與說明都消失")
     getText = realGetText
     typeArea(area1Text)
 
@@ -752,7 +796,7 @@ return function(T)
     local function fits(el, widest) return el ~= nil and el.width >= measure(widest) + PAD_IN end
     local deedPool = PB.pages.deeds.flow.pool
     local narrow = {}
-    for _, s in ipairs({ { "Tier1Side", "96" }, { "Tier1Area", "9216" }, { "Tier1Area", "9999" }, { "Tier3Area", "9999" },
+    for _, s in ipairs({ { "Tier1Side", "150" }, { "Tier1Area", "22500" }, { "Tier1Area", "99999" }, { "Tier3Area", "99999" },
         { "Tier1FreeSlots", "100" }, { "Tier1BuySlots", "100" }, { "Tier1RentSlots", "10" }, { "Tier1LootChance", "100.00" } }) do
         if not fits(deedPool["f:" .. s[1]], s[2]) then narrow[#narrow + 1] = s[1] .. "=" .. tostring(deedPool["f:" .. s[1]] and deedPool["f:" .. s[1]].width) end
     end
