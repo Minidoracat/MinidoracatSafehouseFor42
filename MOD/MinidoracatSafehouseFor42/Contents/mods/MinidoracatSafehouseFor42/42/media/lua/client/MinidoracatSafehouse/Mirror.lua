@@ -113,10 +113,10 @@ local function typeOk(o, v)
 end
 
 -- 伺服器存好沙盒後的快照：本機 SandboxOptions 跟著改再投影到 SandboxVars，否則原版沙盒 UI 存檔會把舊值整份送回
--- （GameServer.java:1694-1708；VM MinidoracatVehicleManager_Client.lua:123-135 同法）。
--- 只收 Settings 認得、型別相符的鍵（set 遇到未知選項名會丟例外，SandboxOptions.java:572-582；toLua :279-285）
+-- （GameServer.java:1732-1746；VM MinidoracatVehicleManager_Client.lua:123-135 同法）。
+-- 只收 Settings 認得、型別相符的鍵（set 遇到未知選項名會丟例外，SandboxOptions.java:568-578；toLua :279-285）
 function M.onSandboxSync(args)
-    local opts, any = getSandboxOptions(), false   -- LuaManager.java:5809
+    local opts, any = getSandboxOptions(), false   -- LuaManager.java:5836
     for k, v in pairs(args) do
         local o = type(k) == "string" and MSH.Settings.BY_KEY[k] or nil
         if o ~= nil and typeOk(o, v) then
@@ -130,7 +130,7 @@ function M.onSandboxSync(args)
     end
 end
 
--- OnServerCommand（GameClient.java:1071）
+-- OnServerCommand（GameClient.java:993）
 function M.onServerCommand(module, command, args)
     if module ~= MSH.MODULE or type(args) ~= "table" then return end
     if command == "nativeRemove" then
@@ -165,7 +165,7 @@ function M.onSafehousesChanged()
 end
 
 -- 送校正：本地 owner 是標記的原生安全屋（最多 CALIBRATE_MAX 筆）；查詢不帶 requestId。
--- sendClientCommand(player, ...)（LuaManager.java:8936-8951）、getSpecificPlayer（:4167）
+-- sendClientCommand(player, ...)（LuaManager.java:8872-8887）、getSpecificPlayer（:4184）
 function M.calibrate(now)
     local player = getSpecificPlayer(0)
     if player == nil then return false end

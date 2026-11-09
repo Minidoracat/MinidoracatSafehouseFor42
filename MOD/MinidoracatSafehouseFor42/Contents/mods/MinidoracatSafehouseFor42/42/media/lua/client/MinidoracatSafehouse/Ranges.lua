@@ -8,8 +8,8 @@
 --   這只是畫面：原版本來就把每一間的範圍傳給所有客戶端（MetaDataPacket、SafehouseSync），改過的客戶端照樣看得到。
 -- 玩家自己的開關：總開關（預設開）＋每一類（預設都開；伺服器沒開放的那類照樣不畫）＋整片顯示（RangesFill，預設關＝只畫
 --   外緣；使用者 2026-10-16「畫面上顯示的區塊可以整片而不是只有邊框嗎?…或者做成切換開關顯示」）。存在 ModOptions（PZAPI.ModOptions，
---   B42 官方 API：引擎自己存讀 ModOptions.ini，MainOptions.lua:2805-2841、ModOptions.lua:259-333），ESC 選項的「模組」頁
---   也有同樣的開關（套用時 Options:apply，MainOptions.lua:3761-3763）；沒有 PZAPI 時只在這次遊戲有效。
+--   B42 官方 API：引擎自己存讀 ModOptions.ini，MainOptions.lua:2800-2836、ModOptions.lua:259-333），ESC 選項的「模組」頁
+--   也有同樣的開關（套用時 Options:apply，MainOptions.lua:3756-3758）；沒有 PZAPI 時只在這次遊戲有效。
 -- 分類：清單快取（Client.claims）的我的、分享給我的先算；其餘原生照屋主：原版或沒接管的直接是 getOwner，
 --   managed（@MSH:<id>）用 PublicApi.ownerName（公開的 registry 表，第一次查不到會抓整張表、有節流）；我在原生名單裡＝分享給我的。
 --   只有我在陣營裡、而且同陣營或其他玩家那類要畫時（要分出是哪一類）才查 managed 的屋主：不在陣營的人不必為了分類去抓
@@ -85,7 +85,7 @@ R.session = R.session or { on = true, own = true, shared = true, faction = true,
 R.walked = 0           -- R.light／R.dim 走過的格子數（harness 看有沒有走整塊）
 R.dirty = true
 
--- 選項在檔案載入時登記：MainOptions 建立時 PZAPI.ModOptions:load 才讀得到存值（MainOptions.lua:2822-2823）
+-- 選項在檔案載入時登記：MainOptions 建立時 PZAPI.ModOptions:load 才讀得到存值（MainOptions.lua:2790-2791）
 if first and PZAPI and PZAPI.ModOptions then
     local opts = PZAPI.ModOptions:create(R.OPTIONS_ID, "IGUI_MSH_Options_Title")
     R.opt = opts:addTickBox("ShowRanges", "IGUI_MSH_Manager_ShowRanges", true, "IGUI_MSH_Manager_ShowRanges_tooltip")

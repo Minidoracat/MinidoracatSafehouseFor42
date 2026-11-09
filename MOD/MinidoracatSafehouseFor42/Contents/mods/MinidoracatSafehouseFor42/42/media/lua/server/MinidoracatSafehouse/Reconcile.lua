@@ -10,7 +10,7 @@
 -- released 紀錄只剩 md.tombs 的精簡 tombstone（Registry）；收斂與 GC 都看 R.tomb／R.tombList。
 -- malformed 紀錄（沒有合法範圍）收斂一律略過，只給管理員 targeted recovery。
 -- 可觀測性（§12.4）：Rc.health() 給上次成功 sweep 時間、待修復數、目前最久的 drift 持續時間、干擾數。
--- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/iso/areas/SafeHouse.java（下稱 SafeHouse.java）。
+-- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.22.2-20261109/pz/zombie/iso/areas/SafeHouse.java（下稱 SafeHouse.java）。
 
 if isClient() then return end
 

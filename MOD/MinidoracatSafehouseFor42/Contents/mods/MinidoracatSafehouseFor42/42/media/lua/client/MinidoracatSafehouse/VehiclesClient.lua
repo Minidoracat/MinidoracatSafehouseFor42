@@ -1,20 +1,20 @@
 -- MinidoracatSafehouse/VehiclesClient.lua：擋車（使用者 2026-10-15）。車上（含拖著的車）有任何一個人不能進的安全屋，
 -- 車就開不進去；判定和走路同一套（SafeHouse.isSafehouseAllowTrepass，SafeHouse.java:224-243：屋主、名單、
 -- 管理員能力、伺服器選項）。原版只在走路時擋，週期趕人也跳過車上的人（SafeHouse.checkTrespass:536-537）。
--- 車（連同拖車）的物理只在駕駛的客戶端算（BaseVehicle.java:3942-3966、3979-4004），伺服器推不動車，所以擋在這裡；
+-- 車（連同拖車）的物理只在駕駛的客戶端算（BaseVehicle.java:3975-3999、4012-4037），伺服器推不動車，所以擋在這裡；
 -- 伺服器 Vehicles.lua 保底（車已經在屋裡：不能進的人下車傳出）。依據與實測：safehouse-dev references/vehicles.md、
 -- E2E vblock-mp。
--- 每幀（OnPlayerUpdate：只有本機玩家，在 updateWhileInVehicle 之前，IsoPlayer.java:2286、2339）看本機駕駛的車與它拖的車：
---   車身＝腳本 extents 加重心偏移的矩形（同 BaseVehicle.getClosestPointOnExtents:4971-4997）外加 PAD，
+-- 每幀（OnPlayerUpdate：只有本機玩家，在 updateWhileInVehicle 之前，IsoPlayer.java:2291、2344）看本機駕駛的車與它拖的車：
+--   車身＝腳本 extents 加重心偏移的矩形（同 BaseVehicle.getClosestPointOnExtents:5005-5031）外加 PAD，
 --   對附近每塊不能進的原生安全屋做 SAT：
 --   1) 照目前速度再走 LOOK_FRAMES 幀（至少 LOOK_MIN 秒）會碰到 → setForceBrake（1 秒、×13、掛空檔，
---      CarController.updateControls:974-980）＋速度歸零；
+--      CarController.updateControls:973-979）＋速度歸零；
 --   2) 從外面穿進去（卡頓、被撞），上一個合法位置在每塊外面 → 拉回那裡（setWorldTransform → Bullet.teleportVehicle，
---      BaseVehicle.java:4049-4067）＋強制煞車＋歸零；車和拖車的位置在同一幀存、一起拉回；
+--      BaseVehicle.java:4083-4101）＋強制煞車＋歸零；車和拖車的位置在同一幀存、一起拉回；
 --   3) 本來就壓在裡面（車停著之後才建屋、改分享）→ 棘輪：記住最淺的位置，比它深 DEEPER 以上就拉回那裡＋歸零，
 --      往外開照常。這裡不強制煞車：煞車會掛空檔 1 秒，貼著邊界的晃動一直重新觸發，車就倒不出去（E2E sh-vblock-1015d）。
 --   歸零用 applyImpulseFromHitPlant(車自己, 質量 ÷ (0.3 × fudgedMass))：列表衝量在下一個物理子步 ×30 套用
---   （:3590-3631、5556-5565），relPos 0 沒有力矩，也不佔 addImpulse 的單一槽；速度和上次送的時候完全相同＝
+--   （:3623-3664、5590-5599），relPos 0 沒有力矩，也不佔 addImpulse 的單一槽；速度和上次送的時候完全相同＝
 --   物理還沒走，不重送（同一步疊兩次會反彈）。
 
 if not isClient() then return end
@@ -68,7 +68,7 @@ function V.sat(fp, cx, cy, r, pad)
     return -math.max(-o1, -o2, -o3, -o4)
 end
 
--- 車上的人：每個座位（BaseVehicle.getMaxPassengers:1800-1802、getCharacter:1851-1854）
+-- 車上的人：每個座位（BaseVehicle.getMaxPassengers:1812-1814、getCharacter:1851-1854）
 local function addRiders(v, out)
     for i = 0, v:getMaxPassengers() - 1 do
         local c = v:getCharacter(i)

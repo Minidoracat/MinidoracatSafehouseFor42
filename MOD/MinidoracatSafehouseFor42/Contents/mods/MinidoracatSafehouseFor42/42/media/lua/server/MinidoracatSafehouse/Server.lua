@@ -446,8 +446,8 @@ function S.onLoadedMapZones()
     S.lastMinute = now
 end
 
--- 網路層到這時才建好：udpEngine 在 GameServer.java:1509 建立、:1533 才觸發 OnServerStarted；OnLoadedMapZones（IsoWorld.init，
--- :787）那時碰連線會 NPE。netUp 之前 Native／Audit 不送封包、不查在線玩家（2026-10-11 migration-mp boot2 實踩）
+-- 網路層到這時才建好：udpEngine 在 GameServer.java:1549 建立、:1573 才觸發 OnServerStarted；OnLoadedMapZones（IsoWorld.init，
+-- :798）那時碰連線會 NPE。netUp 之前 Native／Audit 不送封包、不查在線玩家（2026-10-11 migration-mp boot2 實踩）
 function S.onServerStarted()
     S.netUp = true
     if not S.enabled then return end

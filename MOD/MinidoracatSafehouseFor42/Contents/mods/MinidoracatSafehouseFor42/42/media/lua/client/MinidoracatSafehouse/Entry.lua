@@ -77,7 +77,7 @@ end
 
 -- ===== 原版安全屋視窗 → 管理視窗 =====
 -- 三個原版入口都是 ISSafehouseUI:new → initialise → addToUIManager：User Panel ISUserPanelUI.lua:138-145、
--- 世界右鍵 ISWorldObjectContextMenu.lua:526-531（選項由 ISWorldObjectContextMenuLogic.java:1002-1015 加）、
+-- 世界右鍵 ISWorldObjectContextMenu.lua:526-531（選項由 ISWorldObjectContextMenuLogic.java:1055-1068 加）、
 -- 管理員清單 ISSafehousesList.lua:104-109。攔 addToUIManager 是唯一共同點：managed 就不上畫面、改開管理視窗。
 -- new 已把 ISSafehouseUI.instance 指向這個不會出現的面板（ISSafehouseUI.lua:380），清掉免得 OnSafehousesChanged 操作它。
 -- 管理視窗只列我的與分享給我的（ManagerWindow.lua W:applyWant），名單裡沒有自己的屋會開成自己的第一間（2026-10-23 E2E
@@ -185,7 +185,7 @@ function E.hideManagedControls(panel)
     end
 end
 
--- 原版「建立安全屋」右鍵選項（ISWorldObjectContextMenuLogic.java:1024-1046）一律拿掉：本 MOD 要求 PlayerSafehouse=false
+-- 原版「建立安全屋」右鍵選項（ISWorldObjectContextMenuLogic.java:1077-1099）一律拿掉：本 MOD 要求 PlayerSafehouse=false
 -- （計畫 §5），原版建立封包在伺服器沒有 Lua 掛鉤（decisions.md），地契、名額、道路規則都管不到。
 -- 事件在 Java 建完選項後觸發（ISWorldObjectContextMenu.lua:209-214）；removeOptionByName：ISContextMenu.lua:1016。
 function E.onFillWorldMenu(_, context, _, test)

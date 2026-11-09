@@ -9,7 +9,7 @@
 --   樓上（或地下）的點：伺服器拿得到那格、而且那格是可站的地板（IsoCell.getGridSquare，IsoCell.java:3190，沒載入回 nil；
 --   IsoGridSquare.TreatAsSolidFloor，IsoGridSquare.java:7704-7716：solidfloor 旗標、樓梯或斜面）才用存的 z，
 --   否則落到同一個 x, y 的地面 z=0（主代理 2026-10-14）。存的點不改。
---   分割畫面次座位：CreatePlayerPacket 一律用連線登入名、新角色的 playerIndex 也還是 0（IsoPlayer.java:340、973-981），
+--   分割畫面次座位：CreatePlayerPacket 一律用連線登入名、新角色的 playerIndex 也還是 0（IsoPlayer.java:342、972-980），
 --   所以次座位重生也會放到主帳號的點（不處理）。
 -- 原版旗標（SafeHouse playersRespawn）：原版取 first-match 的那間、以 h/w 對調的中心出生（CreatePlayerPacket.java:268-274），
 --   重建原生時旗標也會掉（SafeHouse.java:299-303）。開服時把 managed 原生上原版真的會採用的旗標換成本 MOD 的點

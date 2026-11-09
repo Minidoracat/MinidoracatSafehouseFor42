@@ -651,7 +651,7 @@ function P.actionClass()
     -- 時間就是伺服器算的，不再乘心情、醉酒、手傷與體溫（原版 MP 搬東西的時間也由伺服器決定、不乘這些；乘了會超過伺服器
     -- 等的期限，2026-10-20 審查）
     function A:adjustMaxTime(maxTime) return maxTime end
-    -- ms：伺服器算的原版搬運時間；1 單位 20 ms（Transaction.java:440），客戶端每秒走 48 單位，比伺服器要的晚一點
+    -- ms：伺服器算的原版搬運時間；1 單位 20 ms（Transaction.java:428），客戶端每秒走 48 單位，比伺服器要的晚一點
     function A:new(character, ms, take)
         local o = ISBaseTimedAction.new(self, character)
         o.maxTime = math.max(1, math.ceil(ms / 20))

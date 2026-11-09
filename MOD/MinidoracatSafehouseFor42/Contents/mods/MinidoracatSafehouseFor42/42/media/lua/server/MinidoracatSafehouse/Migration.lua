@@ -25,7 +25,7 @@
 --     都在管理員面板「需要處理的安全屋」。
 -- md.migration（Global ModData，公開）只放狀態、原因碼與筆數；名字與座標只寫進伺服器本機的 completion 檔（§9 第 11 點）。
 -- 字串字面值只用 ASCII：Kahlua 把非 ASCII 字面值截成單 byte（sh-mig-1011a 實踩）。
--- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/（下稱 SafeHouse.java＝iso/areas/SafeHouse.java、
+-- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.22.2-20261109/pz/zombie/（下稱 SafeHouse.java＝iso/areas/SafeHouse.java、
 --   LuaManager.java＝Lua/LuaManager.java）。
 
 if isClient() then return end
@@ -114,7 +114,7 @@ local function mark(house, id, owner)
     house:addPlayer(owner)
 end
 
--- Better Safehouse 是否啟用：getActivatedMods（LuaManager.java:7458-7462 → ZomboidFileSystem.getModIDs :873，已載入的 MOD id）。
+-- Better Safehouse 是否啟用：getActivatedMods（LuaManager.java:7394-7398 → ZomboidFileSystem.getModIDs :873，已載入的 MOD id）。
 -- ini 的 Mods= 寫成 \ModId，比對前去掉開頭的反斜線
 function M.bshActive()
     local ok, found = pcall(function()

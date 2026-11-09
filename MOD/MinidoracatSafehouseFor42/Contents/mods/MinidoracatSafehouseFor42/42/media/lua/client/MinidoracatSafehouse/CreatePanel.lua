@@ -41,7 +41,7 @@ P.PREVIEW_GAP_MS = 600
 P.LOCAL_CODES = { SPLIT = true, OFFLINE = true, NO_REPLY = true, UNCONFIRMED = true }
 
 local function player()
-    return getSpecificPlayer(0)   -- LuaManager.java:4163-4167；分割畫面次玩家不能建，只看 0 號
+    return getSpecificPlayer(0)   -- LuaManager.java:4180-4184；分割畫面次玩家不能建，只看 0 號
 end
 
 local function changed(m)
@@ -50,7 +50,7 @@ end
 
 -- ===== 狀態機 =====
 
--- 背包（含巢狀容器）持有的地契等級，由低到高（getFirstTypeRecurse ItemContainer.java:1551）
+-- 背包（含巢狀容器）持有的地契等級，由低到高（getFirstTypeRecurse ItemContainer.java:1599）
 function P.heldTiers(p)
     local out = {}
     if p == nil then return out end
@@ -453,7 +453,7 @@ function P.onTick()
     if P.model ~= nil then P.update(P.model, getTimestampMs()) end
 end
 
--- 地面上的左鍵（沒被任何視窗接走才會觸發，UIManager.java:715-719）：框選中就從這格開始拉
+-- 地面上的左鍵（沒被任何視窗接走才會觸發，UIManager.java:712-716）：框選中就從這格開始拉
 function P.onWorldMouseDown()
     local m = P.model
     if m ~= nil and m.phase == P.SELECTING and m.sel ~= nil then Sel.mouseDown(m.sel, player()) end
@@ -1088,7 +1088,7 @@ function P.onInventoryMenu(playerNum, context, items)
     for _, v in ipairs(items) do
         local item = v
         if not instanceof(v, "InventoryItem") then item = type(v) == "table" and v.items and v.items[1] or nil end
-        local ft = item ~= nil and item.getFullType ~= nil and item:getFullType() or nil   -- InventoryItem.java:1657
+        local ft = item ~= nil and item.getFullType ~= nil and item:getFullType() or nil   -- InventoryItem.java:1661
         if MSH.tierOfDeed(ft) ~= nil then
             -- ISContextMenu:addOption(name, target, onSelect, param1)（ISContextMenu.lua:873）
             local opt = context:addOption(getText("IGUI_MSH_Deed_Use"), ft, P.onUseDeed, playerNum)

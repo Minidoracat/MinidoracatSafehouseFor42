@@ -1,7 +1,7 @@
 -- MinidoracatSafehouse/SharingPage.lua：管理視窗「成員與分享」頁（M3，計畫 §10.5、§6.5）。
 -- 上半「目前分享給」：陣營列（權限、〔恢復分享〕〔停止〕）與玩家名單。名單是 VirtualList，可以一次選好幾位（使用者
 --   2026-10-20 核准設計稿 temp/plan-bulkshare-1020；照 Economy 商店編輯 ECAdminShop onRow 與原版物品欄
---   ISInventoryPane.lua:1669-1700）：點一列＝只選這一位，點勾選框或 Ctrl＋點＝加選或取消，Shift＋點＝從錨點選一段，
+--   ISInventoryPane.lua:1672-1705）：點一列＝只選這一位，點勾選框或 Ctrl＋點＝加選或取消，Shift＋點＝從錨點選一段，
 --   Ctrl＋A 全選；鍵盤方向鍵移動、Space／Enter 勾選、Shift＋方向鍵一路選過去；手把十字鍵移動、A 勾選；Esc／手把 B 清除
 --   選取（ManagerWindow 的 win.onEscape）。名單底下〔全選〕〔清除選取〕與操作說明：清除不靠快捷鍵。
 -- 下半跟著選了幾位換：沒選＝新增分享（先勾權限，再輸入玩家名稱〔分享給玩家〕或〔分享給陣營〕）；選一位＝chip 帶入他

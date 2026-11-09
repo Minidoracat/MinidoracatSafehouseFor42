@@ -3,7 +3,7 @@
 --   所以不問伺服器。沒載入（太遠）的格子另外數，面板寫「有幾格沒載入」。
 -- 掃描的地方（使用者 2026-10-20 選）：家具容器、容器裡的背包（往裡看一層）、地上的物品、停在範圍內的車。車與人形模特兒
 --   身上的只能指引（walk）：車可能是別人的；模特兒身上穿的，伺服器移除時不會同步（server Storage.lua）。
---   樓層照每個 chunk 的 getMinLevel／getMaxLevel（IsoChunk.java:3106/3110，sh-storage-1020b 同一套）。
+--   樓層照每個 chunk 的 getMinLevel／getMaxLevel（IsoChunk.java:3105/3110，sh-storage-1020b 同一套）。
 -- 分幀（使用者 2026-10-20：「記得要幫我評估是否會影響到客戶端或伺服器端的性能」）：一欄一欄掃，每個 tick 最多 BUDGET_MS
 --   （sh-storperf-1020a：96×96、186 個容器、4,024 件一次掃完 38 ms；每 tick 3 ms 分 14 個 tick，最長的一個 tick 4 ms）。
 -- 同名物品併成一組（顯示名稱，和玩家在物品欄看到的一樣；名稱先照 SS.nameFixer 請翻譯包修）；組裡再分「在哪裡」（place）：
@@ -38,7 +38,7 @@ function SS.floorText(z)
     return getText("IGUI_MSH_Indoor_Floor", z + 1)
 end
 
--- 物品分類的顯示名（原版 ISInventoryPane.lua:2532-2535 的 IGUI_ItemCat_<分類>；沒有翻譯照原字）
+-- 物品分類的顯示名（原版 ISInventoryPane.lua:2553-2556 的 IGUI_ItemCat_<分類>；沒有翻譯照原字）
 function SS.catText(cat)
     return getTextOrNull("IGUI_ItemCat_" .. tostring(cat)) or tostring(cat)
 end

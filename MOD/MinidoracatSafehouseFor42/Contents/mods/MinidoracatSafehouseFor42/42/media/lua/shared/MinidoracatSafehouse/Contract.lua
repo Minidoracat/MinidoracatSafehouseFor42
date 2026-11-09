@@ -22,7 +22,7 @@ MSH.LIMIT = {
     -- 開著避開道路時，預檢與建立逐格讀「每塊往外擴 RoadMargin 格」的範圍，讀到沒載入的格子就是 NOT_LOADED。伺服器
     -- 載入玩家所在格前後各「客戶端區塊格數 ÷ 2 × 8」格涵蓋到的 64 × 64 載入單位（ServerMap.characterIn、CellSize）。
     -- 區塊格數照螢幕算、最多 19（IsoChunkMap.CalcChunkWidth：1920×1080 以上都是 19），伺服器夾在 12–20
-    -- （GameServer.java:2808）：1280×720 以下前後各 48 格、1920×1080 以上 72 格，所以讀取寬 98／146 以內站在中間兩格之一
+    -- （GameServer.java:2836）：1280×720 以下前後各 48 格、1920×1080 以上 72 格，所以讀取寬 98／146 以內站在中間兩格之一
     -- 一定載得到。外框的門檻＝這個寬 − 2 × RoadMargin（Settings.loadSide，預設 RoadMargin 1 時 96／144）；
     -- 管理員面板、建立面板與 NOT_LOADED 的文字照它寫提醒（使用者 2026-11-08）
     LOAD_READ = 98,
@@ -194,7 +194,7 @@ function MSH.maskBits(bits, mask)
 end
 
 -- 容器上了密碼鎖，或掛了鎖而這個人身上沒有鑰匙：物品搜尋不列、遠距拿取不拿（2026-10-20 審查；原版只在戰利品視窗擋，
--- ISInventoryPage.lua:1742-1748，伺服器的搬運不查鎖）。照 IsoThumpable.isLockedToCharacter（IsoThumpable.java:2486-2497）
+-- ISInventoryPage.lua:1744-1750，伺服器的搬運不查鎖）。照 IsoThumpable.isLockedToCharacter（IsoThumpable.java:2502-2513）
 -- 但不放行管理員能力：那支在伺服器上本來就不看能力，兩端用同一個判斷，才不會客戶端列出來、伺服器說不在了
 function MSH.lockedFor(c, player)
     local o = c:getParent()

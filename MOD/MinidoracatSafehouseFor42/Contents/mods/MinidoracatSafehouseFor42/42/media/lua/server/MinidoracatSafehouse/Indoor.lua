@@ -207,7 +207,7 @@ local function doorOn(cell, x, y, z, side)
 end
 
 -- 這格有真的西牆（牆、門框、窗框；getWall 不算有 WallSE 的物件）又有柱子（WallSE）：回 "corner"＝柱子都是蓋牆時自動補的
--- 牆角（buildUtil.addCorner 的 isCorner，存檔會留，IsoThumpable.java:450, 639），"pillar"＝有玩家自己蓋的或其他的柱子；
+-- 牆角（buildUtil.addCorner 的 isCorner，存檔會留，IsoThumpable.java:460, 649），"pillar"＝有玩家自己蓋的或其他的柱子；
 -- 不是這種格子回 nil
 local function pillarOn(cell, x, y, z)
     local sq = cell:getGridSquare(x, y, z)
@@ -238,7 +238,7 @@ local function stale(ctx, x, y, z, side)
 end
 
 -- 門的狀態（doors 的第四欄）：開著 1；關著時紀錄過期 2；關著也不算牆時，原版車庫門鏈（IsoDoor.getGarageDoorIndex，
--- IsoDoor.java:3212-3239；Knox Pass 4 版的「算室內」只支援這種，Gates.lua G.indoorSupport）3，其他（柵欄門等）0
+-- IsoDoor.java:3035-3062；Knox Pass 4 版的「算室內」只支援這種，Gates.lua G.indoorSupport）3，其他（柵欄門等）0
 local function addGap(r, ctx, x, y, d)
     r.gapCount = r.gapCount + 1
     local ex, ey, side = edgeOf(x, y, d)

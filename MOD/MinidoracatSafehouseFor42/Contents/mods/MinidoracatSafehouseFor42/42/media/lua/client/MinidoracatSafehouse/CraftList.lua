@@ -5,7 +5,7 @@
 --   被沙盒關掉的地契變體回 false，其餘照原函式。客戶端 Lua 照路徑載入，client/MinidoracatSafehouse 在 client/Neat_Crafting
 --   之前，載入時它還不存在，等 OnGameStart 再包；同一張類別表只包一次（熱重載不疊）。
 -- 管理員在遊戲中改難度（Mirror sandboxSync → emit "sandbox"）：已開的製作視窗強制重建清單，不必關掉重開。
---   視窗登記在 ISEntityUI.players[玩家].windows[鍵].instance（關掉就清成 nil，ISEntityUI.lua:407、477）；
+--   視窗登記在 ISEntityUI.players[玩家].windows[鍵].instance（關掉就清成 nil，ISEntityUI.lua:427、497）；
 --   原版 instance.handCraftPanel:refreshRecipeList(true)（ISHandcraftWindow.lua:49、ISHandCraftPanel.lua:176），
 --   Neat Crafting instance.HandCraftPanel:updateRecipeDisplay()（NC_HandcraftWindow.lua:321、NC_EntityWindow.lua:219、
 --   NC_handcraftPanel.lua:661）。鍵名不寫死，逐個看。

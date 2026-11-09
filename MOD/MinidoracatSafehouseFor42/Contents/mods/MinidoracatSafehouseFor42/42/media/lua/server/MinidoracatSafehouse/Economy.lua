@@ -356,7 +356,7 @@ local function notify(rec, sends)
     local id, owner = rec.claimId, rec.owner
     sends[#sends + 1] = function()
         local p = MSH.Native.onlinePlayer(owner)
-        if p then sendServerCommand(p, MSH.MODULE, "changed", { claimId = id }) end   -- LuaManager.java:8962-8966
+        if p then sendServerCommand(p, MSH.MODULE, "changed", { claimId = id }) end   -- LuaManager.java:8898-8902
     end
 end
 

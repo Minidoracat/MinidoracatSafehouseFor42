@@ -3,7 +3,7 @@
 --   decisions.md「三樣東西各自落盤」）。建好之後、下一次世界存檔之前當機，屋子消失，地契卻可能已經存成扣掉。
 -- 記錄：建立、重新框選成功時在伺服器私有的 crash-journal.txt（與 private.txt 同目錄）寫一行；建立滿 INV_DELAY_MS 再補
 --   一行「背包已存」：在線玩家的背包每 180 秒入佇列一次（UdpConnection.java:88、NetworkPlayerManager.java:24-28），
---   背景執行緒 0.5 秒內 commit（ServerPlayersVehicles.java:47-55），斷線時立刻存（GameServer.java:3040）。
+--   背景執行緒 0.5 秒內 commit（ServerPlayersVehicles.java:47-55），斷線時立刻存（GameServer.java:3062）。
 --   真正的放棄（玩家放棄、代為放棄、到期釋出）再寫一行（Registry.markReleased）；重新框選換掉的舊屋不寫，新屋的 C 行接手。
 --   伺服器 Lua 看不到世界存檔（ServerMap.QueuedSaveAll 不發 Lua 事件），不知道哪幾行已經進了存檔，只能在開機時比對 registry。
 -- 開機：order 10 讀檔、把 nextClaimId 抬過檔裡每個 claimId 與高水位（Migration order 11 接管時才不會撞號）；
@@ -13,7 +13,7 @@
 --   - 其餘照最後那一間寫回紀錄。免費建立的、或已有「背包已存」那一行的寫成 active，缺的原生由首輪 Reconcile 補建
 --     （範圍被別的原生佔走時它轉 quarantined REBUILD_*）。用地契建立卻沒有那一行的寫成 quarantined CRASH_UNCONFIRMED：
 --     當機時背包可能還沒存、地契可能已經回到屋主身上，交給管理員問過屋主再決定（管理員面板「需要處理的安全屋」）。
---     原生已經在存檔裡也不算背包已存：世界存檔先寫原生、才把玩家排進存檔佇列（ServerMap.java:377-379）。
+--     原生已經在存檔裡也不算背包已存：世界存檔先寫原生、才把玩家排進存檔佇列（ServerMap.java:379-381）。
 --   - 同一串裡沒補回的那幾間（已放棄、或被重新框選換掉），存檔裡還有它們的原生時寫成 tombstone，首輪 Reconcile 拆掉，
 --     不讓它們變成另一筆 RECOVERED。
 --   沒有補回任何一串時，檔案清成只剩一行 claimId 高水位；有補回的就整份留著，等之後開機在 registry 看到才一起清

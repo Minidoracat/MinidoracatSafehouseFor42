@@ -28,14 +28,14 @@ local CODE = MSH.CODE
 St.pending = St.pending or {}   -- 帳號 → { claimId, x, y, z, ids, startAt, durMs, px, py, pz }
 St.EXPIRE_MS = 60000            -- 時間到了之後最多再等多久（計時動作排在別的動作後面、網路慢）
 -- 容許提早：伺服器收到兩個封包的間隔可能比客戶端實際等的短一點（客戶端每秒 48 單位、伺服器以每秒 50 單位算，
--- BaseAction.java:107、GameTime.java:986，客戶端本來就會晚 4%）
+-- BaseAction.java:107、GameTime.java:979，客戶端本來就會晚 4%）
 St.EARLY_RATIO, St.EARLY_MS = 0.9, 300
 St.STAND = 1                    -- 等的時候最多離開原地幾格
 St.WATCH_MS = 250               -- 多久看一次正在等的人走開了沒有
 local EPS = 0.001
 
 -- 原版搬運時間（毫秒）：世界容器或地上 → 自己的背包是 50 × min(重量, 3) 單位，靈巧 ×0.5、笨手笨腳或戴不靈活的手套 ×2，
--- 1 單位 20 ms（Transaction.java:347-441）。地上連拿同種輕物品免時間（:414-428）不照算：只會慢一點
+-- 1 單位 20 ms（Transaction.java:336-430）。地上連拿同種輕物品免時間（:402-416）不照算：只會慢一點
 function St.itemMs(player, item)
     local ms = 1000 * math.min(item:getActualWeight(), 3)
     if player:hasTrait(CharacterTrait.DEXTROUS) then ms = ms * 0.5 end
@@ -150,7 +150,7 @@ function St.begin(ctx)
 end
 
 -- 照計畫搬（放鎖之後）。每處各自 pcall：一處失手不影響其他處；搬成的件數寫回 res.got。
--- 來源容器標成已探索、已被拿過，同原版拿取（Transaction.java:153-160；戰利品重生看這兩個旗標）
+-- 來源容器標成已探索、已被拿過，同原版拿取（Transaction.java:154-161；戰利品重生看這兩個旗標）
 function St.move(p, sq, list, res)
     local inv = p:getInventory()
     local bags, order = {}, {}

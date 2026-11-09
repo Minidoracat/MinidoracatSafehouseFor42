@@ -12,9 +12,9 @@ local MSH = MinidoracatSafehouse
 local H = MSH.Health or {}
 MSH.Health = H
 
--- 原版選項名與預設：ServerOptions.java:41-203（42.21.0）。值一律用 getOption 讀成字串比對。
+-- 原版選項名與預設：ServerOptions.java:41-203（42.22.2，和 42.21.0 相同）。值一律用 getOption 讀成字串比對。
 H.BLOCKERS = {
-    { option = "PlayerSafehouse", want = "false" },     -- 原版建立封包沒有 Lua 掛鉤（SafehouseClaimPacket.java:71-75）
+    { option = "PlayerSafehouse", want = "false" },     -- 原版建立封包沒有 Lua 掛鉤（SafehouseClaimPacket.java:76-81）
     { option = "AdminSafehouse", want = "false" },      -- 建築 claim 路徑沒有可靠的 capability 閘門（SafeHouse.java:379-397）
     { option = "SafeHouseRemovalTime", want = "0" },    -- 引擎到期自動刪屋（SafeHouse.java:861-884）
     { option = "War", want = "false" },                 -- War 打到門檻自動刪屋（SafeHouse.java:818-829）

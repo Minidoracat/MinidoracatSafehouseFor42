@@ -7,7 +7,7 @@
 --   （adminAddZone／adminRemoveZone，伺服器 Zones.lua）；刪除先 danger 確認。
 -- 〔傳送〕送原版指令 /teleportto x.5,y.5,0 到外框中央那格（不在範圍內就用第一塊的中央，ZL.target）：
 --   TeleportToCommand.java:18-35（名稱 teleportto／tpto、參數 x,y,z、要 Capability.TeleportToCoordinates）、:72-94（伺服器
---   GameServer.sendTeleport、寫 admin log）；Capability.java:17 TeleportToCoordinates；SendCommandToServer（LuaManager.java:9025-9030）；
+--   GameServer.sendTeleport、寫 admin log）；Capability.java:17 TeleportToCoordinates；SendCommandToServer（LuaManager.java:8961-8966）；
 --   getSpecificPlayer(0):getRole():hasCapability（同 AdminPanel.isAdmin）。帳號沒有這個權限時〔傳送〕停用並寫原因。
 -- 框架不合（window／controls／dialog／scrollPanel）時不開（ZL.available；管理員面板的〔管理禁建區〕停用並寫原因），不報錯。
 -- 檔案載入時不碰 ISPanel、框架或玩家（harness T.bootClient 會載入本檔）。

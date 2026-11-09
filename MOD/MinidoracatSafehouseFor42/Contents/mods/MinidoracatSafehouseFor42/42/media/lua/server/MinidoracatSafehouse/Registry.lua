@@ -619,13 +619,13 @@ function R.setSpawn(name, pt)
 end
 
 -- ===== 私有目錄的檔案讀寫（private.txt，以及同目錄遷移的 migration-completion.txt、當機補回的 crash-journal.txt）=====
--- getFileWriter／getFileReader 只碰 <cachedir>/Lua/ 底下，副檔名要在白名單內（LuaManager.java:1035，.txt 可以）。
+-- getFileWriter／getFileReader 只碰 <cachedir>/Lua/ 底下，副檔名要在白名單內（LuaManager.java:1037，.txt 可以）。
 
 function R.privateFile(name)
     return (string.gsub(R.privatePath(), "private%.txt$", name))
 end
 
--- getFileWriter(path, createIfNull, append)：LuaManager.java:6727（UTF-8）；writeln：LuaManager.java:12834。
+-- getFileWriter(path, createIfNull, append)：LuaManager.java:6687（UTF-8）；writeln：LuaManager.java:12820。
 -- close() 才把內容交給作業系統（沒有 fsync）：伺服器程序當掉時，已 close 的行留在檔案裡
 function R.writeLines(path, lines, append)
     local writer
@@ -641,7 +641,7 @@ end
 -- 回傳行陣列（最多 max 行）；檔案不存在回 nil；存在卻讀不開回 false
 function R.readLines(path, max)
     local reader
-    -- getFileReader 吞掉 IOException 回 nil（LuaManager.java:5936；UTF-8）；用 cacheFileExists（LuaManager.java:5544）分辨不存在與讀不開
+    -- getFileReader 吞掉 IOException 回 nil（LuaManager.java:5910；UTF-8）；用 cacheFileExists（LuaManager.java:5571）分辨不存在與讀不開
     local opened = pcall(function() reader = getFileReader(path, false) end)
     if not opened or reader == nil then
         local ok, exists = pcall(cacheFileExists, path)

@@ -4,7 +4,7 @@
 --   自己的安全屋清單快取（manager 投影 list，§6.4）與本地格子的權限位元查詢（客戶端藏選單用，§6.6）。
 -- 查詢也帶 requestId：伺服器對冷卻中的請求直接丟、不回覆（Server.lua coolingDown），沒有 requestId 時只能照順序配對，
 --   一丟就全部錯位。
--- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/（LuaManager.java＝Lua/LuaManager.java）。
+-- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.22.2-20261109/pz/zombie/（LuaManager.java＝Lua/LuaManager.java）。
 
 if not isClient() then return end
 
@@ -104,8 +104,8 @@ local function newRequestId()
     return string.format("msh-%08d-%d", math.floor(getTimestampMs() % 100000000), C.seq)
 end
 
--- 分割畫面次玩家沒有身分（principal 回 nil），一律用 0 號玩家送。getSpecificPlayer LuaManager.java:4163-4167；
--- sendClientCommand(player, module, command, args) :8932-8936。
+-- 分割畫面次玩家沒有身分（principal 回 nil），一律用 0 號玩家送。getSpecificPlayer LuaManager.java:4180-4184；
+-- sendClientCommand(player, module, command, args) :8868-8872。
 -- opts.mutation：結果待定時保留這筆、可重送；opts.requestId：重送同一筆。回傳 requestId（沒有玩家回 nil、不呼叫 cb）。
 -- cb(result)：result 是伺服器的 { command, requestId, ok, code, ... }；10 秒沒回覆時先呼叫一次
 --   { ok = false, code = "NO_REPLY", pending = <是否 mutation> }，mutation 之後收到真結果會再呼叫一次。

@@ -1,12 +1,12 @@
 -- MinidoracatSafehouse/FloorTint.lua：地面標示（地面顯示範圍、建立面板的框選與標紅、禁建區、室內檢查的缺屋頂）。兩種畫法：
 -- 1. 地板染色（IsoObject:setHighlightColor＋setHighlighted(0, true, false)）：FBORenderObjectHighlight 在人物之後、照地板
---    自己的深度重畫那一格（FBORenderCell.java:1128-1137；地板用 FloorShaper 的 tint，IsoObject.java:3686-3700），站在上面
+--    自己的深度重畫那一格（FBORenderCell.java:1125-1134；地板用 FloorShaper 的 tint，IsoObject.java:3689-3703），站在上面
 --    的人物、前面的房子照樣擋得住它（floortint-sp、sh-ranges-1012c 實機）。tint 把地板的光照色往顏色拉 a（Color.tintABGR，
 --    Color.java:243-253），最後乘上地板貼圖：草地幾乎沒有藍，藍、洋紅在草地上出不來（sh-tintbright-1012b）。
--- 2. 疊色（顏色帶 ov 的：地面顯示範圍、禁建區）：在 RenderOpaqueObjectsInWorld（FBORenderCell.java:1126，原版建造游標
---    ISBuildingObject.lua:694-698 的畫法）用 IsoSprite:RenderGhostTileColor 疊一張白色菱形貼圖（IsoSprite.java:519-556），
+-- 2. 疊色（顏色帶 ov 的：地面顯示範圍、禁建區）：在 RenderOpaqueObjectsInWorld（FBORenderCell.java:1123，原版建造游標
+--    ISBuildingObject.lua:697-701 的畫法）用 IsoSprite:RenderGhostTileColor 疊一張白色菱形貼圖（IsoSprite.java:519-556），
 --    顏色照 alpha 混進地面，任何地面上都是同一個色相（sh-overlay-1012a：四類彼此、和標紅的色差都 ≥ 38）。但它關掉深度
---    測試（IsoSprite.java:853-862），玩家又在 :1107 先畫好：站在上面的人物、前面房子的牆與屋簷都會被蓋住
+--    測試（IsoSprite.java:829-838），玩家又在 :1104 先畫好：站在上面的人物、前面房子的牆與屋簷都會被蓋住
 --    （sh-overlay-1013b、-1013c；把玩家重畫一次也蓋不回來）。所以在屋裡、前方的房子在畫面上擋得到（OCC_*）、人物身體
 --    在畫面上蓋得到（BODY_*）的格子改用同一個顏色的地板染色（使用者 2026-10-13 選定）。
 -- 一格只能有一種顏色：各圖層（Ranges 的安全屋與禁建區、建立面板與禁建區面板的各塊／拉到一半那塊／標紅／既有禁建區、禁建區視窗選中的那個、室內檢查）各自交出自己的格子，同一格取 F.ORDER 裡最前面的
@@ -40,8 +40,8 @@ F.NEAR_MS = 200                    -- 多久看一次別的玩家站在哪（本
 -- 菱形和這個矩形有重疊的格子改用染色；站在格子中央時是腳下、身後兩格與兩側共 7 格（sh-rangesov-1013a 用整塊 4×4 太大）
 F.BODY_W, F.BODY_TOP, F.BODY_BOTTOM = 30, 136, 10
 F.OCC_MAX = 20000                  -- 被擋住的快取上限，滿了整個清掉
--- 白色實心菱形（128×256，2x 貼圖）。B42 沒有 1x 貼圖：getOptionTexture2x 固定回 true（Core.java:3448-3450）。
--- ponytail: 只放 2x；哪天恢復 1x（Core.getTileScale() == 1）要補一張 64×128 的、照它選
+-- 白色實心菱形（128×256，2x 貼圖）。B42 沒有 1x 貼圖：42.22 起 Core.tileScale 是常數 2（Core.java:332）。
+-- 42.22 拿掉了 1x 選項（getOptionTexture2x），只放 2x
 F.TEX = "media/textures/MinidoracatSafehouse/FloorFill2x.png"
 F.cells = F.cells or {}       -- 圖層 → { [鍵] = 顏色 }
 F.floor = F.floor or {}       -- 鍵 → 染著的地板物件
@@ -98,12 +98,12 @@ local function top(k)
 end
 
 -- 這一格是不是房子的一部分：在屋裡或頭上有屋頂、樓板（isOutside 是 false：exterior 只在沒有房間又沒有屋頂時設，
--- IsoGridSquare.java:7306, 9431-9433）。回從這層往上幾層樓（BuildingDef:getMaxLevel，IsoBuilding.java:123、
+-- IsoGridSquare.java:7306, 9398-9400）。回從這層往上幾層樓（BuildingDef:getMaxLevel，IsoBuilding.java:123、
 -- BuildingDef.java:82-90；沒有房間的屋簷下、門廊算一層），不是回 0
 local function storeys(cell, x, y, z)
     local sq = cell:getGridSquare(x, y, z)
     if sq == nil or sq:isOutside() then return 0 end
-    local b = sq:getBuilding()   -- IsoGridSquare.java:9266-9269
+    local b = sq:getBuilding()   -- IsoGridSquare.java:9233-9236
     return b and b:getDef():getMaxLevel() - z + 1 or 1
 end
 
@@ -136,7 +136,7 @@ local function occluded(cell, k)
 end
 
 -- 讓這一格顯示最上層的顏色（沒有就取消）：帶 ov、沒被擋、沒有人物蓋著就疊色，否則染地板。不知道地板物件時才讀格子
--- （IsoCell:getGridSquare 沒載入回 nil，IsoCell.java:3190-3192；IsoGridSquare:getFloor IsoGridSquare.java:4652）
+-- （IsoCell:getGridSquare 沒載入回 nil，IsoCell.java:3190-3192；IsoGridSquare:getFloor IsoGridSquare.java:4637）
 local function show(cell, k)
     local want = top(k)
     local ov = want and want.ov
@@ -157,8 +157,8 @@ local function show(cell, k)
         F.floor[k], F.shown[k] = floor, nil
     end
     if F.shown[k] ~= want then
-        floor:setHighlightColor(0, want.r, want.g, want.b, want.a)   -- IsoObject.java:5115-5119
-        floor:setHighlighted(0, true, false)                          -- :5049-5061
+        floor:setHighlightColor(0, want.r, want.g, want.b, want.a)   -- IsoObject.java:5104-5108
+        floor:setHighlighted(0, true, false)                          -- :5038-5050
         F.shown[k] = want
     end
 end
@@ -194,7 +194,7 @@ function F.clear(name)
 end
 
 -- 對一格：疊色的格子之前沒載入、還不知道有沒有被擋的，重新判斷；染色的格子地板換了物件（區塊重新載入）、被取消染色
--- （isHighlighted IsoObject.java:5041-5043）、之前沒載入的現在載入了，就重設；沒載入的忘掉舊地板
+-- （isHighlighted IsoObject.java:5030-5032）、之前沒載入的現在載入了，就重設；沒載入的忘掉舊地板
 local function recheck(cell, k)
     if F.ov[k] ~= nil then
         if F.occ[k] == nil then show(cell, k) end
@@ -262,7 +262,7 @@ function F.renear(cell)
     end
 end
 
--- 本機玩家每幀、別的玩家（getOnlinePlayers：客戶端是 GameClient 認得的全部玩家，LuaManager.java:4457-4463）每 NEAR_MS
+-- 本機玩家每幀、別的玩家（getOnlinePlayers：客戶端是 GameClient 認得的全部玩家，LuaManager.java:4474-4480）每 NEAR_MS
 -- 看一次站在哪、蓋到哪幾格，和上一輪一樣就不動；只看目前畫的那一層
 function F.watchPlayers(now)
     local z = F.win.z
@@ -318,7 +318,7 @@ local function relist()
     F.n, F.listStale = n, false
 end
 
--- RenderOpaqueObjectsInWorld（每幀、每個玩家畫面一次，FBORenderCell.java:3634-3656）：只畫 0 號玩家的畫面
+-- RenderOpaqueObjectsInWorld（每幀、每個玩家畫面一次，FBORenderCell.java:3617-3639）：只畫 0 號玩家的畫面
 function F.render(playerIndex)
     if playerIndex ~= 0 then return end
     if F.listStale then relist() end
@@ -326,7 +326,7 @@ function F.render(playerIndex)
     if n == 0 then return end
     local s = F.sprite
     if s == nil then
-        s = IsoSprite.new()   -- 同原版 ISBuildingObject.getFloorCursorSprite（ISBuildingObject.lua:694-698）
+        s = IsoSprite.new()   -- 同原版 ISBuildingObject.getFloorCursorSprite（ISBuildingObject.lua:697-701）
         s:LoadSingleTexture(F.TEX)
         F.sprite = s
     end
@@ -336,7 +336,7 @@ function F.render(playerIndex)
     end
 end
 
--- 螢幕上一點換成格座標，併進外框（screenToIsoX/Y LuaManager.java:3795,3806；同 Select.pick）
+-- 螢幕上一點換成格座標，併進外框（screenToIsoX/Y LuaManager.java:3812,3823；同 Select.pick）
 local function corner(sx, sy, z, x0, y0, x1, y1)
     local x, y = screenToIsoX(0, sx, sy, z), screenToIsoY(0, sx, sy, z)
     if x < x0 then x0 = x end

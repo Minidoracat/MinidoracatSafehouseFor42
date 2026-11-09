@@ -8,14 +8,14 @@
 --     滑鼠放開就照模式套用這一塊；點一下（沒拖）＝一格。
 --     滑鼠不照原版用視窗的 onMouseDownOutside（:47-75）：子元件接走點擊後，引擎改呼叫父視窗的 onMouseDownOutside
 --     （UIElement.java:1094-1110），按面板上的〔完成〕會變成在按鈕底下的地面重拉一個 1×1（2026-10-11 使用者實機）。
---     改由 Events.OnMouseDown 開始（UIManager.java:715-719：只有沒被任何 UI 接走的點擊才觸發），拖曳中每幀讀
---     isMouseButtonDown(0)（LuaManager.java:8027-8031）更新終點、放開就套用。
+--     改由 Events.OnMouseDown 開始（UIManager.java:712-716：只有沒被任何 UI 接走的點擊才觸發），拖曳中每幀讀
+--     isMouseButtonDown(0)（LuaManager.java:7963-7967）更新終點、放開就套用。
 --   走位（walk）：照原版管理員安全區工具 media/lua/client/ISUI/AdminPanel/ISAddSafeZoneUI.lua——
 --     起點＝按〔設第一角〕時玩家所在格（:176）、終點＝玩家目前位置（:84）、每幀畫範圍（:107），走到對角按〔加入這塊〕。
 -- 地上的範圍由建立面板的 prerender 每幀呼叫 Sel.draw，交給 FloorTint：範圍、顏色或位置變了才動地板。
 -- 每幀路徑（update／bounds／draw）不配置 table 或 closure（形狀結果在 Shape.result 快取到下一次改動）。
--- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/Lua/LuaManager.java
---   screenToIsoX/Y :3795、:3806；getMouseX/Y :8014、:8046；isMouseButtonDown :8030；wasMouseActiveMoreRecentlyThanJoypad :6421。
+-- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.22.2-20261109/pz/zombie/Lua/LuaManager.java
+--   screenToIsoX/Y :3812、:3823；getMouseX/Y :7950、:7982；isMouseButtonDown :7966；wasMouseActiveMoreRecentlyThanJoypad :6381。
 
 if not isClient() then return end
 

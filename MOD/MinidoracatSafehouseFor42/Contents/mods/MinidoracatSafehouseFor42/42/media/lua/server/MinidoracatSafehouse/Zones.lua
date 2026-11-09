@@ -7,7 +7,7 @@
 --   1<TAB>next<TAB><下一個編號><TAB><禁建區個數>
 --   1<TAB>zone<TAB><編號><TAB><x,y,w,h;x,y,w,h…><TAB><名稱>
 -- 編號只增不減：刪掉再新增不重用，開著舊清單的管理員刪不到別人新加的那個。
--- 先寫檔、讀回逐行比對過才改記憶體：PrintWriter 吞掉 IOException（LuaManager.java:12823-12840），writeLines 回 true 不代表
+-- 先寫檔、讀回逐行比對過才改記憶體：PrintWriter 吞掉 IOException（LuaManager.java:12809-12826），writeLines 回 true 不代表
 -- 寫進去了。新的寫不進去就寫回原本的；原本的也寫不回去＝檔案壞了，標成 Z.unreadable。
 -- 檔案只由本 MOD 寫，所以內容對不上（讀到一半出錯、沒有 next 行、有讀不懂的行、zone 行數不等於個數）一律當成讀不開：
 -- Z.unreadable，Health 列成 PrivateStore blocker（fail closed：少讀一個禁建區就有人能在那裡建立），新增、刪除回
@@ -15,7 +15,7 @@
 -- 玩家也看得到禁建區（使用者 2026-10-16「那玩家是不是也應該要可以從畫面上看到禁建區?」；客戶端 Ranges.lua 的 zones 類）：
 --   公開查詢 zones（不限管理員、1 秒冷卻）回 { zones = Z.publicView(), rev = Z.rev }，只有編號、名稱、各塊，不含壓到的
 --   安全屋（那是管理員面板的 adminZones）。新增、刪除存檔成功後 Z.rev 加一，放鎖後推 zonesSync（同樣的兩欄）給每位在線
---   玩家（getOnlinePlayers LuaManager.java:4457；sendServerCommand(player, ...) :8966-8970；同 Admin.pushSync）。rev 是
+--   玩家（getOnlinePlayers LuaManager.java:4474；sendServerCommand(player, ...) :8902-8906；同 Admin.pushSync）。rev 是
 --   這次開服內的版本號（開服 0）：查詢回覆與推送沒有順序保證，客戶端只收 rev 不比手上舊的。OnServerStarted 之前不推
 --   （S.netUp；那時沒有客戶端，getOnlinePlayers 會 NPE）。
 

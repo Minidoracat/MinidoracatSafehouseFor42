@@ -5,7 +5,7 @@
 -- 所有動作只送提案，畫面以伺服器結果與重抓的 list／detail 為準（§10.4 最後一段）。
 -- UI 框架：MSH.Client.ui(MW.CAPS)；不合時退原版 ISPanel／ISButton 最小直角 fallback（AGENTS.md 鐵則「管理視窗不得整個消失」）。
 -- 載入時不碰 ISPanel、框架或 getPlayer（harness T.bootClient 會載入本檔）；ISPanel 子類在第一次開窗時才建。
--- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.21.0-20260928/pz/zombie/；原版 Lua
+-- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.22.2-20261109/pz/zombie/；原版 Lua
 --   D:/SteamLibrary/steamapps/common/ProjectZomboid/media/lua/；框架 D:/github/MinidoracatUIFor42（rev 16＋）。
 
 if not isClient() then return end

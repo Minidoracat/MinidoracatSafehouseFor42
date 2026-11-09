@@ -13,7 +13,7 @@
 --   ISCraftRecipeTooltip.lua:214、258）、ISWidgetTitleHeader 沒傳 player 的繞法（計畫 §7.7「預覽」，
 --   deeds-ui-sp/E2EScenario.lua:30-43 實測）、getScriptManager():getCraftRecipe（同情境 :154）、
 --   getPlayer():getRole():hasCapability(Capability.CanSetupSafehouses)（契約「客戶端模組」）、
---   SendCommandToServer（LuaManager.java:9025-9030；原版 ISServerOptions.lua:184、220 同用法）。
+--   SendCommandToServer（LuaManager.java:8961-8966；原版 ISServerOptions.lua:184、220 同用法）。
 -- 他 MOD：MinidoracatEconomy.v1.Client.openAdminShop（Economy ECClient.lua:1339-1364，rev 4、CAPABILITIES.shopAdd）、
 --   MinidoracatMiniMapResourceAPI.categories()（MiniMap docs/addon-api.md:863）。
 

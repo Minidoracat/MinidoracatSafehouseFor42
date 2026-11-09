@@ -33,7 +33,7 @@ A.FILTERS = { all = true, owners = true, overrides = true }
 
 -- ===== 沙盒選項 =====
 
--- 送整份 81 鍵快照給每位在線玩家（getOnlinePlayers LuaManager.java:4457；sendServerCommand(player, ...) :8966-8970）
+-- 送整份 81 鍵快照給每位在線玩家（getOnlinePlayers LuaManager.java:4474；sendServerCommand(player, ...) :8902-8906）
 function A.pushSync(snapshot)
     local list = getOnlinePlayers()
     for i = 0, list:size() - 1 do
@@ -41,8 +41,8 @@ function A.pushSync(snapshot)
     end
 end
 
--- SandboxOptions.set（未知選項名或 nil 值丟 IllegalArgumentException，SandboxOptions.java:572-582）→ toLua（:279-285）→
--- saveServerLuaFile（:683-685，I/O 錯誤回 false）；getSandboxOptions LuaManager.java:5809、getServerName :4099
+-- SandboxOptions.set（未知選項名或 nil 值丟 IllegalArgumentException，SandboxOptions.java:568-578）→ toLua（:279-285）→
+-- saveServerLuaFile（:679-681，I/O 錯誤回 false）；getSandboxOptions LuaManager.java:5836、getServerName :4116
 local function writeAll(opts, values)
     for k, v in pairs(values) do opts:set(Settings.optionName(k), v) end
     opts:toLua()
@@ -230,7 +230,7 @@ S.define("adminSetOverride", { kind = "mutation", admin = true, whenBlocked = tr
         -- 對方在線就推 changed：客戶端重抓清單，開著的名額視窗、建立面板跟著重抓名額（不帶 claimId，管理視窗不重載詳情）
         ctx.defer(function()
             local p = MSH.Native.onlinePlayer(name)
-            if p then sendServerCommand(p, MSH.MODULE, "changed", {}) end   -- LuaManager.java:8962-8966
+            if p then sendServerCommand(p, MSH.MODULE, "changed", {}) end   -- LuaManager.java:8898-8902
         end)
         return S.ok({ targetUsername = name, n = n })
     end })

@@ -423,7 +423,7 @@ function Z.open(opts)
     return nil
 end
 
--- 地面上的左鍵（沒被任何視窗接走才會觸發，UIManager.java:715-719）：從這格開始拉
+-- 地面上的左鍵（沒被任何視窗接走才會觸發，UIManager.java:712-716）：從這格開始拉
 function Z.onWorldMouseDown()
     local m = Z.model
     if m ~= nil and not m.closed then Sel.mouseDown(m.sel, player()) end

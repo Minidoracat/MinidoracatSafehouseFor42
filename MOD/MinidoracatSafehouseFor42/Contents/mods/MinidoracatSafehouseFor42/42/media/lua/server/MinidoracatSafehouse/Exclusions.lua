@@ -109,7 +109,7 @@ local function nearZones(rects, d)
     local seen, zones = {}, {}
     for _, rect in ipairs(rects) do
         local list = ArrayList.new()   -- 原版用例 ISWidgetCraftLogicInputControl.lua:16
-        -- IsoMetaGrid.java:430-441（void，結果放進 list；所有樓層、不必載入 chunk，§2.8）
+        -- IsoMetaGrid.java:434-449（void，結果放進 list；所有樓層、不必載入 chunk，§2.8）
         getWorld():getMetaGrid():getRoomsIntersecting(rect.x, rect.y, rect.w, rect.h, list)
         for i = 0, list:size() - 1 do
             local b = list:get(i):getBuilding()           -- RoomDef.java:207-209
@@ -163,11 +163,11 @@ end
 
 -- 這格算哪一類路（只回勾選的類別）：現在的地板，加上倒土前的地板。倒土／沙等（ISNaturalFloor:create → addFloor）會換掉
 -- 原地板，原本的圖塊記在新地板 modData 的 shovelledSprites[1]（ISNaturalFloor.lua:7-13；鏟回去時 ISShovelGround.lua:60-76
--- 用它還原）。B42 蓋的地板疊在原地板後面（ISBuildIsoEntity.lua:733 AddSpecialObject），getFloor 本來就讀到原地板。
+-- 用它還原）。B42 蓋的地板疊在原地板後面（ISBuildIsoEntity.lua:742 AddSpecialObject），getFloor 本來就讀到原地板。
 -- 兩個都算路時取主要道路（它不吃住宅近區放寬）
 local function floorKind(floor, kinds)
-    local sprite = floor:getSprite()                       -- IsoObject.java:1999
-    local kind = sprite and E.classify(sprite:getName())  -- IsoSprite.java:1980
+    local sprite = floor:getSprite()                       -- IsoObject.java:2016
+    local kind = sprite and E.classify(sprite:getName())  -- IsoSprite.java:1956
     if kind and not kinds[kind] then kind = nil end
     if kind ~= "main" and floor:hasModData() then         -- 沒有 modData 時不呼叫 getModData（會建一張空表）
         local old = floor:getModData().shovelledSprites
@@ -185,7 +185,7 @@ local function mapRooms(rects, margin)
     for _, rect in ipairs(rects) do
         local s = Rect.expand(rect, margin)
         local list = ArrayList.new()
-        getWorld():getMetaGrid():getRoomsIntersecting(s.x, s.y, s.w, s.h, list)   -- IsoMetaGrid.java:430-441
+        getWorld():getMetaGrid():getRoomsIntersecting(s.x, s.y, s.w, s.h, list)   -- IsoMetaGrid.java:434-449
         for i = 0, list:size() - 1 do
             local r = list:get(i)
             if not seen[r] then
@@ -241,7 +241,7 @@ function E.roads(rects, cfg)
                 -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路
                 local sq = cell:getGridSquare(x, y, 0)
                 if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
-                local floor = sq and sq:getFloor()        -- IsoGridSquare.java:4652（第一個 solidfloor 物件）
+                local floor = sq and sq:getFloor()        -- IsoGridSquare.java:4637（第一個 solidfloor 物件）
                 local kind = floor and floorKind(floor, kinds)
                 if kind then
                     rooms = rooms or mapRooms(rects, cfg.roadMargin)

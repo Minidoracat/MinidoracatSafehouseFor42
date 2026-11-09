@@ -49,7 +49,7 @@ end
 
 -- 活著、存活天數（原生 SafeHouse.hasNotSurvivedEnoughToClaim，SafeHouse.java:852-859：讀 SafehouseDaySurvivedToClaim、admin 免除）
 function C.checkIdentity(v)
-    if v.player:isDead() then return CODE.DEAD end                         -- IsoGameCharacter.java:4913
+    if v.player:isDead() then return CODE.DEAD end                         -- IsoGameCharacter.java:4948
     if SafeHouse.hasNotSurvivedEnoughToClaim(v.player) then return CODE.NOT_SURVIVED end
     return nil
 end
@@ -60,7 +60,7 @@ function C.checkOnSite(v)
     return nil
 end
 
--- 地契：等級只由 full type 決定；背包含巢狀容器都找（ItemContainer.java:1551，compareType 帶點號時比 full type :1197-1201）
+-- 地契：等級只由 full type 決定；背包含巢狀容器都找（ItemContainer.java:1599，compareType 帶點號時比 full type :1245-1249）
 function C.checkDeed(v)
     if v.old then return nil end
     local cfg = v.cfg
@@ -71,7 +71,7 @@ function C.checkDeed(v)
     end
     if v.deedType == nil then return CODE.NO_DEED end
     v.source, v.tier = SRC.DEED, MSH.tierOfDeed(v.deedType)
-    v.item = v.player:getInventory():getFirstTypeRecurse(v.deedType)   -- IsoGameCharacter.java:3322
+    v.item = v.player:getInventory():getFirstTypeRecurse(v.deedType)   -- IsoGameCharacter.java:3355
     -- 沒有這張地契或這一級停用時記 v.badDeed：預檢照樣報大小與名額，但不照這一級的上限掃地圖（客戶端能指定任何等級）
     v.badDeed = v.item == nil or v.tier > cfg.tiersEnabled
     if v.item == nil then return CODE.NO_DEED end
@@ -244,7 +244,7 @@ function C.checkOverlap(v)
     return nil
 end
 
--- 在線的其他人站在範圍的任一塊內（任何 Z、含車內）就拒絕；回覆不帶名字（§7.3）。LuaManager.java:4457
+-- 在線的其他人站在範圍的任一塊內（任何 Z、含車內）就拒絕；回覆不帶名字（§7.3）。LuaManager.java:4474
 function C.checkOccupancy(v)
     local list = getOnlinePlayers()
     for i = 0, list:size() - 1 do
@@ -371,12 +371,12 @@ local function createBody(v, rec, st)
     if houses == nil then return code end
     local item = v.item
     if item ~= nil then
-        -- Remove 會清掉 item.container，所以先記容器（ItemContainer.java:2036-2068；void、miss 靜默）
-        local c = item:getContainer()                                     -- InventoryItem.java:3840
+        -- Remove 會清掉 item.container，所以先記容器（ItemContainer.java:2084-2116；void、miss 靜默）
+        local c = item:getContainer()                                     -- InventoryItem.java:3872
         st.container = c
         st.removed = true
         c:Remove(item)
-        if c:contains(item) or item:getContainer() ~= nil then return CODE.DEED_REMOVE_FAILED end   -- :634
+        if c:contains(item) or item:getContainer() ~= nil then return CODE.DEED_REMOVE_FAILED end   -- :693
     end
     for i, h in ipairs(houses) do rec.rects[i].created = h:getDatetimeCreated() end
     R.put(rec)
@@ -389,7 +389,7 @@ function C.rollback(rec, st, item)
     if st.put then R.unput(rec.claimId) end
     local c = st.container
     if st.removed and not c:contains(item) then
-        c:AddItem(item)                                                   -- ItemContainer.java:462
+        c:AddItem(item)                                                   -- ItemContainer.java:515
         if not c:contains(item) or item:getContainer() ~= c then
             MSH.Audit.write("ROLLBACK_ITEM_FAILED", { actor = rec.owner, claimId = rec.claimId })
         end
@@ -422,7 +422,7 @@ function C.commitCreate(ctx, v)
     end
     local c, houses = st.container, st.houses
     if item ~= nil then
-        -- 伺服器改背包要自己同步（LuaManager.java:12418；原版伺服器用例 ISBuildUtil.lua:148-152）
+        -- 伺服器改背包要自己同步（LuaManager.java:12404；原版伺服器用例 ISBuildUtil.lua:148-152）
         ctx.defer(function() sendRemoveItemFromContainer(c, item) end)
     end
     ctx.defer(function()

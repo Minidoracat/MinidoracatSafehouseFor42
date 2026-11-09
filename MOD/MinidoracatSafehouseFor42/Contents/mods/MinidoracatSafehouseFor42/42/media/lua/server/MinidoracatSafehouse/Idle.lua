@@ -1,5 +1,5 @@
 -- MinidoracatSafehouse/Idle.lua：閒置收回與保險（使用者 2026-10-14，decisions.md「閒置收回」兩條）。
--- 到訪：原版每塊的 lastVisited。名單上的人站進那塊時引擎約每 20 秒記一次（IsoPlayer.java:2177-2185 →
+-- 到訪：原版每塊的 lastVisited。名單上的人站進那塊時引擎約每 20 秒記一次（IsoPlayer.java:2182-2190 →
 --   SafeHouse.playerAllowed(String)：名單或屋主，SafeHouse.java:288-290），建立時記當下（SafeHouse.java:71），
 --   跟 map_meta.bin 一起存檔。名單＝原生名單（Native.desiredPlayers）；service owner @MSH:<id> 永遠不會站進去。
 --   整間的最後到訪取各塊最大值。SafeHouseRemovalTime 是 0（Health 必要設定），原版不會自己刪。
@@ -262,7 +262,7 @@ function I.release(x, now, sends)
     sends[#sends + 1] = function()
         for _, u in ipairs(roster) do
             local p = MSH.Native.onlinePlayer(u)
-            if p then sendServerCommand(p, MSH.MODULE, "changed", { claimId = id }) end   -- LuaManager.java:8962-8966
+            if p then sendServerCommand(p, MSH.MODULE, "changed", { claimId = id }) end   -- LuaManager.java:8898-8902
         end
     end
     return true
