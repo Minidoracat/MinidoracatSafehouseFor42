@@ -8,8 +8,8 @@
 --   （ISBaseTimedAction.lua:173-176），所以在類別上換函式就生效。
 -- 取水 ISTakeWaterAction 在 serverStart 擋（animEvent 分段轉水，ISTakeWaterAction.lua:31-48, 151-161）；撬棍 ISForceOpen 在 attempt 擋
 -- （伺服器 animEvent 呼叫 attempt：扣門血、打破窗戶在 attempt 裡，回 "success" 才開鎖，ISForceOpen.lua:48-103）；Actions.build
--- 不呼叫原函式（BuildAction.java:108-117 不看回傳值），照座標查建造物件會寫入的每一格（P.buildCells）；
--- 爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
+-- 不呼叫原函式（BuildAction.java:108-117 不看回傳值），照座標查建造物件會寫入的每一格（P.buildCells）；割草 ISScything 查範圍裡
+-- 有作物的每一格（wrapScything）；爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
 -- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
@@ -68,7 +68,7 @@ P.WRAPS = {
     { "ISRadioAction", BIT.USE, function(a) return P.squareOf(a.device) end },              -- ISRadioAction.lua:197
     { "ISPlugGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },         -- ISPlugGenerator.lua:53
     { "ISActivateGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },     -- ISActivateGenerator.lua:62
-    -- 加油、修理與搬走發電機（2026-10-14 寫 perm3-mp 時發現沒包；三個都在 complete 才改發電機）
+    -- 加油、修理與搬走發電機：三個都在 complete 才改發電機
     { "ISAddFuel", BIT.USE, function(a) return P.squareOf(a.generator) end },              -- ISAddFuel.lua:74
     { "ISFixGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },         -- ISFixGenerator.lua:89
     { "ISTakeGenerator", BIT.MOVE, function(a) return P.squareOf(a.generator) end },       -- ISTakeGenerator.lua:66
@@ -291,6 +291,36 @@ local function wrapForceOpen()
     end
 end
 
+-- 割草（ISScything）：complete 從 sq 往 +x、+y 割 radius×radius 格，格上的作物能用鐮刀收的就收成、其他的毀掉
+-- （ISScything.lua:38-51, 80-87）。範圍裡有原版會動到的作物（同 :81 的判斷）的格子，任一格拒絕就整個不做（同 Actions.build）；
+-- 沒有作物的格子照原版（割草本身不看權限）。getLuaObjectOnSquare 同原版 :80。
+-- radius 用 tonumber 取值：和原版 :42-43 的算術是同一個轉換（KahluaThread.java:377、BaseLib.java:353-355 都走
+-- KahluaUtil.rawTonumber，數字字串也算數字），查的範圍就是原版割的範圍。沒有 character、sq 或 radius 轉不成數字時不呼叫原函式。
+local function wrapScything()
+    local S = ISScything
+    if type(S) ~= "table" or type(S.complete) ~= "function" then
+        MSH.log("permissions: ISScything.complete missing, not wrapped")
+        return
+    end
+    local orig = S.complete
+    S.complete = function(self)
+        local sq, r = self.sq, tonumber(self.radius)
+        if self.character == nil or sq == nil or r == nil then return false end
+        local x0, y0, z = sq:getX(), sq:getY(), sq:getZ()
+        for x = x0, x0 + r - 1 do
+            for y = y0, y0 + r - 1 do
+                local s = P.squareAt(x, y, z)
+                local plant = s and SFarmingSystem.instance:getLuaObjectOnSquare(s)
+                if plant and plant.state ~= "destroyed" and plant.state ~= "harvested" and plant.state ~= "plow"
+                    and P.deniesAt(self.character, s:getX(), s:getY(), BIT.FARM, "ISScything") then
+                    return false
+                end
+            end
+        end
+        return orig(self)
+    end
+end
+
 -- 全域 Actions.build（ActionManager.lua:26-32）：任一格拒絕就不呼叫原函式；客戶端照樣顯示完成，靠 denied 推送說明。
 -- 只看座標，不需要格子存在（P.deniesAt）。
 local function wrapBuild()
@@ -335,7 +365,8 @@ local function wrapFarmingCommands()
     end
 end
 
--- 爐子／微波爐面板 OK（ISOvenUI.lua:166-170、ISMicrowaveUI.lua:133-137）：原版處理器先跑（LuaManager.java:1193-1194），
+-- 爐子／微波爐面板 OK（ISOvenUI.lua:166-170、ISMicrowaveUI.lua:133-137）：原版處理器先跑（原版 Lua 排在 MOD 檔之前載入、先註冊
+-- OnClientCommand：LuaManager.java:1193-1194；原版註冊在 ClientCommands.lua:1357），
 -- 拒絕時把同格的 IsoStove 翻回去；原版寫入的定時與溫度不還原（§6.6）。IsoGridSquare:getObjects（IsoGridSquare.java:9212）、
 -- IsoStove:Toggle（iso/objects/IsoStove.java:195；原版用例 ClientCommands.lua:1154）。
 function P.onClientCommand(module, command, player, args)
@@ -357,6 +388,7 @@ function P.install()
     wrapTakeWater()
     wrapForceOpen()
     wrapBuild()
+    wrapScything()
     wrapFarmingCommands()
 end
 

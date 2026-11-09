@@ -61,6 +61,10 @@ return function(T)
         ISWaterPlantAction = function(x, y) return { sq = T.gridSquare(x, y) } end,
         ISShovelAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
         ISFertilizeAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
+        ISScything = function(x, y)
+            T.plants[x .. "," .. y] = { state = "seeded" }
+            return { sq = T.gridSquare(x, y), radius = 1 }
+        end,
     }
     local CATEGORY = {
         USE = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator",
@@ -68,7 +72,7 @@ return function(T)
         MOVE = { "ISMoveablesAction", "ISTakeGenerator" },
         BUILD = { "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction", "ISUnbarricadeAction" },
         FARM = { "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction", "ISWaterPlantAction",
-            "ISShovelAction", "ISFertilizeAction" },
+            "ISShovelAction", "ISFertilizeAction", "ISScything" },
     }
     -- 回傳 complete 的回傳值、原函式有沒有跑
     local function run(cls, actor, x, y)
@@ -279,6 +283,31 @@ return function(T)
     SFarmingSystemCommands.seed(farmer, { x = 105, y = 105, z = 0 })
     SFarmingSystemCommands.destroy(nil, { x = 105, y = 105, z = 0 })   -- SFarmingSystem.destroyPlant 自己呼叫
     check(T.ran["farm.seed"] == 1 and T.ran["farm.destroy"] == 1, "有 FARM、伺服器自己呼叫（player nil）：照原版")
+    -- 割草：範圍從 sq 往 +x、+y 共 radius 格，有原版會動到的作物（不是 destroyed／harvested／plow）的格子才查（ISScything.lua:42-49, 81）
+    local function scythe(actor, x, y, r)
+        local before = T.ran["ISScything.complete"] or 0
+        local res = T.action("ISScything", { character = actor, sq = T.gridSquare(x, y), radius = r }):complete()
+        return res, (T.ran["ISScything.complete"] or 0) > before
+    end
+    deniedOf(bare)                                           -- 先送掉前面農務指令留下的那則，下面只看割草推的
+    T.plants = { ["100,100"] = { state = "seeded" } }        -- 98..100：只有角落那格在 claim
+    local s1, sran1 = scythe(bare, 98, 98, 3)
+    T.plants["100,100"].state = "harvested"
+    local _, sran2 = scythe(bare, 98, 98, 3)
+    T.plants = { ["99,99"] = { state = "seeded" } }          -- 範圍跨進 claim，作物在 claim 外
+    local _, sran3 = scythe(bare, 98, 98, 3)
+    T.plants = { ["101,101"] = { state = "seeded" } }
+    local s4, sran4 = scythe(farmer, 100, 100, 3)
+    check(s1 == false and not sran1 and (deniedOf(bare) or {}).bit == B.FARM,
+        "割草：範圍角落一格有 claim 裡的作物、沒有 FARM → 整個不做、推 denied（FARM）")
+    check(sran2 and sran3, "割草：claim 裡的作物已收成、或只有 claim 外的作物 → 照原版（割草本身不看權限）")
+    check(s4 == true and sran4, "割草：有 FARM → 照原版")
+    T.plants = { ["100,100"] = { state = "seeded" } }
+    local s5, sran5 = scythe(bare, 98, 98, "3")
+    local s6, sran6 = scythe(farmer, 98, 98, "3")
+    local s7, sran7 = scythe(farmer, 98, 98, false)
+    check(s5 == false and not sran5 and s6 == true and sran6, "割草：radius 是數字字串 → 照那個數字查範圍（同原版的算術）")
+    check(s7 == false and not sran7, "割草：radius 不是數字 → 不做")
 
     T.section("Permissions：撬棍（42.22 ISForceOpen）")
     -- 門窗：在所在格的北邊（isNorth）或西邊，另一側是 (x, y-1) 或 (x-1, y)。rec 是 100..109，neighbor 是 x 110..119

@@ -68,7 +68,7 @@ function V.sat(fp, cx, cy, r, pad)
     return -math.max(-o1, -o2, -o3, -o4)
 end
 
--- 車上的人：每個座位（BaseVehicle.getMaxPassengers:1812-1814、getCharacter:1851-1854）
+-- 車上的人：每個座位（BaseVehicle.getMaxPassengers:1812-1814、getCharacter:1863-1866）
 local function addRiders(v, out)
     for i = 0, v:getMaxPassengers() - 1 do
         local c = v:getCharacter(i)

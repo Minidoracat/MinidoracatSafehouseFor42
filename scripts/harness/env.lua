@@ -809,7 +809,7 @@ T.TIMED_ACTIONS = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveActio
     "ISAddFuel", "ISFixGenerator", "ISTakeGenerator",
     "ISFluidTransferAction", "ISMoveablesAction", "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction",
     "ISUnbarricadeAction", "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction",
-    "ISWaterPlantAction", "ISShovelAction", "ISFertilizeAction", "ISTakeWaterAction" }
+    "ISWaterPlantAction", "ISShovelAction", "ISFertilizeAction", "ISScything", "ISTakeWaterAction" }
 T.ran = {}
 local function ran(key) T.ran[key] = (T.ran[key] or 0) + 1 end
 function T.resetTimedActions()
@@ -832,6 +832,9 @@ function T.resetTimedActions()
     ISForceOpen = { Type = "ISForceOpen" }
     ISForceOpen.__index = ISForceOpen
     ISForceOpen.attempt = function() ran("ISForceOpen.attempt"); return "success" end
+    -- 割草（ISScything.lua:80）：SFarmingSystem.instance:getLuaObjectOnSquare 查 T.plants["x,y"]（作物，欄位 state）
+    T.plants = {}
+    SFarmingSystem = { instance = { getLuaObjectOnSquare = function(_, sq) return T.plants[sq:getX() .. "," .. sq:getY()] end } }
     Actions = { build = function() ran("Actions.build") end }                 -- ActionManager.lua:26
     SFarmingSystemCommands = {}                                               -- farmingCommands.lua:141
     for _, name in ipairs({ "seed", "plow", "harvest", "water", "destroy" }) do
