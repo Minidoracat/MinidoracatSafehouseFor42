@@ -1,7 +1,8 @@
 -- MinidoracatSafehouse/Permissions.lua：細分權限 USE／MOVE／BUILD／FARM 的伺服器防線（計畫 §6.6，契約「M2 細分權限」）。
 -- 只比原版更嚴：目標格在 managed claim（R.list() 中 lifecycle＝active，含 legacy 來源）裡、actor 不是屋主、
--- MSH.Claims.roleOf 的位元缺該位 → 拒絕；managed 以外（含 foreign 原生屋）照原版，只有一個例外：農務指令 cheat
--- 不接受改作物的 x, y（wrapFarmingCommands；判定靠這兩個欄位）。
+-- MSH.Claims.roleOf 的位元缺該位 → 拒絕；managed 以外（含 foreign 原生屋）照原版。不分安全屋內外的只有三處，
+-- 都是正常客戶端不會送的值：農務指令 cheat 不接受改作物的 x, y（wrapFarmingCommands；判定靠這兩個欄位）、
+-- 建造的座標不是有限數就不蓋（wrapBuild）、割草沒有 character／sq 或 radius 不是數字就不割（wrapScything）。
 -- 手法照 Safehouse E2E perm-mp／perm2-mp 實測（local://sharing-ref.md §3）：
 --   MP 由伺服器重建 timed action 後呼叫 serverStart、到時呼叫 complete，complete 回 false＝拒絕、原版客戶端停下；
 --   伺服器不跑 isValid（NetTimedAction.java:117-120, 132-139；42.22.2 和 42.21.0 相同）。NetTimedAction 以 rawget 取 serverStart／complete
