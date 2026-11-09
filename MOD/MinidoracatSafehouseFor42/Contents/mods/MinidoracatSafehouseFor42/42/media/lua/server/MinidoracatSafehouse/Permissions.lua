@@ -1,6 +1,7 @@
 -- MinidoracatSafehouse/Permissions.lua：細分權限 USE／MOVE／BUILD／FARM 的伺服器防線（計畫 §6.6，契約「M2 細分權限」）。
 -- 只比原版更嚴：目標格在 managed claim（R.list() 中 lifecycle＝active，含 legacy 來源）裡、actor 不是屋主、
--- MSH.Claims.roleOf 的位元缺該位 → 拒絕；managed 以外（含 foreign 原生屋）完全照原版。
+-- MSH.Claims.roleOf 的位元缺該位 → 拒絕；managed 以外（含 foreign 原生屋）照原版，只有一個例外：農務指令 cheat
+-- 不接受改作物的 x, y（wrapFarmingCommands；判定靠這兩個欄位）。
 -- 手法照 Safehouse E2E perm-mp／perm2-mp 實測（local://sharing-ref.md §3）：
 --   MP 由伺服器重建 timed action 後呼叫 serverStart、到時呼叫 complete，complete 回 false＝拒絕、原版客戶端停下；
 --   伺服器不跑 isValid（NetTimedAction.java:117-120, 132-139；42.22.2 和 42.21.0 相同）。NetTimedAction 以 rawget 取 serverStart／complete
@@ -41,17 +42,29 @@ function P.squareOf(o)
     return nil
 end
 
--- 座標 → 格子；不是數字（客戶端送來的 args）回 nil。IsoCell.java:3190-3192（未載入回 nil）
-function P.squareAt(x, y, z)
-    if not (MSH.isFinite(x) and MSH.isFinite(y) and MSH.isFinite(z)) then return nil end
-    return getCell():getGridSquare(x, y, z)
+-- 作物：原版照座標找（SFarmingSystem.instance:getLuaObjectAt → GlobalObjectSystem.getObjectAt，SGlobalObjectSystem.lua:123-125、
+-- GlobalObjectLookup.java:72-90；不看那一帶有沒有載入）。判定用同一個呼叫、同一組參數找，找到的就是原版會找到的那株
+-- （客戶端送來的座標是什麼型別、原版怎麼轉都一樣）。回兩個目標（只有 getX／getY，給 P.denies；claim 是平面範圍）：
+-- 那株在查表裡的位置（Java 的 GlobalObject:getX／getY，GlobalObject.java:33-39；globalObject 欄位由 SGlobalObject:new 設，
+-- SGlobalObject.lua:74），以及它 Lua 欄位的 x, y（原版找到之後照這組找格子與世界物件，SGlobalObject.lua:30-36；
+-- 是一般的 Lua 欄位，不保證和查表的位置相同）。兩個都查。
+-- 找不到回 nil（原版也找不到）；呼叫丟錯就往外丟（原函式不會被呼叫）。
+local Pos = {}
+Pos.__index = Pos
+function Pos:getX() return self.x end
+function Pos:getY() return self.y end
+function P.plantAt(x, y, z)
+    local plant = SFarmingSystem.instance:getLuaObjectAt(x, y, z)
+    if plant == nil then return nil end
+    local g = plant.globalObject
+    return setmetatable({ x = g:getX(), y = g:getY() }, Pos), setmetatable({ x = plant.x, y = plant.y }, Pos)
 end
 
--- 作物：伺服器端 SPlantGlobalObject 帶 x, y, z（ISSeedActionNew.lua:62、ISHarvestPlantAction.lua:59、ISCurePlantAction.lua:57）
+-- 作物的 timed action：self.plant 帶 x, y, z（ISSeedActionNew.lua:62、ISHarvestPlantAction.lua:59、ISCurePlantAction.lua:57、
+-- ISShovelAction.lua:60、ISFertilizeAction.lua:60）
 local function plantSquare(self)
     local plant = self.plant
-    if type(plant) ~= "table" then return nil end
-    return P.squareAt(plant.x, plant.y, plant.z)
+    return P.plantAt(plant.x, plant.y, plant.z)
 end
 
 -- 液體面板：source／target 的擁有者（ISFluidTransferAction.lua:119-120 → ISFluidContainer:getOwner :78-85）是世界物件才算
@@ -239,7 +252,8 @@ local function wrapComplete(name, bit, pick)
     end
     local orig = cls.complete
     cls.complete = function(self)
-        if P.denies(self.character, pick(self), bit, name) then return false end
+        local a, b = pick(self)        -- 第二個目標只有作物有
+        if P.denies(self.character, a, bit, name) or P.denies(self.character, b, bit, name) then return false end
         return orig(self)
     end
 end
@@ -309,7 +323,7 @@ local function wrapScything()
         local x0, y0, z = sq:getX(), sq:getY(), sq:getZ()
         for x = x0, x0 + r - 1 do
             for y = y0, y0 + r - 1 do
-                local s = P.squareAt(x, y, z)
+                local s = getSquare(x, y, z)        -- 同原版 :44
                 local plant = s and SFarmingSystem.instance:getLuaObjectOnSquare(s)
                 if plant and plant.state ~= "destroyed" and plant.state ~= "harvested" and plant.state ~= "plow"
                     and P.deniesAt(self.character, s:getX(), s:getY(), BIT.FARM, "ISScything") then
@@ -322,7 +336,8 @@ local function wrapScything()
 end
 
 -- 全域 Actions.build（ActionManager.lua:26-32）：任一格拒絕就不呼叫原函式；客戶端照樣顯示完成，靠 denied 推送說明。
--- 只看座標，不需要格子存在（P.deniesAt）。
+-- 只看座標，不需要格子存在（P.deniesAt）。x, y, z 是 BuildAction 從封包的 float 轉的（BuildAction.java:58-61），
+-- 不是有限數就不蓋。
 local function wrapBuild()
     if type(Actions) ~= "table" or type(Actions.build) ~= "function" then
         MSH.log("permissions: Actions.build missing, not wrapped")
@@ -330,8 +345,8 @@ local function wrapBuild()
     end
     local orig = Actions.build
     Actions.build = function(character, args)
-        if type(args) == "table" and character ~= nil
-            and MSH.isFinite(args.x) and MSH.isFinite(args.y) and MSH.isFinite(args.z) then
+        if type(args) == "table" and character ~= nil then
+            if not (MSH.isFinite(args.x) and MSH.isFinite(args.y) and MSH.isFinite(args.z)) then return end
             local cells = P.buildCells(args.item, math.floor(args.x), math.floor(args.y), math.floor(args.z), args.north == true)
             for i = 1, #cells, 2 do
                 if P.deniesAt(character, cells[i], cells[i + 1], BIT.BUILD, "Actions.build") then return end
@@ -342,7 +357,12 @@ local function wrapBuild()
 end
 
 -- SFarmingSystemCommands（farmingCommands.lua:13-141）：SFarmingSystem:OnClientCommand 每次以欄位查表（SFarmingSystem.lua:84, 577），
--- 換欄位就生效。player 為 nil 是伺服器自己呼叫（SFarmingSystem.lua:640 destroyPlant），P.denies 照原版放行。
+-- 換欄位就生效。player 為 nil 是伺服器自己呼叫（SFarmingSystem.lua:640 destroyPlant），照原版。
+-- 指令照 args.x, y, z 找作物（getPlantAt，:9-11），plow 另外照同一組座標找格子（:68）：兩個都用原版的呼叫找，
+-- 找到的作物或格子在安全屋裡而沒有 FARM 就不執行。
+-- cheat（:127-139，照 args.var 改作物的欄位）不接受 var 是 x 或 y，不分安全屋內外：原版找到作物之後照這兩個欄位找格子
+-- 與世界物件（SGlobalObject.lua:30-36），各處的判定都當它等於作物所在的位置。原版選單只送生長、水分、病蟲害與健康
+-- （ISFarmingMenu.lua:468-490, 1431-1450）。
 local function wrapFarmingCommands()
     local cmds = SFarmingSystemCommands
     if type(cmds) ~= "table" then
@@ -357,8 +377,13 @@ local function wrapFarmingCommands()
         local orig = cmds[name]
         local label = "farm:" .. tostring(name)
         cmds[name] = function(player, args)
-            if type(args) == "table" and P.denies(player, P.squareAt(args.x, args.y, args.z), BIT.FARM, label) then
-                return
+            if player ~= nil and type(args) == "table" then
+                if name == "cheat" and (args.var == "x" or args.var == "y") then return end
+                local a, b = P.plantAt(args.x, args.y, args.z)
+                if P.denies(player, a, BIT.FARM, label) or P.denies(player, b, BIT.FARM, label)
+                    or P.denies(player, getCell():getGridSquare(args.x, args.y, args.z), BIT.FARM, label) then
+                    return
+                end
             end
             return orig(player, args)
         end
@@ -367,11 +392,12 @@ end
 
 -- 爐子／微波爐面板 OK（ISOvenUI.lua:166-170、ISMicrowaveUI.lua:133-137）：原版處理器先跑（原版 Lua 排在 MOD 檔之前載入、先註冊
 -- OnClientCommand：LuaManager.java:1193-1194；原版註冊在 ClientCommands.lua:1357），
--- 拒絕時把同格的 IsoStove 翻回去；原版寫入的定時與溫度不還原（§6.6）。IsoGridSquare:getObjects（IsoGridSquare.java:9212）、
+-- 拒絕時把同格的 IsoStove 翻回去；原版寫入的定時與溫度不還原（§6.6）。格子用原版同一個呼叫找（getSquare，
+-- ClientCommands.lua:1147）。IsoGridSquare:getObjects（IsoGridSquare.java:9212）、
 -- IsoStove:Toggle（iso/objects/IsoStove.java:195；原版用例 ClientCommands.lua:1154）。
 function P.onClientCommand(module, command, player, args)
     if module ~= "stove" or command ~= "setOvenParamsAndToggle" or type(args) ~= "table" then return end
-    local sq = P.squareAt(args.x, args.y, args.z)
+    local sq = getSquare(args.x, args.y, args.z)
     if not P.denies(player, sq, BIT.USE, "stove:setOvenParamsAndToggle") then return end
     local objects = sq:getObjects()
     for i = 0, objects:size() - 1 do

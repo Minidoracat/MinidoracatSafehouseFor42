@@ -184,13 +184,14 @@ return function(T)
     Actions.build(bare, { x = 50, y = 50, z = 0 })
     check(T.ran["Actions.build"] == 2, "有 BUILD、範圍外：照原版")
     Actions.build(bare, { x = "105", y = 105, z = 0 })
-    check(T.ran["Actions.build"] == 3, "座標不是數字：不判定、照原版")
+    Actions.build(full, { x = 105, y = 105, z = 0 / 0 })
+    check(T.ran["Actions.build"] == 2, "座標不是有限數：不蓋")
     -- 格子不存在的樓層：照座標判斷
     T.unloaded["105,105"] = true
     Actions.build(bare, { x = 105, y = 105, z = 3 })
-    check(T.ran["Actions.build"] == 3, "格子不存在的樓層：沒有 BUILD 照樣被拒")
+    check(T.ran["Actions.build"] == 2, "格子不存在的樓層：沒有 BUILD 照樣被拒")
     Actions.build(full, { x = 105, y = 105, z = 3 })
-    check(T.ran["Actions.build"] == 4, "格子不存在的樓層：有 BUILD 照原版")
+    check(T.ran["Actions.build"] == 3, "格子不存在的樓層：有 BUILD 照原版")
     T.unloaded["105,105"] = nil
 
     -- 多格物件：每一格都查（claim 範圍 100..109）。item 照原版類別會用到的欄位與方法
@@ -283,6 +284,55 @@ return function(T)
     SFarmingSystemCommands.seed(farmer, { x = 105, y = 105, z = 0 })
     SFarmingSystemCommands.destroy(nil, { x = 105, y = 105, z = 0 })   -- SFarmingSystem.destroyPlant 自己呼叫
     check(T.ran["farm.seed"] == 1 and T.ran["farm.destroy"] == 1, "有 FARM、伺服器自己呼叫（player nil）：照原版")
+    -- 作物用原版的呼叫找（getLuaObjectAt），照找到的那株的座標判定：那格沒載入、z 那層沒有格子、座標帶小數或不是 Lua 數字都一樣
+    T.unloaded["105,105"] = true
+    local function plantAct(cls, actor, x, y, z)
+        local before = T.ran[cls .. ".complete"] or 0
+        local res = T.action(cls, { character = actor, plant = { x = x, y = y, z = z } }):complete()
+        return res, (T.ran[cls .. ".complete"] or 0) > before
+    end
+    local p1, pran1 = plantAct("ISHarvestPlantAction", bare, 105, 105, 0)
+    local p2, pran2 = plantAct("ISShovelAction", bare, 105.9, 105.2, -0.5)
+    local p3, pran3 = plantAct("ISHarvestPlantAction", farmer, 105.9, 105.2, -0.5)
+    local _, pran4 = plantAct("ISHarvestPlantAction", bare, 99.9, 105, 0)       -- 截斷後是 99：範圍外
+    SFarmingSystemCommands.water(bare, { x = 105, y = 105, z = -0.5 })
+    local p5, pran5 = plantAct("ISFertilizeAction", bare, T.boxed(105), T.boxed(105), T.boxed(0))
+    local beforeErr = T.ran["ISHarvestPlantAction.complete"]
+    local okErr = pcall(plantAct, "ISHarvestPlantAction", bare, "105", 105, 0)
+    T.unloaded["105,105"] = nil
+    check(p1 == false and not pran1 and p2 == false and not pran2 and T.ran["farm.water"] == nil,
+        "作物動作與農務指令：那格沒載入、座標帶小數 → 照找到的作物查，沒有 FARM 被拒")
+    check(p3 == true and pran3 and pran4, "作物動作：有 FARM、或找到的作物在範圍外 → 照原版")
+    check(p5 == false and not pran5, "作物動作：座標不是 Lua 數字但原版找得到作物 → 照樣查")
+    check(okErr == false and T.ran["ISHarvestPlantAction.complete"] == beforeErr, "作物動作：找作物的呼叫丟錯 → 原函式不跑")
+    T.noPlant = true
+    SFarmingSystemCommands.plow(bare, { x = 105, y = 105, z = 0 })
+    T.noPlant = false
+    check(T.ran["farm.plow"] == nil, "翻土指令：那格沒有作物 → 照格子查，沒有 FARM 被拒")
+    -- 找到的那株：查表的位置（globalObject）與 Lua 欄位的 x, y 都查
+    local moved = SFarmingSystem.instance:getLuaObjectAt(106, 106, 0)
+    moved.x, moved.y = 50, 50                                  -- 查表的位置在 claim 裡，Lua 欄位在範圍外
+    local away = SFarmingSystem.instance:getLuaObjectAt(60, 60, 0)
+    away.x, away.y = 107, 107                                  -- 查表的位置在範圍外，Lua 欄位在 claim 裡
+    local p7, pran7 = plantAct("ISHarvestPlantAction", bare, 106, 106, 0)
+    local p8, pran8 = plantAct("ISHarvestPlantAction", bare, 60, 60, 0)
+    SFarmingSystemCommands.harvest(bare, { x = 60, y = 60, z = 0 })
+    local _, pran9 = plantAct("ISHarvestPlantAction", farmer, 106, 106, 0)
+    check(p7 == false and not pran7 and p8 == false and not pran8 and T.ran["farm.harvest"] == nil,
+        "作物：查表的位置或 Lua 欄位的位置任一個在安全屋裡、沒有 FARM → 被拒")
+    check(pran9, "作物：兩個位置都查過、有 FARM → 照原版")
+    -- 指令的第一個目標單獨驗：查表的位置在 claim 裡、Lua 欄位在範圍外、那格沒載入（格子那一道不會擋）
+    T.unloaded["106,106"] = true
+    SFarmingSystemCommands.destroy(bare, { x = 106, y = 106, z = 0 })
+    T.unloaded["106,106"] = nil
+    check(T.ran["farm.destroy"] == 1, "農務指令：作物查表的位置在安全屋裡、那格沒載入、沒有 FARM → 被拒")
+    -- cheat 不能改作物的 x, y（不分安全屋內外、有沒有 FARM）；其他欄位照一般農務指令判定
+    SFarmingSystemCommands.cheat(bare, { x = 50, y = 50, z = 0, var = "x", count = 1 })
+    SFarmingSystemCommands.cheat(farmer, { x = 105, y = 105, z = 0, var = "y", count = 1 })
+    check(T.ran["farm.cheat"] == nil, "cheat：var 是 x 或 y → 不執行")
+    SFarmingSystemCommands.cheat(bare, { x = 50, y = 50, z = 0, var = "waterLvl", count = 10 })
+    SFarmingSystemCommands.cheat(bare, { x = 105, y = 105, z = 0, var = "waterLvl", count = 10 })
+    check(T.ran["farm.cheat"] == 1, "cheat：其他欄位 → 範圍外照原版、安全屋裡沒有 FARM 被拒")
     -- 割草：範圍從 sq 往 +x、+y 共 radius 格，有原版會動到的作物（不是 destroyed／harvested／plow）的格子才查（ISScything.lua:42-49, 81）
     local function scythe(actor, x, y, r)
         local before = T.ran["ISScything.complete"] or 0
@@ -354,8 +404,9 @@ return function(T)
     local plain = { __class = "IsoObject" }
     getCell = function()
         return { getGridSquare = function(_, x, y, z)
+            if z ~= z then z = 0 end                           -- fastfloor：NaN 當 0（PZMath.java:272-275）
             local sq = T.gridSquare(x, y, z)
-            sq.getObjects = function() return T.javaList({ plain, stove }) end
+            sq.getObjects = function() return T.javaList(z == 0 and { plain, stove } or { plain }) end
             return sq
         end }
     end
@@ -364,6 +415,8 @@ return function(T)
     T.fire("OnClientCommand", "stove", "setOvenParamsAndToggle", full, { x = 105, y = 105, z = 0, timer = 0, maxTemperature = 200 })
     T.fire("OnClientCommand", "stove", "setOvenParamsAndToggle", bare, { x = 305, y = 105, z = 0, timer = 0, maxTemperature = 200 })
     check(stove.toggles == 1, "有 USE、foreign 屋：不翻")
+    T.fire("OnClientCommand", "stove", "setOvenParamsAndToggle", bare, { x = 105, y = 105, z = 0 / 0, timer = 0, maxTemperature = 200 })
+    check(stove.toggles == 2, "沒有 USE、座標不是有限數但原版找得到格子：照樣翻回那格的爐子")
     getCell = realGetCell
 
     T.section("Permissions：audit 聚合")

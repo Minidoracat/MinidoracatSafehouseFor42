@@ -636,10 +636,17 @@ function T.pour(x, y, name, original)
     T.floorMods[x .. "," .. y] = { shovelledSprites = { original } }
 end
 T.squareReads = 0
+-- IsoCell.getGridSquare(double, double, double)：PZMath.fastfloor，NaN 當 0（IsoCell.java:3120-3124、PZMath.java:272-275）
+local function fastfloor(v)
+    if type(v) ~= "number" then return v end
+    if v ~= v then return 0 end
+    return math.floor(v)
+end
 function getCell()
     return {
         getGridSquare = function(_, x, y, z)
             T.squareReads = T.squareReads + 1
+            x, y, z = fastfloor(x), fastfloor(y), fastfloor(z)
             local key = x .. "," .. y
             if T.unloaded[key] then return nil end
             local name = T.floors[key]
@@ -832,15 +839,42 @@ function T.resetTimedActions()
     ISForceOpen = { Type = "ISForceOpen" }
     ISForceOpen.__index = ISForceOpen
     ISForceOpen.attempt = function() ran("ISForceOpen.attempt"); return "success" end
-    -- 割草（ISScything.lua:80）：SFarmingSystem.instance:getLuaObjectOnSquare 查 T.plants["x,y"]（作物，欄位 state）
-    T.plants = {}
-    SFarmingSystem = { instance = { getLuaObjectOnSquare = function(_, sq) return T.plants[sq:getX() .. "," .. sq:getY()] end } }
+    -- 作物：getLuaObjectOnSquare（割草，ISScything.lua:80）查 T.plants["x,y"]（欄位 state）。getLuaObjectAt（作物動作與農務指令）
+    -- 只模擬這幾種 Java int 參數的收法：Lua 數字往 0 截斷、NaN 是 0（不模擬超出 int 範圍的夾值）；T.boxed(n) 代表巢狀表裡的
+    -- java.lang.Integer（Lua 看不是數字、Java 照收）；nil 回 nil（Java 呼叫失敗只記錄，MethodCaller.java:34-43）；其他型別丟錯
+    -- （轉不成 int，LuaJavaInvoker.java:75-89）。每個座標有一株、重複查回同一個物件：globalObject 是查表的位置，
+    -- x, y, z 是可以被改掉的 Lua 欄位（SGlobalObject.lua:70-77）。T.noPlant＝true 時回 nil
+    T.plants, T.noPlant, T.plantObjs = {}, false, {}
+    local function jint(v)
+        if type(v) == "table" and v.__boxed ~= nil then return v.__boxed end
+        if type(v) ~= "number" then error("expected argument of type int, got " .. type(v)) end
+        if v ~= v then return 0 end
+        return v >= 0 and math.floor(v) or math.ceil(v)
+    end
+    SFarmingSystem = { instance = {
+        getLuaObjectOnSquare = function(_, sq) return T.plants[sq:getX() .. "," .. sq:getY()] end,
+        getLuaObjectAt = function(_, x, y, z)
+            if x == nil or y == nil or z == nil or T.noPlant then return nil end
+            x, y, z = jint(x), jint(y), jint(z)
+            local key = x .. "," .. y .. "," .. z
+            local plant = T.plantObjs[key]
+            if plant == nil then
+                plant = { x = x, y = y, z = z,
+                    globalObject = { getX = function() return x end, getY = function() return y end } }
+                T.plantObjs[key] = plant
+            end
+            return plant
+        end,
+    } }
     Actions = { build = function() ran("Actions.build") end }                 -- ActionManager.lua:26
     SFarmingSystemCommands = {}                                               -- farmingCommands.lua:141
-    for _, name in ipairs({ "seed", "plow", "harvest", "water", "destroy" }) do
+    for _, name in ipairs({ "seed", "plow", "harvest", "water", "destroy", "cheat" }) do
         SFarmingSystemCommands[name] = function() ran("farm." .. name) end
     end
 end
+function T.boxed(n) return { __boxed = n } end
+-- 全域 getSquare（LuaManager.java:7247-7249）：同 getCell():getGridSquare
+function getSquare(x, y, z) return getCell():getGridSquare(x, y, z) end
 function T.action(className, fields)
     return setmetatable(fields or {}, _G[className])
 end
