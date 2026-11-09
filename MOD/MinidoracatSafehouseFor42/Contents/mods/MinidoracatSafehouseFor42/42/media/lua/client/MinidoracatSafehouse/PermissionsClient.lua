@@ -3,6 +3,7 @@
 --   1) 世界右鍵選單：藏掉本地玩家在該格沒有權限的原版選項。OnFillWorldObjectContextMenu 在原版選項建好之後觸發
 --      （ISWorldObjectContextMenu.lua:211-214）；以選項的處理函式比對（addGetUpOption 把真正的處理函式放在 param1，
 --      ISContextMenu.lua:1038-1044），不比文字，換語系照樣對得上。子選單都登記在根選單的 instanceMap（:1199-1231）。
+--      「撬開」（42.22 onForceOpen）照門窗兩側判斷，和伺服器 P.deniesEdge 同一條規則（PC.edgeHides）。
 --   2) 爐子／微波爐設定面板：沒有 USE 時藏掉 OK 鈕並擋 onClick（ISOvenUI.lua:157-171、ISMicrowaveUI.lua:31-37）；
 --      開面板的選單項目（onStoveSetting／onMicrowaveSetting）也照 1) 藏。
 --   3) 伺服器推 denied：MSH.Client.toast（框架 Toast，沒有框架就頭上紅字）說缺哪個權限。
@@ -30,14 +31,14 @@ PC.HANDLERS = {
     { "ISWorldObjectContextMenu", BIT.USE, { "onToggleLight", "onLightBulb", "onLightModify", "onLightBattery",
         "onToggleStove", "onStoveSetting", "onMicrowaveSetting",
         "onPlugGenerator", "onActivateGenerator", "doAddFuelGenerator", "onFixGenerator", "onTakeWater", "onDrink",
-        "onFluidTransfer" } },   -- :1328, 1353, 1365, 1378, 1189, 1203, 1196, 540, 547, 648（加油子選單的每一項）, 554, 2050, 2038, 2793
+        "onFluidTransfer" } },   -- :1327, 1352, 1364, 1377, 1188, 1202, 1195, 540, 547, 648（加油子選單的每一項）, 554, 2045, 2033, 2829
     { "ISWorldObjectContextMenu", BIT.MOVE, { "onTakeGenerator" } },                                  -- :665
     { "ISRadioAndTvMenu", BIT.USE, { "openTvPanel" } },                                               -- ISRadioAndTvMenu.lua:8（世界上的電視／收音機）
     { "ISDisassembleMenu", BIT.MOVE, { "disassemble" } },                                             -- ISDisassembleMenu.lua:83（ISMoveablesAction scrap）
     { "ISWorldObjectContextMenu", BIT.BUILD, { "onDestroy", "onBarricade", "onUnbarricade", "onUnbarricadeMetal",
-        "onUnbarricadeMetalBar" } },                                                                  -- :822, 3046, 2136, 2145, 2153
+        "onUnbarricadeMetalBar" } },                                                                  -- :822, 3082, 2131, 2140, 2148
     { "ISFarmingMenu", BIT.FARM, { "onPlow", "onSeed", "onHarvest", "onWater", "onFliesCure", "onMildewCure",
-        "onSlugsCure", "onAphidsCure" } },                                                            -- ISFarmingMenu.lua:1150, 1085, 572, 854, 703, 651, 756, 809
+        "onSlugsCure", "onAphidsCure", "onShovel", "onFertilize", "onCompost" } },                  -- ISFarmingMenu.lua:1257, 1192, 647, 951, 788, 732, 845, 902, 1301, 1316, 1334
 }
 
 -- 要藏的處理函式集合 { [fn] = true }；沒有要藏的回 nil。每次開選單才讀全域（原版熱重載後照樣對得上）
@@ -84,10 +85,30 @@ local function prune(menu, drop)
     return removed
 end
 
--- 回傳移掉的項目數；子選單因此變空時，連父項目一起拿掉（例如燈的開關子選單）
+-- 「撬開」選項的門窗：addGetUpOption 時 param1＝onForceOpen、param2＝worldobjects、param3＝門窗（ISContextMenu.lua:1038-1043；
+-- ISWorldObjectContextMenuLogic.java:2312-2319, 2560-2566），直接 addOption 時是 param1
+local function forceTarget(o)
+    if o.onSelect == ISContextMenu.onGetUpAndThen then return o.param3 end
+    return o.param1
+end
+
+-- 門窗兩側任一格要藏就藏（伺服器 Permissions.lua P.deniesEdge 同一條規則；另一側是北邊或西邊那格）
+function PC.edgeHides(obj, bit)
+    if obj == nil or not instanceof(obj, "IForceablePortal") then return false end
+    local sq = obj:getSquare()
+    if sq == nil then return false end
+    local x, y = sq:getX(), sq:getY()
+    if PC.hides((MSH.Client.bitsAt(x, y)), bit) then return true end
+    if obj:isNorth() then return PC.hides((MSH.Client.bitsAt(x, y - 1)), bit) end
+    return PC.hides((MSH.Client.bitsAt(x - 1, y)), bit)
+end
+
+-- 回傳移掉的項目數；子選單因此變空時，連父項目一起拿掉（例如燈的開關子選單）。
+-- 「撬開」照門窗兩側判斷、不只看點的那一格，所以點的格子沒有要藏的處理函式也要走一遍
 function PC.filterMenu(context, bits)
     local blocked = PC.blockedHandlers(bits)
-    if blocked == nil then return 0 end
+    local force = ISWorldObjectContextMenu ~= nil and ISWorldObjectContextMenu.onForceOpen or nil
+    if blocked == nil and force == nil then return 0 end
     local subs = context.instanceMap or {}
     local menus = { context }
     for _, m in pairs(subs) do menus[#menus + 1] = m end
@@ -95,7 +116,9 @@ function PC.filterMenu(context, bits)
     for _, m in ipairs(menus) do
         n = n + prune(m, function(o)
             local fn = handlerOf(o)
-            return fn ~= nil and blocked[fn] == true
+            if fn == nil then return false end
+            if blocked ~= nil and blocked[fn] == true then return true end
+            return fn == force and PC.edgeHides(forceTarget(o), BIT.BUILD)
         end)
     end
     if n > 0 then

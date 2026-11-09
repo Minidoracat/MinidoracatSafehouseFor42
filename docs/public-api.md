@@ -24,7 +24,7 @@ local ok = api ~= nil and api.API_MAJOR == 1 and type(api.CAPABILITIES) == "tabl
 |---|---|
 | `player` | `IsoPlayer`。伺服器用本 MOD 綁定的帳號判斷身分，不看客戶端送來的名字。分割畫面第 2–4 位玩家在本 MOD 的安全屋裡一律被拒（兩邊都是）。 |
 | `x`, `y`, `z` | 有限的數字，小數照 `math.floor`。安全屋是平面範圍、每一層都算，所以 `z` 不影響結果；格子不必存在。 |
-| `bit` | `v1.BITS.USE`（用電器、水、燈）、`v1.BITS.MOVE`（搬家具）、`v1.BITS.BUILD`（建造、拆、路障）、`v1.BITS.FARM`（農耕）。數值是本 MOD 的分享位元，不要寫死數字。 |
+| `bit` | `v1.BITS.USE`（用電器、水、燈）、`v1.BITS.MOVE`（搬家具）、`v1.BITS.BUILD`（建造、拆、路障、用撬棍撬開門窗）、`v1.BITS.FARM`（農耕）。數值是本 MOD 的分享位元，不要寫死數字。 |
 | `opts` | 可省略。表，欄位見下。 |
 
 `opts` 的欄位（只有伺服器看；客戶端的 `denies` 本來就不寫稽核、不推通知）：
@@ -67,6 +67,7 @@ local ok = api ~= nil and api.API_MAJOR == 1 and type(api.CAPABILITIES) == "tabl
 | 動作完成、真的要放物件 | 伺服器 | 每一格 `denies(..., BITS.BUILD, { label = "MyMod:build" })`，有一格是 `true` 就整個不做 |
 | 按開關 | 伺服器 | 開關那一格查一次 `BITS.USE` |
 | 接線 | 伺服器 | 開關格與每盞燈的格各查一次 `BITS.BUILD` |
+| 門窗這類邊上的物件 | 伺服器 | 門窗所在格與另一側（`isNorth()` 是 true 查 (x, y-1)，否則查 (x-1, y)）各查一次 `BITS.BUILD` |
 
 ```lua
 -- 伺服器端 timed action 的 complete()：逐格查，一格不行就整個不做

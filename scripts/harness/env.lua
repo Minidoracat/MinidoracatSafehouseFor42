@@ -809,7 +809,7 @@ T.TIMED_ACTIONS = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveActio
     "ISAddFuel", "ISFixGenerator", "ISTakeGenerator",
     "ISFluidTransferAction", "ISMoveablesAction", "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction",
     "ISUnbarricadeAction", "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction",
-    "ISWaterPlantAction", "ISTakeWaterAction" }
+    "ISWaterPlantAction", "ISShovelAction", "ISFertilizeAction", "ISTakeWaterAction" }
 T.ran = {}
 local function ran(key) T.ran[key] = (T.ran[key] or 0) + 1 end
 function T.resetTimedActions()
@@ -828,6 +828,10 @@ function T.resetTimedActions()
         if self.item then self.item.water = math.max(self.item.water or 0, self.waterUnit * delta) end
     end
     W.complete = function(self) ran("ISTakeWaterAction.complete"); self:updateUse(1); return true end
+    -- 撬棍（42.22）：伺服器 animEvent 收到 ForceOpenAttempt 就呼叫 attempt，回 "success" 時 forceOpen＋sync（ISForceOpen.lua:48-103）
+    ISForceOpen = { Type = "ISForceOpen" }
+    ISForceOpen.__index = ISForceOpen
+    ISForceOpen.attempt = function() ran("ISForceOpen.attempt"); return "success" end
     Actions = { build = function() ran("Actions.build") end }                 -- ActionManager.lua:26
     SFarmingSystemCommands = {}                                               -- farmingCommands.lua:141
     for _, name in ipairs({ "seed", "plow", "harvest", "water", "destroy" }) do

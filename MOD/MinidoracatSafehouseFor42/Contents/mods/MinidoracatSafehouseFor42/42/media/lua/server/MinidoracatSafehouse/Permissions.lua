@@ -3,12 +3,13 @@
 -- MSH.Claims.roleOf 的位元缺該位 → 拒絕；managed 以外（含 foreign 原生屋）完全照原版。
 -- 手法照 Safehouse E2E perm-mp／perm2-mp 實測（local://sharing-ref.md §3）：
 --   MP 由伺服器重建 timed action 後呼叫 serverStart、到時呼叫 complete，complete 回 false＝拒絕、原版客戶端停下；
---   伺服器不跑 isValid（42.21.0 NetTimedAction.java:117-120, 132-139）。NetTimedAction 以 rawget 取 serverStart／complete
---   （:97, 134），KahluaTableImpl.rawget 找不到會往 metatable 找（KahluaTableImpl.java:98），實例的 metatable 就是類別
+--   伺服器不跑 isValid（NetTimedAction.java:117-120, 132-139；42.22.2 和 42.21.0 相同）。NetTimedAction 以 rawget 取 serverStart／complete
+--   （:97, 134），KahluaTableImpl.rawget 找不到會往 metatable 找（KahluaTableImpl.java:100），實例的 metatable 就是類別
 --   （ISBaseTimedAction.lua:173-176），所以在類別上換函式就生效。
--- 取水 ISTakeWaterAction 在 serverStart 擋（animEvent 分段轉水，ISTakeWaterAction.lua:31-48, 151-161）；Actions.build
+-- 取水 ISTakeWaterAction 在 serverStart 擋（animEvent 分段轉水，ISTakeWaterAction.lua:31-48, 151-161）；撬棍 ISForceOpen 在 attempt 擋
+-- （伺服器 animEvent 呼叫 attempt：扣門血、打破窗戶在 attempt 裡，回 "success" 才開鎖，ISForceOpen.lua:48-103）；Actions.build
 -- 不呼叫原函式（BuildAction.java:108-117 不看回傳值），照座標查建造物件會寫入的每一格（P.buildCells）；
--- 爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1096-1107）。
+-- 爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
 -- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
@@ -32,7 +33,7 @@ P.outbox = P.outbox or {}    -- player → { code, bit, claimId }（同一 tick 
 -- ===== 目標格 =====
 
 -- 格子、世界物件 → 格子；物品（自己手上的收音機、水瓶）與其他 → nil（照原版）。
--- instanceof 是 Java isInstance（LuaManager.java:2948-2952）；IsoObject:getSquare（iso/IsoObject.java:1042）
+-- instanceof 是 Java isInstance（LuaManager.java:2971-2975）；IsoObject:getSquare（iso/IsoObject.java:1059）
 function P.squareOf(o)
     if o == nil then return nil end
     if instanceof(o, "IsoGridSquare") then return o end
@@ -82,6 +83,9 @@ P.WRAPS = {
     { "ISHarvestPlantAction", BIT.FARM, plantSquare },
     { "ISCurePlantAction", BIT.FARM, plantSquare },
     { "ISWaterPlantAction", BIT.FARM, function(a) return P.squareOf(a.sq) end },            -- ISWaterPlantAction.lua:143
+    -- 移除作物、施肥與堆肥：complete 才 removePlant／fertilize（ISShovelAction.lua:59-71、ISFertilizeAction.lua:59-64）
+    { "ISShovelAction", BIT.FARM, plantSquare },
+    { "ISFertilizeAction", BIT.FARM, plantSquare },
 }
 
 -- ===== 判定 =====
@@ -127,11 +131,23 @@ function P.denies(player, sq, bit, label)
     return P.deniesAt(player, sq:getX(), sq:getY(), bit, label)
 end
 
+-- 門窗這類邊上的物件（在所在格的北邊或西邊，isNorth：IsoDoor.java:1776、IsoWindow.java:1214、IsoThumpable.java:340）：
+-- 兩側任一格拒絕就拒絕（使用者 2026-11-10）。另一側＝北邊 (x, y-1) 或西邊 (x-1, y)（GridSquareEdgeElement.getOppositeSquare）。
+-- obj 要是 IForceablePortal（呼叫端先 instanceof；getSquare、isNorth 都在 GridSquareEdgeElement）。
+function P.deniesEdge(player, obj, bit, label)
+    local sq = obj:getSquare()
+    if player == nil or sq == nil then return false end
+    local x, y = sq:getX(), sq:getY()
+    if P.deniesAt(player, x, y, bit, label) then return true end
+    if obj:isNorth() then return P.deniesAt(player, x, y - 1, bit, label) end
+    return P.deniesAt(player, x - 1, y, bit, label)
+end
+
 -- ===== 建造的佔用範圍 =====
 
 -- 原版多格建造類別算其餘各格的方法：只讀 square:getX/getY/getZ（ISWoodenStairs.lua:227-262、ISDoubleDoor.lua:263-298、
 -- ISDoubleTileFurniture.lua:159、ISEmptyGraves.lua:188），錨點格可能還不存在，所以傳座標替身。
--- 樓梯頂端那格：AddStairs 會在那裡補地板（IsoGridSquare.java:4907-4931）。
+-- 樓梯頂端那格：AddStairs 會在那裡補地板（IsoGridSquare.java:4894-4918）。
 local POS_FNS = { "getSquare2Pos", "getSquare3Pos", "getSquare4Pos", "getSquareTopPos" }
 
 -- 建造物件 create(x, y, z, north) 會寫入的每一格的 x, y（扁平 x1, y1, x2, y2…；第一組是錨點）。claim 是平面範圍，
@@ -146,7 +162,7 @@ function P.buildCells(item, x, y, z, north)
             cells[#cells + 1] = math.floor(cy)
         end
     end
-    -- entity：照 face 逐格（ISBuildIsoEntity:create :579-592；isValid :458-474 同一個判斷）。其他 MOD 的 getFace 不一定是
+    -- entity：照 face 逐格（ISBuildIsoEntity:create :588-601；isValid :467-483 同一個判斷）。其他 MOD 的 getFace 不一定是
     -- FaceScript：Knox Buildworks 只回 getFaceName（KBWBuildingObject.lua:693-696），0.12.0 在這裡丟錯，連屋主都蓋不了。
     -- 先看方法在不在：pcall 接住的錯照樣在伺服器 log 印堆疊（KahluaThread.java:953-963）
     if type(item.getFace) == "function" then
@@ -184,7 +200,7 @@ function P.buildCells(item, x, y, z, north)
             if ok then add(cx, cy) end
         end
     end
-    -- 兔籠：IsoHutch 照 def.extraSprites 的 xoffset／yoffset 建其餘各格（IsoHutch.java:87-115）
+    -- 兔籠：IsoHutch 照 def.extraSprites 的 xoffset／yoffset 建其餘各格（IsoHutch.java:89-117）
     local def = item.def
     if type(def) == "table" and type(def.extraSprites) == "table" then
         for _, s in pairs(def.extraSprites) do
@@ -208,7 +224,7 @@ function P.flush()
     if #list == 0 then return end
     P.outbox = {}
     for _, e in ipairs(list) do
-        local ok, err = pcall(sendServerCommand, e.player, MSH.MODULE, "denied", e.args)   -- LuaManager.java:8962-8966
+        local ok, err = pcall(sendServerCommand, e.player, MSH.MODULE, "denied", e.args)   -- LuaManager.java:8898-8902
         if not ok then MSH.log("denied push failed: " .. tostring(err)) end
     end
 end
@@ -252,6 +268,26 @@ local function wrapTakeWater()
     W.complete = function(self)
         if self.mshDenied or P.denies(self.character, target(self), BIT.USE, "ISTakeWaterAction") then return false end
         return oComplete(self)
+    end
+end
+
+-- 撬棍強開（42.22 ISForceOpen，MP 是 NetTimedAction）：伺服器 animEvent 收到 ForceOpenAttempt 就呼叫 attempt，回 "success"
+-- 時 forceOpen＋sync、回 "fail" 時 forceComplete（ISForceOpen.lua:79-103）；掙扎扣門血、失敗扣門血或打破窗戶也都在 attempt 裡
+-- （:61-71）。所以在 attempt 擋：回 "fail"、不呼叫原函式＝不開鎖、不扣血、不打破，complete 照 outcome 回 false（:40-42）。
+-- 只包 complete 擋不住（開鎖在 animEvent）。照 BUILD（和大鎚、拆解、路障同類），門窗兩側都看（使用者 2026-11-10）。
+-- 原版 isValid 不在伺服器跑，非門窗的物件交給原函式（:49-51 回 "fail"）。
+local function wrapForceOpen()
+    local F = ISForceOpen
+    if type(F) ~= "table" or type(F.attempt) ~= "function" then
+        MSH.log("permissions: ISForceOpen.attempt missing, not wrapped")
+        return
+    end
+    local orig = F.attempt
+    F.attempt = function(self)
+        if instanceof(self.object, "IForceablePortal") and P.deniesEdge(self.character, self.object, BIT.BUILD, "ISForceOpen") then
+            return "fail"
+        end
+        return orig(self)
     end
 end
 
@@ -299,9 +335,9 @@ local function wrapFarmingCommands()
     end
 end
 
--- 爐子／微波爐面板 OK（ISOvenUI.lua:166-170、ISMicrowaveUI.lua:133-137）：原版處理器先跑（LuaManager.java:1192-1193），
--- 拒絕時把同格的 IsoStove 翻回去；原版寫入的定時與溫度不還原（§6.6）。IsoGridSquare:getObjects（IsoGridSquare.java:9245）、
--- IsoStove:Toggle（iso/objects/IsoStove.java:195；原版用例 ClientCommands.lua:1104）。
+-- 爐子／微波爐面板 OK（ISOvenUI.lua:166-170、ISMicrowaveUI.lua:133-137）：原版處理器先跑（LuaManager.java:1193-1194），
+-- 拒絕時把同格的 IsoStove 翻回去；原版寫入的定時與溫度不還原（§6.6）。IsoGridSquare:getObjects（IsoGridSquare.java:9212）、
+-- IsoStove:Toggle（iso/objects/IsoStove.java:195；原版用例 ClientCommands.lua:1154）。
 function P.onClientCommand(module, command, player, args)
     if module ~= "stove" or command ~= "setOvenParamsAndToggle" or type(args) ~= "table" then return end
     local sq = P.squareAt(args.x, args.y, args.z)
@@ -319,6 +355,7 @@ function P.install()
     P.installed = true
     for _, w in ipairs(P.WRAPS) do wrapComplete(w[1], w[2], w[3]) end
     wrapTakeWater()
+    wrapForceOpen()
     wrapBuild()
     wrapFarmingCommands()
 end

@@ -59,13 +59,16 @@ return function(T)
         ISHarvestPlantAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
         ISCurePlantAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
         ISWaterPlantAction = function(x, y) return { sq = T.gridSquare(x, y) } end,
+        ISShovelAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
+        ISFertilizeAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
     }
     local CATEGORY = {
         USE = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator",
             "ISActivateGenerator", "ISAddFuel", "ISFixGenerator", "ISFluidTransferAction" },
         MOVE = { "ISMoveablesAction", "ISTakeGenerator" },
         BUILD = { "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction", "ISUnbarricadeAction" },
-        FARM = { "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction", "ISWaterPlantAction" },
+        FARM = { "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction", "ISWaterPlantAction",
+            "ISShovelAction", "ISFertilizeAction" },
     }
     -- 回傳 complete 的回傳值、原函式有沒有跑
     local function run(cls, actor, x, y)
@@ -277,6 +280,44 @@ return function(T)
     SFarmingSystemCommands.destroy(nil, { x = 105, y = 105, z = 0 })   -- SFarmingSystem.destroyPlant 自己呼叫
     check(T.ran["farm.seed"] == 1 and T.ran["farm.destroy"] == 1, "有 FARM、伺服器自己呼叫（player nil）：照原版")
 
+    T.section("Permissions：撬棍（42.22 ISForceOpen）")
+    -- 門窗：在所在格的北邊（isNorth）或西邊，另一側是 (x, y-1) 或 (x-1, y)。rec 是 100..109，neighbor 是 x 110..119
+    local function portal(x, y, north)
+        local sq = T.gridSquare(x, y)
+        return { __class = "IForceablePortal", getSquare = function() return sq end, isNorth = function() return north end }
+    end
+    -- 回 attempt 的結果、原 attempt 有沒有跑（扣門血、打破窗戶在原 attempt 裡；原 attempt 回 success 才開鎖）
+    local function force(actor, obj)
+        local before = T.ran["ISForceOpen.attempt"] or 0
+        local out = T.action("ISForceOpen", { character = actor, object = obj }):attempt()
+        return out, (T.ran["ISForceOpen.attempt"] or 0) > before
+    end
+    local fo, fran = force(bare, portal(105, 105, false))
+    check(fo == "fail" and not fran and (deniedOf(bare) or {}).bit == B.BUILD,
+        "撬棍：沒有 BUILD 的成員被拒（回 fail、原 attempt 沒跑＝不開鎖不扣血、推 denied BUILD）")
+    fo, fran = force(stranger, portal(105, 105, false))
+    check(fo == "fail" and not fran, "撬棍：名單外的人被拒")
+    fo, fran = force(bare, portal(105, 110, true))
+    check(fo == "fail" and not fran and (deniedOf(bare) or {}).claimId == rec.claimId,
+        "撬棍：門窗所在格在範圍外、北側那格在 claim：照樣被拒")
+    fo, fran = force(bare, portal(120, 105, false))
+    check(fo == "fail" and not fran and (deniedOf(bare) or {}).claimId == neighbor.claimId,
+        "撬棍：門窗所在格在範圍外、西側那格在 claim：照樣被拒")
+    fo, fran = force(bare, portal(105, 99, true))
+    check(fo == "success" and fran, "撬棍：兩側都在範圍外照原版")
+    local o1, ran1 = force(full, portal(105, 110, true))
+    local o2, ran2 = force(owner, portal(105, 105, false))
+    check(o1 == "success" and ran1 and o2 == "success" and ran2, "撬棍：有 BUILD 的成員與屋主照原版")
+    fo, fran = force(full, portal(110, 105, false))
+    check(fo == "fail" and not fran and (deniedOf(full) or {}).claimId == neighbor.claimId,
+        "撬棍：門兩側分屬兩間，沒有 BUILD 的那間擋下（denied 帶那間的 claimId）")
+    local nb = T.player({ name = "neighbor" })
+    fo, fran = force(nb, portal(110, 105, false))
+    check(fo == "fail" and not fran and (deniedOf(nb) or {}).claimId == rec.claimId,
+        "撬棍：所在格是自己的屋、西側那格在別人的 claim 沒有 BUILD：照樣被拒（兩側都查）")
+    fo, fran = force(bare, T.worldObject(105, 105))
+    check(fran, "撬棍：不是門窗的物件交給原 attempt（原版回 fail）")
+
     T.section("Permissions：爐子面板指令")
     local realGetCell = getCell
     local stove = { __class = "IsoStove", toggles = 0 }
@@ -307,7 +348,7 @@ return function(T)
     end
     check(logged("ISToggleLightAction") and logged("ISMoveablesAction") and logged("ISDestroyStuffAction")
         and logged("ISPlowAction") and logged("ISTakeWaterAction") and logged("Actions.build") and logged("farm:seed")
-        and logged("stove:setOvenParamsAndToggle"), "每類拒絕都進 audit（DENY、PERM_DENIED、動作@claimId）")
+        and logged("ISForceOpen") and logged("stove:setOvenParamsAndToggle"), "每類拒絕都進 audit（DENY、PERM_DENIED、動作@claimId）")
     local n = 0
     for _, line in ipairs(T.logs) do
         if string.find(line, "ISToggleLightAction@" .. rec.claimId, 1, true) and string.find(line, "^DENY\tbare\t") then n = n + 1 end
@@ -365,9 +406,10 @@ return function(T)
     check(PC.hides(0, B.MOVE) == true, "managed 但不在清單（0）：藏")
 
     -- 假選單：根選單＋一個子選單（燈的開關），處理函式比對（含 addGetUpOption 的 param1）
-    local onToggleLight, onPlow, onEat = function() end, function() end, function() end
+    local onToggleLight, onPlow, onShovel, onFertilize, onCompost, onEat =
+        function() end, function() end, function() end, function() end, function() end, function() end
     ISWorldObjectContextMenu = { onToggleLight = onToggleLight }
-    ISFarmingMenu = { onPlow = onPlow }
+    ISFarmingMenu = { onPlow = onPlow, onShovel = onShovel, onFertilize = onFertilize, onCompost = onCompost }
     ISContextMenu = { onGetUpAndThen = function() end }
     local function menu(opts)
         local m = { options = opts, optionPool = {}, numOptions = #opts + 1, heights = 0 }
@@ -380,13 +422,47 @@ return function(T)
         { name = "Eat", onSelect = onEat },
         { name = "Light", subOption = 1 },
         { name = "Dig", onSelect = onPlow },
+        { name = "Remove", onSelect = onShovel },
+        { name = "Fertilize", onSelect = onFertilize },
+        { name = "Compost", onSelect = onCompost },
     })
     root.instanceMap = { sub }
-    check(PC.filterMenu(root, nil) == 0 and #root.options == 3, "nil：不動選單")
-    check(PC.filterMenu(root, B.MEMBER + B.USE) == 1 and #root.options == 2 and root.options[2].name == "Light",
-        "缺 FARM：只拿掉耕種項")
+    check(PC.filterMenu(root, nil) == 0 and #root.options == 6, "nil：不動選單")
+    check(PC.filterMenu(root, B.MEMBER + B.USE) == 4 and #root.options == 2 and root.options[2].name == "Light",
+        "缺 FARM：只拿掉耕種項（翻土、移除作物、施肥、堆肥）")
     check(PC.filterMenu(root, B.MEMBER) == 1 and #sub.options == 0 and #root.options == 1 and root.options[1].name == "Eat"
         and root.options[1].id == 1 and root.numOptions == 2, "缺 USE：拿掉 get-up 包裝的開燈項，空掉的子選單父項一起拿掉、id 重排")
+
+    -- 撬開（42.22 onForceOpen）照門窗兩側判斷：點的那格不在 claim（bits 是 nil）、門窗另一側在 claim，照樣藏
+    local onForceOpen = function() end
+    ISWorldObjectContextMenu.onForceOpen = onForceOpen
+    local realBitsAt, edgeBits = MSH.Client.bitsAt, B.MEMBER
+    MSH.Client.bitsAt = function(x, y)
+        if x >= 100 and x < 110 and y >= 100 and y < 110 then return edgeBits end
+        return nil
+    end
+    local function forceMenu(x, y, north)
+        local sq = T.gridSquare(x, y)
+        local target = { __class = "IForceablePortal", getSquare = function() return sq end, isNorth = function() return north end }
+        local doorSub = menu({ { name = "Force", onSelect = ISContextMenu.onGetUpAndThen, param1 = onForceOpen, param2 = {}, param3 = target },
+            { name = "Lock", onSelect = onEat } })
+        local r = menu({ { name = "Door", subOption = 1 } })
+        r.instanceMap = { doorSub }
+        return r, doorSub
+    end
+    local fr, fs = forceMenu(105, 110, true)
+    check(PC.filterMenu(fr, nil) == 1 and #fs.options == 1 and fs.options[1].name == "Lock",
+        "撬開：所在格在範圍外、北側那格在 claim、沒有 BUILD：藏（點的格子不在 claim 也照樣判斷）")
+    fr, fs = forceMenu(110, 105, false)
+    check(PC.filterMenu(fr, nil) == 1 and #fs.options == 1, "撬開：所在格在範圍外、西側那格在 claim、沒有 BUILD：藏")
+    fr, fs = forceMenu(105, 100, true)
+    check(PC.filterMenu(fr, nil) == 1 and #fs.options == 1, "撬開：所在格在 claim、北側那格在範圍外、沒有 BUILD：藏")
+    fr, fs = forceMenu(105, 99, true)
+    check(PC.filterMenu(fr, nil) == 0 and #fs.options == 2, "撬開：兩側都在範圍外不藏")
+    edgeBits = B.MEMBER + B.BUILD
+    fr, fs = forceMenu(105, 110, true)
+    check(PC.filterMenu(fr, nil) == 0 and #fs.options == 2, "撬開：有 BUILD 不藏")
+    MSH.Client.bitsAt = realBitsAt
 
     -- denied 推送：沒有框架 → HaloTextHelper
     local halo = {}

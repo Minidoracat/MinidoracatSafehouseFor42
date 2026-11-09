@@ -222,7 +222,7 @@ Select a safehouse in the manager window and open "Members & sharing". To add so
 [tr][td]Member[/td][td]Entering the safehouse, taking and putting items in containers[/td][/tr]
 [tr][td]Use appliances[/td][td]Appliances, including taking water, light bulbs and batteries in lamps, and wiring, switching, refueling and repairing generators[/td][/tr]
 [tr][td]Move furniture[/td][td]Moving furniture, including picking up generators[/td][/tr]
-[tr][td]Build[/td][td]Building, including dismantling[/td][/tr]
+[tr][td]Build[/td][td]Building, including dismantling and forcing doors and windows open with a crowbar[/td][/tr]
 [tr][td]Farm[/td][td]Farming[/td][/tr]
 [tr][td]Remote take[/td][td]When the server allows remote take: standing inside the safehouse, take items from a container elsewhere straight into your inventory[/td][/tr]
 [tr][td]Invite[/td][td]Adding players who can't enter yet[/td][/tr]
@@ -656,7 +656,7 @@ Server-side data:
 [list]
 [*] [b]Zombies can still spawn inside[/b]: vanilla safehouses don't stop it, and neither does this mod.
 [*] [b]Vanilla protection[/b]: the server stops vanilla clients, but modified clients may get around protection that's only checked client-side; the fine-grained permissions (Use appliances, Move furniture, Build, Farm) are only reliable against vanilla clients. Vehicles too: a modified client may drive in, and the server then takes anyone aboard who can't enter out of the vehicle and outside, leaving the vehicle where it is.
-[*] [b]No door or window permission[/b]: the server can't stop opening doors with E or toggling windows directly; whether non-members can open doors follows vanilla.
+[*] [b]No door or window permission[/b]: the server can't stop opening doors with E or toggling windows directly; whether non-members can open doors follows vanilla. Forcing a locked door or window open with a crowbar is the exception: it needs the Build permission.
 [*] [b]No visitors[/b]: "Member" covers both entering and container access, so there's no "enter but don't take" role.
 [*] [b]Safehouse data is public[/b]: vanilla sends every safehouse's area, owner and members to every player who logs in, so modified clients can see it.
 [*] [b]Members removing themselves[/b]: a member who removes themselves with vanilla commands is teleported outside; the list is fixed on the next pass, the position isn't.
@@ -728,7 +728,7 @@ Server-side data:
 [/list]
 [h3]Others can open my doors?[/h3]
 [list]
-[*] Doors and windows have no permission and follow vanilla rules; the server can't stop opening doors with E or toggling windows directly.
+[*] Doors and windows have no permission and follow vanilla rules; the server can't stop opening doors with E or toggling windows directly. Forcing a locked door or window open with a crowbar is the exception: it needs the Build permission.
 [/list]
 [h3]Removed, then back inside?[/h3]
 [list]
