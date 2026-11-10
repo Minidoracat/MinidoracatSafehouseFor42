@@ -91,9 +91,18 @@ function instanceof(obj, cls)
     return also ~= nil and also[cls] == true
 end
 
--- 圖塊屬性（只列測試用到的旗標；值就是名字）
-IsoFlagType = { cutN = "cutN", cutW = "cutW", collideN = "collideN", collideW = "collideW", WindowN = "WindowN", WindowW = "WindowW" }
+-- 圖塊屬性與型別（只列測試用到的；值就是名字）
+IsoFlagType = { cutN = "cutN", cutW = "cutW", collideN = "collideN", collideW = "collideW", WindowN = "WindowN", WindowW = "WindowW",
+    TallHoppableN = "TallHoppableN", TallHoppableW = "TallHoppableW", WallSE = "WallSE" }
 IsoPropertyType = { LADDER_N = "ladderN", LADDER_S = "ladderS", LADDER_W = "ladderW", LADDER_E = "ladderE" }
+IsoObjectType = { doorFrN = "doorFrN", doorFrW = "doorFrW", stairsTN = "stairsTN", stairsTW = "stairsTW" }
+-- 全域 getSprite(名字)（LuaManager.java:8811-8813）：T.sprites[名字] = 圖塊型別
+T.sprites = {}
+function getSprite(name)
+    local t = T.sprites[name]
+    if t == nil then return nil end
+    return { getTileType = function() return t end }
+end
 
 -- ===== 事件 =====
 T.handlers = {}
@@ -632,7 +641,7 @@ Faction = {
 -- ===== 世界：地板與房間 =====
 T.floors = {}            -- "x,y" → 地板 sprite 名
 T.floorMods = {}         -- "x,y" → 地板物件的 modData（IsoObject:hasModData／getModData）
-T.unloaded = {}          -- "x,y" → true：該格未載入（getGridSquare 回 nil，IsoCell.java:3190-3192）
+T.unloaded = {}          -- "x,y"（每一層）或 "x,y,z"（只有那一層）→ true：該格未載入（getGridSquare 回 nil，IsoCell.java:3190-3192）
 T.solid = {}             -- "x,y,z" → true：那格可站（IsoGridSquare.TreatAsSolidFloor，IsoGridSquare.java:7704）
 function T.floor(x, y, name) T.floors[x .. "," .. y] = name end
 function T.fillFloor(x0, y0, w, h, name)
@@ -656,7 +665,7 @@ function getCell()
             T.squareReads = T.squareReads + 1
             x, y, z = fastfloor(x), fastfloor(y), fastfloor(z)
             local key = x .. "," .. y
-            if T.unloaded[key] then return nil end
+            if T.unloaded[key] or T.unloaded[key .. "," .. tostring(z or 0)] then return nil end
             local name = T.floors[key]
             return {
                 getX = function() return x end,
@@ -904,9 +913,29 @@ function T.props(flags)
     for _, f in ipairs(flags or {}) do set[f] = true end
     return { has = function(_, f) return set[f] == true end }
 end
+-- 物件的欄位（測試直接改）：tileType＝圖塊型別（IsoObject:getType）、sprite（getSprite；多格家具用 T.gridSprite）、
+-- spriteConfig（getSpriteConfig；多格 entity 用 T.multiConfig）
 function T.worldObject(x, y, z, flags)
     local sq, props = T.gridSquare(x, y, z), T.props(flags)
-    return { __class = "IsoObject", getSquare = function() return sq end, getProperties = function() return props end }
+    local o = { __class = "IsoObject", getSquare = function() return sq end, getProperties = function() return props end }
+    o.getType = function() return o.tileType end
+    o.getSprite = function() return o.sprite end
+    o.getSpriteConfig = function() return o.spriteConfig end
+    return o
+end
+-- 多格家具的一塊：sprite grid 寬 w、高 h，這一塊在 (px, py)（IsoSpriteGrid.getSpriteGridPosX／Y、getWidth／getHeight）
+function T.gridSprite(w, h, px, py)
+    local grid = { getSpriteGridPosX = function() return px end, getSpriteGridPosY = function() return py end,
+        getWidth = function() return w end, getHeight = function() return h end }
+    return { getSpriteGrid = function() return grid end }
+end
+-- 多格 entity 的 SpriteConfig：getAllMultiSquareObjects 把每一塊加進清單（SpriteConfig.java:169-181）
+function T.multiConfig(parts)
+    return { isValidMultiSquare = function() return true end,
+        getAllMultiSquareObjects = function(_, list)
+            for _, p in ipairs(parts) do list:add(p) end
+            return true
+        end }
 end
 -- 門、窗、窗框（cls＝IsoDoor／IsoWindow／IsoWindowFrame；門窗也是 IForceablePortal）：在所在格的北邊（north）或西邊
 function T.edgeObject(cls, x, y, north)

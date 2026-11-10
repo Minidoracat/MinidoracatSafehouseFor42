@@ -12,7 +12,8 @@
 -- （伺服器 animEvent 呼叫 attempt：扣門血、打破窗戶在 attempt 裡，回 "success" 才開鎖，ISForceOpen.lua:48-103）；Actions.build
 -- 不呼叫原函式（BuildAction.java:108-117 不看回傳值），照座標查建造物件會寫入的每一格（P.buildCells）；割草 ISScything 查範圍裡
 -- 有作物的每一格（wrapScything）；爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
--- 撬棍、大鎚、拆解、釘路障、拆路障的目標在邊上（門、窗、牆、柵欄）時兩側的格子都查（MSH.edgeCells、P.CELL_WRAPS）。
+-- 撬棍、大鎚、拆解、釘路障、拆路障的目標在邊上（門、窗、牆、柵欄）時兩側的格子都查（MSH.edgeCells、P.CELL_WRAPS）；
+-- 大鎚、拆解、搬家具的目標是多格物件時，每一塊的格子都查（groupCells、moveCells）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
 -- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
@@ -88,7 +89,6 @@ P.WRAPS = {
     { "ISFixGenerator", BIT.USE, function(a) return P.squareOf(a.generator) end },         -- ISFixGenerator.lua:89
     { "ISTakeGenerator", BIT.MOVE, function(a) return P.squareOf(a.generator) end },       -- ISTakeGenerator.lua:66
     { "ISFluidTransferAction", BIT.USE, fluidSquare },
-    { "ISMoveablesAction", BIT.MOVE, function(a) return P.squareOf(a.square) end },         -- ISMoveablesAction.lua:274
     { "ISPlowAction", BIT.FARM, function(a) return P.squareOf(a.gridSquare) end },          -- ISPlowAction.lua:152
     { "ISSeedActionNew", BIT.FARM, plantSquare },
     { "ISHarvestPlantAction", BIT.FARM, plantSquare },
@@ -99,28 +99,68 @@ P.WRAPS = {
     { "ISFertilizeAction", BIT.FARM, plantSquare },
 }
 
+-- 多格圖塊（sprite grid）每一格的 x, y 加進 cells；(x, y) 是 sprite 那一塊所在的格子
+-- （IsoSpriteGrid.getSpriteGridPosX／Y；原版同一個算法：ISMoveableSpriteProps.lua:1094-1107）
+local function addGridCells(cells, sprite, x, y)
+    local grid = sprite ~= nil and sprite:getSpriteGrid() or nil
+    if grid == nil then return end
+    local left, top = x - grid:getSpriteGridPosX(sprite), y - grid:getSpriteGridPosY(sprite)
+    for gx = 0, grid:getWidth() - 1 do
+        for gy = 0, grid:getHeight() - 1 do
+            cells[#cells + 1] = left + gx
+            cells[#cells + 1] = top + gy
+        end
+    end
+end
+
 -- 大鎚、拆解、釘路障、拆路障：目標可能是邊上的物件（牆、門、窗、柵欄），兩側任一格拒絕就拒絕（使用者 2026-11-10；
--- 格子清單 MSH.edgeCells，Contract.lua）。大鎚與拆解另外加原版會一起拆掉的物件所在的格子（樓梯、雙開門、車庫門、墓穴：
--- ISDestroyStuffAction.lua:276-306、ISDismantleAction.lua:77-81，用原版同一組 buildUtil 呼叫找）。
+-- 格子清單 MSH.edgeCells，Contract.lua）。大鎚與拆解另外加原版會一起拆掉的物件所在的格子：
+-- · 樓梯、雙開門、車庫門、墓穴：用原版同一組 buildUtil 呼叫找（ISDestroyStuffAction.lua:266-271、ISDismantleAction.lua:77-81）。
+-- · 多格物件：伺服器移除其中一塊時整組一起移除（IsoGridSquare.transmitRemoveItemFromSquare，IsoGridSquare.java:5933-5960 →
+--   IsoObjectUtils.getAllMultiTileObjects，IsoObjectUtils.java:83-155）。多格 entity 用它自己的清單
+--   （SpriteConfig.getAllMultiSquareObjects，SpriteConfig.java:169-181），多格家具照 sprite grid 逐格。
+-- · 雞舍：大鎚拆的是它的每一塊（IsoHutch.removeHutch，IsoHutch.java:986-1013）。
 local GROUP_FNS = { "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }
-local function groupCells(obj, fns)
+local function groupCells(obj)
     local cells = MSH.edgeCells(obj)
     if #cells == 0 then return cells end
-    for _, fn in ipairs(fns) do
-        for _, o in ipairs(buildUtil[fn](obj)) do
+    local function addAll(list)
+        for _, o in ipairs(list) do
             local more = MSH.edgeCells(o)
             for i = 1, #more do cells[#cells + 1] = more[i] end
         end
     end
+    for _, fn in ipairs(GROUP_FNS) do addAll(buildUtil[fn](obj)) end
+    local cfg = obj:getSpriteConfig()
+    if cfg ~= nil and cfg:isValidMultiSquare() then
+        local parts = ArrayList.new()
+        cfg:getAllMultiSquareObjects(parts)
+        addAll(MSH.toArray(parts))
+    end
+    addGridCells(cells, obj:getSprite(), cells[1], cells[2])
+    if instanceof(obj, "IsoHutch") then addAll(MSH.toArray(obj:getAllHutchObjects())) end
+    return cells
+end
+
+-- 搬家具（撿起、放下、旋轉、拆解、修理）：多格家具整組一起動（ISMoveableSpriteProps.lua:1265-1282, 1975-2005），每一格都查；
+-- 旋轉前後是兩組圖塊（ISMoveablesAction.lua:323-331），都算。a.square 是動作的那一格（ISMoveablesAction.lua:274）
+local function moveCells(a)
+    local sq = P.squareOf(a.square)
+    if sq == nil then return {} end
+    local x, y = sq:getX(), sq:getY()
+    local cells = { x, y }
+    if type(a.moveProps) == "table" then addGridCells(cells, a.moveProps.sprite, x, y) end
+    if type(a.origMoveProps) == "table" then addGridCells(cells, a.origMoveProps.sprite, x, y) end
     return cells
 end
 
 -- { 類別名, 位元, 取要查的格子（扁平 x1, y1, x2, y2…） }
 P.CELL_WRAPS = {
-    { "ISDestroyStuffAction", BIT.BUILD, function(a) return groupCells(a.item, GROUP_FNS) end },               -- ISDestroyStuffAction.lua:362
-    { "ISDismantleAction", BIT.BUILD, function(a) return groupCells(a.thumpable, { "getStairObjects" }) end }, -- ISDismantleAction.lua:107
-    { "ISBarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                          -- ISBarricadeAction.lua:193
-    { "ISUnbarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                        -- ISUnbarricadeAction.lua:167
+    { "ISDestroyStuffAction", BIT.BUILD, function(a) return groupCells(a.item) end },       -- ISDestroyStuffAction.lua:362
+    { "ISDismantleAction", BIT.BUILD, function(a) return groupCells(a.thumpable) end },     -- ISDismantleAction.lua:107
+    { "ISBarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },       -- ISBarricadeAction.lua:193
+    { "ISUnbarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },     -- ISUnbarricadeAction.lua:167
+    { "ISMoveablesAction", BIT.MOVE, moveCells },
 }
 
 -- ===== 判定 =====
@@ -247,16 +287,35 @@ function P.buildCells(item, x, y, z, north)
             if w == "north20" or w == "south20" then add(x, y - i) elseif w == "west20" or w == "east20" then add(x - i, y) end
         end
     end
-    -- 建造選單的路障（entity_barricade_*，OnCreate 是 BuildRecipeCode.barricade.OnCreate）：釘的是面向那一側的門窗，
-    -- 朝 n／w 時門窗在錨點格的北邊／西邊，朝 s／e 時在 (x, y+1)／(x+1, y) 那格（buildRecipeCode.lua:98-117）。
-    -- 面向那一側的鄰格也查，門窗兩側就都查到。面向的名稱同原版傳給 OnCreate 的（ISBuildIsoEntity.lua:749-752）
+    -- entity 的 OnCreate 會動到 face 以外的格子（每放一塊呼叫一次，ISBuildIsoEntity.lua:749-752），照它的名字認：
+    -- · 路障（BuildRecipeCode.barricade.OnCreate，entity_barricade_*）：釘的是面向那一側的門窗，朝 n／w 時門窗在錨點格的
+    --   北邊／西邊，朝 s／e 時在 (x, y+1)／(x+1, y) 那格（buildRecipeCode.lua:98-117）。面向那一側的鄰格也查，門窗兩側就都
+    --   查到。面向的名稱同原版傳給 OnCreate 的。
+    -- · 樓梯（BuildRecipeCode.stairs.OnCreate）：頂端那一段（圖塊型別 stairsTN／stairsTW）在它北邊／西邊那格的上一層
+    --   補平台地板（buildRecipeCode.lua:225-296），那一格也查。
     if item.objectInfo ~= nil and type(item.getFace) == "function" then
         pcall(function()
             local onCreate = item.objectInfo:getScript():getOnCreate()
-            if type(onCreate) ~= "string" or string.find(onCreate, "BuildRecipeCode.barricade.", 1, true) ~= 1 then return end
-            local f = item:getFace():getFaceName()
-            if f == "n" then add(x, y - 1) elseif f == "s" then add(x, y + 1)
-            elseif f == "w" then add(x - 1, y) elseif f == "e" then add(x + 1, y) end
+            if type(onCreate) ~= "string" then return end
+            local face = item:getFace()
+            if string.find(onCreate, "BuildRecipeCode.barricade.", 1, true) == 1 then
+                local f = face:getFaceName()
+                if f == "n" then add(x, y - 1) elseif f == "s" then add(x, y + 1)
+                elseif f == "w" then add(x - 1, y) elseif f == "e" then add(x + 1, y) end
+            elseif string.find(onCreate, "BuildRecipeCode.stairs.", 1, true) == 1 then
+                for zz = 0, face:getzLayers() - 1 do
+                    for xx = 0, face:getWidth() - 1 do
+                        for yy = 0, face:getHeight() - 1 do
+                            local info = face:getTileInfo(xx, yy, zz)
+                            local name = info and info:getSpriteName()
+                            local sprite = name and getSprite(name)
+                            local t = sprite and sprite:getTileType()
+                            if t == IsoObjectType.stairsTN then add(x + xx, y + yy - 1)
+                            elseif t == IsoObjectType.stairsTW then add(x + xx - 1, y + yy) end
+                        end
+                    end
+                end
+            end
         end)
     end
     return cells

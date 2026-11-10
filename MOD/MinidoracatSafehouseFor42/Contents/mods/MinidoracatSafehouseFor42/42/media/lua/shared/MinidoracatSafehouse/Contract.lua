@@ -207,11 +207,15 @@ end
 
 -- 世界物件要查權限的格子（扁平 x1, y1, x2, y2…；第一組是物件所在格），給破壞、撬開、路障這類動作；伺服器 Permissions.lua
 -- 與客戶端 PermissionsClient.lua 共用。邊上的物件在所在格的北邊或西邊，另一側是 (x, y-1) 或 (x-1, y)，兩側都列
--- （使用者 2026-11-10）。哪些算邊上，照原版大鎚游標「從另一側也拆得到」的判斷（ISDestroyCursor.lua:259-282）：
--- 門、窗、窗框照 getNorth（GridSquareEdgeElement.java；IsoThumpable 只有 isDoor 的才照它，木箱這類也是 IsoThumpable）；
--- 其他照圖塊屬性：cutN／collideN／WindowN 是北邊，cutW／collideW／WindowW 是西邊（牆、門框牆、窗框牆、柵欄；
--- IsoWorld.java:882-966；轉角牆兩邊都有）。路障物件另外加它釘的那個門窗的格子（IsoBarricade.getBarricadedObject，
--- IsoBarricade.java:667-703）。不是世界物件、沒有格子回空表。
+-- （使用者 2026-11-10）。哪些算邊上：
+-- · 門、窗、窗框照 getNorth（GridSquareEdgeElement.java；IsoThumpable 只有 isDoor 的才照它，木箱這類也是 IsoThumpable）。
+-- · 其他照圖塊：屬性 cutN／collideN／WindowN／TallHoppableN 是北邊，cutW／collideW／WindowW／TallHoppableW 是西邊
+--   （牆、門框牆、窗框牆、柵欄、高柵欄；IsoWorld.java:882-1010；轉角牆兩邊都有），圖塊型別 doorFrN／doorFrW 的門框也是
+--   （原版大鎚游標「從另一側也拆得到」同一組：ISDestroyCursor.lua:268-291）。
+-- · 牆角柱（WallSE）載入時也帶 cutW（IsoWorld.java:978-982），但它不擋任何一邊（IsoGridSquare.getWall 也排除它，
+--   IsoGridSquare.java:4590-4607），只算所在格。
+-- 路障物件另外加它釘的那個門窗的格子（IsoBarricade.getBarricadedObject，IsoBarricade.java:667-703）。
+-- 不是世界物件、沒有格子回空表。
 function MSH.edgeCells(obj)
     local cells = {}
     if obj == nil or not instanceof(obj, "IsoObject") then return cells end
@@ -228,9 +232,13 @@ function MSH.edgeCells(obj)
         local props = obj:getProperties()
         if props ~= nil then
             local F = IsoFlagType
-            n = props:has(F.cutN) or props:has(F.collideN) or props:has(F.WindowN)
-            w = props:has(F.cutW) or props:has(F.collideW) or props:has(F.WindowW)
+            n = props:has(F.cutN) or props:has(F.collideN) or props:has(F.WindowN) or props:has(F.TallHoppableN)
+            w = (props:has(F.cutW) and not props:has(F.WallSE)) or props:has(F.collideW) or props:has(F.WindowW)
+                or props:has(F.TallHoppableW)
         end
+        local t = obj:getType()
+        n = n or t == IsoObjectType.doorFrN
+        w = w or t == IsoObjectType.doorFrW
     end
     if n then
         cells[#cells + 1] = x

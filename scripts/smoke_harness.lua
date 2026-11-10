@@ -59,8 +59,10 @@ local only = arg and arg[1]
 local ran = 0
 for _, name in ipairs(SCENARIOS) do
     if only == nil or string.find(name, only, 1, true) then
-        local chunk = loadfile("scripts/harness/" .. name .. ".lua")
-        if chunk then
+        local chunk, loadErr = loadfile("scripts/harness/" .. name .. ".lua")
+        if chunk == nil then
+            T.check(false, name .. " 載入失敗：" .. tostring(loadErr))
+        else
             ran = ran + 1
             io.write("\n== " .. name .. " ==\n")
             local ok, err = pcall(function() chunk()(T) end)

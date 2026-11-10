@@ -292,6 +292,27 @@ return function(T)
     check(built(bare, barricade("s"), 105, 97) and built(bare, barricade("n"), 105, 99) and built(full, barricade("s"), 105, 99),
         "路障建造：面向的鄰格在範圍外、或有 BUILD：照原版")
     check(built(bare, barricade("s", "BuildRecipeCode.other.OnCreate"), 105, 99), "不是路障的 entity：不加鄰格")
+    -- 建造選單的樓梯（OnCreate 是 BuildRecipeCode.stairs.OnCreate）：頂端那一段北邊／西邊那格（上一層的平台）也查
+    do
+        T.sprites = { top_w = "stairsTW", top_n = "stairsTN" }
+        local function stairsEntity(tiles, w, h, onCreate)
+            local e = entity(tiles, w, h, 1)
+            local script = { getOnCreate = function() return onCreate or "BuildRecipeCode.stairs.OnCreate" end }
+            e.objectInfo = { getScript = function() return script end }
+            return e
+        end
+        local westStairs = stairsEntity({ { { tile("top_w"), tile("mid"), tile("low") } } }, 3, 1)
+        local northStairs = stairsEntity({ { { tile("top_n") }, { tile("mid") }, { tile("low") } } }, 1, 3)
+        check(not built(bare, westStairs, 120, 105) and (deniedOf(bare) or {}).claimId == neighbor.claimId,
+            "樓梯建造（頂端朝西）：三段都在範圍外、頂端西邊那格在 claim：被拒")
+        check(not built(bare, northStairs, 105, 110) and (deniedOf(bare) or {}).claimId == rec.claimId,
+            "樓梯建造（頂端朝北）：三段都在範圍外、頂端北邊那格在 claim：被拒")
+        check(built(bare, westStairs, 105, 110) and built(bare, northStairs, 120, 105) and built(full, northStairs, 105, 110),
+            "樓梯建造：平台那格在範圍外（朝西的北邊在 claim、朝北的西邊在 claim 都不算）、或有 BUILD：照原版")
+        check(built(bare, stairsEntity({ { { tile("top_n") }, { tile("mid") }, { tile("low") } } }, 1, 3,
+            "BuildRecipeCode.other.OnCreate"), 105, 110), "不是樓梯的 entity：不加平台那格")
+        T.sprites = {}
+    end
 
     T.section("Permissions：邊上的物件（大鎚、拆解、釘路障、拆路障）")
     -- rec 是 x 100..109、y 100..109，neighbor 是 x 110..119、y 100..109
@@ -329,6 +350,11 @@ return function(T)
         { "窗框牆 WindowW", function() return T.worldObject(120, 105, 0, { "WindowW" }) end },
         { "轉角牆（北邊那格在 claim）", function() return T.worldObject(115, 110, 0, { "cutN", "cutW" }) end },
         { "轉角牆（西邊那格在 claim）", function() return T.worldObject(120, 105, 0, { "cutN", "cutW" }) end },
+        { "高柵欄 TallHoppableN", function() return T.worldObject(105, 110, 0, { "TallHoppableN" }) end },
+        { "高柵欄 TallHoppableW", function() return T.worldObject(120, 105, 0, { "TallHoppableW" }) end },
+        { "門框（圖塊型別 doorFrN）", function() local o = T.worldObject(105, 110); o.tileType = "doorFrN"; return o end },
+        { "門框（圖塊型別 doorFrW）", function() local o = T.worldObject(120, 105); o.tileType = "doorFrW"; return o end },
+        { "牆角柱（所在格在 claim）", function() return T.worldObject(105, 105, 0, { "cutW", "WallSE" }) end },
     }
     local EDGE_PLAIN = {    -- 照原版：另一側不在 claim，或不是邊上的物件
         { "兩側都在範圍外的門", function() return T.edgeObject("IsoDoor", 105, 99, true) end },
@@ -337,6 +363,9 @@ return function(T)
         { "西牆、北邊那格才在 claim", function() return T.worldObject(105, 110, 0, { "cutW" }) end },
         { "沒有邊的屬性的物件", function() return T.worldObject(105, 110) end },
         { "木箱（IsoThumpable、不是門）", function() return crate(120, 105) end },
+        { "牆角柱（WallSE，載入時帶 cutW）、西邊那格才在 claim", function() return T.worldObject(120, 105, 0, { "cutW", "WallSE" }) end },
+        { "朝北的門框、西邊那格才在 claim", function() local o = T.worldObject(120, 105); o.tileType = "doorFrN"; return o end },
+        { "朝西的高柵欄、北邊那格才在 claim", function() return T.worldObject(105, 110, 0, { "TallHoppableW" }) end },
     }
     for cls in pairs(EDGE_FIELD) do
         local bad, good = {}, {}
@@ -372,25 +401,77 @@ return function(T)
     local _, ranB2 = edgeRun("ISDestroyStuffAction", bare, barricadeOn(T.edgeObject("IsoDoor", 105, 99, true), 105, 99))
     local _, ranB3 = edgeRun("ISDestroyStuffAction", bare, barricadeOn(nil, 105, 110))
     check(not ranB1 and ranB2 and ranB3, "大鎚拆路障物件：它釘的門窗另一側在 claim 就被拒；門窗兩側都在範圍外、找不到門窗照原版")
-    -- 原版會一起拆的物件（樓梯、雙開門、車庫門、墓穴）：每個物件的格子都查
+    -- 原版會一起拆的物件（樓梯、雙開門、車庫門、墓穴）：每個物件的格子都查；大鎚與拆解同一份清單
     local inClaim = T.worldObject(105, 105)
     local groupBad = {}
     for _, fn in ipairs({ "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }) do
         T.group = { [fn] = function() return { inClaim } end }
-        local _, ranG = edgeRun("ISDestroyStuffAction", bare, T.worldObject(50, 50))
-        if ranG then groupBad[#groupBad + 1] = fn end
+        for _, cls in ipairs({ "ISDestroyStuffAction", "ISDismantleAction" }) do
+            local _, ranG = edgeRun(cls, bare, T.worldObject(50, 50))
+            if ranG then groupBad[#groupBad + 1] = cls .. " " .. fn end
+        end
     end
-    check(#groupBad == 0, "大鎚：一起拆的物件有一個在 claim：被拒" .. (#groupBad > 0 and "（沒擋：" .. table.concat(groupBad, "、") .. "）" or ""))
+    check(#groupBad == 0, "大鎚、拆解：一起拆的物件有一個在 claim：被拒" .. (#groupBad > 0 and "（沒擋：" .. table.concat(groupBad, "、") .. "）" or ""))
     T.group = { getStairObjects = function() return { inClaim } end }
-    local _, ranD1 = edgeRun("ISDismantleAction", bare, T.worldObject(50, 50))
-    T.group = { getGraveObjects = function() return { inClaim } end }
-    local _, ranD2 = edgeRun("ISDismantleAction", bare, T.worldObject(50, 50))
     local _, ranD3 = edgeRun("ISBarricadeAction", bare, T.worldObject(50, 50))
     T.group = { getStairObjects = function() return { T.edgeObject("IsoDoor", 105, 110, true) } end }
     local _, ranD4 = edgeRun("ISDestroyStuffAction", bare, T.worldObject(50, 50))
     T.group = {}
-    check(not ranD1 and ranD2 and ranD3, "拆解：只有樓梯會一起拆（同原版）；路障動作不看一起拆的物件")
+    check(ranD3, "路障動作不看一起拆的物件")
     check(not ranD4, "一起拆的物件在邊上：它的另一側也查")
+    -- 多格物件：伺服器移除其中一塊時整組一起移除，每一塊的格子都查
+    do
+        local function gridPiece(x, y, w, h, px, py)   -- (x, y) 那一塊在 sprite grid 的 (px, py)
+            local o = T.worldObject(x, y)
+            o.sprite = T.gridSprite(w, h, px, py)
+            return o
+        end
+        local function ranBy(cls, actor, obj) return (select(2, edgeRun(cls, actor, obj))) end
+        check(not ranBy("ISDestroyStuffAction", bare, gridPiece(105, 110, 1, 2, 0, 1))      -- 另一塊在 (105, 109)
+            and not ranBy("ISDismantleAction", bare, gridPiece(120, 105, 2, 1, 1, 0)),      -- 另一塊在 (119, 105)
+            "多格家具（sprite grid）：有一塊在 claim、沒有 BUILD：大鎚與拆解被拒")
+        check(ranBy("ISDestroyStuffAction", bare, gridPiece(105, 110, 1, 2, 0, 0))          -- 另一塊在 (105, 111)
+            and ranBy("ISDestroyStuffAction", full, gridPiece(105, 110, 1, 2, 0, 1))
+            and ranBy("ISBarricadeAction", bare, gridPiece(105, 110, 1, 2, 0, 1)),
+            "多格家具：各塊都在範圍外、有 BUILD、路障動作：照原版")
+        local multi = T.worldObject(50, 50)
+        multi.spriteConfig = T.multiConfig({ multi, inClaim })
+        check(not ranBy("ISDestroyStuffAction", bare, multi) and not ranBy("ISDismantleAction", bare, multi),
+            "多格 entity（SpriteConfig）：有一塊在 claim、沒有 BUILD：大鎚與拆解被拒")
+        multi.spriteConfig = T.multiConfig({ multi, T.worldObject(51, 50) })
+        local ranOutside = ranBy("ISDestroyStuffAction", bare, multi)
+        multi.spriteConfig = { isValidMultiSquare = function() return false end,
+            getAllMultiSquareObjects = function(_, list) list:add(inClaim) end }
+        check(ranOutside and ranBy("ISDestroyStuffAction", bare, multi), "多格 entity：各塊都在範圍外、不是多格的 entity：照原版")
+        local hutch = T.worldObject(50, 50)
+        hutch.__is = { IsoHutch = true }
+        hutch.getAllHutchObjects = function() return T.javaList({ hutch, inClaim }) end
+        local ranHutch = ranBy("ISDestroyStuffAction", bare, hutch)
+        hutch.getAllHutchObjects = function() return T.javaList({ hutch }) end
+        check(not ranHutch and ranBy("ISDestroyStuffAction", bare, hutch), "雞舍：有一塊在 claim、沒有 BUILD 被拒；都在範圍外照原版")
+    end
+    -- 搬多格家具（撿起、放下、旋轉都是整組）：每一塊的格子都查（MOVE）
+    do
+        local function moveRun(actor, fields)
+            fields.character = actor
+            local before = T.ran["ISMoveablesAction.complete"] or 0
+            local res = T.action("ISMoveablesAction", fields):complete()
+            return res, (T.ran["ISMoveablesAction.complete"] or 0) > before
+        end
+        local function ranBy(actor, fields) return (select(2, moveRun(actor, fields))) end
+        local function moveProps(w, h, px, py) return { sprite = T.gridSprite(w, h, px, py) } end
+        local at = T.gridSquare(105, 110)
+        local res, ranOrig = moveRun(bare, { square = at, moveProps = moveProps(1, 2, 0, 1) })
+        local dv = deniedOf(bare)
+        check(res == false and not ranOrig and dv ~= nil and dv.bit == B.MOVE and dv.claimId == rec.claimId,
+            "搬多格家具：動作那格在範圍外、另一塊在 claim、沒有 MOVE：被拒（denied 帶 MOVE）")
+        check(ranBy(mover, { square = at, moveProps = moveProps(1, 2, 0, 1) })
+            and ranBy(bare, { square = at, moveProps = moveProps(1, 2, 0, 0) })
+            and ranBy(bare, { square = at, moveProps = { sprite = { getSpriteGrid = function() return nil end } } })
+            and ranBy(bare, { square = at }), "搬家具：有 MOVE、各塊都在範圍外、單格家具、沒有圖塊資料：照原版")
+        check(not ranBy(bare, { square = at, moveProps = moveProps(1, 2, 0, 0), origMoveProps = moveProps(1, 2, 0, 1) }),
+            "旋轉多格家具：旋轉前的那一組有一塊在 claim：被拒")
+    end
     local _, ranNil = edgeRun("ISDestroyStuffAction", bare, nil)
     local _, ranItem = edgeRun("ISBarricadeAction", bare, T.item("Base.Plank"))
     check(ranNil and ranItem, "沒有目標、目標不是世界物件：照原版")
@@ -667,29 +748,39 @@ return function(T)
         local m = menu({ { name = field, onSelect = ISContextMenu.onGetUpAndThen, param1 = fn, param2 = {},
             param3 = T.edgeObject("IsoWindowFrame", 105, 110, true) }, { name = "Keep", onSelect = onEat } })
         local far = menu({ { name = field, onSelect = fn, param1 = T.edgeObject("IsoWindowFrame", 105, 99, true) } })
-        if PC.filterMenu(m, nil) ~= 1 or #m.options ~= 1 or PC.filterMenu(far, nil) ~= 0 then unbarBad[#unbarBad + 1] = field end
+        -- 直接 addOption 的寫法：門窗在 param1
+        local near = menu({ { name = field, onSelect = fn, param1 = T.edgeObject("IsoWindowFrame", 105, 110, true) } })
+        if PC.filterMenu(m, nil) ~= 1 or #m.options ~= 1 or PC.filterMenu(far, nil) ~= 0 or PC.filterMenu(near, nil) ~= 1 then
+            unbarBad[#unbarBad + 1] = field
+        end
     end
     check(#unbarBad == 0, "拆路障：窗框所在格在範圍外、北側那格在 claim、沒有 BUILD：藏；兩側都在範圍外不藏"
         .. (#unbarBad > 0 and "（不對：" .. table.concat(unbarBad, "、") .. "）" or ""))
-    MSH.Client.bitsAt = realBitsAt
 
     T.section("PermissionsClient：梯子（42.22）")
     -- 原生安全屋 x 100..109、y 100..109，屋主 host；me 不在名單
     T.houses[#T.houses + 1] = T.house(100, 100, 10, 10, "host")
     local me, host = T.player({ name = "me" }), T.player({ name = "host", num = 1 })
     local function ladder(x, y, prop) return T.worldObject(x, y, 0, { prop }) end
-    check(PC.ladderBlocked(me, ladder(105, 110, "ladderN")) == true, "梯子在範圍外、出口（北邊那格）在不能進的安全屋：擋")
-    check(PC.ladderBlocked(me, ladder(105, 109, "ladderS")) == true, "梯子在安全屋裡、出口在範圍外（從外面爬下來）：擋")
+    -- 往上（down 是 false／nil）：看出口那格；往下：看梯子那格
+    check(PC.ladderBlocked(me, ladder(105, 110, "ladderN")) == true, "往上：梯子在範圍外、出口（北邊那格）在不能進的安全屋：擋")
+    check(PC.ladderBlocked(me, ladder(105, 109, "ladderS"), true) == true, "往下：梯子在安全屋裡（從範圍外的出口爬下來）：擋")
     check(PC.ladderBlocked(me, ladder(99, 105, "ladderE")) == true and PC.ladderBlocked(me, ladder(110, 105, "ladderW")) == true,
         "東向、西向的梯子：出口在安全屋就擋")
     check(PC.ladderBlocked(me, ladder(105, 110, "ladderS")) == false and PC.ladderBlocked(me, ladder(105, 111, "ladderN")) == false,
         "梯子與出口都在範圍外：不擋")
-    check(PC.ladderBlocked(host, ladder(105, 110, "ladderN")) == false, "屋主：不擋")
+    check(PC.ladderBlocked(me, ladder(105, 109, "ladderS")) == false and PC.ladderBlocked(me, ladder(105, 110, "ladderN"), true) == false,
+        "從屋裡爬出去（往上、出口在範圍外；往下、梯子在範圍外）：不擋")
+    check(PC.ladderBlocked(host, ladder(105, 110, "ladderN")) == false and PC.ladderBlocked(host, ladder(105, 109, "ladderS"), true) == false,
+        "屋主：不擋")
     T.serverOptions.SafehouseAllowTrepass = "true"
     check(PC.ladderBlocked(me, ladder(105, 110, "ladderN")) == false, "伺服器允許進別人的安全屋：不擋（同走路的判定）")
     T.serverOptions.SafehouseAllowTrepass = "false"
+    T.unloaded["105,109,0"] = true
+    check(PC.ladderBlocked(me, ladder(105, 110, "ladderN")) == true, "出口那格的地面層沒有格子：照上一層的格子判定，照樣擋")
+    T.unloaded["105,109,0"] = nil
     T.unloaded["105,109"] = true
-    check(PC.ladderBlocked(me, ladder(105, 110, "ladderN")) == false, "出口那格還沒載入：不擋（同原版判定收到 nil）")
+    check(PC.ladderBlocked(me, ladder(105, 110, "ladderN")) == false, "出口那格每一層都沒載入：不擋（同原版判定收到 nil）")
     T.unloaded["105,109"] = nil
     check(PC.ladderBlocked(me, nil) == false and PC.ladderBlocked(nil, ladder(105, 110, "ladderN")) == false, "沒有梯子、沒有玩家：不擋")
     -- 選單：「爬梯子」是 addGetUpOption(文字, 格子, onClimbLadder, down, playerObj, ladder)
@@ -699,23 +790,56 @@ return function(T)
     ISClimbLadderAction = { isValid = function() return "orig" end }
     PC.installed = nil
     PC.install()
-    local function climbMenu(l)
+    local function climbMenu(l, down)
         return menu({ { name = "Climb", onSelect = ISContextMenu.onGetUpAndThen, param1 = ISWorldObjectContextMenu.onClimbLadder,
-            param2 = T.gridSquare(105, 110), param3 = false, param4 = me, param5 = l }, { name = "Walk", onSelect = onEat } })
+            param2 = T.gridSquare(105, 110), param3 = down or false, param4 = me, param5 = l }, { name = "Walk", onSelect = onEat } })
     end
     local cm = climbMenu(ladder(105, 110, "ladderN"))
     check(PC.filterMenu(cm, nil) == 1 and #cm.options == 1 and cm.options[1].name == "Walk", "選單：會進到不能進的安全屋就不列「爬梯子」")
     cm = climbMenu(ladder(105, 110, "ladderS"))
     check(PC.filterMenu(cm, nil) == 0 and #cm.options == 2, "選單：不會進到安全屋的梯子照列")
+    cm = climbMenu(ladder(105, 109, "ladderS"), true)
+    local cmOut = climbMenu(ladder(105, 110, "ladderN"), true)
+    check(PC.filterMenu(cm, nil) == 1 and PC.filterMenu(cmOut, nil) == 0, "選單：往下爬照梯子那格（選項帶的方向）")
+    -- 直接 addOption 的寫法：addOption(文字, 格子, onClimbLadder, down, playerObj, ladder) → param1、param2、param3
+    cm = menu({ { name = "Climb", onSelect = ISWorldObjectContextMenu.onClimbLadder, param1 = false, param2 = me,
+        param3 = ladder(105, 110, "ladderN") }, { name = "Walk", onSelect = onEat } })
+    cmOut = menu({ { name = "Climb", onSelect = ISWorldObjectContextMenu.onClimbLadder, param1 = false, param2 = host,
+        param3 = ladder(105, 110, "ladderN") } })
+    check(PC.filterMenu(cm, nil) == 1 and #cm.options == 1 and PC.filterMenu(cmOut, nil) == 0, "選單：直接 addOption 的爬梯子項同樣判斷")
+    -- 分割畫面次玩家：只處理爬梯子，其他項目不動（細項權限的清單是 0 號玩家的）
+    MSH.Client.bitsAt = function() return B.MEMBER end
+    local function coopMenu()
+        return menu({ { name = "Climb", onSelect = ISContextMenu.onGetUpAndThen, param1 = ISWorldObjectContextMenu.onClimbLadder,
+            param2 = T.gridSquare(105, 110), param3 = false, param4 = me, param5 = ladder(105, 110, "ladderN") },
+            { name = "Unbar", onSelect = ISWorldObjectContextMenu.onUnbarricade, param1 = T.edgeObject("IsoWindowFrame", 105, 110, true) },
+            { name = "Dig", onSelect = onPlow } })
+    end
+    cm = coopMenu()
+    PC.onFillWorldObjectContextMenu(1, cm, {}, false)
+    cmOut = coopMenu()
+    PC.onFillWorldObjectContextMenu(0, cmOut, { T.worldObject(105, 105) }, false)
+    check(#cm.options == 2 and cm.options[1].name == "Unbar" and cm.options[2].name == "Dig",
+        "次玩家的選單：只拿掉爬梯子，照 0 號玩家清單藏的項目不動")
+    check(#cmOut.options == 0, "0 號玩家的選單：三項都照規則藏")
+    cm = coopMenu()
+    PC.onFillWorldObjectContextMenu(1, cm, {}, true)
+    check(#cm.options == 3, "test 模式：不動選單")
+    MSH.Client.bitsAt = realBitsAt
     ISWorldObjectContextMenu.onClimbLadder(T.gridSquare(105, 110), false, me, ladder(105, 110, "ladderN"))
     check(climbs == 0 and #halo == 1 and string.find(halo[1], "IGUI_MSH_Ladder_Blocked", 1, true) ~= nil,
         "選單與互動鍵的入口：擋下時不呼叫原函式、顯示一句原因")
+    ISWorldObjectContextMenu.onClimbLadder(T.gridSquare(105, 110), true, me, ladder(105, 109, "ladderS"))
+    check(climbs == 0 and #halo == 2, "入口：往下爬進不能進的安全屋同樣擋")
     ISWorldObjectContextMenu.onClimbLadder(T.gridSquare(105, 110), false, me, ladder(105, 110, "ladderS"))
     ISWorldObjectContextMenu.onClimbLadder(T.gridSquare(105, 110), false, host, ladder(105, 110, "ladderN"))
-    check(climbs == 2 and #halo == 1, "入口：不擋的梯子、能進的人照原版")
+    ISWorldObjectContextMenu.onClimbLadder(T.gridSquare(105, 109), false, me, ladder(105, 109, "ladderS"))
+    check(climbs == 3 and #halo == 2, "入口：不擋的梯子、能進的人、從屋裡爬出去照原版")
     check(ISClimbLadderAction.isValid({ character = me, ladder = ladder(105, 110, "ladderN") }) == false
-        and ISClimbLadderAction.isValid({ character = me, ladder = ladder(105, 110, "ladderS") }) == "orig",
-        "爬梯動作 isValid：擋下回 false，其他照原函式")
+        and ISClimbLadderAction.isValid({ character = me, down = true, ladder = ladder(105, 109, "ladderS") }) == false
+        and ISClimbLadderAction.isValid({ character = me, ladder = ladder(105, 110, "ladderS") }) == "orig"
+        and ISClimbLadderAction.isValid({ character = me, down = true, ladder = ladder(105, 110, "ladderN") }) == "orig",
+        "爬梯動作 isValid：擋下回 false（照動作的方向），其他照原函式")
     halo = {}
 
     -- denied 推送：沒有框架 → HaloTextHelper

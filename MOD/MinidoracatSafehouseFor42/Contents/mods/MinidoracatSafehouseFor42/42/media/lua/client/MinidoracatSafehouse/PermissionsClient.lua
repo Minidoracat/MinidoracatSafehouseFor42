@@ -9,7 +9,7 @@
 --   3) 伺服器推 denied：MSH.Client.toast（框架 Toast，沒有框架就頭上紅字）說缺哪個權限。
 --   4) 梯子（42.22）：爬上去或爬下來會進到自己不能進的安全屋時，不列「爬梯子」、按鍵與動作也不啟動（PC.ladderBlocked）。
 --      爬梯只在客戶端執行，伺服器看不到；進去之後原版照舊定期把人移出去。
--- 位元來自 MSH.Client.bitsAt(x, y)（nil＝不是 managed → 照原版；只有 0 號玩家有清單）。
+-- 位元來自 MSH.Client.bitsAt(x, y)（nil＝不是 managed → 照原版；只有 0 號玩家有清單）。梯子不用清單，每位本機玩家都判斷。
 
 if not isClient() then return end
 
@@ -108,40 +108,45 @@ end
 
 -- 梯子（圖塊屬性 ladderN/S/E/W）：往上是從梯子那格爬到上一層、往屬性的方向走出去；往下是從那個出口爬回梯子那格
 -- （IsoGridSquare.getLadderUnder，IsoGridSquare.java:11870-11892；ISWorldObjectContextMenu.lua:2188-2195 同一組屬性）。
--- 梯子那格或出口那格在這個人不能進的安全屋裡就擋；判定和走路、擋車同一套（SafeHouse.isSafehouseAllowTrepass，
--- SafeHouse.java:224-243：屋主、名單、管理員能力、伺服器選項），它要一格，取 z＝0 那格（安全屋是平面範圍）。
-function PC.ladderBlocked(playerObj, ladder)
+-- 爬完會到的那一格（往上是出口那格，往下是梯子那格）在這個人不能進的安全屋裡就擋；從屋裡爬出去不擋。
+-- 判定和走路、擋車同一套（SafeHouse.isSafehouseAllowTrepass，SafeHouse.java:224-243：屋主、名單、管理員能力、伺服器選項）。
+-- 它要一格、只讀 x, y（findSafeHouse :144-155；安全屋是平面範圍），哪一層都行：出口那格取地面層、梯子那層、上一層裡
+-- 第一個存在的（都不存在照原版判定收到 nil：放行）。
+function PC.ladderBlocked(playerObj, ladder, down)
     local sq = ladder ~= nil and ladder:getSquare() or nil
     if playerObj == nil or sq == nil then return false end
+    if down then return not SafeHouse.isSafehouseAllowTrepass(sq, playerObj) end
     local props = ladder:getProperties()
     if props == nil then return false end
-    local x, y = sq:getX(), sq:getY()
-    local ex, ey = x, y
-    if props:has(IsoPropertyType.LADDER_N) then ey = y - 1
-    elseif props:has(IsoPropertyType.LADDER_S) then ey = y + 1
-    elseif props:has(IsoPropertyType.LADDER_W) then ex = x - 1
-    elseif props:has(IsoPropertyType.LADDER_E) then ex = x + 1 end
+    local x, y, z = sq:getX(), sq:getY(), sq:getZ()
+    if props:has(IsoPropertyType.LADDER_N) then y = y - 1
+    elseif props:has(IsoPropertyType.LADDER_S) then y = y + 1
+    elseif props:has(IsoPropertyType.LADDER_W) then x = x - 1
+    elseif props:has(IsoPropertyType.LADDER_E) then x = x + 1 end
     local cell = getCell()
-    return not SafeHouse.isSafehouseAllowTrepass(cell:getGridSquare(x, y, 0), playerObj)
-        or not SafeHouse.isSafehouseAllowTrepass(cell:getGridSquare(ex, ey, 0), playerObj)
+    local exit = cell:getGridSquare(x, y, 0) or cell:getGridSquare(x, y, z) or cell:getGridSquare(x, y, z + 1)
+    return not SafeHouse.isSafehouseAllowTrepass(exit, playerObj)
 end
 
--- 「爬梯子」選項的玩家與梯子：addGetUpOption(文字, 格子, onClimbLadder, down, playerObj, ladder)
--- （ISWorldObjectContextMenuLogic.java:942-962）→ param4、param5；直接 addOption 時是 param2、param3
+-- 「爬梯子」選項的玩家、梯子、方向：addGetUpOption(文字, 格子, onClimbLadder, down, playerObj, ladder)
+-- （ISWorldObjectContextMenuLogic.java:942-962）→ param4、param5、param3；直接 addOption 時是 param2、param3、param1
 local function ladderArgs(o)
-    if o.onSelect == ISContextMenu.onGetUpAndThen then return o.param4, o.param5 end
-    return o.param2, o.param3
+    if o.onSelect == ISContextMenu.onGetUpAndThen then return o.param4, o.param5, o.param3 end
+    return o.param2, o.param3, o.param1
 end
 
 -- 回傳移掉的項目數；子選單因此變空時，連父項目一起拿掉（例如燈的開關子選單）。
--- 撬開、拆路障、爬梯子不只看點的那一格，所以點的格子沒有要藏的處理函式也要走一遍
-function PC.filterMenu(context, bits)
+-- 撬開、拆路障、爬梯子不只看點的那一格，所以點的格子沒有要藏的處理函式也要走一遍。
+-- ladderOnly：只處理爬梯子（分割畫面次玩家：細項權限的清單只有 0 號玩家的，梯子的判定用選項自己帶的玩家）
+function PC.filterMenu(context, bits, ladderOnly)
     local W = ISWorldObjectContextMenu
     if type(W) ~= "table" then return 0 end
     local blocked = PC.blockedHandlers(bits)
     local edge = {}
-    for _, field in ipairs(PC.EDGE_HANDLERS) do
-        if W[field] ~= nil then edge[W[field]] = true end
+    if not ladderOnly then
+        for _, field in ipairs(PC.EDGE_HANDLERS) do
+            if W[field] ~= nil then edge[W[field]] = true end
+        end
     end
     local climb = W.onClimbLadder
     local subs = context.instanceMap or {}
@@ -175,9 +180,14 @@ function PC.blockedAt(obj, bit)
     return PC.hides((MSH.Client.bitsAt(sq:getX(), sq:getY())), bit)
 end
 
--- 分割畫面次玩家沒有自己的清單（Client.lua 一律用 0 號玩家），不動他的選單
+-- 分割畫面次玩家沒有自己的清單（Client.lua 一律用 0 號玩家），他的選單只處理爬梯子
 function PC.onFillWorldObjectContextMenu(playerNum, context, worldobjects, test)
-    if test or playerNum ~= 0 or type(worldobjects) ~= "table" or worldobjects[1] == nil then return end
+    if test then return end
+    if playerNum ~= 0 then
+        PC.filterMenu(context, nil, true)
+        return
+    end
+    if type(worldobjects) ~= "table" or worldobjects[1] == nil then return end
     local sq = worldobjects[1]:getSquare()
     if sq == nil then return end
     PC.filterMenu(context, (MSH.Client.bitsAt(sq:getX(), sq:getY())))
@@ -204,7 +214,7 @@ local function wrapLadder()
     if type(W) == "table" and type(W.onClimbLadder) == "function" then
         local orig = W.onClimbLadder
         W.onClimbLadder = function(square, down, playerObj, ladder)
-            if PC.ladderBlocked(playerObj, ladder) then
+            if PC.ladderBlocked(playerObj, ladder, down) then
                 MSH.Client.toast(getText("IGUI_MSH_Ladder_Blocked"), playerObj)
                 return
             end
@@ -214,7 +224,7 @@ local function wrapLadder()
     if type(A) == "table" and type(A.isValid) == "function" then
         local orig = A.isValid
         A.isValid = function(self)
-            if PC.ladderBlocked(self.character, self.ladder) then return false end
+            if PC.ladderBlocked(self.character, self.ladder, self.down) then return false end
             return orig(self)
         end
     end
