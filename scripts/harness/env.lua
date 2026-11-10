@@ -894,7 +894,7 @@ function T.resetTimedActions()
     for _, name in ipairs({ "seed", "plow", "harvest", "water", "destroy", "cheat" }) do
         SFarmingSystemCommands[name] = function() ran("farm." .. name) end
     end
-    -- 大鎚、拆解會一起拆的物件（ISBuildUtil.lua:495-590）：預設沒有；測試改 T.group[函式名] = function(obj) return {…} end。
+    -- 大鎚、拆除會一起拆的物件（ISBuildUtil.lua:495-590）：預設沒有；測試改 T.group[函式名] = function(obj) return {…} end。
     -- 補進現有的 buildUtil（其他測試自己放了別的欄位）
     T.group = {}
     buildUtil = buildUtil or {}

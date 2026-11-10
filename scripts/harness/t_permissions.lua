@@ -314,7 +314,7 @@ return function(T)
         T.sprites = {}
     end
 
-    T.section("Permissions：邊上的物件（大鎚、拆解、釘路障、拆路障）")
+    T.section("Permissions：邊上的物件（大鎚、拆除、釘路障、拆路障）")
     -- rec 是 x 100..109、y 100..109，neighbor 是 x 110..119、y 100..109
     local EDGE_FIELD = { ISDestroyStuffAction = "item", ISDismantleAction = "thumpable", ISBarricadeAction = "item",
         ISUnbarricadeAction = "item" }
@@ -401,7 +401,7 @@ return function(T)
     local _, ranB2 = edgeRun("ISDestroyStuffAction", bare, barricadeOn(T.edgeObject("IsoDoor", 105, 99, true), 105, 99))
     local _, ranB3 = edgeRun("ISDestroyStuffAction", bare, barricadeOn(nil, 105, 110))
     check(not ranB1 and ranB2 and ranB3, "大鎚拆路障物件：它釘的門窗另一側在 claim 就被拒；門窗兩側都在範圍外、找不到門窗照原版")
-    -- 原版會一起拆的物件：每個物件的格子都查。大鎚是樓梯、雙開門四扇、車庫門、墓穴；拆解是樓梯、車庫門、雙開門同一對的另一扇
+    -- 原版會一起拆的物件：每個物件的格子都查。大鎚是樓梯、雙開門四扇、車庫門、墓穴；拆除是樓梯、車庫門、雙開門同一對的另一扇
     local inClaim = T.worldObject(105, 105)
     local groupBad = {}
     for _, fn in ipairs({ "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }) do
@@ -411,7 +411,7 @@ return function(T)
         local _, ranDis = edgeRun("ISDismantleAction", bare, T.worldObject(50, 50))
         if ranDis ~= (fn == "getDoubleDoorObjects" or fn == "getGraveObjects") then groupBad[#groupBad + 1] = "ISDismantleAction " .. fn end
     end
-    check(#groupBad == 0, "一起拆的物件有一個在 claim：大鎚四種都被拒；拆解只看樓梯與車庫門"
+    check(#groupBad == 0, "一起拆的物件有一個在 claim：大鎚四種都被拒；拆除只看樓梯與車庫門"
         .. (#groupBad > 0 and "（不對：" .. table.concat(groupBad, "、") .. "）" or ""))
     do   -- 雙開門四扇：1、2 一對在範圍外，3、4 在 claim
         local door = T.worldObject(50, 50)
@@ -422,7 +422,17 @@ return function(T)
         door.ddParts[2] = inClaim
         local _, ranPartner = edgeRun("ISDismantleAction", bare, door)
         check(ranPair and not ranFour and not ranPartner,
-            "雙開門：拆解只看同一對的另一扇（另一對在 claim 不擋、同一對的在 claim 被拒）；大鎚四扇都看")
+            "雙開門：拆除只看同一對的另一扇（另一對在 claim 不擋、同一對的在 claim 被拒）；大鎚四扇都看")
+        -- 搬家具：拆解（移除）同拆除，只看同一對；修理會把四扇一起補滿，四扇都看
+        door.ddParts[2] = T.worldObject(51, 50)
+        local function moved(mode)
+            local before = T.ran["ISMoveablesAction.complete"] or 0
+            T.action("ISMoveablesAction", { character = bare, square = T.gridSquare(50, 50), mode = mode,
+                moveProps = { object = door } }):complete()
+            return (T.ran["ISMoveablesAction.complete"] or 0) > before
+        end
+        check(moved("scrap") and not moved("repair"), "搬家具的雙開門：拆解只看同一對；修理四扇都看（另一對在 claim、沒有 MOVE 被拒）")
+        T.group = {}
     end
     T.group = { getStairObjects = function() return { inClaim } end }
     local _, ranD3 = edgeRun("ISBarricadeAction", bare, T.worldObject(50, 50))
@@ -441,7 +451,7 @@ return function(T)
         local function ranBy(cls, actor, obj) return (select(2, edgeRun(cls, actor, obj))) end
         check(not ranBy("ISDestroyStuffAction", bare, gridPiece(105, 110, 1, 2, 0, 1))      -- 另一塊在 (105, 109)
             and not ranBy("ISDismantleAction", bare, gridPiece(120, 105, 2, 1, 1, 0)),      -- 另一塊在 (119, 105)
-            "多格家具（sprite grid）：有一塊在 claim、沒有 BUILD：大鎚與拆解被拒")
+            "多格家具（sprite grid）：有一塊在 claim、沒有 BUILD：大鎚與拆除被拒")
         check(ranBy("ISDestroyStuffAction", bare, gridPiece(105, 110, 1, 2, 0, 0))          -- 另一塊在 (105, 111)
             and ranBy("ISDestroyStuffAction", full, gridPiece(105, 110, 1, 2, 0, 1))
             and ranBy("ISBarricadeAction", bare, gridPiece(105, 110, 1, 2, 0, 1)),
@@ -449,7 +459,7 @@ return function(T)
         local multi = T.worldObject(50, 50)
         multi.spriteConfig = T.multiConfig({ multi, inClaim })
         check(not ranBy("ISDestroyStuffAction", bare, multi) and not ranBy("ISDismantleAction", bare, multi),
-            "多格 entity（SpriteConfig）：有一塊在 claim、沒有 BUILD：大鎚與拆解被拒")
+            "多格 entity（SpriteConfig）：有一塊在 claim、沒有 BUILD：大鎚與拆除被拒")
         multi.spriteConfig = T.multiConfig({ multi, T.worldObject(51, 50) })
         local ranOutside = ranBy("ISDestroyStuffAction", bare, multi)
         multi.spriteConfig = { isValidMultiSquare = function() return false end,

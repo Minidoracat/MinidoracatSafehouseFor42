@@ -12,8 +12,9 @@
 -- （伺服器 animEvent 呼叫 attempt：扣門血、打破窗戶在 attempt 裡，回 "success" 才開鎖，ISForceOpen.lua:48-103）；Actions.build
 -- 不呼叫原函式（BuildAction.java:108-117 不看回傳值），照座標查建造物件會寫入的每一格（P.buildCells）；割草 ISScything 查範圍裡
 -- 有作物的每一格（wrapScything）；爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
--- 撬棍、大鎚、拆解、釘路障、拆路障的目標在邊上（門、窗、牆、柵欄）時兩側的格子都查（MSH.edgeCells、P.CELL_WRAPS）；
--- 大鎚、拆解、搬家具的目標是多格物件時，每一塊的格子都查（groupCells、moveCells）。
+-- 撬棍、大鎚、拆除、釘路障、拆路障的目標在邊上（門、窗、牆、柵欄）時兩側的格子都查（MSH.edgeCells、P.CELL_WRAPS）；
+-- 大鎚、拆除、搬家具的目標是多格物件時，每一塊的格子都查（groupCells、moveCells）。
+-- 用語照原版繁中：「拆除」是 ISDismantleAction（BUILD），「拆解」是搬家具的 scrap（MOVE）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
 -- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
@@ -113,10 +114,11 @@ local function addGridCells(cells, sprite, x, y)
     end
 end
 
--- 大鎚、拆解、搬家具、釘路障、拆路障：目標可能是邊上的物件（牆、門、窗、柵欄），兩側任一格拒絕就拒絕（使用者 2026-11-10；
--- 格子清單 MSH.edgeCells，Contract.lua）。大鎚、拆解、搬家具另外加原版會一起移除的物件所在的格子（groupCells）：
+-- 大鎚、拆除、搬家具、釘路障、拆路障：目標可能是邊上的物件（牆、門、窗、柵欄），兩側任一格拒絕就拒絕（使用者 2026-11-10；
+-- 格子清單 MSH.edgeCells，Contract.lua）。大鎚、拆除、搬家具另外加原版會一起動到的物件所在的格子（groupCells）：
 -- · 各動作自己找的一組（finders）。大鎚：樓梯、雙開門四扇、車庫門、墓穴，用原版同一組 buildUtil 呼叫
---   （ISDestroyStuffAction.lua:266-271）。拆解與搬家具：樓梯（ISDismantleAction.lua:77-81），以及伺服器移除多格物件的
+--   （ISDestroyStuffAction.lua:266-271）。搬家具的修理：樓梯、車庫門、雙開門四扇（修理會把這些一起補滿，
+--   ISMoveableSpriteProps.lua:3521-3561）。拆除與搬家具的其他模式：樓梯（ISDismantleAction.lua:77-81），以及伺服器移除多格物件的
 --   其中一塊時一起移除的（IsoGridSquare.transmitRemoveItemFromSquare，IsoGridSquare.java:5933-5960 →
 --   IsoObjectUtils.getAllMultiTileObjects，IsoObjectUtils.java:83-155）：雙開門是同一對的另一扇（1↔2、3↔4，
 --   IsoDoor.java:2845-2856）、車庫門每一片。
@@ -133,6 +135,7 @@ end
 local SLEDGE_GROUPS = { viaBuildUtil("getStairObjects"), viaBuildUtil("getDoubleDoorObjects"), viaBuildUtil("getGarageDoorObjects"),
     viaBuildUtil("getGraveObjects") }
 local REMOVE_GROUPS = { viaBuildUtil("getStairObjects"), doorPair, viaBuildUtil("getGarageDoorObjects") }
+local REPAIR_GROUPS = { viaBuildUtil("getStairObjects"), viaBuildUtil("getGarageDoorObjects"), viaBuildUtil("getDoubleDoorObjects") }
 local function groupCells(obj, finders)
     local cells = MSH.edgeCells(obj)
     if #cells == 0 then return cells end
@@ -183,7 +186,7 @@ end
 local function moveCells(a)
     local cells = {}
     local function addObject(o)
-        local more = groupCells(o, REMOVE_GROUPS)
+        local more = groupCells(o, a.mode == "repair" and REPAIR_GROUPS or REMOVE_GROUPS)
         for i = 1, #more do cells[#cells + 1] = more[i] end
     end
     local function addFound(o, overlay)
@@ -447,7 +450,7 @@ end
 -- 撬棍強開（42.22 ISForceOpen，MP 是 NetTimedAction）：伺服器 animEvent 收到 ForceOpenAttempt 就呼叫 attempt，回 "success"
 -- 時 forceOpen＋sync、回 "fail" 時 forceComplete（ISForceOpen.lua:79-103）；掙扎扣門血、失敗扣門血或打破窗戶也都在 attempt 裡
 -- （:61-71）。所以在 attempt 擋：回 "fail"、不呼叫原函式＝不開鎖、不扣血、不打破，complete 照 outcome 回 false（:40-42）。
--- 只包 complete 擋不住（開鎖在 animEvent）。照 BUILD（和大鎚、拆解、路障同類），門窗兩側都看（使用者 2026-11-10，
+-- 只包 complete 擋不住（開鎖在 animEvent）。照 BUILD（和大鎚、拆除、路障同類），門窗兩側都看（使用者 2026-11-10，
 -- MSH.edgeCells）。原版 isValid 不在伺服器跑，非門窗的物件交給原函式（:49-51 回 "fail"）。
 local function wrapForceOpen()
     local F = ISForceOpen
