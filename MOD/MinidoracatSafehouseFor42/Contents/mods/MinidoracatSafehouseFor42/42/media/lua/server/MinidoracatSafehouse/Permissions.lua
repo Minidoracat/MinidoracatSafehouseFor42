@@ -148,13 +148,17 @@ local function groupCells(obj, finders)
         end
     end
     for _, find in ipairs(finders) do addAll(find(obj)) end
-    local cfg = obj:getSpriteConfig()
-    if cfg ~= nil and cfg:isValidMultiSquare() then
-        local parts = ArrayList.new()
-        cfg:getAllMultiSquareObjects(parts)
-        addAll(MSH.toArray(parts))
+    -- 雙開門只照上面各動作自己的那一組：建造選單蓋的雙開門同時是四格的 entity，但原版移除它只到同一對
+    -- （getAllMultiTileObjects 先看雙開門就回，IsoObjectUtils.java:84-96）
+    if IsoDoor.getDoubleDoorIndex(obj) == -1 then
+        local cfg = obj:getSpriteConfig()
+        if cfg ~= nil and cfg:isValidMultiSquare() then
+            local parts = ArrayList.new()
+            cfg:getAllMultiSquareObjects(parts)
+            addAll(MSH.toArray(parts))
+        end
+        addGridCells(cells, obj:getSprite(), cells[1], cells[2])
     end
-    addGridCells(cells, obj:getSprite(), cells[1], cells[2])
     if instanceof(obj, "IsoHutch") then addAll(MSH.toArray(obj:getAllHutchObjects())) end
     return cells
 end

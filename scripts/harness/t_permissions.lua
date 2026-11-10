@@ -413,9 +413,10 @@ return function(T)
     end
     check(#groupBad == 0, "一起拆的物件有一個在 claim：大鎚四種都被拒；拆除只看樓梯與車庫門"
         .. (#groupBad > 0 and "（不對：" .. table.concat(groupBad, "、") .. "）" or ""))
-    do   -- 雙開門四扇：1、2 一對在範圍外，3、4 在 claim
+    do   -- 雙開門四扇：1、2 一對在範圍外，3、4 在 claim。建造選單蓋的雙開門同時是四格的 entity（SpriteConfig 列出四扇）
         local door = T.worldObject(50, 50)
         door.ddIndex, door.ddParts = 1, { door, T.worldObject(51, 50), inClaim, inClaim }
+        door.spriteConfig = T.multiConfig(door.ddParts)
         T.group = { getDoubleDoorObjects = function(o) return o.ddParts or {} end }
         local _, ranPair = edgeRun("ISDismantleAction", bare, door)
         local _, ranFour = edgeRun("ISDestroyStuffAction", bare, door)
