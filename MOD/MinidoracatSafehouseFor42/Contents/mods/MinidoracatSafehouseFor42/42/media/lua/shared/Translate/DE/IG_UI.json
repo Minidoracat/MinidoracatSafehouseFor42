@@ -607,6 +607,7 @@
     "IGUI_MSH_Vehicle_Blocked": "Du darfst dieses Safehouse nicht betreten – auch nicht mit dem Fahrzeug.",
     "IGUI_MSH_Vehicle_BlockedRider": "Jemand in diesem Fahrzeug darf dieses Safehouse nicht betreten, deshalb kommt das Fahrzeug nicht hinein.",
     "IGUI_MSH_Ladder_Blocked": "Du darfst dieses Safehouse nicht betreten – auch nicht über eine Leiter.",
+    "IGUI_MSH_WhatsNew": "Safehouse-Rand: Wände, Türen und Zäune sind geschützt. Brecheisen, Beete, Leitern brauchen Rechte.",
     "IGUI_MSH_Code_Generic": "Der Server hat die Anfrage abgelehnt (%1).",
     "IGUI_MSH_Alert_Title": "Safehouse",
     "IGUI_MSH_Alert_Generic": "Safehouse-Hinweis vom Server: %1",

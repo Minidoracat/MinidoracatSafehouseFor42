@@ -607,6 +607,7 @@
     "IGUI_MSH_Vehicle_Blocked": "Bu güvenli eve giremezsiniz, araçla da giremezsiniz.",
     "IGUI_MSH_Vehicle_BlockedRider": "Araçtaki birisi bu güvenli eve giremiyor, bu yüzden araç içeri giremez.",
     "IGUI_MSH_Ladder_Blocked": "Bu güvenli eve giremezsiniz, merdivenle de giremezsiniz.",
+    "IGUI_MSH_WhatsNew": "Güvenli ev sınırındaki duvar, kapı ve çitler artık korunuyor. Levye, ekinler ve merdivenler izinlere bağlı.",
     "IGUI_MSH_Code_Generic": "Sunucu isteği reddetti (%1).",
     "IGUI_MSH_Alert_Title": "Güvenli ev",
     "IGUI_MSH_Alert_Generic": "Sunucu güvenli ev bildirimi: %1",

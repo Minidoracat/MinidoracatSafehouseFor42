@@ -607,6 +607,7 @@
     "IGUI_MSH_Vehicle_Blocked": "このセーフハウスには入れないため、車でも入れません。",
     "IGUI_MSH_Vehicle_BlockedRider": "乗っている人の中にこのセーフハウスに入れない人がいるため、車で入れません。",
     "IGUI_MSH_Ladder_Blocked": "このセーフハウスには入れないため、はしごでも入れません。",
+    "IGUI_MSH_WhatsNew": "セーフハウス境界の壁・ドア・柵も保護対象になりました。バール、作物の撤去、施肥には権限が必要です。はしごでも侵入できません。",
     "IGUI_MSH_Code_Generic": "サーバーがリクエストを拒否しました（%1）。",
     "IGUI_MSH_Alert_Title": "セーフハウス",
     "IGUI_MSH_Alert_Generic": "サーバーからのセーフハウス通知：%1",

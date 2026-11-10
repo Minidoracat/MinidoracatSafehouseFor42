@@ -607,6 +607,7 @@
     "IGUI_MSH_Vehicle_Blocked": "你不能进这间安全屋，开车也进不去。",
     "IGUI_MSH_Vehicle_BlockedRider": "车上有人不能进这间安全屋，车子开不进去。",
     "IGUI_MSH_Ladder_Blocked": "你不能进这间安全屋，爬梯子也进不去。",
+    "IGUI_MSH_WhatsNew": "安全屋边上的门窗、墙与栅栏现在也受保护；撬棍撬开、移除作物、施肥要对应权限；不能进的安全屋梯子爬不进去。",
     "IGUI_MSH_Code_Generic": "服务器拒绝了这个请求（%1）。",
     "IGUI_MSH_Alert_Title": "安全屋",
     "IGUI_MSH_Alert_Generic": "服务器的安全屋提示：%1",

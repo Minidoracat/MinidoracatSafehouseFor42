@@ -607,6 +607,7 @@
     "IGUI_MSH_Vehicle_Blocked": "You can't enter this safehouse, so you can't drive in either.",
     "IGUI_MSH_Vehicle_BlockedRider": "Someone in this vehicle can't enter this safehouse, so the vehicle can't go in.",
     "IGUI_MSH_Ladder_Blocked": "You can't enter this safehouse, so you can't climb in either.",
+    "IGUI_MSH_WhatsNew": "Safehouse edge walls, doors and fences are now protected. Crowbars, crops and ladders need permission.",
     "IGUI_MSH_Code_Generic": "The server refused the request (%1).",
     "IGUI_MSH_Alert_Title": "Safehouse",
     "IGUI_MSH_Alert_Generic": "Safehouse server notice: %1",

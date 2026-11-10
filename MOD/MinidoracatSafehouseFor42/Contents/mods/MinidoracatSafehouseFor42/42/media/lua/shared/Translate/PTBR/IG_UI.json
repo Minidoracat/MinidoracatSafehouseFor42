@@ -607,6 +607,7 @@
     "IGUI_MSH_Vehicle_Blocked": "Você não pode entrar nesta base, nem de veículo.",
     "IGUI_MSH_Vehicle_BlockedRider": "Alguém neste veículo não pode entrar nesta base, então o veículo não pode entrar.",
     "IGUI_MSH_Ladder_Blocked": "Você não pode entrar nesta base, nem por uma escada.",
+    "IGUI_MSH_WhatsNew": "Paredes, portas, cercas na borda da base estão protegidas. Pé de cabra, plantio e escadas: com permissão.",
     "IGUI_MSH_Code_Generic": "O servidor recusou o pedido (%1).",
     "IGUI_MSH_Alert_Title": "Base",
     "IGUI_MSH_Alert_Generic": "Aviso de bases do servidor: %1",

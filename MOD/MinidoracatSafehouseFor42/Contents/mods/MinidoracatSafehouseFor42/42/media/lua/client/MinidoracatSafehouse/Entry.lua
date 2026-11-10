@@ -6,7 +6,8 @@
 --   改名／移交／放棄／成員／離開／重生控制項隱藏。這些只讓誠實玩家不誤觸 anti-cheat（decisions.md「原版安全屋封包」），
 --   惡意封包靠伺服器收斂（§2、§6.3）。
 --   家族工具列 Dock（id safehouse、order 60：UI repo ARCHITECTURE §3.16 登記）；地契物品說明（§10.8）。
--- 原版掛鉤全部在 OnGameStart 才裝（檔案載入時不碰原版 UI 類別與框架；harness 的 bootClient 也會載入本檔）。
+-- 原版掛鉤全部在 OnGameStart 才裝（檔案載入時不碰原版 UI 類別；harness 的 bootClient 也會載入本檔）。框架只有
+-- 更新概要在檔案載入時登記（框架契約要早於 OnGameStart）。
 -- 包裝一律只裝一次（E.installed），包裝裡經 MSH.Entry 轉呼叫，熱重載本檔換掉的是實作、不會疊一層包裝。
 
 if not isClient() then return end
@@ -25,6 +26,22 @@ E.DOCK_MIN_REV = 13              -- Dock 在框架 rev 13 加入（ARCHITECTURE 
 E.TIP_TTL_MS = 1000              -- 地契說明快取：sandboxSync 改值後最多 1 秒反映，不每幀重讀整份設定
 E.attention = E.attention or 0   -- 我的安全屋裡狀態不是「已保護」的間數（Dock 徽章）
 E.tip = E.tip or { tier = nil, at = nil, lines = nil }
+
+-- 更新概要（框架 rev 24，UI repo AGENTS.md「下游 consumer」第 8 條）：玩家更新後第一次進遊戲，右上角跳一則本版重點。
+-- 發布列車的 ready 用 regex 讀這段：四欄寫字面字串、一欄一行；發版寫了新概要才把 since 改成本版
+-- （家族 conventions.md「遊戲內更新概要」）。
+pcall(require, "MinidoracatUI/WhatsNew")
+do
+    local UI = MSH.Client.ui({ "whatsNew" }, 24)
+    if UI ~= nil and UI.WhatsNew ~= nil then
+        UI.WhatsNew.register({
+            modId = "MinidoracatSafehouseFor42",
+            since = "0.14.0",
+            name = "IGUI_MSH_Alert_Title",
+            text = "IGUI_MSH_WhatsNew",
+        })
+    end
+end
 
 -- ===== 共用 =====
 
