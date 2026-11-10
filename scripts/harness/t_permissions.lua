@@ -401,17 +401,29 @@ return function(T)
     local _, ranB2 = edgeRun("ISDestroyStuffAction", bare, barricadeOn(T.edgeObject("IsoDoor", 105, 99, true), 105, 99))
     local _, ranB3 = edgeRun("ISDestroyStuffAction", bare, barricadeOn(nil, 105, 110))
     check(not ranB1 and ranB2 and ranB3, "大鎚拆路障物件：它釘的門窗另一側在 claim 就被拒；門窗兩側都在範圍外、找不到門窗照原版")
-    -- 原版會一起拆的物件（樓梯、雙開門、車庫門、墓穴）：每個物件的格子都查；大鎚與拆解同一份清單
+    -- 原版會一起拆的物件：每個物件的格子都查。大鎚是樓梯、雙開門四扇、車庫門、墓穴；拆解是樓梯、車庫門、雙開門同一對的另一扇
     local inClaim = T.worldObject(105, 105)
     local groupBad = {}
     for _, fn in ipairs({ "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }) do
         T.group = { [fn] = function() return { inClaim } end }
-        for _, cls in ipairs({ "ISDestroyStuffAction", "ISDismantleAction" }) do
-            local _, ranG = edgeRun(cls, bare, T.worldObject(50, 50))
-            if ranG then groupBad[#groupBad + 1] = cls .. " " .. fn end
-        end
+        local _, ranG = edgeRun("ISDestroyStuffAction", bare, T.worldObject(50, 50))
+        if ranG then groupBad[#groupBad + 1] = "ISDestroyStuffAction " .. fn end
+        local _, ranDis = edgeRun("ISDismantleAction", bare, T.worldObject(50, 50))
+        if ranDis ~= (fn == "getDoubleDoorObjects" or fn == "getGraveObjects") then groupBad[#groupBad + 1] = "ISDismantleAction " .. fn end
     end
-    check(#groupBad == 0, "大鎚、拆解：一起拆的物件有一個在 claim：被拒" .. (#groupBad > 0 and "（沒擋：" .. table.concat(groupBad, "、") .. "）" or ""))
+    check(#groupBad == 0, "一起拆的物件有一個在 claim：大鎚四種都被拒；拆解只看樓梯與車庫門"
+        .. (#groupBad > 0 and "（不對：" .. table.concat(groupBad, "、") .. "）" or ""))
+    do   -- 雙開門四扇：1、2 一對在範圍外，3、4 在 claim
+        local door = T.worldObject(50, 50)
+        door.ddIndex, door.ddParts = 1, { door, T.worldObject(51, 50), inClaim, inClaim }
+        T.group = { getDoubleDoorObjects = function(o) return o.ddParts or {} end }
+        local _, ranPair = edgeRun("ISDismantleAction", bare, door)
+        local _, ranFour = edgeRun("ISDestroyStuffAction", bare, door)
+        door.ddParts[2] = inClaim
+        local _, ranPartner = edgeRun("ISDismantleAction", bare, door)
+        check(ranPair and not ranFour and not ranPartner,
+            "雙開門：拆解只看同一對的另一扇（另一對在 claim 不擋、同一對的在 claim 被拒）；大鎚四扇都看")
+    end
     T.group = { getStairObjects = function() return { inClaim } end }
     local _, ranD3 = edgeRun("ISBarricadeAction", bare, T.worldObject(50, 50))
     T.group = { getStairObjects = function() return { T.edgeObject("IsoDoor", 105, 110, true) } end }
@@ -469,8 +481,25 @@ return function(T)
             and ranBy(bare, { square = at, moveProps = moveProps(1, 2, 0, 0) })
             and ranBy(bare, { square = at, moveProps = { sprite = { getSpriteGrid = function() return nil end } } })
             and ranBy(bare, { square = at }), "搬家具：有 MOVE、各塊都在範圍外、單格家具、沒有圖塊資料：照原版")
-        check(not ranBy(bare, { square = at, moveProps = moveProps(1, 2, 0, 0), origMoveProps = moveProps(1, 2, 0, 1) }),
-            "旋轉多格家具：旋轉前的那一組有一塊在 claim：被拒")
+        -- 旋轉多格家具：原本那一組從動作那格推；新的一組從錨點放（原本那組的第一塊，或圖塊等於新圖塊的那一塊）
+        local function rotate(x, y, origSprite, newSprite)
+            T.sprites = { before = origSprite }
+            local ran = ranBy(bare, { square = T.gridSquare(x, y), mode = "rotate", origSpriteName = "before",
+                moveProps = { sprite = newSprite } })
+            T.sprites = {}
+            return ran
+        end
+        check(not rotate(105, 110, T.gridSprite(1, 2, 0, 1), { getSpriteGrid = function() return nil end }),
+            "旋轉多格家具：原本那一組有一塊在 claim：被拒")
+        check(not rotate(99, 110, T.gridSprite(1, 2, 0, 1), T.gridSprite(2, 1, 0, 0)),
+            "旋轉多格家具：點的不是第一塊、原本那組都在範圍外、從第一塊放下的新一組有一塊在 claim：被拒")
+        check(rotate(99, 105, T.gridSprite(2, 1, 1, 0), T.gridSprite(2, 1, 0, 0)),
+            "旋轉多格家具：新的一組從第一塊放（不是從點的那格），都在範圍外：照原版")
+        local turned = T.gridSprite(2, 1, 0, 0)
+        check(not rotate(99, 105, T.gridSprite(2, 1, 1, 0, { ["1,0"] = turned }), turned),
+            "旋轉多格家具：原本那組裡有新圖塊的那一塊當錨點，新的一組有一塊在 claim：被拒")
+        check(rotate(105, 110, { getSpriteGrid = function() return nil end }, T.gridSprite(1, 2, 0, 1)),
+            "旋轉：原本的圖塊不是多格，只查動作那格")
         -- 拆解、修理動的是 moveProps.object，不看 square
         local far = T.gridSquare(50, 50)
         check(not ranBy(bare, { square = far, mode = "scrap", moveProps = { object = inClaim } })
@@ -492,6 +521,12 @@ return function(T)
             and ranBy(bare, { square = at, mode = "pickup", moveProps = finder("now", T.worldObject(105, 110)) })
             and ranBy(bare, { square = at, mode = "pickup", moveProps = finder("other", inClaim) }),
             "撿起：門窗兩側都在範圍外、不是邊上的物件、square 上找不到的名字：照原版")
+        -- 牆上的貼圖（海報這類）：findOnSquare 回（牆, 貼圖），動的是貼圖，不查牆的另一側
+        local wall = T.worldObject(105, 110, 0, { "cutN" })
+        check(ranBy(bare, { square = at, mode = "pickup",
+                moveProps = { spriteName = "now", findOnSquare = function() return wall, {} end } })
+            and not ranBy(bare, { square = at, mode = "pickup", moveProps = finder("now", wall) }),
+            "撿起牆上的貼圖：只查動作那格；撿的是牆本身才查另一側")
     end
     local _, ranNil = edgeRun("ISDestroyStuffAction", bare, nil)
     local _, ranItem = edgeRun("ISBarricadeAction", bare, T.item("Base.Plank"))

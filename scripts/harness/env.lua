@@ -96,13 +96,19 @@ IsoFlagType = { cutN = "cutN", cutW = "cutW", collideN = "collideN", collideW = 
     TallHoppableN = "TallHoppableN", TallHoppableW = "TallHoppableW", WallSE = "WallSE" }
 IsoPropertyType = { LADDER_N = "ladderN", LADDER_S = "ladderS", LADDER_W = "ladderW", LADDER_E = "ladderE" }
 IsoObjectType = { doorFrN = "doorFrN", doorFrW = "doorFrW", stairsTN = "stairsTN", stairsTW = "stairsTW" }
--- 全域 getSprite(名字)（LuaManager.java:8811-8813）：T.sprites[名字] = 圖塊型別
+-- 全域 getSprite(名字)（LuaManager.java:8811-8813）：T.sprites[名字] = 圖塊型別（字串），或直接放一個假 sprite（表）
 T.sprites = {}
 function getSprite(name)
     local t = T.sprites[name]
-    if t == nil then return nil end
+    if t == nil or type(t) == "table" then return t end
     return { getTileType = function() return t end }
 end
+-- 雙開門（IsoDoor.java:2756-2856）：物件的 ddIndex＝第幾扇（沒有＝-1）、ddParts[i]＝第 i 扇
+IsoDoor = {
+    getDoubleDoorIndex = function(o) return o.ddIndex or -1 end,
+    getDoubleDoorObject = function(o, i) return o.ddParts and o.ddParts[i] or nil end,
+    getDoubleDoorPartnerIndex = function(i) return ({ 2, 1, 4, 3 })[i] or -1 end,
+}
 
 -- ===== 事件 =====
 T.handlers = {}
@@ -923,11 +929,16 @@ function T.worldObject(x, y, z, flags)
     o.getSpriteConfig = function() return o.spriteConfig end
     return o
 end
--- 多格家具的一塊：sprite grid 寬 w、高 h，這一塊在 (px, py)（IsoSpriteGrid.getSpriteGridPosX／Y、getWidth／getHeight）
-function T.gridSprite(w, h, px, py)
-    local grid = { getSpriteGridPosX = function() return px end, getSpriteGridPosY = function() return py end,
-        getWidth = function() return w end, getHeight = function() return h end }
-    return { getSpriteGrid = function() return grid end }
+-- 多格家具的一塊：sprite grid 寬 w、高 h，這一塊在 (px, py)（IsoSpriteGrid.getSpriteGridPosX／Y(sprite)：傳進來的不是這一塊
+-- 回 -1，IsoSpriteGrid.java:63-80；getWidth／getHeight）；pieces["gx,gy"]＝那一格的 sprite（IsoSpriteGrid.getSprite(x, y)），沒給回 nil
+function T.gridSprite(w, h, px, py, pieces)
+    local sprite = {}
+    local grid = { getSpriteGridPosX = function(_, s) return s == sprite and px or -1 end,
+        getSpriteGridPosY = function(_, s) return s == sprite and py or -1 end,
+        getWidth = function() return w end, getHeight = function() return h end,
+        getSprite = function(_, gx, gy) return pieces and pieces[gx .. "," .. gy] or nil end }
+    sprite.getSpriteGrid = function() return grid end
+    return sprite
 end
 -- 多格 entity 的 SpriteConfig：getAllMultiSquareObjects 把每一塊加進清單（SpriteConfig.java:169-181）
 function T.multiConfig(parts)

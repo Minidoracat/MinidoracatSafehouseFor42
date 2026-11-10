@@ -113,15 +113,27 @@ local function addGridCells(cells, sprite, x, y)
     end
 end
 
--- 大鎚、拆解、釘路障、拆路障：目標可能是邊上的物件（牆、門、窗、柵欄），兩側任一格拒絕就拒絕（使用者 2026-11-10；
--- 格子清單 MSH.edgeCells，Contract.lua）。大鎚與拆解另外加原版會一起拆掉的物件所在的格子：
--- · 樓梯、雙開門、車庫門、墓穴：用原版同一組 buildUtil 呼叫找（ISDestroyStuffAction.lua:266-271、ISDismantleAction.lua:77-81）。
--- · 多格物件：伺服器移除其中一塊時整組一起移除（IsoGridSquare.transmitRemoveItemFromSquare，IsoGridSquare.java:5933-5960 →
---   IsoObjectUtils.getAllMultiTileObjects，IsoObjectUtils.java:83-155）。多格 entity 用它自己的清單
---   （SpriteConfig.getAllMultiSquareObjects，SpriteConfig.java:169-181），多格家具照 sprite grid 逐格。
+-- 大鎚、拆解、搬家具、釘路障、拆路障：目標可能是邊上的物件（牆、門、窗、柵欄），兩側任一格拒絕就拒絕（使用者 2026-11-10；
+-- 格子清單 MSH.edgeCells，Contract.lua）。大鎚、拆解、搬家具另外加原版會一起移除的物件所在的格子（groupCells）：
+-- · 各動作自己找的一組（finders）。大鎚：樓梯、雙開門四扇、車庫門、墓穴，用原版同一組 buildUtil 呼叫
+--   （ISDestroyStuffAction.lua:266-271）。拆解與搬家具：樓梯（ISDismantleAction.lua:77-81），以及伺服器移除多格物件的
+--   其中一塊時一起移除的（IsoGridSquare.transmitRemoveItemFromSquare，IsoGridSquare.java:5933-5960 →
+--   IsoObjectUtils.getAllMultiTileObjects，IsoObjectUtils.java:83-155）：雙開門是同一對的另一扇（1↔2、3↔4，
+--   IsoDoor.java:2845-2856）、車庫門每一片。
+-- · 多格 entity 用它自己的清單（SpriteConfig.getAllMultiSquareObjects，SpriteConfig.java:169-181），多格家具照 sprite grid 逐格。
 -- · 雞舍：大鎚拆的是它的每一塊（IsoHutch.removeHutch，IsoHutch.java:986-1013）。
-local GROUP_FNS = { "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }
-local function groupCells(obj)
+local function viaBuildUtil(name)
+    return function(obj) return buildUtil[name](obj) end
+end
+local function doorPair(obj)
+    local i = IsoDoor.getDoubleDoorIndex(obj)
+    if i == -1 then return {} end
+    return { IsoDoor.getDoubleDoorObject(obj, IsoDoor.getDoubleDoorPartnerIndex(i)) }
+end
+local SLEDGE_GROUPS = { viaBuildUtil("getStairObjects"), viaBuildUtil("getDoubleDoorObjects"), viaBuildUtil("getGarageDoorObjects"),
+    viaBuildUtil("getGraveObjects") }
+local REMOVE_GROUPS = { viaBuildUtil("getStairObjects"), doorPair, viaBuildUtil("getGarageDoorObjects") }
+local function groupCells(obj, finders)
     local cells = MSH.edgeCells(obj)
     if #cells == 0 then return cells end
     local function addAll(list)
@@ -130,7 +142,7 @@ local function groupCells(obj)
             for i = 1, #more do cells[#cells + 1] = more[i] end
         end
     end
-    for _, fn in ipairs(GROUP_FNS) do addAll(buildUtil[fn](obj)) end
+    for _, find in ipairs(finders) do addAll(find(obj)) end
     local cfg = obj:getSpriteConfig()
     if cfg ~= nil and cfg:isValidMultiSquare() then
         local parts = ArrayList.new()
@@ -142,28 +154,54 @@ local function groupCells(obj)
     return cells
 end
 
+-- 旋轉多格家具：原版先撿起原本那一組（origSpriteName 的 sprite grid，從動作那格推），再以其中一塊為錨點放下新的一組
+-- （ISMoveableSpriteProps.lua:2881-2897）。錨點是原本那組裡圖塊等於新圖塊的那一塊，沒有就是第一塊（左上；:2790-2797）。
+local function rotateCells(cells, origName, sprite, x, y)
+    local orig = type(origName) == "string" and getSprite(origName) or nil
+    local grid = orig ~= nil and orig:getSpriteGrid() or nil
+    if grid == nil then return end
+    addGridCells(cells, orig, x, y)
+    local left, top = x - grid:getSpriteGridPosX(orig), y - grid:getSpriteGridPosY(orig)
+    local ax, ay, found = left, top, false
+    for gx = 0, grid:getWidth() - 1 do
+        for gy = 0, grid:getHeight() - 1 do
+            if not found and sprite ~= nil and grid:getSprite(gx, gy) == sprite then
+                ax, ay, found = left + gx, top + gy, true
+            end
+        end
+    end
+    addGridCells(cells, sprite, ax, ay)
+end
+
 -- 搬家具（MOVE）：原版各模式實際會動到的東西都查，用原版同一個找法找目標。
 -- · 撿起、放下、旋轉照 a.square（ISMoveablesAction.lua:274）：撿起找 findOnSquare(square, moveProps.spriteName)
---   （ISMoveableSpriteProps.lua:1265-1267），旋轉找 findOnSquare(square, origSpriteName)（:2918）。
+--   （ISMoveableSpriteProps.lua:1265-1267），旋轉找 findOnSquare(square, origSpriteName)（:2918）。找到的是牆上的貼圖時
+--   （第二個回傳值，:1023-1030），動的是那張貼圖，不是牆，只查 a.square。
 -- · 拆解、修理不看 a.square，動的是 moveProps.object（:3472-3500, 3574-3577）。
--- 找到的物件照大鎚同一份清單查（groupCells：邊上的物件兩側、一起拆的、多格的每一塊）。多格家具另外從 a.square 推
--- 每一格（放下時物件還不存在；旋轉前後是兩組圖塊，ISMoveablesAction.lua:323-331；:1265-1282, 1975-2005 逐格處理）。
+-- 找到的物件走 groupCells（邊上的物件兩側、一起移除的、多格的每一塊）。多格家具另外從 a.square 推每一格
+-- （放下時物件還不存在；:1265-1282, 1975-2005 逐格處理），旋轉照 rotateCells。
 local function moveCells(a)
     local cells = {}
     local function addObject(o)
-        local more = groupCells(o)
+        local more = groupCells(o, REMOVE_GROUPS)
         for i = 1, #more do cells[#cells + 1] = more[i] end
+    end
+    local function addFound(o, overlay)
+        if overlay == nil then addObject(o) end
     end
     local props, sq = a.moveProps, P.squareOf(a.square)
     if type(props) ~= "table" then props = {} end
     if sq ~= nil then
         local x, y = sq:getX(), sq:getY()
         cells[1], cells[2] = x, y
-        addGridCells(cells, props.sprite, x, y)
-        if type(a.origMoveProps) == "table" then addGridCells(cells, a.origMoveProps.sprite, x, y) end
+        if a.mode == "rotate" then
+            rotateCells(cells, a.origSpriteName, props.sprite, x, y)
+        else
+            addGridCells(cells, props.sprite, x, y)
+        end
         if type(props.findOnSquare) == "function" then
-            addObject((props:findOnSquare(sq, props.spriteName)))
-            addObject((props:findOnSquare(sq, a.origSpriteName)))
+            addFound(props:findOnSquare(sq, props.spriteName))
+            addFound(props:findOnSquare(sq, a.origSpriteName))
         end
     end
     addObject(props.object)
@@ -172,10 +210,10 @@ end
 
 -- { 類別名, 位元, 取要查的格子（扁平 x1, y1, x2, y2…） }
 P.CELL_WRAPS = {
-    { "ISDestroyStuffAction", BIT.BUILD, function(a) return groupCells(a.item) end },       -- ISDestroyStuffAction.lua:362
-    { "ISDismantleAction", BIT.BUILD, function(a) return groupCells(a.thumpable) end },     -- ISDismantleAction.lua:107
-    { "ISBarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },       -- ISBarricadeAction.lua:193
-    { "ISUnbarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },     -- ISUnbarricadeAction.lua:167
+    { "ISDestroyStuffAction", BIT.BUILD, function(a) return groupCells(a.item, SLEDGE_GROUPS) end },       -- ISDestroyStuffAction.lua:362
+    { "ISDismantleAction", BIT.BUILD, function(a) return groupCells(a.thumpable, REMOVE_GROUPS) end },     -- ISDismantleAction.lua:107
+    { "ISBarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                      -- ISBarricadeAction.lua:193
+    { "ISUnbarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                    -- ISUnbarricadeAction.lua:167
     { "ISMoveablesAction", BIT.MOVE, moveCells },
 }
 
