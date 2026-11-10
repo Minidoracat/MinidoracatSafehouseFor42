@@ -606,6 +606,7 @@
     "IGUI_MSH_Perm_Denied": "No tienes el permiso \"%1\" en este refugio.",
     "IGUI_MSH_Vehicle_Blocked": "No puedes entrar en este refugio, tampoco con un vehículo.",
     "IGUI_MSH_Vehicle_BlockedRider": "Alguien en este vehículo no puede entrar en este refugio, así que el vehículo no puede pasar.",
+    "IGUI_MSH_Ladder_Blocked": "No puedes entrar en este refugio, tampoco por una escalera.",
     "IGUI_MSH_Code_Generic": "El servidor rechazó la solicitud (%1).",
     "IGUI_MSH_Alert_Title": "Refugio",
     "IGUI_MSH_Alert_Generic": "Aviso de refugios del servidor: %1",

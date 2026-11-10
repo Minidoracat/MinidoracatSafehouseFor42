@@ -205,6 +205,48 @@ function MSH.lockedFor(c, player)
     return inv == nil or inv:haveThisKeyId(o:getKeyId()) == nil
 end
 
+-- 世界物件要查權限的格子（扁平 x1, y1, x2, y2…；第一組是物件所在格），給破壞、撬開、路障這類動作；伺服器 Permissions.lua
+-- 與客戶端 PermissionsClient.lua 共用。邊上的物件在所在格的北邊或西邊，另一側是 (x, y-1) 或 (x-1, y)，兩側都列
+-- （使用者 2026-11-10）。哪些算邊上，照原版大鎚游標「從另一側也拆得到」的判斷（ISDestroyCursor.lua:259-282）：
+-- 門、窗、窗框照 getNorth（GridSquareEdgeElement.java；IsoThumpable 只有 isDoor 的才照它，木箱這類也是 IsoThumpable）；
+-- 其他照圖塊屬性：cutN／collideN／WindowN 是北邊，cutW／collideW／WindowW 是西邊（牆、門框牆、窗框牆、柵欄；
+-- IsoWorld.java:882-966；轉角牆兩邊都有）。路障物件另外加它釘的那個門窗的格子（IsoBarricade.getBarricadedObject，
+-- IsoBarricade.java:667-703）。不是世界物件、沒有格子回空表。
+function MSH.edgeCells(obj)
+    local cells = {}
+    if obj == nil or not instanceof(obj, "IsoObject") then return cells end
+    local sq = obj:getSquare()
+    if sq == nil then return cells end
+    local x, y = sq:getX(), sq:getY()
+    cells[1], cells[2] = x, y
+    local n, w = false, false
+    if instanceof(obj, "IsoDoor") or instanceof(obj, "IsoWindow") or instanceof(obj, "IsoWindowFrame")
+        or (instanceof(obj, "IsoThumpable") and obj:isDoor()) then
+        n = obj:getNorth() == true
+        w = not n
+    else
+        local props = obj:getProperties()
+        if props ~= nil then
+            local F = IsoFlagType
+            n = props:has(F.cutN) or props:has(F.collideN) or props:has(F.WindowN)
+            w = props:has(F.cutW) or props:has(F.collideW) or props:has(F.WindowW)
+        end
+    end
+    if n then
+        cells[#cells + 1] = x
+        cells[#cells + 1] = y - 1
+    end
+    if w then
+        cells[#cells + 1] = x - 1
+        cells[#cells + 1] = y
+    end
+    if instanceof(obj, "IsoBarricade") then
+        local more = MSH.edgeCells(obj:getBarricadedObject())
+        for i = 1, #more do cells[#cells + 1] = more[i] end
+    end
+    return cells
+end
+
 -- java.util.List 轉 Lua 陣列（0-based size()/get(i)）
 function MSH.toArray(list)
     local out = {}

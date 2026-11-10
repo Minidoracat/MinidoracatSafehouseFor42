@@ -606,6 +606,7 @@
     "IGUI_MSH_Perm_Denied": "이 은신처에서 '%1' 권한이 없습니다.",
     "IGUI_MSH_Vehicle_Blocked": "이 은신처에 들어갈 수 없어 차량으로도 들어갈 수 없습니다.",
     "IGUI_MSH_Vehicle_BlockedRider": "탑승자 중 이 은신처에 들어갈 수 없는 사람이 있어 차량이 들어갈 수 없습니다.",
+    "IGUI_MSH_Ladder_Blocked": "이 은신처에 들어갈 수 없어 사다리로도 들어갈 수 없습니다.",
     "IGUI_MSH_Code_Generic": "서버가 요청을 거부했습니다 (%1).",
     "IGUI_MSH_Alert_Title": "은신처",
     "IGUI_MSH_Alert_Generic": "서버 은신처 알림: %1",

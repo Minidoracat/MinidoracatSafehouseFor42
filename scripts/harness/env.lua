@@ -82,10 +82,18 @@ function T.javaList(items)
 end
 ArrayList = { new = function() return T.javaList({}) end }
 
--- instanceof（LuaManager.java:2948-2952 是 Java isInstance，不經 __index）：假物件以 rawget 的 __class 判斷
+-- instanceof（LuaManager.java:2948-2952 是 Java isInstance，不經 __index）：假物件以 rawget 的 __class 判斷；
+-- 要同時算其他類別或介面（IsoDoor 也是 IsoObject、IForceablePortal）就列在 __is
 function instanceof(obj, cls)
-    return type(obj) == "table" and rawget(obj, "__class") == cls
+    if type(obj) ~= "table" then return false end
+    if rawget(obj, "__class") == cls then return true end
+    local also = rawget(obj, "__is")
+    return also ~= nil and also[cls] == true
 end
+
+-- 圖塊屬性（只列測試用到的旗標；值就是名字）
+IsoFlagType = { cutN = "cutN", cutW = "cutW", collideN = "collideN", collideW = "collideW", WindowN = "WindowN", WindowW = "WindowW" }
+IsoPropertyType = { LADDER_N = "ladderN", LADDER_S = "ladderS", LADDER_W = "ladderW", LADDER_E = "ladderE" }
 
 -- ===== 事件 =====
 T.handlers = {}
@@ -871,6 +879,13 @@ function T.resetTimedActions()
     for _, name in ipairs({ "seed", "plow", "harvest", "water", "destroy", "cheat" }) do
         SFarmingSystemCommands[name] = function() ran("farm." .. name) end
     end
+    -- 大鎚、拆解會一起拆的物件（ISBuildUtil.lua:495-590）：預設沒有；測試改 T.group[函式名] = function(obj) return {…} end。
+    -- 補進現有的 buildUtil（其他測試自己放了別的欄位）
+    T.group = {}
+    buildUtil = buildUtil or {}
+    for _, name in ipairs({ "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }) do
+        buildUtil[name] = function(obj) return T.group[name] and T.group[name](obj) or {} end
+    end
 end
 function T.boxed(n) return { __boxed = n } end
 -- 全域 getSquare（LuaManager.java:7247-7249）：同 getCell():getGridSquare
@@ -878,14 +893,27 @@ function getSquare(x, y, z) return getCell():getGridSquare(x, y, z) end
 function T.action(className, fields)
     return setmetatable(fields or {}, _G[className])
 end
--- 世界格子與物件（instanceof 以 __class 判斷，不模擬 Java 繼承）
+-- 世界格子與物件（instanceof 以 __class／__is 判斷，不模擬 Java 繼承）
 function T.gridSquare(x, y, z)
     return { __class = "IsoGridSquare", getX = function() return x end, getY = function() return y end,
         getZ = function() return z or 0 end }
 end
-function T.worldObject(x, y, z)
-    local sq = T.gridSquare(x, y, z)
-    return { __class = "IsoObject", getSquare = function() return sq end }
+-- flags＝圖塊屬性名的清單（PropertyContainer.has）
+function T.props(flags)
+    local set = {}
+    for _, f in ipairs(flags or {}) do set[f] = true end
+    return { has = function(_, f) return set[f] == true end }
+end
+function T.worldObject(x, y, z, flags)
+    local sq, props = T.gridSquare(x, y, z), T.props(flags)
+    return { __class = "IsoObject", getSquare = function() return sq end, getProperties = function() return props end }
+end
+-- 門、窗、窗框（cls＝IsoDoor／IsoWindow／IsoWindowFrame；門窗也是 IForceablePortal）：在所在格的北邊（north）或西邊
+function T.edgeObject(cls, x, y, north)
+    local o = T.worldObject(x, y)
+    o.__class, o.__is = cls, { IsoObject = true, IForceablePortal = cls ~= "IsoWindowFrame" }
+    o.getNorth = function() return north end
+    return o
 end
 
 -- ===== 載入 MOD =====

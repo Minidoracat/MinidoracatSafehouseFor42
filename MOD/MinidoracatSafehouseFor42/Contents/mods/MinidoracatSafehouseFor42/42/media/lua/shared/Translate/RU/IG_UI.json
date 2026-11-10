@@ -606,6 +606,7 @@
     "IGUI_MSH_Perm_Denied": "У вас нет права «%1» в этом убежище.",
     "IGUI_MSH_Vehicle_Blocked": "Вам нельзя в это убежище — на машине тоже.",
     "IGUI_MSH_Vehicle_BlockedRider": "Кому-то в этой машине нельзя в это убежище, поэтому машина туда не проедет.",
+    "IGUI_MSH_Ladder_Blocked": "Вам нельзя в это убежище — по лестнице тоже.",
     "IGUI_MSH_Code_Generic": "Сервер отклонил запрос (%1).",
     "IGUI_MSH_Alert_Title": "Убежище",
     "IGUI_MSH_Alert_Generic": "Уведомление сервера об убежищах: %1",

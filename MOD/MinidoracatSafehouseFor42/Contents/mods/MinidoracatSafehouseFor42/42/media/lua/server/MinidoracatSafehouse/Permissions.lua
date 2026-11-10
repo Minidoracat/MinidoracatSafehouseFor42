@@ -12,6 +12,7 @@
 -- （伺服器 animEvent 呼叫 attempt：扣門血、打破窗戶在 attempt 裡，回 "success" 才開鎖，ISForceOpen.lua:48-103）；Actions.build
 -- 不呼叫原函式（BuildAction.java:108-117 不看回傳值），照座標查建造物件會寫入的每一格（P.buildCells）；割草 ISScything 查範圍裡
 -- 有作物的每一格（wrapScything）；爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
+-- 撬棍、大鎚、拆解、釘路障、拆路障的目標在邊上（門、窗、牆、柵欄）時兩側的格子都查（MSH.edgeCells、P.CELL_WRAPS）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
 -- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
@@ -88,10 +89,6 @@ P.WRAPS = {
     { "ISTakeGenerator", BIT.MOVE, function(a) return P.squareOf(a.generator) end },       -- ISTakeGenerator.lua:66
     { "ISFluidTransferAction", BIT.USE, fluidSquare },
     { "ISMoveablesAction", BIT.MOVE, function(a) return P.squareOf(a.square) end },         -- ISMoveablesAction.lua:274
-    { "ISDestroyStuffAction", BIT.BUILD, function(a) return P.squareOf(a.item) end },       -- ISDestroyStuffAction.lua:362
-    { "ISDismantleAction", BIT.BUILD, function(a) return P.squareOf(a.thumpable) end },     -- ISDismantleAction.lua:107
-    { "ISBarricadeAction", BIT.BUILD, function(a) return P.squareOf(a.item) end },          -- ISBarricadeAction.lua:193
-    { "ISUnbarricadeAction", BIT.BUILD, function(a) return P.squareOf(a.item) end },        -- ISUnbarricadeAction.lua:167
     { "ISPlowAction", BIT.FARM, function(a) return P.squareOf(a.gridSquare) end },          -- ISPlowAction.lua:152
     { "ISSeedActionNew", BIT.FARM, plantSquare },
     { "ISHarvestPlantAction", BIT.FARM, plantSquare },
@@ -100,6 +97,30 @@ P.WRAPS = {
     -- 移除作物、施肥與堆肥：complete 才 removePlant／fertilize（ISShovelAction.lua:59-71、ISFertilizeAction.lua:59-64）
     { "ISShovelAction", BIT.FARM, plantSquare },
     { "ISFertilizeAction", BIT.FARM, plantSquare },
+}
+
+-- 大鎚、拆解、釘路障、拆路障：目標可能是邊上的物件（牆、門、窗、柵欄），兩側任一格拒絕就拒絕（使用者 2026-11-10；
+-- 格子清單 MSH.edgeCells，Contract.lua）。大鎚與拆解另外加原版會一起拆掉的物件所在的格子（樓梯、雙開門、車庫門、墓穴：
+-- ISDestroyStuffAction.lua:276-306、ISDismantleAction.lua:77-81，用原版同一組 buildUtil 呼叫找）。
+local GROUP_FNS = { "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }
+local function groupCells(obj, fns)
+    local cells = MSH.edgeCells(obj)
+    if #cells == 0 then return cells end
+    for _, fn in ipairs(fns) do
+        for _, o in ipairs(buildUtil[fn](obj)) do
+            local more = MSH.edgeCells(o)
+            for i = 1, #more do cells[#cells + 1] = more[i] end
+        end
+    end
+    return cells
+end
+
+-- { 類別名, 位元, 取要查的格子（扁平 x1, y1, x2, y2…） }
+P.CELL_WRAPS = {
+    { "ISDestroyStuffAction", BIT.BUILD, function(a) return groupCells(a.item, GROUP_FNS) end },               -- ISDestroyStuffAction.lua:362
+    { "ISDismantleAction", BIT.BUILD, function(a) return groupCells(a.thumpable, { "getStairObjects" }) end }, -- ISDismantleAction.lua:107
+    { "ISBarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                          -- ISBarricadeAction.lua:193
+    { "ISUnbarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                        -- ISUnbarricadeAction.lua:167
 }
 
 -- ===== 判定 =====
@@ -145,16 +166,14 @@ function P.denies(player, sq, bit, label)
     return P.deniesAt(player, sq:getX(), sq:getY(), bit, label)
 end
 
--- 門窗這類邊上的物件（在所在格的北邊或西邊，isNorth：IsoDoor.java:1776、IsoWindow.java:1214、IsoThumpable.java:340）：
--- 兩側任一格拒絕就拒絕（使用者 2026-11-10）。另一側＝北邊 (x, y-1) 或西邊 (x-1, y)（GridSquareEdgeElement.getOppositeSquare）。
--- obj 要是 IForceablePortal（呼叫端先 instanceof；getSquare、isNorth 都在 GridSquareEdgeElement）。
-function P.deniesEdge(player, obj, bit, label)
-    local sq = obj:getSquare()
-    if player == nil or sq == nil then return false end
-    local x, y = sq:getX(), sq:getY()
-    if P.deniesAt(player, x, y, bit, label) then return true end
-    if obj:isNorth() then return P.deniesAt(player, x, y - 1, bit, label) end
-    return P.deniesAt(player, x - 1, y, bit, label)
+-- 一串格子（扁平 x1, y1, x2, y2…）任一格拒絕就拒絕；沒有 actor → false（照原版）。邊上的物件（門、窗、牆、柵欄）
+-- 用 MSH.edgeCells 列出兩側的格子（使用者 2026-11-10）。
+function P.deniesCells(player, cells, bit, label)
+    if player == nil then return false end
+    for i = 1, #cells, 2 do
+        if P.deniesAt(player, cells[i], cells[i + 1], bit, label) then return true end
+    end
+    return false
 end
 
 -- ===== 建造的佔用範圍 =====
@@ -228,6 +247,18 @@ function P.buildCells(item, x, y, z, north)
             if w == "north20" or w == "south20" then add(x, y - i) elseif w == "west20" or w == "east20" then add(x - i, y) end
         end
     end
+    -- 建造選單的路障（entity_barricade_*，OnCreate 是 BuildRecipeCode.barricade.OnCreate）：釘的是面向那一側的門窗，
+    -- 朝 n／w 時門窗在錨點格的北邊／西邊，朝 s／e 時在 (x, y+1)／(x+1, y) 那格（buildRecipeCode.lua:98-117）。
+    -- 面向那一側的鄰格也查，門窗兩側就都查到。面向的名稱同原版傳給 OnCreate 的（ISBuildIsoEntity.lua:749-752）
+    if item.objectInfo ~= nil and type(item.getFace) == "function" then
+        pcall(function()
+            local onCreate = item.objectInfo:getScript():getOnCreate()
+            if type(onCreate) ~= "string" or string.find(onCreate, "BuildRecipeCode.barricade.", 1, true) ~= 1 then return end
+            local f = item:getFace():getFaceName()
+            if f == "n" then add(x, y - 1) elseif f == "s" then add(x, y + 1)
+            elseif f == "w" then add(x - 1, y) elseif f == "e" then add(x + 1, y) end
+        end)
+    end
     return cells
 end
 
@@ -255,6 +286,20 @@ local function wrapComplete(name, bit, pick)
     cls.complete = function(self)
         local a, b = pick(self)        -- 第二個目標只有作物有
         if P.denies(self.character, a, bit, name) or P.denies(self.character, b, bit, name) then return false end
+        return orig(self)
+    end
+end
+
+-- 目標是一串格子的動作（P.CELL_WRAPS）
+local function wrapCompleteCells(name, bit, cells)
+    local cls = _G[name]
+    if type(cls) ~= "table" or type(cls.complete) ~= "function" then
+        MSH.log("permissions: " .. name .. ".complete missing, not wrapped")
+        return
+    end
+    local orig = cls.complete
+    cls.complete = function(self)
+        if self.character ~= nil and P.deniesCells(self.character, cells(self), bit, name) then return false end
         return orig(self)
     end
 end
@@ -289,8 +334,8 @@ end
 -- 撬棍強開（42.22 ISForceOpen，MP 是 NetTimedAction）：伺服器 animEvent 收到 ForceOpenAttempt 就呼叫 attempt，回 "success"
 -- 時 forceOpen＋sync、回 "fail" 時 forceComplete（ISForceOpen.lua:79-103）；掙扎扣門血、失敗扣門血或打破窗戶也都在 attempt 裡
 -- （:61-71）。所以在 attempt 擋：回 "fail"、不呼叫原函式＝不開鎖、不扣血、不打破，complete 照 outcome 回 false（:40-42）。
--- 只包 complete 擋不住（開鎖在 animEvent）。照 BUILD（和大鎚、拆解、路障同類），門窗兩側都看（使用者 2026-11-10）。
--- 原版 isValid 不在伺服器跑，非門窗的物件交給原函式（:49-51 回 "fail"）。
+-- 只包 complete 擋不住（開鎖在 animEvent）。照 BUILD（和大鎚、拆解、路障同類），門窗兩側都看（使用者 2026-11-10，
+-- MSH.edgeCells）。原版 isValid 不在伺服器跑，非門窗的物件交給原函式（:49-51 回 "fail"）。
 local function wrapForceOpen()
     local F = ISForceOpen
     if type(F) ~= "table" or type(F.attempt) ~= "function" then
@@ -299,7 +344,8 @@ local function wrapForceOpen()
     end
     local orig = F.attempt
     F.attempt = function(self)
-        if instanceof(self.object, "IForceablePortal") and P.deniesEdge(self.character, self.object, BIT.BUILD, "ISForceOpen") then
+        if instanceof(self.object, "IForceablePortal")
+            and P.deniesCells(self.character, MSH.edgeCells(self.object), BIT.BUILD, "ISForceOpen") then
             return "fail"
         end
         return orig(self)
@@ -349,9 +395,7 @@ local function wrapBuild()
         if type(args) == "table" and character ~= nil then
             if not (MSH.isFinite(args.x) and MSH.isFinite(args.y) and MSH.isFinite(args.z)) then return end
             local cells = P.buildCells(args.item, math.floor(args.x), math.floor(args.y), math.floor(args.z), args.north == true)
-            for i = 1, #cells, 2 do
-                if P.deniesAt(character, cells[i], cells[i + 1], BIT.BUILD, "Actions.build") then return end
-            end
+            if P.deniesCells(character, cells, BIT.BUILD, "Actions.build") then return end
         end
         return orig(character, args)
     end
@@ -412,6 +456,7 @@ function P.install()
     if P.installed then return end
     P.installed = true
     for _, w in ipairs(P.WRAPS) do wrapComplete(w[1], w[2], w[3]) end
+    for _, w in ipairs(P.CELL_WRAPS) do wrapCompleteCells(w[1], w[2], w[3]) end
     wrapTakeWater()
     wrapForceOpen()
     wrapBuild()

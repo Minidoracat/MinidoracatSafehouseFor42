@@ -606,6 +606,7 @@
     "IGUI_MSH_Perm_Denied": "Vous n'avez pas la permission « %1 » dans cet abri.",
     "IGUI_MSH_Vehicle_Blocked": "Vous ne pouvez pas entrer dans cet abri, même en véhicule.",
     "IGUI_MSH_Vehicle_BlockedRider": "Quelqu'un dans ce véhicule ne peut pas entrer dans cet abri : le véhicule ne peut pas y aller.",
+    "IGUI_MSH_Ladder_Blocked": "Vous ne pouvez pas entrer dans cet abri, même par une échelle.",
     "IGUI_MSH_Code_Generic": "Le serveur a refusé la demande (%1).",
     "IGUI_MSH_Alert_Title": "Abri",
     "IGUI_MSH_Alert_Generic": "Avis du serveur sur les abris : %1",

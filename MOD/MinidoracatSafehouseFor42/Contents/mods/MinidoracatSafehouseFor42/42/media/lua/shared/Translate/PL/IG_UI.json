@@ -606,6 +606,7 @@
     "IGUI_MSH_Perm_Denied": "Nie masz uprawnienia „%1” w tym schronieniu.",
     "IGUI_MSH_Vehicle_Blocked": "Nie możesz wejść do tego schronienia, więc nie wjedziesz też pojazdem.",
     "IGUI_MSH_Vehicle_BlockedRider": "Ktoś w tym pojeździe nie może wejść do tego schronienia, więc pojazd nie może wjechać.",
+    "IGUI_MSH_Ladder_Blocked": "Nie możesz wejść do tego schronienia, więc nie wejdziesz też po drabinie.",
     "IGUI_MSH_Code_Generic": "Serwer odrzucił żądanie (%1).",
     "IGUI_MSH_Alert_Title": "Schronienie",
     "IGUI_MSH_Alert_Generic": "Komunikat serwera o schronieniach: %1",

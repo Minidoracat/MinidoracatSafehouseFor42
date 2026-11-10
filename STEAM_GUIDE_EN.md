@@ -655,7 +655,7 @@ Server-side data:
 === ⚠️ Known limitations
 [list]
 [*] [b]Zombies can still spawn inside[/b]: vanilla safehouses don't stop it, and neither does this mod.
-[*] [b]Vanilla protection[/b]: the server stops vanilla clients, but modified clients may get around protection that's only checked client-side; the fine-grained permissions (Use appliances, Move furniture, Build, Farm) are only reliable against vanilla clients. Vehicles too: a modified client may drive in, and the server then takes anyone aboard who can't enter out of the vehicle and outside, leaving the vehicle where it is.
+[*] [b]Vanilla protection[/b]: the server stops vanilla clients, but modified clients may get around protection that's only checked client-side; the fine-grained permissions (Use appliances, Move furniture, Build, Farm) are only reliable against vanilla clients. Vehicles too: a modified client may drive in, and the server then takes anyone aboard who can't enter out of the vehicle and outside, leaving the vehicle where it is. Ladders too: the check that stops you climbing in runs on the client, and anyone inside who can't enter is moved outside by the vanilla periodic check.
 [*] [b]No door or window permission[/b]: the server can't stop opening doors with E or toggling windows directly; whether non-members can open doors follows vanilla. Forcing a locked door or window open with a crowbar is the exception: it needs the Build permission.
 [*] [b]No visitors[/b]: "Member" covers both entering and container access, so there's no "enter but don't take" role.
 [*] [b]Safehouse data is public[/b]: vanilla sends every safehouse's area, owner and members to every player who logs in, so modified clients can see it.

@@ -606,6 +606,7 @@
     "IGUI_MSH_Perm_Denied": "你在这间安全屋没有「%1」权限。",
     "IGUI_MSH_Vehicle_Blocked": "你不能进这间安全屋，开车也进不去。",
     "IGUI_MSH_Vehicle_BlockedRider": "车上有人不能进这间安全屋，车子开不进去。",
+    "IGUI_MSH_Ladder_Blocked": "你不能进这间安全屋，爬梯子也进不去。",
     "IGUI_MSH_Code_Generic": "服务器拒绝了这个请求（%1）。",
     "IGUI_MSH_Alert_Title": "安全屋",
     "IGUI_MSH_Alert_Generic": "服务器的安全屋提示：%1",

@@ -3,10 +3,12 @@
 --   1) 世界右鍵選單：藏掉本地玩家在該格沒有權限的原版選項。OnFillWorldObjectContextMenu 在原版選項建好之後觸發
 --      （ISWorldObjectContextMenu.lua:211-214）；以選項的處理函式比對（addGetUpOption 把真正的處理函式放在 param1，
 --      ISContextMenu.lua:1038-1044），不比文字，換語系照樣對得上。子選單都登記在根選單的 instanceMap（:1199-1231）。
---      「撬開」（42.22 onForceOpen）照門窗兩側判斷，和伺服器 P.deniesEdge 同一條規則（PC.edgeHides）。
+--      「撬開」（42.22 onForceOpen）與拆路障照門窗兩側判斷，和伺服器同一份格子清單（MSH.edgeCells、PC.edgeHides）。
 --   2) 爐子／微波爐設定面板：沒有 USE 時藏掉 OK 鈕並擋 onClick（ISOvenUI.lua:157-171、ISMicrowaveUI.lua:31-37）；
 --      開面板的選單項目（onStoveSetting／onMicrowaveSetting）也照 1) 藏。
 --   3) 伺服器推 denied：MSH.Client.toast（框架 Toast，沒有框架就頭上紅字）說缺哪個權限。
+--   4) 梯子（42.22）：爬上去或爬下來會進到自己不能進的安全屋時，不列「爬梯子」、按鍵與動作也不啟動（PC.ladderBlocked）。
+--      爬梯只在客戶端執行，伺服器看不到；進去之後原版照舊定期把人移出去。
 -- 位元來自 MSH.Client.bitsAt(x, y)（nil＝不是 managed → 照原版；只有 0 號玩家有清單）。
 
 if not isClient() then return end
@@ -85,30 +87,63 @@ local function prune(menu, drop)
     return removed
 end
 
--- 「撬開」選項的門窗：addGetUpOption 時 param1＝onForceOpen、param2＝worldobjects、param3＝門窗（ISContextMenu.lua:1038-1043；
--- ISWorldObjectContextMenuLogic.java:2312-2319, 2560-2566），直接 addOption 時是 param1
-local function forceTarget(o)
+-- 選項帶的門窗：addGetUpOption 時 param1＝處理函式、param2＝worldobjects、param3＝門窗（ISContextMenu.lua:1038-1043；
+-- ISWorldObjectContextMenuLogic.java:1845-1849, 2312-2319, 2452-2456），直接 addOption 時是 param1
+local function edgeTarget(o)
     if o.onSelect == ISContextMenu.onGetUpAndThen then return o.param3 end
     return o.param1
 end
 
--- 門窗兩側任一格要藏就藏（伺服器 Permissions.lua P.deniesEdge 同一條規則；另一側是北邊或西邊那格）
+-- 選項帶著門窗物件、照門窗兩側判斷的處理函式（都要 BUILD）：撬開、拆路障
+PC.EDGE_HANDLERS = { "onForceOpen", "onUnbarricade", "onUnbarricadeMetal", "onUnbarricadeMetalBar" }
+
+-- 物件要查的格子（MSH.edgeCells：邊上的物件是兩側）任一格要藏就藏；伺服器 Permissions.lua 用同一份清單
 function PC.edgeHides(obj, bit)
-    if obj == nil or not instanceof(obj, "IForceablePortal") then return false end
-    local sq = obj:getSquare()
-    if sq == nil then return false end
+    local cells = MSH.edgeCells(obj)
+    for i = 1, #cells, 2 do
+        if PC.hides((MSH.Client.bitsAt(cells[i], cells[i + 1])), bit) then return true end
+    end
+    return false
+end
+
+-- 梯子（圖塊屬性 ladderN/S/E/W）：往上是從梯子那格爬到上一層、往屬性的方向走出去；往下是從那個出口爬回梯子那格
+-- （IsoGridSquare.getLadderUnder，IsoGridSquare.java:11870-11892；ISWorldObjectContextMenu.lua:2188-2195 同一組屬性）。
+-- 梯子那格或出口那格在這個人不能進的安全屋裡就擋；判定和走路、擋車同一套（SafeHouse.isSafehouseAllowTrepass，
+-- SafeHouse.java:224-243：屋主、名單、管理員能力、伺服器選項），它要一格，取 z＝0 那格（安全屋是平面範圍）。
+function PC.ladderBlocked(playerObj, ladder)
+    local sq = ladder ~= nil and ladder:getSquare() or nil
+    if playerObj == nil or sq == nil then return false end
+    local props = ladder:getProperties()
+    if props == nil then return false end
     local x, y = sq:getX(), sq:getY()
-    if PC.hides((MSH.Client.bitsAt(x, y)), bit) then return true end
-    if obj:isNorth() then return PC.hides((MSH.Client.bitsAt(x, y - 1)), bit) end
-    return PC.hides((MSH.Client.bitsAt(x - 1, y)), bit)
+    local ex, ey = x, y
+    if props:has(IsoPropertyType.LADDER_N) then ey = y - 1
+    elseif props:has(IsoPropertyType.LADDER_S) then ey = y + 1
+    elseif props:has(IsoPropertyType.LADDER_W) then ex = x - 1
+    elseif props:has(IsoPropertyType.LADDER_E) then ex = x + 1 end
+    local cell = getCell()
+    return not SafeHouse.isSafehouseAllowTrepass(cell:getGridSquare(x, y, 0), playerObj)
+        or not SafeHouse.isSafehouseAllowTrepass(cell:getGridSquare(ex, ey, 0), playerObj)
+end
+
+-- 「爬梯子」選項的玩家與梯子：addGetUpOption(文字, 格子, onClimbLadder, down, playerObj, ladder)
+-- （ISWorldObjectContextMenuLogic.java:942-962）→ param4、param5；直接 addOption 時是 param2、param3
+local function ladderArgs(o)
+    if o.onSelect == ISContextMenu.onGetUpAndThen then return o.param4, o.param5 end
+    return o.param2, o.param3
 end
 
 -- 回傳移掉的項目數；子選單因此變空時，連父項目一起拿掉（例如燈的開關子選單）。
--- 「撬開」照門窗兩側判斷、不只看點的那一格，所以點的格子沒有要藏的處理函式也要走一遍
+-- 撬開、拆路障、爬梯子不只看點的那一格，所以點的格子沒有要藏的處理函式也要走一遍
 function PC.filterMenu(context, bits)
+    local W = ISWorldObjectContextMenu
+    if type(W) ~= "table" then return 0 end
     local blocked = PC.blockedHandlers(bits)
-    local force = ISWorldObjectContextMenu ~= nil and ISWorldObjectContextMenu.onForceOpen or nil
-    if blocked == nil and force == nil then return 0 end
+    local edge = {}
+    for _, field in ipairs(PC.EDGE_HANDLERS) do
+        if W[field] ~= nil then edge[W[field]] = true end
+    end
+    local climb = W.onClimbLadder
     local subs = context.instanceMap or {}
     local menus = { context }
     for _, m in pairs(subs) do menus[#menus + 1] = m end
@@ -118,7 +153,8 @@ function PC.filterMenu(context, bits)
             local fn = handlerOf(o)
             if fn == nil then return false end
             if blocked ~= nil and blocked[fn] == true then return true end
-            return fn == force and PC.edgeHides(forceTarget(o), BIT.BUILD)
+            if edge[fn] == true then return PC.edgeHides(edgeTarget(o), BIT.BUILD) end
+            return fn == climb and PC.ladderBlocked(ladderArgs(o))
         end)
     end
     if n > 0 then
@@ -161,11 +197,35 @@ local function wrapOvenPanel(cls)
     end
 end
 
+-- 爬梯子的兩個入口：選單與互動鍵都進 onClimbLadder（ISContextualActions.lua:19-24），其他程式直接排的動作經過 isValid
+-- （ISClimbLadderAction.lua:5-11）。onClimbLadder 擋下時不走過去，說明原因；isValid 只回 false。
+local function wrapLadder()
+    local W, A = ISWorldObjectContextMenu, ISClimbLadderAction
+    if type(W) == "table" and type(W.onClimbLadder) == "function" then
+        local orig = W.onClimbLadder
+        W.onClimbLadder = function(square, down, playerObj, ladder)
+            if PC.ladderBlocked(playerObj, ladder) then
+                MSH.Client.toast(getText("IGUI_MSH_Ladder_Blocked"), playerObj)
+                return
+            end
+            return orig(square, down, playerObj, ladder)
+        end
+    end
+    if type(A) == "table" and type(A.isValid) == "function" then
+        local orig = A.isValid
+        A.isValid = function(self)
+            if PC.ladderBlocked(self.character, self.ladder) then return false end
+            return orig(self)
+        end
+    end
+end
+
 function PC.install()
     if PC.installed then return end
     PC.installed = true
     wrapOvenPanel(ISOvenUI)
     wrapOvenPanel(ISMicrowaveUI)
+    wrapLadder()
 end
 
 PC.BIT_KEYS = { [BIT.USE] = "USE", [BIT.MOVE] = "MOVE", [BIT.BUILD] = "BUILD", [BIT.FARM] = "FARM" }
