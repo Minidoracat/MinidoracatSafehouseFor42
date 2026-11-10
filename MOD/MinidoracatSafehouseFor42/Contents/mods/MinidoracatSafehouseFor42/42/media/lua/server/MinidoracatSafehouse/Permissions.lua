@@ -224,10 +224,9 @@ P.CELL_WRAPS = {
     { "ISDismantleAction", BIT.BUILD, function(a) return groupCells(a.thumpable, REMOVE_GROUPS) end },     -- ISDismantleAction.lua:107
     { "ISBarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                      -- ISBarricadeAction.lua:193
     { "ISUnbarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                    -- ISUnbarricadeAction.lua:167
-    -- 拆解玩家蓋的東西（ISThumpableSpriteProps:scrapObjectViaCursor 這類，ISMoveableSpriteProps.lua:42, 4320-4358）和「拆除」
-    -- 拆的是同一批，BUILD 也要
+    -- 拆解玩家蓋的、撿不起來的東西（牆、樓梯這類；ISMoveableSpriteProps.lua:42, 4320-4358）和「拆除」拆的是同一批，BUILD 也要
     { "ISMoveablesAction", BIT.MOVE, moveCells, function(a)
-        if a.mode == "scrap" and type(a.moveProps) == "table" and MSH.isBuilt(a.moveProps.object) then return BIT.BUILD end
+        if a.mode == "scrap" and MSH.scrapNeedsBuild(a.moveProps) then return BIT.BUILD end
     end },
 }
 

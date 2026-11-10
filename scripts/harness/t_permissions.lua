@@ -521,7 +521,8 @@ return function(T)
             and ranBy(mover, { square = far, mode = "scrap", moveProps = { object = inClaim } })
             and ranBy(bare, { square = far, mode = "scrap", moveProps = { object = T.worldObject(51, 50) } }),
             "拆解、修理家具：照動到的物件那格（不是動作帶的 square）；有 MOVE、物件在範圍外照原版")
-        -- 拆解玩家蓋的東西（原版「拆除」拆得掉的）：MOVE 與 BUILD 都要；撿起再放下的家具也是 IsoThumpable，但只要 MOVE
+        -- 拆解玩家蓋的、撿不起來的東西（原版「拆除」拆得掉的）：MOVE 與 BUILD 都要；撿得起來的（木箱這類）和
+        -- 撿起再放下的家具（也是 IsoThumpable）只要 MOVE
         do
             local function thumpable(x, y, dismantable, flags)
                 local o = T.worldObject(x, y, 0, flags)
@@ -538,10 +539,11 @@ return function(T)
             check(resM == false and not ranM and dvM ~= nil and dvM.bit == B.BUILD and not ranN and dvN ~= nil and dvN.bit == B.MOVE,
                 "拆解玩家蓋的東西：只有 MOVE 被拒（denied 帶 BUILD）；兩個都沒有照樣先說缺 MOVE")
             check(select(2, scrap(full, built)) and select(2, scrap(mover, placed)) and select(2, scrap(bare, thumpable(51, 50, true)))
+                and ranBy(mover, { square = far, mode = "scrap", moveProps = { object = built, isMoveable = true } })
                 and ranBy(mover, { square = far, mode = "repair", moveProps = { object = built } })
                 and ranBy(mover, { square = T.gridSquare(105, 105), mode = "pickup",
                     moveProps = { spriteName = "now", findOnSquare = function() return built end } }),
-                "拆解玩家蓋的東西：兩個都有照原版；放下的家具、範圍外的、修理與撿起只看 MOVE")
+                "拆解玩家蓋的東西：兩個都有照原版；放下的家具、撿得起來的、範圍外的、修理與撿起只看 MOVE")
             check(not select(2, scrap(mover, thumpable(105, 110, true, { "cutN" }))),
                 "拆解玩家蓋的牆：所在格在範圍外、另一側在 claim、只有 MOVE：被拒")
         end
@@ -861,8 +863,10 @@ return function(T)
             return o
         end
         local function scrapMenu()
-            local items = menu({ { name = "Wall", onSelect = disassemble, param1 = { object = thumpable(true) } },
-                { name = "Chair", onSelect = disassemble, param1 = { object = thumpable(false) } } })
+            local wall, crate, chair = thumpable(true), thumpable(true), thumpable(false)
+            local items = menu({ { name = "Wall", onSelect = disassemble, param1 = { object = wall, moveProps = { object = wall } } },
+                { name = "Crate", onSelect = disassemble, param1 = { object = crate, moveProps = { object = crate, isMoveable = true } } },
+                { name = "Chair", onSelect = disassemble, param1 = { object = chair, moveProps = { object = chair, isMoveable = true } } } })
             local r = menu({ { name = "Disassemble", subOption = 1 }, { name = "Keep", onSelect = onEat } })
             r.instanceMap = { items }
             return r, items
@@ -876,8 +880,8 @@ return function(T)
         edgeBits = B.MEMBER + B.BUILD
         r, items = scrapMenu()
         local n3, rootLeft = PC.filterMenu(r, edgeBits), #r.options
-        check(n1 == 1 and left1 == "Chair" and n2 == 0 and n3 == 2 and rootLeft == 1,
-            "拆解選單：只有 MOVE 藏掉玩家蓋的那項、放下的家具留著；兩個都有不藏；沒有 MOVE 整個子選單拿掉")
+        check(n1 == 1 and left1 == "Crate" and n2 == 0 and n3 == 3 and rootLeft == 1,
+            "拆解選單：只有 MOVE 藏掉玩家蓋的牆那項，撿得起來的木箱與放下的家具留著；兩個都有不藏；沒有 MOVE 整個子選單拿掉")
         ISDisassembleMenu = nil
     end
 

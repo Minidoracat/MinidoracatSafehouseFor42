@@ -222,7 +222,7 @@ Select a safehouse in the manager window and open "Members & sharing". To add so
 [tr][td]Member[/td][td]Entering the safehouse, taking and putting items in containers[/td][/tr]
 [tr][td]Use appliances[/td][td]Appliances, including taking water, light bulbs and batteries in lamps, and wiring, switching, refueling and repairing generators[/td][/tr]
 [tr][td]Move furniture[/td][td]Moving furniture, including picking up generators[/td][/tr]
-[tr][td]Build[/td][td]Building, including dismantling and forcing doors and windows open with a crowbar[/td][/tr]
+[tr][td]Build[/td][td]Building, including dismantling and forcing doors and windows open with a crowbar. Disassembling player-built walls, stairs and other structures that can't be picked up needs both Move furniture and Build[/td][/tr]
 [tr][td]Farm[/td][td]Farming[/td][/tr]
 [tr][td]Remote take[/td][td]When the server allows remote take: standing inside the safehouse, take items from a container elsewhere straight into your inventory[/td][/tr]
 [tr][td]Invite[/td][td]Adding players who can't enter yet[/td][/tr]

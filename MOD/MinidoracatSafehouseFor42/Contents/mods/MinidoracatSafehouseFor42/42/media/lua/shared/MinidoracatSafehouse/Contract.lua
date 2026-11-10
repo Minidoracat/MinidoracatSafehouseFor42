@@ -269,6 +269,13 @@ function MSH.isBuilt(obj)
     return obj ~= nil and instanceof(obj, "IsoThumpable") and obj:isDismantable() == true
 end
 
+-- 搬家具的「拆解」要不要另外有 BUILD：目標是玩家蓋的、撿不起來的東西（牆、樓梯、門框這類）。props 是原版照目標建的
+-- moveProps（ISMoveableSpriteProps.fromObject，isMoveable 是圖塊屬性 IsMoveAble，ISMoveableSpriteProps.lua:130）。
+-- 撿得起來的（木箱、家具）不算：撿起只要 MOVE，放下後也不再是 dismantable。
+function MSH.scrapNeedsBuild(props)
+    return type(props) == "table" and props.isMoveable ~= true and MSH.isBuilt(props.object)
+end
+
 -- ===== service-owner 標記（§4.2）=====
 
 function MSH.marker(claimId)
