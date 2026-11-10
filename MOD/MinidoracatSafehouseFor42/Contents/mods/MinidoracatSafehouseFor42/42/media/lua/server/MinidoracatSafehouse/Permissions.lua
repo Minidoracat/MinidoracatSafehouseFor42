@@ -14,8 +14,8 @@
 -- 有作物的每一格（wrapScything）；爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
 -- 撬棍、大鎚、拆除、釘路障、拆路障的目標在邊上（門、窗、牆、柵欄）時兩側的格子都查（MSH.edgeCells、P.CELL_WRAPS）；
 -- 大鎚、拆除、搬家具的目標是多格物件時，每一塊的格子都查（groupCells、moveCells）。
--- 用語照原版繁中：「拆除」是 ISDismantleAction（BUILD），「拆解」是搬家具的 scrap（MOVE；目標是「拆除」拆得掉的東西時
--- BUILD 也要，使用者 2026-11-10）。
+-- 用語照原版繁中：「拆除」是 ISDismantleAction（BUILD），「拆解」是搬家具的 scrap（MOVE；目標是玩家蓋的、撿不起來的
+-- 東西（MSH.scrapNeedsBuild）時 BUILD 也要，使用者 2026-11-10）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
 -- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
