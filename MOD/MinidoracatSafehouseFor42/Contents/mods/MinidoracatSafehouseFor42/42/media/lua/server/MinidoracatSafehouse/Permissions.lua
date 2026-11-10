@@ -142,15 +142,31 @@ local function groupCells(obj)
     return cells
 end
 
--- 搬家具（撿起、放下、旋轉、拆解、修理）：多格家具整組一起動（ISMoveableSpriteProps.lua:1265-1282, 1975-2005），每一格都查；
--- 旋轉前後是兩組圖塊（ISMoveablesAction.lua:323-331），都算。a.square 是動作的那一格（ISMoveablesAction.lua:274）
+-- 搬家具（MOVE）：原版各模式實際會動到的東西都查，用原版同一個找法找目標。
+-- · 撿起、放下、旋轉照 a.square（ISMoveablesAction.lua:274）：撿起找 findOnSquare(square, moveProps.spriteName)
+--   （ISMoveableSpriteProps.lua:1265-1267），旋轉找 findOnSquare(square, origSpriteName)（:2918）。
+-- · 拆解、修理不看 a.square，動的是 moveProps.object（:3472-3500, 3574-3577）。
+-- 找到的物件照大鎚同一份清單查（groupCells：邊上的物件兩側、一起拆的、多格的每一塊）。多格家具另外從 a.square 推
+-- 每一格（放下時物件還不存在；旋轉前後是兩組圖塊，ISMoveablesAction.lua:323-331；:1265-1282, 1975-2005 逐格處理）。
 local function moveCells(a)
-    local sq = P.squareOf(a.square)
-    if sq == nil then return {} end
-    local x, y = sq:getX(), sq:getY()
-    local cells = { x, y }
-    if type(a.moveProps) == "table" then addGridCells(cells, a.moveProps.sprite, x, y) end
-    if type(a.origMoveProps) == "table" then addGridCells(cells, a.origMoveProps.sprite, x, y) end
+    local cells = {}
+    local function addObject(o)
+        local more = groupCells(o)
+        for i = 1, #more do cells[#cells + 1] = more[i] end
+    end
+    local props, sq = a.moveProps, P.squareOf(a.square)
+    if type(props) ~= "table" then props = {} end
+    if sq ~= nil then
+        local x, y = sq:getX(), sq:getY()
+        cells[1], cells[2] = x, y
+        addGridCells(cells, props.sprite, x, y)
+        if type(a.origMoveProps) == "table" then addGridCells(cells, a.origMoveProps.sprite, x, y) end
+        if type(props.findOnSquare) == "function" then
+            addObject((props:findOnSquare(sq, props.spriteName)))
+            addObject((props:findOnSquare(sq, a.origSpriteName)))
+        end
+    end
+    addObject(props.object)
     return cells
 end
 

@@ -450,7 +450,7 @@ return function(T)
         hutch.getAllHutchObjects = function() return T.javaList({ hutch }) end
         check(not ranHutch and ranBy("ISDestroyStuffAction", bare, hutch), "雞舍：有一塊在 claim、沒有 BUILD 被拒；都在範圍外照原版")
     end
-    -- 搬多格家具（撿起、放下、旋轉都是整組）：每一塊的格子都查（MOVE）
+    -- 搬家具（MOVE）：多格家具每一塊的格子都查；各模式實際會動到的物件照大鎚同一份清單查
     do
         local function moveRun(actor, fields)
             fields.character = actor
@@ -471,6 +471,27 @@ return function(T)
             and ranBy(bare, { square = at }), "搬家具：有 MOVE、各塊都在範圍外、單格家具、沒有圖塊資料：照原版")
         check(not ranBy(bare, { square = at, moveProps = moveProps(1, 2, 0, 0), origMoveProps = moveProps(1, 2, 0, 1) }),
             "旋轉多格家具：旋轉前的那一組有一塊在 claim：被拒")
+        -- 拆解、修理動的是 moveProps.object，不看 square
+        local far = T.gridSquare(50, 50)
+        check(not ranBy(bare, { square = far, mode = "scrap", moveProps = { object = inClaim } })
+            and not ranBy(stranger, { square = far, mode = "repair", moveProps = { object = inClaim } })
+            and ranBy(mover, { square = far, mode = "scrap", moveProps = { object = inClaim } })
+            and ranBy(bare, { square = far, mode = "scrap", moveProps = { object = T.worldObject(51, 50) } }),
+            "拆解、修理家具：照動到的物件那格（不是動作帶的 square）；有 MOVE、物件在範圍外照原版")
+        -- 撿起、旋轉：用原版的找法在 square 上找到的物件；邊上的物件另一側也查
+        local function finder(name, obj)
+            return { spriteName = "now", findOnSquare = function(_, _, n) if n == name then return obj end end }
+        end
+        check(not ranBy(bare, { square = at, mode = "pickup", moveProps = finder("now", T.edgeObject("IsoDoor", 105, 110, true)) })
+            and not ranBy(bare, { square = at, mode = "rotate", origSpriteName = "before",
+                moveProps = finder("before", T.edgeObject("IsoWindow", 105, 110, true)) })
+            and ranBy(mover, { square = at, mode = "pickup", moveProps = finder("now", T.edgeObject("IsoDoor", 105, 110, true)) }),
+            "撿起、旋轉邊上的門窗：所在格在範圍外、另一側在 claim、沒有 MOVE：被拒；有 MOVE 照原版")
+        check(ranBy(bare, { square = T.gridSquare(105, 99), mode = "pickup",
+                moveProps = finder("now", T.edgeObject("IsoDoor", 105, 99, true)) })
+            and ranBy(bare, { square = at, mode = "pickup", moveProps = finder("now", T.worldObject(105, 110)) })
+            and ranBy(bare, { square = at, mode = "pickup", moveProps = finder("other", inClaim) }),
+            "撿起：門窗兩側都在範圍外、不是邊上的物件、square 上找不到的名字：照原版")
     end
     local _, ranNil = edgeRun("ISDestroyStuffAction", bare, nil)
     local _, ranItem = edgeRun("ISBarricadeAction", bare, T.item("Base.Plank"))
