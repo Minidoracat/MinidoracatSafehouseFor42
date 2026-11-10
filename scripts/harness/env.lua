@@ -899,7 +899,7 @@ function T.resetTimedActions()
     T.group = {}
     buildUtil = buildUtil or {}
     for _, name in ipairs({ "getStairObjects", "getDoubleDoorObjects", "getGarageDoorObjects", "getGraveObjects" }) do
-        buildUtil[name] = function(obj) return T.group[name] and T.group[name](obj) or {} end
+        buildUtil[name] = function(obj, ...) return T.group[name] and T.group[name](obj, ...) or {} end
     end
 end
 function T.boxed(n) return { __boxed = n } end

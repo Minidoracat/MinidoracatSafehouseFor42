@@ -432,6 +432,9 @@ return function(T)
             return (T.ran["ISMoveablesAction.complete"] or 0) > before
         end
         check(moved("scrap") and not moved("repair"), "搬家具的雙開門：拆解只看同一對；修理四扇都看（另一對在 claim、沒有 MOVE 被拒）")
+        -- 樓梯頂端的平台地板：修理不動它（原版傳 skipFloor），拆解會一起拆
+        T.group = { getStairObjects = function(_, skipFloor) return skipFloor and {} or { inClaim } end }
+        check(moved("repair") and not moved("scrap"), "搬家具的樓梯：修理不看頂端平台地板；拆解照樣看（平台在 claim、沒有 MOVE 被拒）")
         T.group = {}
     end
     T.group = { getStairObjects = function() return { inClaim } end }

@@ -135,7 +135,9 @@ end
 local SLEDGE_GROUPS = { viaBuildUtil("getStairObjects"), viaBuildUtil("getDoubleDoorObjects"), viaBuildUtil("getGarageDoorObjects"),
     viaBuildUtil("getGraveObjects") }
 local REMOVE_GROUPS = { viaBuildUtil("getStairObjects"), doorPair, viaBuildUtil("getGarageDoorObjects") }
-local REPAIR_GROUPS = { viaBuildUtil("getStairObjects"), viaBuildUtil("getGarageDoorObjects"), viaBuildUtil("getDoubleDoorObjects") }
+-- 修理不動樓梯頂端的平台地板（原版傳 skipFloor，ISMoveableSpriteProps.lua:3522）
+local REPAIR_GROUPS = { function(obj) return buildUtil.getStairObjects(obj, true) end, viaBuildUtil("getGarageDoorObjects"),
+    viaBuildUtil("getDoubleDoorObjects") }
 local function groupCells(obj, finders)
     local cells = MSH.edgeCells(obj)
     if #cells == 0 then return cells end
