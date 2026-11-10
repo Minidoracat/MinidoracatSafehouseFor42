@@ -263,6 +263,12 @@ function MSH.toArray(list)
     return out
 end
 
+-- 原版「拆除」拆得掉的東西：玩家用建造選單蓋的（原版同一個判斷，ISDestroyCursor.lua:308）。
+-- 撿起再放下的家具也是 IsoThumpable，但不是 dismantable（ISMoveableSpriteProps.lua:2336, 2379）。
+function MSH.isBuilt(obj)
+    return obj ~= nil and instanceof(obj, "IsoThumpable") and obj:isDismantable() == true
+end
+
 -- ===== service-owner 標記（§4.2）=====
 
 function MSH.marker(claimId)

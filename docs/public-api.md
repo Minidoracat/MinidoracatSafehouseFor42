@@ -67,7 +67,7 @@ local ok = api ~= nil and api.API_MAJOR == 1 and type(api.CAPABILITIES) == "tabl
 | 動作完成、真的要放物件 | 伺服器 | 每一格 `denies(..., BITS.BUILD, { label = "MyMod:build" })`，有一格是 `true` 就整個不做 |
 | 按開關 | 伺服器 | 開關那一格查一次 `BITS.USE` |
 | 接線 | 伺服器 | 開關格與每盞燈的格各查一次 `BITS.BUILD` |
-| 對邊上已有的物件（門、窗、窗框、門框、牆、柵欄）做破壞、開鎖、路障或搬動類動作（例：撬開、大鎚、拆除、釘路障、拆路障，搬家具的撿起、旋轉、拆解） | 伺服器 | 物件所在格與另一側各查一次該動作的位元：在北邊的（門、窗、窗框 `getNorth()` 是 true；其他物件的圖塊屬性有 `cutN`、`collideN`、`WindowN` 或 `TallHoppableN`，或圖塊型別是 `doorFrN`）查 (x, y-1)，在西邊的（`getNorth()` 是 false；圖塊屬性有 `cutW`、`collideW`、`WindowW` 或 `TallHoppableW`，或圖塊型別是 `doorFrW`）查 (x-1, y)，轉角牆兩格都查；牆角柱（屬性 `WallSE`）雖然帶 `cutW`，只查所在格。目標是路障物件（`IsoBarricade`）時，另外查它釘的那個門窗（`getBarricadedObject()`）的兩側（本 MOD：破壞、開鎖、路障用 `BITS.BUILD`，搬家具的撿起、旋轉、拆解用 `BITS.MOVE`；開關門窗不查；建造或放下新物件只查它佔的格子） |
+| 對邊上已有的物件（門、窗、窗框、門框、牆、柵欄）做破壞、開鎖、路障或搬動類動作（例：撬開、大鎚、拆除、釘路障、拆路障，搬家具的撿起、旋轉、拆解） | 伺服器 | 物件所在格與另一側各查一次該動作的位元：在北邊的（門、窗、窗框 `getNorth()` 是 true；其他物件的圖塊屬性有 `cutN`、`collideN`、`WindowN` 或 `TallHoppableN`，或圖塊型別是 `doorFrN`）查 (x, y-1)，在西邊的（`getNorth()` 是 false；圖塊屬性有 `cutW`、`collideW`、`WindowW` 或 `TallHoppableW`，或圖塊型別是 `doorFrW`）查 (x-1, y)，轉角牆兩格都查；牆角柱（屬性 `WallSE`）雖然帶 `cutW`，只查所在格。目標是路障物件（`IsoBarricade`）時，另外查它釘的那個門窗（`getBarricadedObject()`）的兩側（本 MOD：破壞、開鎖、路障用 `BITS.BUILD`，搬家具的撿起、旋轉、拆解用 `BITS.MOVE`，拆解的目標是玩家蓋的東西（`IsoThumpable` 且 `isDismantable()`，也就是「拆除」拆得掉的）時另外也查 `BITS.BUILD`；開關門窗不查；建造或放下新物件只查它佔的格子） |
 | 拆掉或搬動多格物件（多格家具、多格 entity、雙開門、車庫門、樓梯、雞舍） | 伺服器 | 會一起被移除或搬動的每一塊所在的格子各查一次（本 MOD：大鎚與拆除用 `BITS.BUILD`，搬家具用 `BITS.MOVE`） |
 
 ```lua

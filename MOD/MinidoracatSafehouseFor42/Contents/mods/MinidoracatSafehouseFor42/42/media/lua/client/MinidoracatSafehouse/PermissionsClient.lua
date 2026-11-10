@@ -4,6 +4,7 @@
 --      （ISWorldObjectContextMenu.lua:211-214）；以選項的處理函式比對（addGetUpOption 把真正的處理函式放在 param1，
 --      ISContextMenu.lua:1038-1044），不比文字，換語系照樣對得上。子選單都登記在根選單的 instanceMap（:1199-1231）。
 --      「撬開」（42.22 onForceOpen）與拆路障照門窗兩側判斷，和伺服器同一份格子清單（MSH.edgeCells、PC.edgeHides）。
+--      「拆解」的目標是玩家蓋的東西（MSH.isBuilt）時，沒有 BUILD 也藏。
 --   2) 爐子／微波爐設定面板：沒有 USE 時藏掉 OK 鈕並擋 onClick（ISOvenUI.lua:157-171、ISMicrowaveUI.lua:31-37）；
 --      開面板的選單項目（onStoveSetting／onMicrowaveSetting）也照 1) 藏。
 --   3) 伺服器推 denied：MSH.Client.toast（框架 Toast，沒有框架就頭上紅字）說缺哪個權限。
@@ -149,6 +150,8 @@ function PC.filterMenu(context, bits, ladderOnly)
         end
     end
     local climb = W.onClimbLadder
+    -- 「拆解」子選單的每一項：addOption(名稱, playerObj, disassemble, v)，v.object 是目標（ISDisassembleMenu.lua:42）
+    local scrap = not ladderOnly and type(ISDisassembleMenu) == "table" and ISDisassembleMenu.disassemble or nil
     local subs = context.instanceMap or {}
     local menus = { context }
     for _, m in pairs(subs) do menus[#menus + 1] = m end
@@ -159,6 +162,10 @@ function PC.filterMenu(context, bits, ladderOnly)
             if fn == nil then return false end
             if blocked ~= nil and blocked[fn] == true then return true end
             if edge[fn] == true then return PC.edgeHides(edgeTarget(o), BIT.BUILD) end
+            if scrap ~= nil and fn == scrap then
+                local obj = type(o.param1) == "table" and o.param1.object or nil
+                return MSH.isBuilt(obj) and PC.edgeHides(obj, BIT.BUILD)
+            end
             return fn == climb and PC.ladderBlocked(ladderArgs(o))
         end)
     end

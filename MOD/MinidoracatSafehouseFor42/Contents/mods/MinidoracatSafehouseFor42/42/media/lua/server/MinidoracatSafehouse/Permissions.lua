@@ -14,7 +14,8 @@
 -- 有作物的每一格（wrapScything）；爐子面板 client command 只能在原版處理後翻回來（ClientCommands.lua:1146-1158）。
 -- 撬棍、大鎚、拆除、釘路障、拆路障的目標在邊上（門、窗、牆、柵欄）時兩側的格子都查（MSH.edgeCells、P.CELL_WRAPS）；
 -- 大鎚、拆除、搬家具的目標是多格物件時，每一塊的格子都查（groupCells、moveCells）。
--- 用語照原版繁中：「拆除」是 ISDismantleAction（BUILD），「拆解」是搬家具的 scrap（MOVE）。
+-- 用語照原版繁中：「拆除」是 ISDismantleAction（BUILD），「拆解」是搬家具的 scrap（MOVE；目標是「拆除」拆得掉的東西時
+-- BUILD 也要，使用者 2026-11-10）。
 -- 拒絕：Audit.deny 聚合（每分鐘一行）＋下個 tick 推 denied 給本人（每人每 tick 一則）。
 -- 檔尾是伺服器公開 API MinidoracatSafehouse.v1.denies（契約 docs/public-api.md）。
 
@@ -217,13 +218,17 @@ local function moveCells(a)
     return cells
 end
 
--- { 類別名, 位元, 取要查的格子（扁平 x1, y1, x2, y2…） }
+-- { 類別名, 位元, 取要查的格子（扁平 x1, y1, x2, y2…）, 另一個也要有的位元（選用：function(a) 回位元或 nil） }
 P.CELL_WRAPS = {
     { "ISDestroyStuffAction", BIT.BUILD, function(a) return groupCells(a.item, SLEDGE_GROUPS) end },       -- ISDestroyStuffAction.lua:362
     { "ISDismantleAction", BIT.BUILD, function(a) return groupCells(a.thumpable, REMOVE_GROUPS) end },     -- ISDismantleAction.lua:107
     { "ISBarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                      -- ISBarricadeAction.lua:193
     { "ISUnbarricadeAction", BIT.BUILD, function(a) return MSH.edgeCells(a.item) end },                    -- ISUnbarricadeAction.lua:167
-    { "ISMoveablesAction", BIT.MOVE, moveCells },
+    -- 拆解玩家蓋的東西（ISThumpableSpriteProps:scrapObjectViaCursor 這類，ISMoveableSpriteProps.lua:42, 4320-4358）和「拆除」
+    -- 拆的是同一批，BUILD 也要
+    { "ISMoveablesAction", BIT.MOVE, moveCells, function(a)
+        if a.mode == "scrap" and type(a.moveProps) == "table" and MSH.isBuilt(a.moveProps.object) then return BIT.BUILD end
+    end },
 }
 
 -- ===== 判定 =====
@@ -413,7 +418,7 @@ local function wrapComplete(name, bit, pick)
 end
 
 -- 目標是一串格子的動作（P.CELL_WRAPS）
-local function wrapCompleteCells(name, bit, cells)
+local function wrapCompleteCells(name, bit, cells, also)
     local cls = _G[name]
     if type(cls) ~= "table" or type(cls.complete) ~= "function" then
         MSH.log("permissions: " .. name .. ".complete missing, not wrapped")
@@ -421,7 +426,12 @@ local function wrapCompleteCells(name, bit, cells)
     end
     local orig = cls.complete
     cls.complete = function(self)
-        if self.character ~= nil and P.deniesCells(self.character, cells(self), bit, name) then return false end
+        if self.character ~= nil then
+            local list = cells(self)
+            if P.deniesCells(self.character, list, bit, name) then return false end
+            local more = also ~= nil and also(self) or nil
+            if more ~= nil and P.deniesCells(self.character, list, more, name) then return false end
+        end
         return orig(self)
     end
 end
@@ -578,7 +588,7 @@ function P.install()
     if P.installed then return end
     P.installed = true
     for _, w in ipairs(P.WRAPS) do wrapComplete(w[1], w[2], w[3]) end
-    for _, w in ipairs(P.CELL_WRAPS) do wrapCompleteCells(w[1], w[2], w[3]) end
+    for _, w in ipairs(P.CELL_WRAPS) do wrapCompleteCells(w[1], w[2], w[3], w[4]) end
     wrapTakeWater()
     wrapForceOpen()
     wrapBuild()
