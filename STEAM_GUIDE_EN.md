@@ -302,7 +302,7 @@ A switch under the list (on by default) marks the safehouses and no-build zones 
 [tr][th]Status[/th][th]Meaning[/th][/tr]
 [tr][td]Protected[/td][td]Protected normally.[/td][/tr]
 [tr][td]Server setup incomplete[/td][td]Creating and changing safehouses is paused. Ask an admin to check the missing settings in the admin panel.[/td][/tr]
-[tr][td]Lease expired (kept)[/td][td]Still protected while kept; others can't enter. Renew this tier's slot to restore it. If not renewed in time, protection ends and it is released.[/td][/tr]
+[tr][td]Lease expired (kept)[/td][td]Still protected while kept; others can't enter. Renew this tier's slot to restore it. If not renewed in time, protection ends and it is released. Until you renew, you can't change sharing, find items, set a respawn point, rename or redraw it.[/td][/tr]
 [tr][td]Faction share paused[/td][td]Open Members & sharing to see why and resume it.[/td][/tr]
 [tr][td]Member sync disrupted[/td][td]The member list was changed through vanilla actions and is being restored. Tell an admin if this keeps happening.[/td][/tr]
 [tr][td]Held for review, Repair paused[/td][td]Ask an admin to handle it by number in the admin panel.[/td][/tr]
