@@ -54,7 +54,7 @@ E.RENTAL_CEIL = MSH.Settings.BY_KEY.Tier1RentSlots.max
 
 E.currencies = E.currencies or {}
 E.pending = E.pending or {}     -- onEntitlementChanged 排隊：owner → { [tier] = true }（下個 tick 持鎖處理）
-E.watch = E.watch or {}         -- owner → tier → leaseId → { q, untilMs, key }：看過的寬限租約（RAM）
+E.watch = E.watch or {}         -- owner → tier → leaseId → { q, untilMs, key }：看過的寬限或已到期租約（RAM；onChanged 快照裡的 expired 截止記 0）
 E.SPENT_TAG = MSH.TAG .. "_EconomySpent"
 E.readErrorAt = E.readErrorAt or {}
 
@@ -396,7 +396,7 @@ function E.spentOf(owner, t)
     return s, o, md
 end
 
--- 這一輪新結束寬限、還沒算過的名額：現在列為 expired 的，加上看過寬限或 expired（這裡讀到的，或 onChanged 的快照）、
+-- 這一輪新結束寬限、還沒算過的名額：現在列為 expired 的，加上看過寬限（或 onChanged 快照裡的 expired）、
 -- 寬限截止已過、現在已經不在的（Economy 到期後可能同一次排程就移除，VM-RL:142-143 註解）。寬限截止前消失（退款）不算。
 -- 同一次到期只算一次（記在 Global ModData，重開機與 Economy 連續幾輪列著都不重算）；不再列著的租約記錄就刪（每人每級 ≤ 10 張）。
 -- hold 時結果未定：不算、不記，看過的寬限租約留到下一輪。
@@ -505,7 +505,7 @@ function E.locked(fn)
     return res.code ~= CODE.BUSY
 end
 
--- 屋主集合：all＝全部有非 legacy claim 的屋主（開服）；否則只看寬限觀察中與有 lapsed 的
+-- 屋主集合：all＝全部有非 legacy claim 的屋主（開服）；否則只看觀察中與有 lapsed 的
 local function owners(all)
     local set, list = {}, {}
     for owner in pairs(E.watch) do set[owner] = true end
