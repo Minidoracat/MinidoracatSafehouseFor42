@@ -321,6 +321,33 @@ return function(T)
     T.advance(HOUR)
     minute()
     check(m2.lifecycle == "active", "快照看過寬限、截止前退款：不停用")
+    -- 截止前退款，之後讀取失敗或 hold 一直拖過截止：退款當下的快照就丟掉觀察，不會被當成自然到期
+    local nina = T.player({ name = "nina", items = { D1 } })
+    seed("nina", rect(5100, 5100, 5, 5), 1)
+    T.econSet("nina", 1, 0, { lease("S6", 1, "active") })
+    local n2 = R.get(create(nina, 5200, 5200).claimId)
+    T.econSet("nina", 1, 0, { lease("S6", 1, "grace", T.now + HOUR, 6006) })
+    T.tick(1)
+    T.econ.failRead.nina = true
+    T.econSet("nina", 1, 0, {})
+    T.tick(1)
+    T.advance(HOUR)
+    T.econ.failRead.nina = nil
+    minute()
+    check(n2.lifecycle == "active", "截止前退款、讀取失敗拖過截止：不停用")
+    local olga = T.player({ name = "olga", items = { D1 } })
+    seed("olga", rect(5300, 5300, 5, 5), 1)
+    T.econSet("olga", 1, 0, { lease("S7", 1, "active") })
+    local o2 = R.get(create(olga, 5400, 5400).claimId)
+    T.econSet("olga", 1, 0, { lease("S7", 1, "grace", T.now + HOUR, 6007), lease("S8", 1, "pending") })
+    T.tick(1)
+    T.econSet("olga", 1, 0, { lease("S8", 1, "pending") })   -- S7 截止前退款，S8 還在待確認（hold）
+    T.tick(1)
+    T.advance(HOUR)
+    T.econSet("olga", 1, 0, {})                             -- S8 沒成，hold 結束
+    T.tick(1)
+    minute()
+    check(o2.lifecycle == "active", "截止前退款、hold 拖過截止：不停用")
 
     T.section("ABSENT：全部恢復、不釋出；FAILED：不動")
     local bobId = b2.claimId

@@ -92,7 +92,7 @@ function E.defaults(t)
     return {
         permanentEnabled = false, permanentCurrency = "survivor", permanentPrice = rent * 12, permanentLimit = E.PERMANENT_CEIL,
         rentalEnabled = false, rentalCurrency = "survivor", rentalPrice = rent, rentalLimit = E.RENTAL_CEIL, rentalDays = 30,
-        graceHours = 24, reminderHours = 24, autoRenewAllowed = true,
+        graceHours = 72, reminderHours = 24, autoRenewAllowed = true,
     }
 end
 
@@ -541,17 +541,21 @@ function E.onChanged(username, productId, snap)
     local t = E.tierOf(productId)
     if type(username) ~= "string" or t == nil then return end
     -- 寬限 0 的租約 Economy 同一次走訪就通知 expired 又移除，下個 tick 讀權益時已經不在：快照裡寬限中與已到期的
-    -- 先記進觀察（只動 RAM，不改紀錄），newlyEnded 看到它截止後不在了照樣算；expired＝寬限已過，截止記 0
+    -- 先記進觀察（只動 RAM，不改紀錄），newlyEnded 看到它截止後不在了照樣算；expired＝寬限已過，截止記 0。
+    -- 截止前就不在快照裡的是退款：當下丟掉，之後讀取失敗或 hold 拖過截止也不會被當成自然到期
     local l = type(snap) == "table" and type(snap.entitlement) == "table" and leases(snap.entitlement) or nil
     if l ~= nil then
         local w = E.watch[username] or {}
         local seen = w[t] or {}
+        local now, refunded = getTimestampMs(), {}
+        for id, g in pairs(seen) do
+            if l.stateById[id] == nil and g.untilMs ~= nil and now < g.untilMs then refunded[#refunded + 1] = id end
+        end
+        for _, id in ipairs(refunded) do seen[id] = nil end
         for id, g in pairs(l.graceById) do seen[id] = g end
         for _, x in ipairs(l.expiredList) do seen[x.id] = { q = x.q, untilMs = 0, key = x.key } end
-        if not isEmpty(seen) then
-            w[t] = seen
-            E.watch[username] = w
-        end
+        w[t] = not isEmpty(seen) and seen or nil
+        E.watch[username] = not isEmpty(w) and w or nil
     end
     local p = type(E.pending[username]) == "table" and E.pending[username] or {}
     p[t] = true
