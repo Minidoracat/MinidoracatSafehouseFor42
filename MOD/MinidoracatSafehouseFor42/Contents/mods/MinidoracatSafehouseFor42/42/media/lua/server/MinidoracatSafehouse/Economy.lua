@@ -246,7 +246,7 @@ local function leases(ent)
                 key = leaseKey(id, x.paidUntil) }
         elseif x.state == "expired" then
             l.expired = l.expired + x.quantity
-            l.expiredList[#l.expiredList + 1] = { q = x.quantity, key = leaseKey(id, x.paidUntil) }
+            l.expiredList[#l.expiredList + 1] = { id = id, q = x.quantity, key = leaseKey(id, x.paidUntil) }
         elseif x.state == "pending" or x.state == "paused_system" or x.state == "frozen" then
             l.hold = true
         end
@@ -396,8 +396,8 @@ function E.spentOf(owner, t)
     return s, o, md
 end
 
--- 這一輪新結束寬限、還沒算過的名額：現在列為 expired 的，加上看過寬限、寬限截止已過、現在已經不在的
--- （Economy 到期後可能同一次排程就移除，VM-RL:142-143 註解）。寬限截止前消失（退款）不算。
+-- 這一輪新結束寬限、還沒算過的名額：現在列為 expired 的，加上看過寬限或 expired（這裡讀到的，或 onChanged 的快照）、
+-- 寬限截止已過、現在已經不在的（Economy 到期後可能同一次排程就移除，VM-RL:142-143 註解）。寬限截止前消失（退款）不算。
 -- 同一次到期只算一次（記在 Global ModData，重開機與 Economy 連續幾輪列著都不重算）；不再列著的租約記錄就刪（每人每級 ≤ 10 張）。
 -- hold 時結果未定：不算、不記，看過的寬限租約留到下一輪。
 -- ponytail: 看過的寬限租約只記在 RAM；停機期間寬限結束又被 Economy 移除的租約，重開後只擋新增、不停用
@@ -540,6 +540,19 @@ function E.onChanged(username, productId, snap)
     end
     local t = E.tierOf(productId)
     if type(username) ~= "string" or t == nil then return end
+    -- 寬限 0 的租約 Economy 同一次走訪就通知 expired 又移除，下個 tick 讀權益時已經不在：快照裡寬限中與已到期的
+    -- 先記進觀察（只動 RAM，不改紀錄），newlyEnded 看到它截止後不在了照樣算；expired＝寬限已過，截止記 0
+    local l = type(snap) == "table" and type(snap.entitlement) == "table" and leases(snap.entitlement) or nil
+    if l ~= nil then
+        local w = E.watch[username] or {}
+        local seen = w[t] or {}
+        for id, g in pairs(l.graceById) do seen[id] = g end
+        for _, x in ipairs(l.expiredList) do seen[x.id] = { q = x.q, untilMs = 0, key = x.key } end
+        if not isEmpty(seen) then
+            w[t] = seen
+            E.watch[username] = w
+        end
+    end
     local p = type(E.pending[username]) == "table" and E.pending[username] or {}
     p[t] = true
     E.pending[username] = p

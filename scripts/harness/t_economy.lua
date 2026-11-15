@@ -277,6 +277,26 @@ return function(T)
     check(d2.lifecycle == "active", "退款與管理員調低造成的超額：不停用")
     check(create(dave, 1800, 1800).code == "QUOTA_FULL", "…只擋新增")
 
+    T.section("通知快照裡的到期也算：寬限 0 同一次走訪就到期又移除")
+    -- Economy 同一次走訪先通知 expired、再移除（ECEntitlements visitLease），本 MOD 下個 tick 才讀權益，讀到時已經不在
+    local hank = T.player({ name = "hank", items = { D1 } })
+    seed("hank", rect(4000, 4000, 5, 5), 1)
+    T.econSet("hank", 1, 0, { lease("S1", 1, "active") })
+    local h2 = R.get(create(hank, 4100, 4100).claimId)
+    T.econSet("hank", 1, 0, { lease("S1", 1, "expired", T.now, 6001) })
+    T.econSet("hank", 1, 0, {})
+    T.tick(1)
+    check(h2.lifecycle == "lapsed", "寬限 0：快照看過 expired、讀的時候已移除 → 停用")
+    local ida = T.player({ name = "ida", items = { D1 } })
+    seed("ida", rect(4300, 4300, 5, 5), 1)
+    T.econSet("ida", 1, 0, { lease("S2", 1, "active", nil, 6002) })
+    local i2 = R.get(create(ida, 4400, 4400).claimId)
+    T.econSet("ida", 1, 0, { lease("S2", 1, "expired", nil, 6002) })
+    T.econSet("ida", 1, 0, { lease("S2", 1, "active", nil, 6002 + DAY) })   -- 移除前手動續租
+    T.tick(1)
+    minute()
+    check(i2.lifecycle == "active", "快照看過 expired、讀的時候已續租：不停用")
+
     T.section("ABSENT：全部恢復、不釋出；FAILED：不動")
     local bobId = b2.claimId
     boot({ econ = false, keepGmd = true, keepFiles = true, keepHouses = true })
