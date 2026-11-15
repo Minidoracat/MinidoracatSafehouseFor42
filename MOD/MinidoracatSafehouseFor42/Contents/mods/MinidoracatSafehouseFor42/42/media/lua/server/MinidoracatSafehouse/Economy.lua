@@ -86,7 +86,7 @@ function E.tierEnabled(cfg, t)
     return cfg.tiers[t].enabled and (cfg.createMode ~= MSH.Settings.CREATE.FREE or t == 1)
 end
 
--- 世界第一次看到產品時的方案（之後改值全走 setPlan）：兩種販售都關，買斷＝月租 × 12（§1.3 第 57 行）
+-- 世界第一次看到產品時的方案（之後改值全走 setPlan）：兩種販售都關，買斷＝月租 × 12（§1.3 第 57 行）；寬限 72 小時（使用者 2026-11-16，原本 24）
 function E.defaults(t)
     local rent = E.RENT_DEFAULT[t] or E.RENT_DEFAULT[3]
     return {

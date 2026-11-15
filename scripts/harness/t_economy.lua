@@ -72,7 +72,7 @@ return function(T)
         local v = plan and plan.values
         okDefaults = okDefaults and spec ~= nil and spec.instant == true and spec.freezeWhenAbsent == true
             and type(spec.validatePurchase) == "function" and v.permanentEnabled == false and v.rentalEnabled == false
-            and v.rentalPrice == rents[t] and v.permanentPrice == rents[t] * 12 and v.rentalDays == 30
+            and v.rentalPrice == rents[t] and v.permanentPrice == rents[t] * 12 and v.rentalDays == 30 and v.graceHours == 72
             and v.permanentCurrency == "survivor" and v.rentalCurrency == "survivor"
     end
     check(n == 8 and okDefaults, "8 個產品：instant、freezeWhenAbsent、販售都關、月租 100/300/700…、買斷＝月租×12、30 天")
@@ -348,6 +348,31 @@ return function(T)
     T.tick(1)
     minute()
     check(o2.lifecycle == "active", "截止前退款、hold 拖過截止：不停用")
+    -- 對照組：截止那一刻、讀取失敗期間的自然到期照樣停用（只丟截止前就不在的）
+    local pia = T.player({ name = "pia", items = { D1 } })
+    seed("pia", rect(5500, 5500, 5, 5), 1)
+    T.econSet("pia", 1, 0, { lease("S9", 1, "active") })
+    local p2 = R.get(create(pia, 5600, 5600).claimId)
+    T.econSet("pia", 1, 0, { lease("S9", 1, "grace", T.now + HOUR, 6009) })
+    T.tick(1)
+    T.advance(HOUR - 100)          -- T.tick 推進 100 ms：現在剛好是截止時間
+    T.econSet("pia", 1, 0, {})
+    T.tick(1)
+    check(p2.lifecycle == "lapsed", "截止那一刻移除：照樣停用")
+    local quin = T.player({ name = "quin", items = { D1 } })
+    seed("quin", rect(5700, 5700, 5, 5), 1)
+    T.econSet("quin", 1, 0, { lease("S10", 1, "active") })
+    local q2 = R.get(create(quin, 5800, 5800).claimId)
+    T.econSet("quin", 1, 0, { lease("S10", 1, "grace", T.now + HOUR, 6010) })
+    T.tick(1)
+    T.econ.failRead.quin = true
+    T.advance(HOUR)
+    T.econSet("quin", 1, 0, { lease("S10", 1, "expired", nil, 6010) })
+    T.econSet("quin", 1, 0, {})
+    T.tick(1)
+    T.econ.failRead.quin = nil
+    minute()
+    check(q2.lifecycle == "lapsed", "讀取失敗期間自然到期又移除：恢復讀取後停用")
 
     T.section("ABSENT：全部恢復、不釋出；FAILED：不動")
     local bobId = b2.claimId
