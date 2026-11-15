@@ -36,7 +36,7 @@ do
     if UI ~= nil and UI.WhatsNew ~= nil then
         UI.WhatsNew.register({
             modId = "MinidoracatSafehouseFor42",
-            since = "0.14.0",
+            since = "0.15.0",
             name = "IGUI_MSH_Alert_Title",
             text = "IGUI_MSH_WhatsNew",
         })
