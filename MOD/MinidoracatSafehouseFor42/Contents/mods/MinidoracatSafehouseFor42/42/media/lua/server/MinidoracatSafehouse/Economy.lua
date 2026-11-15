@@ -6,9 +6,9 @@
 -- 停用照 VM RentLock（MinidoracatVehicleManager_RentLock.lua:79-147）改成「只在寬限結束時」：
 --   每個租約到期（租約 id＋paidUntil）在第一次看到寬限結束時算一次，記在 Global ModData（重開不重算）；
 --   該級停用數＝min(超額, 已停用間數＋這次新結束的名額)，停用該屋主該級最新的付費間
---   （lifecycle＝lapsed，原生移除與 remove delta 交給 Reconcile）；退款與管理員調低（沒有新結束的名額）只擋新增。
---   續租或名額空出 → 由舊到新恢復（Reconcile 重建原生）；
---   lapsedAt＋lapseKeepDays 期滿才釋出。ABSENT：全部恢復、不釋出；UNSUPPORTED／FAILED／查詢失敗：什麼都不改。
+--   （lifecycle＝lapsed；保留期內原生照留、照樣保護，使用者 2026-11-15）；退款與管理員調低（沒有新結束的名額）只擋新增。
+--   續租或名額空出 → 由舊到新恢復（只改 lifecycle，原生本來就在）；
+--   lapsedAt＋lapseKeepDays 期滿才釋出（解除保護）。ABSENT：全部恢復、不釋出；UNSUPPORTED／FAILED／查詢失敗：什麼都不改。
 -- 觸發：onEntitlementChanged（排到下個 tick 持鎖處理）、每分鐘、開服。
 -- Economy 出處（D:/github/MinidoracatEconomyFor42/…/42/media/lua/server/MinidoracatEconomy/，下稱 ECE＝ECEntitlements.lua、
 --   ECP＝ECEntitlementPlans.lua、ECI＝ECIntegration.lua）：facade 能力 ECE:1857-1865；registerSource ECI:174-212；

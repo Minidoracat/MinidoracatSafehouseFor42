@@ -5,8 +5,8 @@
 -- 位元的唯一來源是 Claims.roleOf；原生名單應有的人是 Native.desiredPlayers。Reconcile 也用 desiredPlayers 收斂，
 --   兩邊同一個判定，所以不會一邊加、一邊移。
 -- 撤銷（移除、停止分享、陣營暫停、離開、陣營少了人）用 Native.revoke（kickUserFromSafehouse：人在屋內立即傳出，§4.4），
---   只撤銷不再有任何資格的人；新增用 addPlayer＋放鎖後廣播。一間的每一塊（每個原生）都照同一份名單改；
---   原生不在（lapsed、等收斂重建）就只改紀錄。
+--   只撤銷不再有任何資格的人；新增用 addPlayer＋放鎖後廣播。一間的每一塊（每個原生）都照同一份名單改，
+--   lapsed 保留期內也照改（原生還在）；原生不在（等收斂重建）就只改紀錄。
 --   陣營少了人沒有事件：Sh.last 記上次套用的名單，同步時比對出要撤銷的人（Reconcile 可能已先安靜移除，撤銷補上傳出）。
 -- 陣營有效性照 VM（Native.faction）；失效 → 持久化 SUSPENDED＋reason（GONE／LEADER_CHANGED／OWNER_LEFT）。
 --   全服關閉 AllowFactionShare 只停止投影（成員照樣撤銷）、不寫 SUSPENDED，重新開啟就恢復，和 VM 相同。
@@ -130,7 +130,7 @@ function Sh.apply(rec, old, defer, idx)
         affected[u] = true
         changed = true
     end
-    if rec.lifecycle ~= LC.ACTIVE then return affected, changed end
+    if not MSH.GUARDED[rec.lifecycle] then return affected, changed end
     local houses = {}
     for _, e in ipairs(MSH.Lifecycle.findNatives(rec, idx or N.index()) or {}) do
         if e then houses[#houses + 1] = e.house end

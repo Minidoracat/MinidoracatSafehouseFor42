@@ -1,5 +1,5 @@
 -- MinidoracatSafehouse/Permissions.lua：細分權限 USE／MOVE／BUILD／FARM 的伺服器防線（計畫 §6.6，契約「M2 細分權限」）。
--- 只比原版更嚴：目標格在 managed claim（R.list() 中 lifecycle＝active，含 legacy 來源）裡、actor 不是屋主、
+-- 只比原版更嚴：目標格在 managed claim（R.list() 中受保護的 lifecycle＝MSH.GUARDED：active 與保留期內的 lapsed，含 legacy 來源）裡、actor 不是屋主、
 -- MSH.Claims.roleOf 的位元缺該位 → 拒絕；managed 以外（含 foreign 原生屋）照原版。不分安全屋內外的只有三處，
 -- 都是正常客戶端不會送的值：農務指令 cheat 不接受改作物的 x, y（wrapFarmingCommands；判定靠這兩個欄位）、
 -- 建造的座標不是有限數就不蓋（wrapBuild）、割草沒有 character／sq 或 radius 不是數字就不割（wrapScything）。
@@ -232,15 +232,15 @@ P.CELL_WRAPS = {
 
 -- ===== 判定 =====
 
--- 含 (x, y) 的 managed claim（active；legacy 匯入的也是 active），看每一塊。範圍互不重疊（§7.3），第一筆就是，
+-- 含 (x, y) 的受保護 claim（MSH.GUARDED：active、lapsed；legacy 匯入的是 active），看每一塊。範圍互不重疊（§7.3），第一筆就是，
 -- 所以不必排序：直接走 R.md.claims（同 R.list 的篩選：整數 id、table、非 malformed），每個包裝到的動作都會走這裡，
 -- 不配置、不排序（照 Admin.lua、Sharing.lua 的直接走訪）。
 function P.claimAt(x, y)
     local md = MSH.Registry.md
     if md == nil then return nil end
-    local ACTIVE = MSH.LIFECYCLE.ACTIVE
+    local GUARDED = MSH.GUARDED
     for id, rec in pairs(md.claims) do
-        if MSH.isInt(id) and type(rec) == "table" and not rec.malformed and rec.lifecycle == ACTIVE
+        if MSH.isInt(id) and type(rec) == "table" and not rec.malformed and GUARDED[rec.lifecycle]
             and MSH.Rect.listContains(rec.rects, x, y) then
             return rec
         end

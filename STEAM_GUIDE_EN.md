@@ -302,7 +302,7 @@ A switch under the list (on by default) marks the safehouses and no-build zones 
 [tr][th]Status[/th][th]Meaning[/th][/tr]
 [tr][td]Protected[/td][td]Protected normally.[/td][/tr]
 [tr][td]Server setup incomplete[/td][td]Creating and changing safehouses is paused. Ask an admin to check the missing settings in the admin panel.[/td][/tr]
-[tr][td]Suspended (lease expired)[/td][td]Renew this tier's slot to restore protection. It will be released if not renewed in time.[/td][/tr]
+[tr][td]Lease expired (kept)[/td][td]Still protected while kept; others can't enter. Renew this tier's slot to restore it. If not renewed in time, protection ends and it is released.[/td][/tr]
 [tr][td]Faction share paused[/td][td]Open Members & sharing to see why and resume it.[/td][/tr]
 [tr][td]Member sync disrupted[/td][td]The member list was changed through vanilla actions and is being restored. Tell an admin if this keeps happening.[/td][/tr]
 [tr][td]Held for review, Repair paused[/td][td]Ask an admin to handle it by number in the admin panel.[/td][/tr]
@@ -313,7 +313,7 @@ A switch under the list (on by default) marks the safehouses and no-build zones 
 [*] [b]Respawning[/b]: after you die, your next character always starts on the tile you stood on, whatever you pick in the spawn menu; if you die during the same session, the spawn location menu is skipped.
 [*] [b]Upper floors[/b]: if the server can't confirm that floor is still there at that moment (the area isn't loaded, or the floor was dismantled or burned), you start on the same tile at ground level.
 [*] [b]One per player[/b]: setting it in another safehouse replaces it; you can also press "Clear respawn point".
-[*] [b]Paused[/b]: while the safehouse is released or suspended, or you've been removed as a member, you spawn the vanilla way; it works again once you have access back.
+[*] [b]Paused[/b]: while the safehouse is released or kept after its lease expired, or you've been removed as a member, you spawn the vanilla way; it works again once you have access back.
 [*] [b]Server must allow it[/b]: with the vanilla server option SafehouseAllowRespawn off, it can't be set and isn't used.
 [/list]
 === 🧰 Indoor check
@@ -384,23 +384,23 @@ Default prices (set per tier by admins):
 [*] [b]Each tier[/b]: the heading shows how many safehouses you have and the maximum; the next line shows the free, bought and rented slots used and their limits; with paid slots to spare, it says how many more you can build.
 [*] [b]Buy and rent[/b]: the buttons are disabled at the limit, with "This tier is at its limit: you can't buy or rent more." underneath.
 [*] [b]Payment results[/b]: shown under the tier you paid for, both while working and when done; a notification also pops up once the payment has a result.
-[*] [b]Leases[/b]: expand to see every lease, renew it or toggle "Auto-renew"; the last line reads "Leases are not tied to a specific safehouse. When a lease ends and this tier has fewer paid slots than safehouses using them, the newest one loses protection first and gets it back once you have a slot for it again."
+[*] [b]Leases[/b]: expand to see every lease, renew it or toggle "Auto-renew"; the last line reads "Leases are not tied to a specific safehouse. When a lease ends and this tier has fewer paid slots than safehouses using them, the newest one is kept and stays protected. It comes back once you have a slot for it again; protection ends and it is released only when the keep period runs out."
 [*] [b]Nothing to show[/b]: it says "This server offers no slots."
 [*] [b]Live updates[/b]: after a payment, renewal, expiry, creating or abandoning a safehouse, or an admin changing slot numbers, an open slots window and create panel update themselves.
 [/list]
 [h3]When a lease ends[/h3]
 [list]
 [*] [b]Grace[/b]: an expired lease enters grace first; slots in grace can't be used for new safehouses.
-[*] [b]Suspended[/b]: if you're still over the limit for that tier after grace, your newest paid-slot safehouses of that tier are suspended (never more than the number of slots that ended): protection pauses and the area is kept for 7 days (adjustable).
-[*] [b]Restore[/b]: renewing, or getting a slot back for it, restores protection; the area is released only after the keep period.
+[*] [b]Kept[/b]: if you're still over the limit for that tier after grace, your newest paid-slot safehouses of that tier are kept (never more than the number of slots that ended): they stay protected so others can't enter, and the area is kept for 7 days (adjustable). While kept, renew first to change sharing, set a respawn point, use item search (remote take included), rename or redraw.
+[*] [b]Restore[/b]: renewing, or getting a slot back for it, restores it; protection ends and the area is released only after the keep period.
 [*] [b]Other tiers[/b]: not affected.
-[*] [b]Refunds or an admin lowering the numbers (free slots included)[/b]: the excess doesn't suspend anything, it only blocks new safehouses.
+[*] [b]Refunds or an admin lowering the numbers (free slots included)[/b]: the excess doesn't put anything into the keep period, it only blocks new safehouses.
 [/list]
 [h3]When a tier closes or Economy is removed[/h3]
 [list]
 [*] [b]Admin removes a deed tier[/b]: no new slots for that tier can be bought; existing leases can still be renewed or set to auto-renew in the slots window.
-[*] [b]Economy removed from the server[/b]: suspended safehouses are protected again; the excess only blocks new ones.
-[*] [b]Unsupported Economy version or a read failure[/b]: nothing changes; nothing is suspended or restored.
+[*] [b]Economy removed from the server[/b]: kept safehouses go back to normal; the excess only blocks new ones.
+[*] [b]Unsupported Economy version or a read failure[/b]: nothing changes; nothing starts or ends a keep period, and kept safehouses stay protected until Economy can be read again.
 [/list]
 === 🧰 Idle release and insurance
 Safehouses nobody comes back to for too long are released automatically, freeing the land.
@@ -712,10 +712,10 @@ Server-side data:
 [*] The name must match exactly, including case; picking from the suggestions under the box is safest.
 [*] The server doesn't know players who never joined; share once they're online.
 [/list]
-[h3]My safehouse says "Suspended (lease expired)"?[/h3]
+[h3]My safehouse says "Lease expired (kept)"?[/h3]
 [list]
 [*] The paid slot's lease ended and the grace period is over.
-[*] Renew in the slots window to restore protection; it's released if not renewed within the keep period (7 days by default).
+[*] It stays protected while kept. Renew in the slots window to restore it; if not renewed within the keep period (7 days by default), protection ends and it is released.
 [/list]
 [h3]My safehouse was released?[/h3]
 [list]

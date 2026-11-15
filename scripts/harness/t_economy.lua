@@ -186,7 +186,14 @@ return function(T)
     T.sandbox("Tier1BuySlots", 5)
     T.sandbox("Tier1RentSlots", 0)
 
-    T.section("停用：只有寬限結束造成的超額，停該級最新一間")
+    T.section("停用：只有寬限結束造成的超額，停該級最新一間；保留期內照樣保護")
+    local function removesOf(id)
+        local n = 0
+        for _, a in ipairs(T.broadcastsOf("nativeRemove")) do if a.claimId == id then n = n + 1 end end
+        return n
+    end
+    local mal = T.player({ name = "mallory" })
+    local inside = T.gridSquare(302, 302)
     T.econSet("alice", 1, 0, { lease("L1", 1, "active"), lease("L2", 1, "grace", T.now + HOUR) })
     T.tick(1)
     check(a2.lifecycle == "active" and a3.lifecycle == "active", "寬限中仍算 usable：不停用")
@@ -196,7 +203,17 @@ return function(T)
     check(a3.lifecycle == "lapsed" and a3.lapsedAt == T.now and a2.lifecycle == "active" and a1.lifecycle == "active"
         and a4.lifecycle == "active" and a5.lifecycle == "active", "寬限結束仍超額：停 tier1 最新一間；免費位與別級不動")
     T.tick(5)
-    check(T.houseOf(MSH.marker(a3.claimId)) == nil, "Reconcile 移除停用屋的原生")
+    local h3 = T.houseOf(MSH.marker(a3.claimId))
+    check(h3 ~= nil and removesOf(a3.claimId) == 0, "保留期內：原生留著、不送 remove delta")
+    check(SafeHouse.isSafehouseAllowTrepass(inside, mal) == false and SafeHouse.isSafehouseAllowTrepass(inside, alice) == true,
+        "保留期內：外人不能進、屋主可以")
+    -- 2026-11-15 起因：停用後外人進到停車場開走車。車上的外人照樣被伺服器保底傳出去（Vehicles.check）
+    mal.x, mal.y = 302.5, 302.5
+    local tp0 = #T.teleports
+    MSH.Vehicles.check(mal, T.now)
+    check(#T.teleports == tp0 + 1 and T.teleports[#T.teleports].name == "mallory",
+        "保留期內：外人開車進來，伺服器保底把他傳到屋外")
+    mal.x, mal.y = 0, 0
     minute()
     check(a2.lifecycle == "active" and a3.lifecycle == "lapsed", "再評估：不多停")
     local info = E.claimInfo(a3)
@@ -204,12 +221,14 @@ return function(T)
         "claimInfo：付費、等級、停用時間與釋出時間")
     check(E.claimInfo(a1).paid == false and E.claimInfo(a1).lapsedAt == nil, "claimInfo：免費位不是付費")
 
-    T.section("續租恢復、Reconcile 重建原生")
+    T.section("續租恢復：原生原封不動、不重建、不廣播")
+    local syncs0 = #T.syncs
     T.econSet("alice", 1, 0, { lease("L1", 1, "active"), lease("L2", 1, "active") })
     T.tick(1)
     check(a3.lifecycle == "active" and a3.lapsedAt == nil, "續租：恢復 active")
     T.tick(5)
-    check(T.houseOf(MSH.marker(a3.claimId)) ~= nil, "Reconcile 重建原生")
+    check(T.houseOf(MSH.marker(a3.claimId)) == h3 and #T.syncs == syncs0 and removesOf(a3.claimId) == 0,
+        "續租：同一個原生、不重建、不廣播")
 
     T.section("期滿釋出（只在 READY）")
     T.econSet("alice", 1, 0, { lease("L1", 1, "active"), lease("L2", 1, "expired", nil, 1002) })
@@ -222,6 +241,9 @@ return function(T)
     minute()
     check(a3.lifecycle == "released" and a3.releaseReason == "LAPSE_EXPIRED" and R.get(a3.claimId) == nil
         and R.tomb(a3.claimId) ~= nil and a2.lifecycle == "active", "lapseKeepDays 期滿 → released（只剩 tombstone）")
+    T.tick(5)
+    check(T.houseOf(MSH.marker(a3.claimId)) == nil and removesOf(a3.claimId) == 1
+        and SafeHouse.isSafehouseAllowTrepass(inside, mal) == true, "期滿：原生移除、remove delta 恰好一次、外人可以進")
 
     T.section("寬限結束後租約直接被移除也算；寬限截止前移除（退款）與管理員調低不停用")
     local bob = T.player({ name = "bob", items = { D1 } })

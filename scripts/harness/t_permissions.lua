@@ -154,10 +154,16 @@ return function(T)
     local before = T.ran["ISFluidTransferAction.complete"] or 0
     check(fl:complete() == true and T.ran["ISFluidTransferAction.complete"] == before + 1, "液體面板兩邊都是物品：照原版")
 
-    -- LAPSED 的屋（原生已移除）不擋
+    -- LAPSED 的屋：保留期內照樣保護（使用者 2026-11-15）；QUARANTINED 照原版（受保護的範圍沒擴過頭）
     rec.lifecycle = MSH.LIFECYCLE.LAPSED
     local r4, ran4 = run("ISToggleLightAction", bare, 105, 105)
-    check(r4 == true and ran4, "lapsed 的屋照原版")
+    local r5, ran5 = run("ISToggleLightAction", stranger, 105, 105)
+    local r6, ran6 = run("ISToggleLightAction", full, 105, 105)
+    check(r4 == false and not ran4 and r5 == false and not ran5, "lapsed 保留期內：沒有位元的成員與外人被拒")
+    check(r6 == true and ran6, "lapsed 保留期內：有位元的成員照原版")
+    rec.lifecycle = MSH.LIFECYCLE.QUARANTINED
+    local r7, ran7 = run("ISToggleLightAction", bare, 105, 105)
+    check(r7 == true and ran7, "quarantined 的屋照原版")
     rec.lifecycle = MSH.LIFECYCLE.ACTIVE
 
     T.section("Permissions：取水")

@@ -6,7 +6,8 @@
 --   一間有幾塊就有幾個原生（共用標記，使用者 2026-10-11 裁定多塊），每個有變動的原生每輪最多一次 service-owner
 --   廣播；廣播、remove delta、admin alert 都排進 sends，放鎖之後才送（§6.2 最後一段）。
 -- blocked mode（§5）：不重建消失的原生、不把 missing 轉 released、不刪紀錄；名單／標題／owner 收斂、
---   releasing 收尾。恢復後下一輪收斂一次補做重建。lapsed 期滿釋出歸 Economy.lua（只在 READY 時，§1.3 第 61 行）。
+--   releasing 收尾。恢復後下一輪收斂一次補做重建。lapsed 保留期內和 active 一樣收斂（原生留著、缺了補建，
+--   使用者 2026-11-15）；期滿釋出歸 Economy.lua（只在 READY 時，§1.3 第 61 行）。
 -- released 紀錄只剩 md.tombs 的精簡 tombstone（Registry）；收斂與 GC 都看 R.tomb／R.tombList。
 -- malformed 紀錄（沒有合法範圍）收斂一律略過，只給管理員 targeted recovery。
 -- 可觀測性（§12.4）：Rc.health() 給上次成功 sweep 時間、待修復數、目前最久的 drift 持續時間、干擾數。
@@ -83,7 +84,7 @@ local function clearQuietInterference(now)
 end
 
 -- 這一輪要收斂的紀錄（active、lapsed、releasing），每輪開頭走訪 registry 一次填進共用陣列（不排序：收斂與順序無關，
--- 省掉每輪 1,280 筆的排序；不每輪重配）。malformed（沒有合法 rect）略過。後面三步（owner drift、inactive、active）
+-- 省掉每輪 1,280 筆的排序；不每輪重配）。malformed（沒有合法 rect）略過。後面三步（owner drift、releasing、受保護）
 -- 都走這份，各自當下再看 lifecycle 與 md.claims[id] 是不是還是它：inactive 那步 markReleased 會把 md.claims[id] 設 nil。
 local live, liveN = {}, 0
 local function collectLive()
@@ -133,7 +134,7 @@ end
 -- 上一輪確認剛好是 want 的名單：索引 entry → { want, snap＝那時 live list 的 Java 複本 }。這輪同一份 want、
 -- live list 和複本 ArrayList.equals 相同（一次引擎呼叫，不逐個 l:get(i)）＝rosterClean 這輪也成立：它只看名單內容、
 -- want／wanted（desiredPlayers 輸入一變就換新的 table，不改舊的）與標記（照 claimId，同一個 entry 不變）。
--- 索引換新時整份清掉（pass 的 active 迴圈開頭）：舊索引的 entry 不會再被查到，只是不讓它們留在記憶體。
+-- 索引換新時整份清掉（pass 的受保護〔MSH.GUARDED〕迴圈開頭）：舊索引的 entry 不會再被查到，只是不讓它們留在記憶體。
 local cleanRoster, cleanIdx = {}, nil
 
 -- 名單、標題收斂（native 已確認是這筆紀錄的）。回傳是否需要廣播。want／wanted 是 Native.desiredPlayers 的陣列與集合，
@@ -195,7 +196,7 @@ end
 -- owner drift：同範圍＋同建立時間指紋的原生，owner 卻不是標記（例：owner packet，§2.2）→ 換回標記。
 -- 只看標記原生比塊數少的紀錄（常態每塊都在，不必每輪逐塊讀建立時間）。先做這步再建索引，
 -- 換回來的原生在本輪就照一般路徑收斂名單。
--- 只有 active 排廣播：lapsed／releasing 的原生本輪就會被移除，廣播只會讓客戶端把它加回去（只送 remove delta）。
+-- 受保護的（active、lapsed）排廣播；releasing 的原生本輪就會被移除，廣播只會讓客戶端把它加回去（只送 remove delta）。
 local function fixOwners(idx, now, st)
     local N = MSH.Native
     local fixed = false
@@ -215,7 +216,7 @@ local function fixOwners(idx, now, st)
                         if e.claimId ~= id and N.pieceOf(rec, e) == i then
                             -- setOwner 也把新 owner 從 players 移除（SafeHouse.java:660-663）
                             e.house:setOwner(MSH.marker(id))
-                            if lc == LC.ACTIVE then
+                            if MSH.GUARDED[lc] then
                                 st.changed[id .. ":" .. i] = e.house
                                 st.drift[id] = true
                             end
@@ -236,7 +237,7 @@ local function sendRemove(st, id)
     st.sends[#st.sends + 1] = function() MSH.Native.sendRemove(id) end
 end
 
--- releasing／lapsed：只移除原生、收尾，不重建
+-- releasing：只移除原生、收尾，不重建（lapsed 保留期內照 active 收斂）
 local function convergeInactive(id, rec, idx, now, st)
     local N, R, L = MSH.Native, MSH.Registry, MSH.Lifecycle
     local entries, why = L.findNatives(rec, idx)
@@ -258,7 +259,7 @@ local function convergeInactive(id, rec, idx, now, st)
         st.removed = true
         sendRemove(st, id)
     end
-    if rec.lifecycle == LC.RELEASING then R.markReleased(rec, "RELEASE_RECOVERED", now) end
+    R.markReleased(rec, "RELEASE_RECOVERED", now)
 end
 
 -- 同一代原生：範圍與建立時間（getDatetimeCreated，SafeHouse.java:681-683，存檔保存）都和 tombstone 的某一塊相同。
@@ -379,7 +380,7 @@ local function recoverOrphans(idx, now)
     end
 end
 
--- 一輪收斂；呼叫端持鎖。先移除該移除的（重畫留下的舊原生可能與新 claim 重疊），重建索引後再處理 active。
+-- 一輪收斂；呼叫端持鎖。先移除該移除的（重畫留下的舊原生可能與新 claim 重疊），重建索引後再處理受保護的（MSH.GUARDED）。
 local function pass(now, st)
     local N = MSH.Native
     collectLive()
@@ -390,7 +391,7 @@ local function pass(now, st)
     for i = 1, liveN do
         local rec = live[i]
         local lc = rec.lifecycle
-        if (lc == LC.LAPSED or lc == LC.RELEASING) and current(rec) then
+        if lc == LC.RELEASING and current(rec) then
             convergeInactive(rec.claimId, rec, idx, now, st)
         end
     end
@@ -398,7 +399,7 @@ local function pass(now, st)
     if idx ~= cleanIdx then cleanRoster, cleanIdx = {}, idx end
     for i = 1, liveN do
         local rec = live[i]
-        if rec.lifecycle == LC.ACTIVE and current(rec) then convergeActive(rec.claimId, rec, idx, now, st) end
+        if MSH.GUARDED[rec.lifecycle] and current(rec) then convergeActive(rec.claimId, rec, idx, now, st) end
     end
     return first
 end
@@ -477,7 +478,7 @@ function Rc.tick(now)
     end
 end
 
--- 給管理員 health detail（§12.4）：lastSuccessAt（上次完整成功 sweep）、pendingRepair（active 但原生缺著
+-- 給管理員 health detail（§12.4）：lastSuccessAt（上次完整成功 sweep）、pendingRepair（受保護〔MSH.GUARDED〕但原生缺著
 -- ＋quarantined，含 malformed）、longestDriftMs（上次成功那輪還沒收斂的 claim 裡最久的）、interference（受干擾 claim 數）
 function Rc.health()
     local R = MSH.Registry
@@ -485,7 +486,7 @@ function Rc.health()
     for id, rec in pairs(R.md and R.md.claims or {}) do
         if type(rec) == "table" then
             local f = Rc.claimFlags[id]
-            if rec.lifecycle == LC.QUARANTINED or (rec.lifecycle == LC.ACTIVE and f and f.missing) then
+            if rec.lifecycle == LC.QUARANTINED or (MSH.GUARDED[rec.lifecycle] and f and f.missing) then
                 pending = pending + 1
             end
         end

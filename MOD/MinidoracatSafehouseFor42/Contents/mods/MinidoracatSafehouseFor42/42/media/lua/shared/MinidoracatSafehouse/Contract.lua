@@ -65,6 +65,9 @@ MSH.LIFECYCLE = {
     QUARANTINED = "quarantined",
 }
 
+-- 有原生、受保護的 lifecycle：lapsed 在保留期內照樣保護，期滿才釋出（使用者 2026-11-15，decisions.md）
+MSH.GUARDED = { [MSH.LIFECYCLE.ACTIVE] = true, [MSH.LIFECYCLE.LAPSED] = true }
+
 MSH.SOURCE = { FREE = "free", DEED = "deed", LEGACY = "legacy" }
 
 -- 分享權限位元（§6.5）；其他位元一定要搭配 MEMBER。

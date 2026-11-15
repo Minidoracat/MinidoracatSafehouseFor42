@@ -347,7 +347,8 @@ return function(T)
     local rl = mk(MSH, { x = 200, y = 100, w = 5, h = 5 }, "alice")
     MSH.Lifecycle.release(rl, "RELEASED", "op-1", T.now)
     local q = mk(MSH, { x = 300, y = 100, w = 5, h = 5 }, "alice", { quarantine = true })
-    local lp = mk(MSH, { x = 400, y = 100, w = 5, h = 5 }, "alice", { lifecycle = "lapsed", noNative = true })
+    local lp = mk(MSH, { x = 400, y = 100, w = 5, h = 5 }, "alice", { lifecycle = "lapsed" })   -- 保留期內有原生
+    local lp2 = mk(MSH, { x = 500, y = 100, w = 5, h = 5 }, "alice", { lifecycle = "lapsed" })  -- 客戶端沒報
     local function house(id, x) return { claimId = id, x = x, y = 100, w = 5, h = 5 } end
     local report = { house(rl.claimId, 200), house(q.claimId, 300), house(lp.claimId, 400), house(999, 900), house(888, 1000) }
     SafeHouse.addSafeHouse(1000, 100, 5, 5, MSH.marker(888))   -- 沒有紀錄的孤兒（開服才轉 recovered）
@@ -355,19 +356,23 @@ return function(T)
     res = T.cmd(alice, "calibrate", { houses = report })
     local removed = {}
     for _, id in ipairs(res.remove or {}) do removed[id] = true end
-    check(res.ok and removed[rl.claimId] and removed[lp.claimId] and removed[999], "released、lapsed、沒有紀錄 → 移除")
+    check(res.ok and removed[rl.claimId] and removed[999], "released、沒有紀錄 → 移除")
+    check(not removed[lp.claimId], "lapsed（保留期內照樣保護）：保留")
     check(not removed[q.claimId] and not removed[a.claimId], "quarantined 保留")
     check(not removed[888], "沒有紀錄但伺服器有這個標記的原生（孤兒）：保留")
     check(res.bootId == MSH.Native.bootId and res.seq == MSH.Native.seq, "回覆附目前 bootId／seq")
-    check(#T.syncs == syncsC + 1 and T.syncs[#T.syncs].owner == MSH.marker(a.claimId), "客戶端缺少 active → 廣播一次")
+    local synced = {}
+    for i = syncsC + 1, #T.syncs do synced[T.syncs[i].owner] = true end
+    check(#T.syncs == syncsC + 2 and synced[MSH.marker(a.claimId)] and synced[MSH.marker(lp2.claimId)],
+        "客戶端缺少 active、lapsed → 各廣播一次")
     res = T.cmd(alice, "calibrate", { houses = report })
     check(res == nil, "5 秒內重送：丟掉、不回覆")
     T.advance(6000)
     res = T.cmd(alice, "calibrate", { houses = report })
-    check(res ~= nil and res.ok and #T.syncs == syncsC + 1, "10 秒內再次回報缺少：不再廣播")
+    check(res ~= nil and res.ok and #T.syncs == syncsC + 2, "10 秒內再次回報缺少：不再廣播")
     T.advance(5000)
     res = T.cmd(alice, "calibrate", { houses = report })
-    check(res.ok and #T.syncs == syncsC + 2, "超過 10 秒：再廣播一次")
+    check(res.ok and #T.syncs == syncsC + 4, "超過 10 秒：再廣播一次")
     T.advance(6000)
     res = T.cmd(alice, "calibrate", { houses = { { claimId = 1, x = 0, y = 0, w = 1, h = 1, extra = 1 } } })
     check(res ~= nil and res.code == "BAD_ARGS", "多出欄位：BAD_ARGS")

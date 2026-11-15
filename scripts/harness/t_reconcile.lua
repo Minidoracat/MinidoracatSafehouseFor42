@@ -81,7 +81,7 @@ return function(T)
     local r8, hs8 = mk(MSH, 800, "alice")                         -- releasing＋指紋不合 → quarantined
     N.remove(hs8)
     R.markReleasing(r8, "op8")
-    local r9 = mk(MSH, 900, "alice")                              -- lapsed＋原生還在 → 移除
+    local r9, hs9 = mk(MSH, 900, "alice")                         -- lapsed＋原生還在 → 保留（保留期內照樣保護）
     r9.lifecycle, r9.lapsedAt = "lapsed", T.now
     local r10 = mk(MSH, 1000, "alice")                            -- released＋相符原生重現 → 移除
     R.markReleased(r10, "RELEASED", T.now)
@@ -91,6 +91,14 @@ return function(T)
     local r12, hs12 = mk(MSH, 1200, "alice")                      -- quarantined → 不碰
     R.markQuarantined(r12, "TEST")
     hs12:addPlayer("zed")
+    local r13, hs13 = mk(MSH, 1700, "alice")                      -- lapsed＋MISSING（舊版已移除）→ 重建
+    N.remove(hs13)
+    r13.lifecycle, r13.lapsedAt = "lapsed", T.now
+    local lapsed13 = r13.lapsedAt                                  -- 數值另存：r13 和重開後的紀錄是同一張表
+    local r14, hs14 = mk(MSH, 1800, "alice")                      -- lapsed＋MISSING＋重疊 → quarantined
+    N.remove(hs14)
+    r14.lifecycle, r14.lapsedAt = "lapsed", T.now
+    SafeHouse.addSafeHouse(1802, 1802, 3, 3, "stranger3")
     T.advance(1000)
     SafeHouse.addSafeHouse(500, 500, 5, 5, MSH.marker(r5.claimId))
     SafeHouse.addSafeHouse(800, 800, 5, 5, MSH.marker(r8.claimId))
@@ -136,8 +144,13 @@ return function(T)
     check(lc(r7) == "released", "releasing＋原生不在：released")
     check(lc(r8) == "quarantined" and reason(r8) == "RELEASE_MISMATCH" and T.houseOf(MSH.marker(r8.claimId)) ~= nil,
         "releasing＋指紋不合：quarantined、原生不動")
-    check(lc(r9) == "lapsed" and T.houseOf(MSH.marker(r9.claimId)) == nil and not removedDelta(r9.claimId),
-        "lapsed＋原生還在：移除、維持 lapsed（開服首輪不送 remove delta）")
+    check(lc(r9) == "lapsed" and T.houseOf(MSH.marker(r9.claimId)) == hs9 and not removedDelta(r9.claimId),
+        "lapsed＋原生還在：保留原生、維持 lapsed")
+    local new13 = T.houseOf(MSH.marker(r13.claimId))
+    check(lc(r13) == "lapsed" and new13 ~= nil and new13 ~= hs13 and R.get(r13.claimId).lapsedAt == lapsed13
+        and syncsOf(new13) == 0, "lapsed＋原生不在（升級前已移除）：開服重建、維持 lapsed、保留期不重算、首輪不廣播")
+    check(lc(r14) == "quarantined" and reason(r14) == "REBUILD_OVERLAP" and T.houseOf(MSH.marker(r14.claimId)) == nil,
+        "lapsed＋原生不在但和別的原生重疊：quarantined、不建")
     check(lc(r10) == "released" and T.houseOf(MSH.marker(r10.claimId)) == nil and not removedDelta(r10.claimId),
         "released＋相符原生重現：移除")
     check(#T.netEarly == 0, "開服首輪不碰連線：OnServerStarted 之前不查在線玩家、不廣播、不送封包（實機會 NPE）")
@@ -162,7 +175,7 @@ return function(T)
     T.syncs = {}
     sweepNow()
     sweepNow()
-    check(#T.houses == houses and #T.syncs == 0 and countLogs("REBUILT") == 1, "開服之後的週期掃描不再改任何東西")
+    check(#T.houses == houses and #T.syncs == 0 and countLogs("REBUILT") == 2, "開服之後的週期掃描不再改任何東西")
 
     T.section("週期收斂：名單、標題、owner drift，每間一次廣播、不傳送")
     MSH = T.boot()
@@ -293,32 +306,55 @@ return function(T)
     sweepNow()
     check(housesOf(MSH.marker(b1.claimId)) == 1 and countLogs("REBUILT") == 1, "恢復後一次重建")
 
-    T.section("lapsed：移除殘留原生；期滿釋出不歸 Reconcile")
+    T.section("lapsed：保留期內原生留著、缺了補建；期滿釋出不歸 Reconcile")
     MSH = T.boot()
     R = MSH.Registry
-    local l1 = mk(MSH, 100, "alice")
+    local l1, lh1 = mk(MSH, 100, "alice")
     l1.lifecycle, l1.lapsedAt = "lapsed", T.now
     sweepNow()
-    check(T.houseOf(MSH.marker(l1.claimId)) == nil and removedDelta(l1.claimId) and l1.lifecycle == "lapsed",
-        "lapsed：原生移除＋remove delta、範圍仍佔位")
+    check(T.houseOf(MSH.marker(l1.claimId)) == lh1 and not removedDelta(l1.claimId) and l1.lifecycle == "lapsed",
+        "lapsed：原生留著、不送 remove delta")
+    local rebuilt0 = countLogs("REBUILT")
+    MSH.Native.remove(lh1)
     sweepNow()
-    check(T.houseOf(MSH.marker(l1.claimId)) == nil, "lapsed 不重建")
+    check(housesOf(MSH.marker(l1.claimId)) == 1 and countLogs("REBUILT") == rebuilt0 + 1 and l1.lifecycle == "lapsed",
+        "lapsed 的原生被移除：下一輪重建、維持 lapsed")
+    T.serverOptions.War = "true"
+    sweepNow()
+    MSH.Native.remove(T.houseOf(MSH.marker(l1.claimId)))
+    sweepNow()
+    check(T.houseOf(MSH.marker(l1.claimId)) == nil and MSH.Reconcile.claimFlags[l1.claimId].missing == true
+        and MSH.Reconcile.health().pendingRepair == 1, "blocked：lapsed 缺原生不重建、標 missing、算在待修復數")
+    T.serverOptions.War = "false"
+    sweepNow()
+    sweepNow()
+    sweepNow()
+    check(housesOf(MSH.marker(l1.claimId)) == 1 and countLogs("REBUILT") == rebuilt0 + 2, "blocked 解除：補建一次")
     MSH.Economy.status = "FAILED"   -- 期滿釋出歸 Economy（只在 READY，t_economy 測）
     T.advance(7 * DAY)
     sweepNow()
-    check(l1.lifecycle == "lapsed" and R.get(l1.claimId) == l1 and R.tomb(l1.claimId) == nil,
-        "Economy 不 READY：lapseKeepDays 期滿也不釋出")
+    check(l1.lifecycle == "lapsed" and R.get(l1.claimId) == l1 and R.tomb(l1.claimId) == nil
+        and T.houseOf(MSH.marker(l1.claimId)) ~= nil, "Economy 不 READY：lapseKeepDays 期滿也不釋出、原生留著")
 
-    T.section("lapsed 原生的 owner drift：本輪換回標記後直接移除，不送 SafehouseSync")
+    T.section("owner drift：lapsed 換回標記並廣播；releasing 換回後直接移除、不廣播")
     local l2, lh2 = mk(MSH, 300, "alice")
     sweepNow()
     T.syncs = {}
     lh2:setOwner("mallory")
     l2.lifecycle, l2.lapsedAt = "lapsed", T.now
     sweepNow()
-    check(T.houseOf(MSH.marker(l2.claimId)) == nil and T.houseOf("mallory") == nil and removedDelta(l2.claimId),
-        "owner 被換掉的 lapsed 原生：換回標記並移除＋remove delta")
-    check(syncsOf(lh2) == 0, "同一輪移除的原生不廣播（實際 " .. syncsOf(lh2) .. " 次）")
+    check(T.houseOf(MSH.marker(l2.claimId)) == lh2 and T.houseOf("mallory") == nil and not removedDelta(l2.claimId),
+        "owner 被換掉的 lapsed 原生：換回標記、保留")
+    check(syncsOf(lh2) == 1, "lapsed 的 owner drift 廣播一次（實際 " .. syncsOf(lh2) .. " 次）")
+    local l3, lh3 = mk(MSH, 500, "alice")
+    sweepNow()
+    T.syncs = {}
+    lh3:setOwner("mallory")
+    R.markReleasing(l3, "op3")
+    sweepNow()
+    check(T.houseOf(MSH.marker(l3.claimId)) == nil and T.houseOf("mallory") == nil and removedDelta(l3.claimId),
+        "owner 被換掉的 releasing 原生：換回標記並移除＋remove delta")
+    check(syncsOf(lh3) == 0, "同一輪移除的原生不廣播（實際 " .. syncsOf(lh3) .. " 次）")
 
     T.section("health()：上次成功時間、待修復數、drift 持續時間；pass 丟錯不算成功")
     MSH = T.boot()

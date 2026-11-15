@@ -14,7 +14,7 @@
 --   managed（@MSH:<id>）用 PublicApi.ownerName（公開的 registry 表，第一次查不到會抓整張表、有節流）；我在原生名單裡＝分享給我的。
 --   只有我在陣營裡、而且同陣營或其他玩家那類要畫時（要分出是哪一類）才查 managed 的屋主：不在陣營的人不必為了分類去抓
 --   registry。屋主還沒查到的先算其他玩家的。安全屋的四類互不重疊：關掉同陣營的，同陣營的屋不會改用其他玩家的顏色畫出來。
--- 暫停保護（lapsed）沒有原生，不畫。清單、原生、陣營（SyncFaction）、屋主表（OnReceiveGlobalModData）、沙盒（sandboxSync）、
+-- 照原生畫（保留期內的 lapsed 也有原生，照畫）。清單、原生、陣營（SyncFaction）、屋主表（OnReceiveGlobalModData）、沙盒（sandboxSync）、
 --   禁建區清單（Client 事件 zones）或開關一變就標記重算，重算時才配置。
 -- 畫法交給 FloorTint（安全屋在圖層 "ranges"、禁建區在 "rangeZones"，安全屋蓋過禁建區；建立面板的框選與標紅、管理員的
 --   禁建區視窗蓋在它們上面）：格子平常是疊色（顏色帶 ov），在屋裡、前方有房子、有玩家站在附近的格子改用同一個顏色的地板

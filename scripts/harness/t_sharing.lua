@@ -291,6 +291,13 @@ return function(T)
     T.teleports = {}
     res = cmd(jack, "leave", rec)
     check(res.ok and res.viaFaction == nil and not has(hs, "jack") and teleported("jack"), "只有 grant：離開即撤銷")
+    local kim = T.player({ name = "kim", x = 107, y = 107 })
+    check(cmd(alice, "share", rec, { targetUsername = "kim", bits = USE }).ok, "kim 只有 grant")
+    rec.lifecycle = "lapsed"
+    T.teleports = {}
+    res = cmd(kim, "leave", rec)
+    check(res.ok and not has(hs, "kim") and teleported("kim"), "lapsed 保留期內離開：照樣撤銷並傳出（原生還在）")
+    rec.lifecycle = "active"
 
     T.section("陣營 > 64 人：照存、不投影、FACTION_TOO_LARGE")
     boot()
