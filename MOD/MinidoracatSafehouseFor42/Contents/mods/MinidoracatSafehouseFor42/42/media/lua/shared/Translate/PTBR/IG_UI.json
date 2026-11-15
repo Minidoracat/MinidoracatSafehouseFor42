@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "Alugar 1 vaga de nível %1 por %2 a cada período (dias: %3)?",
     "IGUI_MSH_Slots_ConfirmRenew": "Renovar este aluguel de nível %1 por %2 (dias: %3)?",
     "IGUI_MSH_Slots_ConfirmAuto": "Renovar automaticamente no vencimento: %1 por período (dias: %2). Você pode desativar quando quiser.",
+    "IGUI_MSH_Slots_AutoPaused": "Renovação automática (pausada)",
+    "IGUI_MSH_Slots_NewTerms": "Renovação automática pausada: o aluguel agora é %1 a cada %2 dias (antes %3 a cada %4 dias). Aceite as novas condições para retomá-la.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "A Central Econômica não respondeu o preço. Nada foi cobrado; tente de novo.",
     "IGUI_MSH_Slots_PriceChanged": "O preço mudou para %1. Nada foi cobrado; confira o novo preço e tente de novo.",
     "IGUI_MSH_Slots_NoAnswer": "O resultado do pagamento é desconhecido. Consulte o resultado da compra em vez de pagar de novo.",

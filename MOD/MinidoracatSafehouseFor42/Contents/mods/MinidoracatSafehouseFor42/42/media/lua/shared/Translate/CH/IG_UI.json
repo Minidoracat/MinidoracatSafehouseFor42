@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "以每 %3 天 %2 租用 1 個 %1 級名額？",
     "IGUI_MSH_Slots_ConfirmRenew": "以 %2 續租這張 %1 級租約（%3 天）？",
     "IGUI_MSH_Slots_ConfirmAuto": "到期自動續租：每 %2 天 %1。隨時可以關閉。",
+    "IGUI_MSH_Slots_AutoPaused": "到期自動續租（暫停）",
+    "IGUI_MSH_Slots_NewTerms": "自動續租已暫停：租金改為每 %2 天 %1（原本每 %4 天 %3），按〔同意〕接受新條款才會恢復。",
     "IGUI_MSH_Slots_QuoteNoAnswer": "經濟中心沒有回覆報價，沒有扣款，請再試一次。",
     "IGUI_MSH_Slots_PriceChanged": "價格已改成 %1，沒有扣款；請確認新價格後再試。",
     "IGUI_MSH_Slots_NoAnswer": "付款結果未知，請查詢購買結果，不要重新付款。",

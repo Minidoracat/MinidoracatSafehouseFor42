@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "Rent 1 tier %1 slot for %2 per %3-day period?",
     "IGUI_MSH_Slots_ConfirmRenew": "Renew this tier %1 lease for %2 (%3-day period)?",
     "IGUI_MSH_Slots_ConfirmAuto": "Renew automatically when due: %1 per %2-day period. You can turn it off any time.",
+    "IGUI_MSH_Slots_AutoPaused": "Auto-renew (paused)",
+    "IGUI_MSH_Slots_NewTerms": "Auto-renew paused: the rent is now %1 per %2 days (was %3 per %4 days). Agree to the new terms to resume it.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "No price reply from the Economy. Nothing was charged; try again.",
     "IGUI_MSH_Slots_PriceChanged": "The price changed to %1. Nothing was charged; check the new price and try again.",
     "IGUI_MSH_Slots_NoAnswer": "The payment result is unknown. Check the purchase result instead of paying again.",

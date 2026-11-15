@@ -227,11 +227,31 @@ function SW.orderKey(res, pending, E)
     return E and E.orderOutcome and SW.OUTCOME[E.orderOutcome(res)] or nil
 end
 
--- 自動續租開著（已送出取消就算關，VM BU.autoRenewOn :282）
+-- 自動續租開著（已送出取消就算關；暫停也算開，玩家才能取消。VM BU.autoRenewOn :282）
 function SW.autoRenewOn(r)
     local s = r.autoRenewState
     if s == "pending_off" then return false end
-    return r.autoRenew == true or s == "on" or s == "pending_on"
+    return r.autoRenew == true or s == "on" or s == "pending_on" or s == "paused_terms" or s == "paused_system"
+end
+
+-- 同意時記下的條款（autoTerms）和目前方案的租金、幣別、天數不同（VM BU.termsDiffer :293）
+function SW.termsDiffer(plan, t)
+    return type(t) == "table"
+        and (t.price ~= plan.rentalPrice or t.currency ~= plan.rentalCurrency or t.days ~= plan.rentalDays)
+end
+
+-- 開著但到期不會扣款：條款改了、超過上限、停租、不再提供自動續租或系統暫停（VM BU.autoPaused :299）
+function SW.autoPaused(plan, r)
+    if not SW.autoRenewOn(r) then return false end
+    local s = r.autoRenewState
+    return s == "paused_terms" or s == "paused_system" or SW.termsDiffer(plan, r.autoTerms)
+        or plan.rentalEnabled ~= true or plan.autoRenewAllowed ~= true
+end
+
+-- 要玩家重新同意目前條款才會續租（VM BU.needsConsent :307）。2026-11-15 正式服：改價後只顯示「開著」，到期沒扣款就停用
+function SW.needsConsent(plan, r)
+    return SW.autoRenewOn(r) and SW.termsDiffer(plan, r.autoTerms) and plan.rentalEnabled == true
+        and plan.autoRenewAllowed == true
 end
 
 -- 本 MOD 的拒絕碼（validatePurchase 的 TIER_DISABLED／KIND_CLOSED）→ Economy 的錯誤文字 → 通用說明
@@ -511,18 +531,32 @@ function SW.layoutLeases(w, F, n, E)
             line = getText("IGUI_MSH_Slots_LeaseState", i, r.quantity or 0, E.stateText(r.state))
         end
         F:text(key, line, r.state == "grace" and "warning" or "text")
+        local consent = SW.needsConsent(plan, r)
+        if consent then
+            local t, q = r.autoTerms, r.quantity or 1
+            F:text(key .. "t", getText("IGUI_MSH_Slots_NewTerms",
+                SW.money(E, { amount = (plan.rentalPrice or 0) * q, currency = plan.rentalCurrency }), plan.rentalDays or 0,
+                SW.money(E, { amount = (t.price or 0) * q, currency = t.currency }), t.days or 0), "warning")
+        end
         local ctrls = {}
         local on = SW.autoRenewOn(r)
-        local box = F:checkbox(key .. "a", getText("IGUI_MSH_Slots_AutoRenew"), w, SW.onAutoRenew)
+        local label = SW.autoPaused(plan, r) and "IGUI_MSH_Slots_AutoPaused" or "IGUI_MSH_Slots_AutoRenew"
+        local box = F:checkbox(key .. "a", getText(label), w, SW.onAutoRenew)
         box.internal, box.tier = r.id, n
         box:setChecked(on, true)
         box:setEnabled(w.busy == nil and (on or plan.autoRenewAllowed == true))
         ctrls[1] = box
+        if consent then
+            local g = F:button(key .. "g", getText("IGUI_MSH_Slots_Agree"), w, SW.onAgree, "primary")
+            g.internal, g.tier = r.id, n
+            g:setEnabled(w.busy == nil)
+            ctrls[#ctrls + 1] = g
+        end
         if (r.state == "active" or r.state == "grace") and plan.rentalEnabled == true then
             local b = F:button(key .. "r", getText("IGUI_MSH_Slots_Renew"), w, SW.onRenew)
             b.internal, b.tier = r.id, n
             b:setEnabled(SW.canPurchase(w))
-            ctrls[2] = b
+            ctrls[#ctrls + 1] = b
         end
         F:row(ctrls, K.PAD + 12)
     end
@@ -710,13 +744,27 @@ function SW.onAutoRenew(w, checked, box)
     if r == nil or w.busy or checked == on then return end
     local plan, ent = env.plan or {}, env.entitlement or {}
     if not checked then return SW.sendAutoRenew(w, box.tier, false, ent.revision, plan.revision, r.id) end
-    if plan.autoRenewAllowed ~= true then return end
+    if plan.autoRenewAllowed == true then SW.confirmAuto(w, E, env, r, box.tier) end
+end
+
+-- 〔同意〕新條款：開著但條款改了（暫停中），用同一個確認框重新同意目前方案
+function SW.onAgree(w, b)
+    local E = SW.api()
+    local env = E and E.getState(SW.SRC, SW.product(b.tier))
+    local r = SW.findRental(env, b.internal)
+    if r == nil or w.busy or not SW.needsConsent(env.plan or {}, r) then return end
+    SW.confirmAuto(w, E, env, r, b.tier)
+end
+
+-- 確認框寫目前方案的條款；同意才送（帶權益版本與條款版本，Economy 照當下方案記下同意）
+function SW.confirmAuto(w, E, env, r, tier)
+    local plan, ent = env.plan or {}, env.entitlement or {}
     local price = { amount = (plan.rentalPrice or 0) * (r.quantity or 1), currency = plan.rentalCurrency }
     w.UI.Dialog.show(MSH.Client.windowOpts(w.UI, { title = getText("IGUI_MSH_Slots_Title"), theme = w.theme,
         text = getText("IGUI_MSH_Slots_ConfirmAuto", SW.money(E, price), plan.rentalDays or 0),
         confirmText = getText("IGUI_MSH_Slots_Agree"), cancelText = getText("UI_Cancel"),
         onResult = function(ok)
-            if ok then SW.sendAutoRenew(w, box.tier, true, ent.revision, plan.revision, r.id) end
+            if ok then SW.sendAutoRenew(w, tier, true, ent.revision, plan.revision, r.id) end
         end }))
 end
 

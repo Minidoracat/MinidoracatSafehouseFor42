@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "ランク%1の枠を%3日ごとに%2で1つレンタルしますか？",
     "IGUI_MSH_Slots_ConfirmRenew": "このランク%1の契約を%2（%3日）で更新しますか？",
     "IGUI_MSH_Slots_ConfirmAuto": "期限が来たら自動で更新します：%2日ごとに%1。いつでもオフにできます。",
+    "IGUI_MSH_Slots_AutoPaused": "自動更新（停止中）",
+    "IGUI_MSH_Slots_NewTerms": "自動更新は停止中です：賃料が%2日ごとに%1に変わりました（以前は%4日ごとに%3）。新しい条件に同意すると再開します。",
     "IGUI_MSH_Slots_QuoteNoAnswer": "経済センターから価格の応答がありません。請求はされていないので、もう一度お試しください。",
     "IGUI_MSH_Slots_PriceChanged": "価格が%1に変わりました。請求はされていないので、新しい価格を確認してもう一度お試しください。",
     "IGUI_MSH_Slots_NoAnswer": "支払い結果が不明です。もう一度支払わずに、購入結果を確認してください。",

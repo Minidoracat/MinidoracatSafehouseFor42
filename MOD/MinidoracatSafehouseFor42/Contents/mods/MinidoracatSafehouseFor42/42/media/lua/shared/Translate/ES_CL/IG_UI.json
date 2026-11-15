@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "¿Alquilar 1 plaza de nivel %1 por %2 cada periodo (días: %3)?",
     "IGUI_MSH_Slots_ConfirmRenew": "¿Renovar este alquiler de nivel %1 por %2 (días: %3)?",
     "IGUI_MSH_Slots_ConfirmAuto": "Renovar automáticamente al vencer: %1 por periodo (días: %2). Puedes desactivarlo cuando quieras.",
+    "IGUI_MSH_Slots_AutoPaused": "Renovación automática (en pausa)",
+    "IGUI_MSH_Slots_NewTerms": "Renovación automática en pausa: el alquiler ahora es %1 cada %2 días (antes %3 cada %4 días). Acepta las nuevas condiciones para reanudarla.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "El Centro Económico no respondió con el precio. No se cobró nada; inténtalo de nuevo.",
     "IGUI_MSH_Slots_PriceChanged": "El precio cambió a %1. No se cobró nada; revisa el nuevo precio e inténtalo de nuevo.",
     "IGUI_MSH_Slots_NoAnswer": "Se desconoce el resultado del pago. Consulta el resultado de la compra en vez de volver a pagar.",

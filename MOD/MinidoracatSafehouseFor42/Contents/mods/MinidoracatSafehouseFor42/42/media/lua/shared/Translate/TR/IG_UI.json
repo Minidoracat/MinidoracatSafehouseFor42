@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "Her %3 gün için %2 karşılığında 1 adet seviye %1 hakkı kiralansın mı?",
     "IGUI_MSH_Slots_ConfirmRenew": "Bu seviye %1 kirası %2 karşılığında yenilensin mi (%3 gün)?",
     "IGUI_MSH_Slots_ConfirmAuto": "Süresi dolunca otomatik yenile: her %2 günde %1. İstediğiniz zaman kapatabilirsiniz.",
+    "IGUI_MSH_Slots_AutoPaused": "Otomatik yenile (duraklatıldı)",
+    "IGUI_MSH_Slots_NewTerms": "Otomatik yenileme duraklatıldı: kira artık her %2 günde %1 (önceden her %4 günde %3). Devam etmesi için yeni koşulları kabul edin.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "Ekonomi Merkezi fiyat yanıtı vermedi. Ücret alınmadı; tekrar deneyin.",
     "IGUI_MSH_Slots_PriceChanged": "Fiyat %1 olarak değişti. Ücret alınmadı; yeni fiyatı kontrol edip tekrar deneyin.",
     "IGUI_MSH_Slots_NoAnswer": "Ödeme sonucu bilinmiyor. Tekrar ödemek yerine satın alma sonucunu kontrol edin.",

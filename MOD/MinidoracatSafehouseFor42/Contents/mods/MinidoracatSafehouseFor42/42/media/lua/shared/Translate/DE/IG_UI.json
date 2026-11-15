@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "1 Platz der Stufe %1 für %2 pro Zeitraum (Tage: %3) mieten?",
     "IGUI_MSH_Slots_ConfirmRenew": "Diesen Mietvertrag der Stufe %1 für %2 (Tage: %3) verlängern?",
     "IGUI_MSH_Slots_ConfirmAuto": "Bei Fälligkeit automatisch verlängern: %1 pro Zeitraum (Tage: %2). Du kannst das jederzeit ausschalten.",
+    "IGUI_MSH_Slots_AutoPaused": "Auto-Verlängerung (pausiert)",
+    "IGUI_MSH_Slots_NewTerms": "Auto-Verlängerung pausiert: Die Miete beträgt jetzt %1 pro %2 Tage (vorher %3 pro %4 Tage). Stimme den neuen Bedingungen zu, um sie fortzusetzen.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "Keine Preisantwort vom Wirtschaftszentrum. Nichts wurde abgebucht; versuch es erneut.",
     "IGUI_MSH_Slots_PriceChanged": "Der Preis hat sich auf %1 geändert. Nichts wurde abgebucht; prüfe den neuen Preis und versuch es erneut.",
     "IGUI_MSH_Slots_NoAnswer": "Das Zahlungsergebnis ist unbekannt. Prüfe das Kaufergebnis, statt erneut zu zahlen.",

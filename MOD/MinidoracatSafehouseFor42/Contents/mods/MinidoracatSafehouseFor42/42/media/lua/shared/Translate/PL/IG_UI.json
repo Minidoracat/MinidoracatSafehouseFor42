@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "Wynająć 1 miejsce poziomu %1 za %2 na okres (dni: %3)?",
     "IGUI_MSH_Slots_ConfirmRenew": "Odnowić ten najem poziomu %1 za %2 (dni: %3)?",
     "IGUI_MSH_Slots_ConfirmAuto": "Odnawiaj automatycznie w terminie: %1 za każdy okres (dni: %2). Możesz to wyłączyć w każdej chwili.",
+    "IGUI_MSH_Slots_AutoPaused": "Autoodnawianie (wstrzymane)",
+    "IGUI_MSH_Slots_NewTerms": "Autoodnawianie wstrzymane: czynsz wynosi teraz %1 za %2 dni (wcześniej %3 za %4 dni). Zaakceptuj nowe warunki, aby je wznowić.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "Brak odpowiedzi Centrum Ekonomii z ceną. Nic nie pobrano; spróbuj ponownie.",
     "IGUI_MSH_Slots_PriceChanged": "Cena zmieniła się na %1. Nic nie pobrano; sprawdź nową cenę i spróbuj ponownie.",
     "IGUI_MSH_Slots_NoAnswer": "Wynik płatności jest nieznany. Sprawdź wynik zakupu, zamiast płacić ponownie.",

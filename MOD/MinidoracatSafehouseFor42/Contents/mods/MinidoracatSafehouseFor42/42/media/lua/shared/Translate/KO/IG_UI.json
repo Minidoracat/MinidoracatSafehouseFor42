@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "%1등급 슬롯 1개를 %3일마다 %2에 임대하시겠습니까?",
     "IGUI_MSH_Slots_ConfirmRenew": "이 %1등급 임대를 %2에 갱신하시겠습니까? (%3일)",
     "IGUI_MSH_Slots_ConfirmAuto": "만료 시 자동 갱신: %2일마다 %1. 언제든지 끌 수 있습니다.",
+    "IGUI_MSH_Slots_AutoPaused": "자동 갱신 (일시 중지됨)",
+    "IGUI_MSH_Slots_NewTerms": "자동 갱신이 일시 중지되었습니다: 임대료가 %2일마다 %1(으)로 바뀌었습니다(이전: %4일마다 %3). 새 조건에 동의하면 다시 시작됩니다.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "경제 센터에서 가격 응답이 없습니다. 결제되지 않았으니 다시 시도하세요.",
     "IGUI_MSH_Slots_PriceChanged": "가격이 %1(으)로 바뀌었습니다. 결제되지 않았으니 새 가격을 확인하고 다시 시도하세요.",
     "IGUI_MSH_Slots_NoAnswer": "결제 결과를 알 수 없습니다. 다시 결제하지 말고 구매 결과를 확인하세요.",

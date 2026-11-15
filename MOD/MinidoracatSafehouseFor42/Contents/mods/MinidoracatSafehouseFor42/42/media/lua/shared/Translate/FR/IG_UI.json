@@ -261,6 +261,8 @@
     "IGUI_MSH_Slots_ConfirmRent": "Louer 1 place de niveau %1 pour %2 par période de %3 j ?",
     "IGUI_MSH_Slots_ConfirmRenew": "Renouveler cette location de niveau %1 pour %2 (période de %3 j) ?",
     "IGUI_MSH_Slots_ConfirmAuto": "Renouveler automatiquement à l'échéance : %1 par période de %2 j. Vous pouvez le désactiver à tout moment.",
+    "IGUI_MSH_Slots_AutoPaused": "Renouvellement auto (en pause)",
+    "IGUI_MSH_Slots_NewTerms": "Renouvellement auto en pause : le loyer est maintenant de %1 tous les %2 j (avant : %3 tous les %4 j). Acceptez les nouvelles conditions pour le reprendre.",
     "IGUI_MSH_Slots_QuoteNoAnswer": "Pas de prix reçu du Centre économique. Rien n'a été débité ; réessayez.",
     "IGUI_MSH_Slots_PriceChanged": "Le prix est passé à %1. Rien n'a été débité ; vérifiez le nouveau prix et réessayez.",
     "IGUI_MSH_Slots_NoAnswer": "Résultat du paiement inconnu. Vérifiez le résultat de l'achat au lieu de payer à nouveau.",

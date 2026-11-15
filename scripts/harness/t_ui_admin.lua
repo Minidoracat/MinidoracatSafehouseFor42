@@ -612,6 +612,37 @@ return function(T)
     check(ar ~= nil and ar[3] == true and ar[4] == 2 and ar[5] == 5 and ar[7] == "L1", "送出該張租約的自動續租（帶版本與條款版本）")
     check(sp["lr2#1"] ~= nil and sp["lr2#1"]:isVisible(), "展開的租約最後寫租約和房子的關係")
 
+    -- 2026-11-15 正式服：改價後 Economy 把自動續租停在 paused_terms（autoRenew 仍是 true），視窗卻寫「開著」，到期沒扣款就停用
+    ar[6]({ ok = true })
+    local entBefore = env.entitlement
+    local paused = { id = "L1", quantity = 1, state = "active", paidUntil = T.now + 86400000, autoRenew = true,
+        autoRenewState = "paused_terms", autoTerms = { price = 300, currency = "survivor", days = 30 } }
+    env.entitlement = { revision = 3, rentals = { paused } }
+    SW.layout(w)
+    check(box:getChecked() == true and box.label == "IGUI_MSH_Slots_AutoPaused" and sp["l2:1t#1"] ~= nil
+        and sp["l2:1t#1"]:isVisible() and sp["l2:1g"] ~= nil and sp["l2:1g"]:isVisible(),
+        "條款改了：開關仍勾著（才能取消）但寫「暫停」，並寫新舊條款、給〔同意〕")
+    fw.dialog = nil
+    fw.click(sp["l2:1g"])
+    check(fw.dialog ~= nil, "〔同意〕先開確認框")
+    fw.dialog.onResult(true)
+    ar = lastCall("setAutoRenew")
+    check(ar ~= nil and ar[3] == true and ar[4] == 3 and ar[5] == 5 and ar[7] == "L1", "同意後送目前條款版本的同意")
+    ar[6]({ ok = true })
+    paused.autoRenewState, paused.autoTerms = "on", { price = 100, currency = "survivor", days = 30 }
+    SW.layout(w)
+    check(box.label == "IGUI_MSH_Slots_AutoRenew" and not sp["l2:1g"]:isVisible() and not sp["l2:1t#1"]:isVisible(),
+        "條款相同、開著：一般標籤，不寫條款、沒有〔同意〕")
+    paused.autoRenewState = "paused_system"
+    SW.layout(w)
+    check(box.label == "IGUI_MSH_Slots_AutoPaused" and not sp["l2:1g"]:isVisible() and not sp["l2:1t#1"]:isVisible(),
+        "系統暫停、條款沒變：寫「暫停」，不叫玩家同意沒變的條款")
+    paused.autoRenewState = "paused_terms"
+    SW.layout(w)
+    check(box.label == "IGUI_MSH_Slots_AutoPaused" and not sp["l2:1g"]:isVisible() and not sp["l2:1t#1"]:isVisible(),
+        "paused_terms 但條款和方案相同（例如超過可租上限）：寫「暫停」、沒有〔同意〕")
+    env.entitlement = entBefore
+
     -- 2026-10-15 帳本：同一級在可租 1 時多租了第二張。到上限：〔租用〕停用並寫原因、伺服器那邊也擋（t_economy）
     T.advance(MSH.Client.SLOTS_GAP_MS)
     SW.refresh(w)
