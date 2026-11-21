@@ -18,6 +18,14 @@
 --   關著的門片照格子現在的物件該算牆、引擎記的卻是缺口（原版右鍵開關門不通知 IsoRegions，紀錄停在上次的樣子）：查到
 --   時由伺服器請引擎重算那幾格（玩家 2026-10-22 回報，使用者同日同意）。只在查詢時比對、只比對缺口上關著的門、只重算
 --   對不上的格子；門開著、紀錄卻是牆的另一個方向不修（房間封閉就不看門）。
+--   地板與牆的紀錄也會過期（玩家 2026-11-20 回報，使用者 2026-11-21 同意比照門處理）：
+--   (1) 世界有地板或牆、引擎的位元沒有（引擎兩份緩衝的時序會漏記）：列出來的缺屋頂格由本層往上、缺牆那條邊的格子
+--       各比對一次，對不上的請引擎重算。只認「世界有、紀錄沒有」這個方向。
+--   (2) 引擎的屋頂數比照現在的位元算的少：屋頂數只在那個 chunk 重算時更新，而且位元是 0 的格子要當下那一層的 region
+--       封閉才算有屋頂（DataChunk.recalcRoofs）；房間後來才封閉時別的 chunk 不重算（DataRoot.processDirtyChunks），
+--       屋頂數就一直少，面板會寫缺 N 格卻標不出來、或屋頂全有卻判只有一部分。封閉的房間查到時把它所在的 chunk
+--       標成要重算（I.reroof），並把位元漏記地板的格子重推（不補的話房間下次不封閉時又會少算）。
+--   只修引擎少算的方向，判定仍以引擎為準。實證 E2E indoorstale-mp（sh-istale-1121b、1121c）。
 --   缺口在西邊、那格有西牆又有柱子的也另外列（pillars）：引擎整格有 WallSE（柱子的圖塊屬性）就不算那格的西牆
 --   （IsoRegions.java:336），牆在也照缺口算（玩家 2026-10-19 回報）。柱子是蓋牆時遊戲自動補的牆角（buildUtil.addCorner
 --   的 isCorner）就由伺服器拆掉（使用者 2026-10-19 裁定；那格有西牆時牆角多餘，拆前拆後畫面只差柱頂幾個像素，
@@ -45,7 +53,9 @@ I.LIMIT = 4096        -- 一次查詢最多走幾格（房子加上各房間）
 I.NEAR = 4            -- 站的那格沒有屋頂時，往外找有屋頂的格子最多幾步
 I.MAX_ROOMS = 12      -- 同一棟最多分析幾間（各層合計）
 I.MAX_RUNS = 512      -- 每一層的範圍最多回幾段（同一列連續的格子算一段）
-I.MAX_MARKS = 256     -- 每間最多回幾條缺牆、幾格缺屋頂（封包大小；count 照實數）
+I.MAX_MARKS = 256     -- 每間最多回幾條缺牆、幾格缺屋頂（封包大小；count 照實數）；也是每次查詢比對過期紀錄的上限：
+                      -- 缺口上的門一份（ctx.doorChecks）、地板與牆一份（ctx.checks）、替屋頂數過期的 chunk 各找一格
+                      -- 拿來推一份（ctx.kicks，只算紀錄不是 0 的格子），各自不超過它。推幾格引擎就存檔、廣播幾次 chunk
 I.BOX_MAX = 16384     -- 找外面走不進來的格子時，外框面積超過就略過（斜著長的屋頂外框很大）
 I.SLOW_MS = 50        -- 一次查詢超過就記 log
 
@@ -143,7 +153,7 @@ local function newCtx(x, y, z)
     local cache = {}
     local ctx = { left = I.LIMIT, cell = getCell(), minX = x, minY = y, minZ = z, maxX = x, maxY = y, maxZ = z,
         partial = false, holes = {}, foot = {}, footList = {}, regions = {}, corners = {}, fix = {}, fixSeen = {},
-        doorChecks = 0 }
+        doorChecks = 0, checks = 0, dirty = {}, dirtySeen = {}, kick = {}, kicked = {}, kicks = 0 }
     function ctx.roofed(rx, ry, rz)
         local c = at(cache, rz)
         local k = key(rx, ry)
@@ -220,14 +230,17 @@ local function pillarOn(cell, x, y, z)
     return "corner"
 end
 
--- 缺口上關著的門片那格照現在的物件該算牆（regionFlags 有那一邊的位元；side 的值就是那一邊牆的位元，1 北、2 西），
--- 引擎記的卻是缺口（走得過去才會走到這裡）＝紀錄過期，記進 ctx.fix 由 I.query 請引擎重算。沒有那一邊的位元＝這種門
--- 關著也不算牆（Knox Pass 閘門、兩層樓的門），不修。引擎沒資料的格子不碰；每次查詢最多比對 MAX_MARKS 扇
-local function stale(ctx, x, y, z, side)
-    if ctx.doorChecks >= I.MAX_MARKS or flags(x, y, z) < 0 then return false end
-    ctx.doorChecks = ctx.doorChecks + 1
+-- 這格照現在的物件有 b 這個位元（地板 16、北牆 1、西牆 2；regionFlags）、引擎記的卻沒有＝紀錄過期，記進 ctx.fix 由
+-- I.query 請引擎重算。只認這個方向。缺口上關著的門片（走得過去才會走到這裡）照現在的物件也沒有那一邊的位元＝這種門
+-- 關著也不算牆（Knox Pass 閘門、兩層樓的門），不修。引擎沒資料的格子不碰。counter＝比對次數記在 ctx 的哪一欄
+-- （門 doorChecks，地板與牆 checks），每次查詢各最多比對 MAX_MARKS 格
+local function stale(ctx, x, y, z, b, counter)
+    if ctx[counter] >= I.MAX_MARKS then return false end   -- 額滿後不再讀引擎
+    local f = flags(x, y, z)
+    if f < 0 or has(f, b) then return false end
+    ctx[counter] = ctx[counter] + 1
     local sq = ctx.cell:getGridSquare(x, y, z)
-    if sq == nil or not has(I.regionFlags(sq), side) then return false end
+    if sq == nil or not has(I.regionFlags(sq), b) then return false end
     local seen, k = at(ctx.fixSeen, z), key(x, y)
     if not seen[k] then   -- 同一格北、西兩邊都是門時只重算一次
         seen[k] = true
@@ -248,7 +261,7 @@ local function addGap(r, ctx, x, y, d)
         if r.doorCount > I.MAX_MARKS then return end
         local g, n = r.doors, #r.doors
         g[n + 1], g[n + 2], g[n + 3], g[n + 4] = ex, ey, side, door:IsOpen() and 1
-            or stale(ctx, ex, ey, r.z, side) and 2 or IsoDoor.getGarageDoorIndex(door) ~= -1 and 3 or 0
+            or stale(ctx, ex, ey, r.z, side, "doorChecks") and 2 or IsoDoor.getGarageDoorIndex(door) ~= -1 and 3 or 0
         return
     end
     local pillar = side == 2 and pillarOn(ctx.cell, ex, ey, r.z) or nil
@@ -263,9 +276,76 @@ local function addGap(r, ctx, x, y, d)
         g[n + 1], g[n + 2], g[n + 3] = ex, ey, pillar == "corner" and 1 or 0
         return
     end
+    stale(ctx, ex, ey, r.z, side, "checks")   -- 牆在、紀錄沒有：這筆照列，重算後客戶端再查
     if r.gapCount - r.doorCount - r.pillarCount > I.MAX_MARKS then return end
     local g, n = r.gaps, #r.gaps
     g[n + 1], g[n + 2], g[n + 3] = ex, ey, side
+end
+
+-- 一格由 z 往上到有資料的最高層：世界有地板、引擎沒記的記進 ctx.fix。比對額滿就停，不再讀引擎
+local function staleAbove(ctx, x, y, z)
+    while z <= 31 and ctx.checks < I.MAX_MARKS and flags(x, y, z) >= 0 do
+        stale(ctx, x, y, z, FLOOR, "checks")
+        z = z + 1
+    end
+end
+
+-- 列出來的缺屋頂格各比對一欄。本層也看：本層的位元是 0、region 又不封閉時，屋頂傳不下來（roofed 的 f <= 0 and not enc）
+local function staleHoles(r, ctx)
+    local h = r.holes
+    for i = 1, #h, 2 do
+        if ctx.checks >= I.MAX_MARKS then return end
+        staleAbove(ctx, h[i], h[i + 1], r.z)
+    end
+end
+
+-- I.reroof 拿來推的格子（ctx.kick，x, y, z 三個一組；每個 chunk 一格）：紀錄不是 0，而且和照現在的物件算的一樣（重推它
+-- 不改任何位元；紀錄和物件不同的格子不拿來用：Knox Pass「算室內」開著的門片記著牆，重推會把牆清掉）。紀錄是 0 的格子
+-- 不佔 ctx.kicks 的額度（挑高的那層從中間往外走，前幾百格都是 0）
+local function kickAt(ctx, x, y, z)
+    if ctx.kicks >= I.MAX_MARKS then return false end
+    local f = flags(x, y, z)
+    if f <= 0 then return false end
+    ctx.kicks = ctx.kicks + 1
+    local sq = ctx.cell:getGridSquare(x, y, z)
+    if sq == nil or I.regionFlags(sq) ~= f then return false end
+    local k, n = ctx.kick, #ctx.kick
+    k[n + 1], k[n + 2], k[n + 3] = x, y, z
+    return true
+end
+
+-- 引擎的屋頂數比照現在的位元算的少（檔頭 (2)）：list（x, y 兩個一組）是這一間在 z 這一層的格子。格子所在的 chunk
+-- （8×8）記進 ctx.dirty（cx, cy 兩個一組）由 I.query 請引擎重算；位元沒有地板的格子比對世界。每個 chunk 找一格可以
+-- 推的：先看這一層，沒有再看同一格的一樓（挑高的那層整層沒有地板），合計最多拿 MAX_MARKS 格比對世界
+local function staleRoofs(ctx, list, z)
+    local seen, dirty, kicked = ctx.dirtySeen, ctx.dirty, ctx.kicked
+    for i = 1, #list, 2 do
+        local x, y = list[i], list[i + 1]
+        stale(ctx, x, y, z, FLOOR, "checks")
+        local cx, cy = math.floor(x / 8), math.floor(y / 8)
+        local k = key(cx, cy)
+        if not seen[k] then
+            seen[k] = true
+            dirty[#dirty + 1] = cx
+            dirty[#dirty + 1] = cy
+        end
+        if not kicked[k] and (kickAt(ctx, x, y, z) or z > 0 and kickAt(ctx, x, y, 0)) then kicked[k] = true end
+    end
+end
+
+-- 房間的格子裡找不到可以推的 chunk（那幾格記著世界沒有的牆；挑高那層底下的地板也漏記）：在那個 chunk 的一樓另找一格。
+-- 還是沒有的 chunk 伺服器照樣重算，客戶端那一份要等那個 chunk 下次有變動才跟上
+local function kickRest(ctx)
+    local dirty, kicked = ctx.dirty, ctx.kicked
+    for i = 1, #dirty, 2 do
+        local k, x0, y0 = key(dirty[i], dirty[i + 1]), dirty[i] * 8, dirty[i + 1] * 8
+        for dy = 0, 7 do
+            for dx = 0, 7 do
+                if kicked[k] or ctx.kicks >= I.MAX_MARKS then break end
+                if kickAt(ctx, x0 + dx, y0 + dy, 0) then kicked[k] = true end
+            end
+        end
+    end
 end
 
 -- 封閉而且屋頂至少一半：整個 region 走一遍。格數與屋頂數照引擎（走到上限時清單只有一部分；判定不受影響）
@@ -296,6 +376,9 @@ local function closedRoom(r, wr, z, ctx)
         r.holes, r.holeCount = {}, 0   -- 判定以引擎為準
     else
         r.verdict = "NEED_ROOF"
+        staleHoles(r, ctx)
+        -- 走過的格子裡照現在的位元有屋頂的，比引擎的屋頂數還多＝引擎少算（沒走完時也成立）
+        if (qi - 1) / 2 - r.holeCount > r.roofs then staleRoofs(ctx, q, z) end
     end
 end
 
@@ -322,9 +405,11 @@ local function roofedNear(x0, y0, z, ctx)
 end
 
 -- 不封閉（或屋頂不到一半）：見檔頭「找原因」。inside[鍵] 是 true（有屋頂）或 false（缺屋頂），list 是房子的格子
+-- （回傳；室外回 nil）
 local function openRoom(r, z, ctx)
     local sx, sy = roofedNear(r.x, r.y, z, ctx)
     if sx == nil then
+        staleAbove(ctx, r.x, r.y, z)   -- 頭上唯一的那塊屋頂剛好沒記到時，起點附近找不到有屋頂的格子
         r.verdict = "OUTSIDE"
         return
     end
@@ -442,7 +527,9 @@ local function openRoom(r, z, ctx)
             end
         end
     end
+    staleHoles(r, ctx)   -- 排在缺牆後面：比對的額度先給牆（缺屋頂的格子多時會把它用完）
     r.verdict = "OPEN"
+    return list
 end
 
 local function analyze(wr, x, y, z, ctx)
@@ -452,8 +539,10 @@ local function analyze(wr, x, y, z, ctx)
     elseif wr:getRoofCnt() * 2 >= wr:getSquareSize() then
         closedRoom(r, wr, z, ctx)
     else
-        openRoom(r, z, ctx)
+        local list = openRoom(r, z, ctx)
         if r.verdict == "OPEN" then r.verdict = "PART_ROOF" end
+        -- 從起點走到的有屋頂格子（整間的下界）比引擎的屋頂數還多＝引擎少算
+        if list ~= nil and r.roofs > wr:getRoofCnt() then staleRoofs(ctx, list, z) end
     end
     return r
 end
@@ -560,7 +649,9 @@ end
 -- 房間，之後是同一層、樓上、樓下的其他房間（MAP_ROOM、BASEMENT、OUTSIDE 沒有 rooms）；levels＝各層走過的範圍
 -- { z, runs }（由低到高）；partial＝走到上限，有房間或缺口沒列到。地圖的地下室有 RoomDef（Basements），先看地圖房間；
 -- 其他地下（z < 0）不進 IsoRegions（IsoRegionWorker 只收 z >= 0），遊戲永遠不算室內。查詢只讀不改，要改的另外回
--- （x, y, z 三個一組，不在回覆裡，I.query 處理）：第二個回傳值＝要拆自動牆角的格子，第三個＝紀錄過期、要請引擎重算的門片格子
+-- （不在回覆裡，I.query 處理）：第二個回傳值＝要拆自動牆角的格子，第三個＝紀錄過期、要請引擎重算的格子（都是 x, y, z
+-- 三個一組），第四個＝屋頂數過期、要標成重算的 chunk（cx, cy 兩個一組），第五個＝I.reroof 要推的格子（x, y, z 三個
+-- 一組，每個找得到的 chunk 一格；一格都沒有＝空清單）
 function I.check(x, y, z)
     local res = { x = x, y = y, z = z, rooms = {}, levels = {} }
     local ctx = newCtx(x, y, z)
@@ -589,7 +680,8 @@ function I.check(x, y, z)
     end
     res.minX, res.minY, res.minZ = ctx.minX, ctx.minY, ctx.minZ
     res.maxX, res.maxY, res.maxZ, res.partial = ctx.maxX, ctx.maxY, ctx.maxZ, ctx.partial
-    return res, ctx.corners, ctx.fix
+    kickRest(ctx)
+    return res, ctx.corners, ctx.fix, ctx.dirty, ctx.kick
 end
 
 function I.query(ctx)
@@ -600,9 +692,23 @@ function I.query(ctx)
         return MSH.Srv.fail(CODE.TOO_FAR)
     end
     local t0 = getTimestampMs()
-    local res, corners, fix = I.check(a.x, a.y, a.z)
+    local res, corners, fix, dirty, kick = I.check(a.x, a.y, a.z)
     for i = 1, #corners, 3 do I.queueCorner(corners[i], corners[i + 1], corners[i + 2]) end
-    if #fix > 0 then res.fixed = I.recalc(fix, a.x, a.y, a.z) end   -- 回覆照查的當下，客戶端過了冷卻再查
+    -- 回覆照查的當下，客戶端過了冷卻再查；fixed＝請引擎重算的格數加 chunk 數。sent＝這次已經排了格子的 chunk
+    -- （引擎會存檔、送給客戶端，I.reroof 不必再替它推一格）
+    local sent = {}
+    local n = #fix > 0 and I.recalc(fix, a.x, a.y, a.z, sent) or 0
+    if #dirty > 0 then
+        -- 要有一格讓引擎開始跑，不然標了也不會算。一格都找不到就借重推的第一格：這一輪它已經排了工作，
+        -- 第二輪（它的紀錄修好之後）才拿來推（pushKicks）
+        if #kick == 0 and n > 0 then kick = { fix[1], fix[2], fix[3] } end
+        if #kick > 0 then
+            n = n + I.reroof(dirty, kick, a.x, a.y, a.z, sent)
+        else
+            MSH.log("indoor: roof count out of date near " .. a.x .. "," .. a.y .. "," .. a.z .. ", no square to start a recount with")
+        end
+    end
+    if n > 0 then res.fixed = n end
     local ms = getTimestampMs() - t0
     if ms >= I.SLOW_MS then
         MSH.log("indoor check " .. a.x .. "," .. a.y .. "," .. a.z .. " took " .. ms .. " ms, rooms=" .. #res.rooms)
@@ -613,19 +719,140 @@ end
 MSH.Srv.define("indoor", { kind = "query", cooldownMs = 1000, fields = { x = "int", y = "int", z = "int" },
     run = function(ctx) return MSH.Indoor.query(ctx) end })
 
--- 請引擎照格子現在的物件重算這幾格（x, y, z 三個一組）的牆紀錄，照 Knox Pass Gates.syncRegions：squareChanged 只在算出的
--- 位元和共用的 previousFlags 不同時才排工作（IsoRegions.java:309-320），先 setPreviousFlags(nil) 把它歸 0（要重算的是
--- 關著的門片，有牆位元，不會是 0）。引擎在背景執行緒重算那個 chunk、存檔、送給每位在線玩家一份（IsoRegionWorker.java:
--- 215-262、314-338，同玩家蓋一面牆），所以只修對不上的格子。回排了幾格；記一行 log（查詢的那格）
-function I.recalc(list, x, y, z)
+-- 請引擎照格子現在的物件重算這一格的紀錄，照 Knox Pass Gates.syncRegions：squareChanged 只在算出的位元和共用的
+-- previousFlags 不同時才排工作（IsoRegions.squareChanged），先 setPreviousFlags(nil) 把它歸 0（要重算的格子照現在的
+-- 物件有牆或地板，不會是 0）。格子已經卸載就不做
+local function push(cell, x, y, z)
+    local sq = cell:getGridSquare(x, y, z)
+    if sq == nil then return false end
+    IsoRegions.setPreviousFlags(nil)
+    IsoRegions.squareChanged(sq)
+    return true
+end
+
+-- 請引擎重算這幾格（x, y, z 三個一組）。引擎在背景執行緒重算那個 chunk、存檔、送給每位在線玩家一份
+-- （IsoRegionWorker.thread_run_batched_jobs，同玩家蓋一面牆），所以只修對不上的格子。回排了幾格；記一行 log（查詢的那格）。
+-- sent（可省）：排到的格子所在的 chunk 記進去
+function I.recalc(list, x, y, z, sent)
     local cell, n = getCell(), 0
     for i = 1, #list, 3 do
-        IsoRegions.setPreviousFlags(nil)
-        IsoRegions.squareChanged(cell:getGridSquare(list[i], list[i + 1], list[i + 2]))
+        if push(cell, list[i], list[i + 1], list[i + 2]) and sent ~= nil then
+            sent[key(math.floor(list[i] / 8), math.floor(list[i + 1] / 8))] = true
+        end
         n = n + 1
     end
-    MSH.log("indoor: recalculated " .. n .. " door tile(s) near " .. x .. "," .. y .. "," .. z)
+    MSH.log("indoor: recalculated " .. n .. " square(s) near " .. x .. "," .. y .. "," .. z)
     return n
+end
+
+-- ===== 屋頂數過期 =====
+
+I.REDO_MS = 10000             -- 等引擎換緩衝做第二輪，最多等多久
+I.redo = I.redo or {}         -- 等第二輪的：{ chunks, seen, sent, kick, mark, cx, cy, due }
+
+-- 推 kick（x, y, z 三個一組）。選的時候到現在格子可能卸載、門可能開了，所以推之前再比一次：紀錄不是 0、等於照現在的
+-- 物件算的才推（重推不改任何位元）。有 sent（第一輪）：每個還沒排過格子的 chunk 各推一格、記進 sent；
+-- 沒有（第二輪）：推到一格就停。回推了幾格
+local function pushKicks(kick, sent)
+    local cell, n = getCell(), 0
+    for i = 1, #kick, 3 do
+        local x, y, z = kick[i], kick[i + 1], kick[i + 2]
+        local k = sent ~= nil and key(math.floor(x / 8), math.floor(y / 8)) or nil
+        if k == nil or not sent[k] then
+            local f = flags(x, y, z)
+            local sq = f > 0 and cell:getGridSquare(x, y, z) or nil
+            if sq ~= nil and I.regionFlags(sq) == f then
+                IsoRegions.setPreviousFlags(nil)
+                IsoRegions.squareChanged(sq)
+                n = n + 1
+                if k == nil then break end
+                sent[k] = true
+            end
+        end
+    end
+    return n
+end
+
+-- 把這幾個 chunk（cx, cy 兩個一組）標成整個重算（DataChunk.setDirtyAllActive；位元沒變時重推沒有用，
+-- DataRoot.updateExistingSquare 直接返回）。標記本身不排工作，呼叫端另外推格子。
+-- 回標了幾個、第一個標到的 chunk 物件與它在 chunks 裡的位置
+local function markChunks(chunks)
+    local n, mark, at1 = 0, nil, nil
+    for i = 1, #chunks, 2 do
+        local dc = IsoRegions.getDataChunk(chunks[i], chunks[i + 1])
+        if dc ~= nil then
+            dc:setDirtyAllActive()
+            n = n + 1
+            if mark == nil then mark, at1 = dc, i end
+        end
+    end
+    return n, mark, at1
+end
+
+-- 屋頂數過期的 chunk 請引擎重算。引擎有兩份區域資料輪流當前台，Lua 只碰得到前台那一份（IsoRegions.getDataChunk）；
+-- 一批工作只把標過的那一份重算，前台換成另一份（實測 sh-istale-1121c：只標一次，之後每換一次緩衝結果就交替）。
+-- 所以記下標到的 chunk 物件，I.redoTick 看到同一個座標換成另一個物件（＝前台換了）再標一次。標記本身不存檔、
+-- 不廣播；客戶端那一份的屋頂數要收到那個 chunk 才會重算（JobChunkUpdate.readChunksPacket；只推一格時客戶端停在
+-- 76/196，sh-istale-1121f），所以第一輪每個 chunk 要有一格排進工作（同玩家在那裡蓋一面牆：那個 chunk 存檔、送給
+-- 每位在線玩家）：sent 是已經排過的 chunk（I.query 重推的格子、之前推過的），其餘各推一格；第二輪只推一格讓引擎
+-- 開始跑。前一筆還在等換緩衝時（幾個人同時查同一棟）併進那一筆：只標那一筆還沒有的 chunk、只推還沒排過的。
+-- 回要重算幾個（已經在那一筆裡的也算：這位玩家的面板照樣要稍後再查）；log 記實際標的數目
+function I.reroof(chunks, kick, x, y, z, sent)
+    local n, cover, mark, at1
+    local r = I.redo[1]
+    if r ~= nil and IsoRegions.getDataChunk(r.cx, r.cy) == r.mark then
+        local add = {}
+        for i = 1, #chunks, 2 do
+            local k = key(chunks[i], chunks[i + 1])
+            if not r.seen[k] then
+                r.seen[k] = true
+                for j = i, i + 1 do
+                    add[#add + 1] = chunks[j]
+                    r.chunks[#r.chunks + 1] = chunks[j]
+                end
+            end
+        end
+        for k in pairs(sent or {}) do r.sent[k] = true end
+        for i = 1, #kick, 3 do   -- 還沒排過的 chunk 才記（幾個人查同一棟，同一批格子不重複記）
+            if not r.sent[key(math.floor(kick[i] / 8), math.floor(kick[i + 1] / 8))] then
+                for j = i, i + 2 do r.kick[#r.kick + 1] = kick[j] end
+            end
+        end
+        n, cover = markChunks(add), #chunks / 2
+        pushKicks(kick, r.sent)
+    else
+        sent = sent or {}
+        n, mark, at1 = markChunks(chunks)
+        cover = n
+        if mark ~= nil then
+            pushKicks(kick, sent)
+            local seen = {}
+            for i = 1, #chunks, 2 do seen[key(chunks[i], chunks[i + 1])] = true end
+            I.redo[#I.redo + 1] = { chunks = chunks, seen = seen, sent = sent, kick = kick, mark = mark, cx = chunks[at1],
+                cy = chunks[at1 + 1], due = getTimestampMs() + I.REDO_MS }
+        end
+    end
+    MSH.log("indoor: roof count out of date, re-marked " .. n .. " chunk(s) near " .. x .. "," .. y .. "," .. z)
+    return cover
+end
+
+function I.redoTick()
+    local redo = I.redo
+    if #redo == 0 then return end
+    local now = getTimestampMs()
+    for i = #redo, 1, -1 do
+        local r = redo[i]
+        if IsoRegions.getDataChunk(r.cx, r.cy) ~= r.mark then
+            table.remove(redo, i)
+            -- 沒有格子可推時，標記要等附近下一次變動引擎才會算；下一次查詢會重新比對到
+            local n = markChunks(r.chunks)
+            local pushed = n > 0 and pushKicks(r.kick) or 0
+            MSH.log("indoor: roof count second pass, " .. n .. " chunk(s)" .. (pushed > 0 and "" or ", no square to push"))
+        elseif now >= r.due then
+            table.remove(redo, i)   -- 引擎沒換緩衝（沒有工作在跑）：放掉，另一份等下次查詢再比對到
+            MSH.log("indoor: roof count second pass timed out")
+        end
+    end
 end
 
 -- ===== 自動牆角 =====
@@ -681,3 +908,4 @@ end
 
 MSH.Srv.hook("startup", "indoorCorners", function() MSH.Indoor.install() end)
 MSH.Srv.hook("tick", "indoorCorners", function() MSH.Indoor.tick() end)
+MSH.Srv.hook("tick", "indoorRoofs", function() MSH.Indoor.redoTick() end)

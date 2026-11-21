@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "Add a wall, or tick Knox Pass \"Counts as indoors\".",
     "IGUI_MSH_Indoor_DoorStale": "Outdated door record · tiles: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Closed but recorded as a gap; fixed, checking again.",
+    "IGUI_MSH_Indoor_Stale": "The game's record of this building was out of date. It has been told to recalculate; checking again shortly.",
+    "IGUI_MSH_Indoor_StaleStuck": "The game's record still doesn't match after recalculating. This isn't a building mistake. Wait a few seconds and press Check again; if nothing changes, report coordinates %1, %2, %3 to an admin.",
     "IGUI_MSH_Indoor_Pillar": "Wall with a pillar · tiles: %1",
     "IGUI_MSH_Indoor_PillarFix": "Remove the pillar; the wall can stay.",
     "IGUI_MSH_Indoor_Corner": "Automatic wall corner · tiles: %1",

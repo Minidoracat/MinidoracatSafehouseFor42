@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "Duvar yapın ya da Knox Pass okuyucusunda \"İç mekan sayılır\" seçeneğini açın.",
     "IGUI_MSH_Indoor_DoorStale": "Kaydı eski kalmış kapı · kare: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Kapalı ama boşluk olarak kayıtlıydı; düzeltildi, yeniden kontrol ediliyor.",
+    "IGUI_MSH_Indoor_Stale": "Oyunun bu binayla ilgili kaydı güncel değildi. Yeniden hesaplaması istendi; birazdan yeniden kontrol edilecek.",
+    "IGUI_MSH_Indoor_StaleStuck": "Yeniden hesaplamadan sonra da oyunun kaydı uyuşmuyor. Bu bir inşa hatası değil. Birkaç saniye bekleyip “Tekrar kontrol et”e basın; değişmezse %1, %2, %3 koordinatlarını bir yöneticiye bildirin.",
     "IGUI_MSH_Indoor_Pillar": "Direkli duvar · kare: %1",
     "IGUI_MSH_Indoor_PillarFix": "Direği kaldırın, duvar kalsın.",
     "IGUI_MSH_Indoor_Corner": "Otomatik köşe · kare: %1",

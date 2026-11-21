@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "Construa uma parede ou marque \"Conta como interior\" no leitor Knox Pass.",
     "IGUI_MSH_Indoor_DoorStale": "Porta com registo desatualizado · quadrados: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Fechada mas registada como abertura; corrigido, a verificar de novo.",
+    "IGUI_MSH_Indoor_Stale": "O registo do jogo sobre este edifício estava desatualizado. Foi pedido ao jogo que o recalcule; a verificar de novo em breve.",
+    "IGUI_MSH_Indoor_StaleStuck": "Depois de recalcular, o registo do jogo continua a não coincidir. Não é um erro de construção. Espere alguns segundos e clique em «Verificar de novo»; se nada mudar, comunique as coordenadas %1, %2, %3 a um administrador.",
     "IGUI_MSH_Indoor_Pillar": "Parede com um poste · quadrados: %1",
     "IGUI_MSH_Indoor_PillarFix": "Retire o poste; a parede fica.",
     "IGUI_MSH_Indoor_Corner": "Canto automático · quadrados: %1",

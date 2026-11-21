@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "加牆或門框，或在 Knox Pass 讀頭勾「算室內」。",
     "IGUI_MSH_Indoor_DoorStale": "紀錄過期的門 %1 格",
     "IGUI_MSH_Indoor_DoorStaleFix": "門關著卻記成缺口，已更正，稍後重新檢查。",
+    "IGUI_MSH_Indoor_Stale": "遊戲對這棟房子的紀錄過期了，已請遊戲重算，稍後自動再檢查一次。",
+    "IGUI_MSH_Indoor_StaleStuck": "遊戲重算後紀錄還是對不上，不是你蓋錯。等幾秒再按〔重新檢查〕；還是一樣，請把座標 %1, %2, %3 回報給管理員。",
     "IGUI_MSH_Indoor_Pillar": "有柱子的牆 %1 格",
     "IGUI_MSH_Indoor_PillarFix": "同一格的柱子讓牆不算：拆掉柱子，牆不用動。",
     "IGUI_MSH_Indoor_Corner": "自動補的牆角 %1 格",

@@ -12,8 +12,12 @@ return function(T)
     -- region 照引擎：同一層不穿牆相連的格子；有一條走得過去的邊通到沒資料的格子＝不封閉；屋頂數＝正上方一層有地板的格數
     -- props["x,y,z"]＝那格現在的物件真正有的屬性（覆蓋用；沒寫的照記著的位元，見 truth），recalc＝引擎排了重算的格子，
     -- prev＝IsoRegions 共用的 previousFlags（squareChanged 只在算出的位元和它不同時才排工作，IsoRegions.java:309-320）
+    -- 屋頂數過期（引擎只在 chunk 重算時更新屋頂數）：引擎有兩份資料輪流當前台（front＝1 或 2），lag[份]["x,y,z"]＝那一份
+    -- 沒把這格算成有屋頂；getDataChunk 回前台那一份的 chunk 物件，setDirtyAllActive 記進 dirty[份] 與 marked（"份:cx,cy"）；
+    -- batch＝工作執行緒跑一批（有排工作才跑）：重算背後那份標過的 chunk、換前台、再重算換下來的那一份
     local W = { flags = {}, map = {}, doors = {}, regions = nil, objs = {}, westWall = {}, removed = {}, props = {},
-        recalc = {}, prev = 0 }
+        recalc = {}, prev = 0, front = 1, lag = { {}, {} }, dirty = { {}, {} }, chunks = { {}, {} }, marked = {},
+        pending = false }
     local function k3(x, y, z) return x .. "," .. y .. "," .. z end
     local function fl(x, y, z) return W.flags[k3(x, y, z)] or -1 end
     local function bit(f, b) return f >= 0 and math.floor(f / b) % 2 == 1 end
@@ -74,7 +78,7 @@ return function(T)
                     local x, y = q[qi], q[qi + 1]
                     qi = qi + 2
                     r.size = r.size + 1
-                    if bit(fl(x, y, z + 1), FLOOR) then r.roofs = r.roofs + 1 end
+                    if bit(fl(x, y, z + 1), FLOOR) and not W.lag[W.front][k3(x, y, z)] then r.roofs = r.roofs + 1 end
                     for d = 0, 3 do
                         if canMove(x, y, z, d) then
                             local nx, ny = x + DX[d], y + DY[d]
@@ -124,6 +128,29 @@ return function(T)
         if truth(x, y, z, "cutW") and not truth(x, y, z, "WallSE") then f = f + WALL_W end
         return f
     end
+    -- 那一份資料裡 (cx, cy) 這個 chunk 重算了：屋頂數照現在的位元
+    local function relag(buf, cx, cy)
+        for k in pairs(W.lag[buf]) do
+            local x, y = string.match(k, "^(-?%d+),(-?%d+),")
+            if math.floor(tonumber(x) / 8) == cx and math.floor(tonumber(y) / 8) == cy then W.lag[buf][k] = nil end
+        end
+        W.regions = nil
+    end
+    local function process(buf)
+        for ck in pairs(W.dirty[buf]) do
+            local cx, cy = string.match(ck, "^(-?%d+),(-?%d+)$")
+            relag(buf, tonumber(cx), tonumber(cy))
+        end
+        W.dirty[buf] = {}
+    end
+    function W.batch()
+        if not W.pending then return end
+        W.pending = false
+        local back = 3 - W.front
+        process(back)
+        W.front, W.regions = back, nil
+        process(3 - back)
+    end
     IsoRegions = {
         getSquareFlags = function(x, y, z)
             W.reads = W.reads + 1
@@ -134,13 +161,31 @@ return function(T)
             local r = region(x, y, z)
             return r and r.chunk or nil
         end,
+        getDataChunk = function(cx, cy)
+            local buf, ck = W.front, cx .. "," .. cy
+            if W.noChunk[ck] then return nil end   -- 引擎沒有這個 chunk 的資料
+            local dc = W.chunks[buf][ck]
+            if dc == nil then
+                dc = { setDirtyAllActive = function()
+                    W.dirty[buf][ck] = true
+                    W.marked[#W.marked + 1] = buf .. ":" .. ck
+                end }
+                W.chunks[buf][ck] = dc
+            end
+            return dc
+        end,
         setPreviousFlags = function(sq) W.prev = sq and calc(sq:getX(), sq:getY(), sq:getZ()) or 0 end,
-        -- 真的引擎在背景執行緒重算、之後的查詢才看得到；這裡當場改（查詢的回覆在呼叫之前就算好了）
+        -- 真的引擎在背景執行緒重算、之後的查詢才看得到；這裡當場改（查詢的回覆在呼叫之前就算好了）。位元有變的那個 chunk
+        -- 兩份都重算（SquareUpdate 兩輪都套用）
         squareChanged = function(sq)
             local x, y, z = sq:getX(), sq:getY(), sq:getZ()
             local f = calc(x, y, z)
             if f == W.prev then return end
-            W.flags[k3(x, y, z)], W.regions, W.prev = f, nil, 0
+            if f ~= fl(x, y, z) then
+                relag(1, math.floor(x / 8), math.floor(y / 8))
+                relag(2, math.floor(x / 8), math.floor(y / 8))
+            end
+            W.flags[k3(x, y, z)], W.regions, W.prev, W.pending = f, nil, 0, true
             W.recalc[#W.recalc + 1] = k3(x, y, z)
         end,
     }
@@ -169,6 +214,7 @@ return function(T)
     getCell = function()
         return { getGridSquare = function(_, x, y, z)
             local k = k3(x, y, z)
+            if W.noSquare[k] then return nil end   -- 格子已經卸載
             local inMap, objs = W.map[k], W.doors[k] or NO_OBJECTS
             return { getX = function() return x end, getY = function() return y end, getZ = function() return z end,
                 getRoom = function() return inMap and {} or nil end, isUserDefinedRoom = function() return false end,
@@ -196,6 +242,9 @@ return function(T)
     local function fresh()
         W.flags, W.map, W.doors, W.regions = {}, {}, {}, nil
         W.objs, W.westWall, W.removed, W.props, W.recalc = {}, {}, {}, {}, {}
+        W.front, W.lag, W.dirty, W.chunks, W.marked, W.pending = 1, { {}, {} }, { {}, {} }, { {}, {} }, {}, false
+        W.noChunk, W.noSquare = {}, {}
+        if MinidoracatSafehouse ~= nil and MinidoracatSafehouse.Indoor ~= nil then MinidoracatSafehouse.Indoor.redo = {} end
         ground(0, 0, 40, 40, 0)
     end
     -- 在 (x, y) 放一扇門：north＝北邊的門；class 預設 IsoDoor（IsoThumpable 用 isDoor 分辨，isDoor＝false＝不是門的物件）。
@@ -440,7 +489,7 @@ return function(T)
     local carl = T.player({ name = "carl", x = 11.5, y = 11.5 })
     res = T.cmd(carl, "indoor", { x = 11, y = 11, z = 0 })
     check(res.ok and res.verdict == "OPEN" and res.fixed == 3 and sorted(W.recalc) == "10,11,0 10,12,0 10,13,0"
-        and bit(fl(10, 12, 0), WALL_W) and printed("indoor: recalculated 3 door tile(s)"),
+        and bit(fl(10, 12, 0), WALL_W) and printed("indoor: recalculated 3 square(s)"),
         "查詢：回覆照查的當下、帶 fixed＝3，三格請引擎重算（先把 previousFlags 歸 0），記一行 log")
     T.advance(1000)
     W.recalc = {}
@@ -468,6 +517,397 @@ return function(T)
     res, skip, fix = I.check(11, 11, 0)
     check(#(fix or {}) == 6, "每次查詢最多比對 MAX_MARKS 扇關著的門")
     I.MAX_MARKS = marks0
+
+    T.section("室內檢查：地板、牆、屋頂數的紀錄過期（玩家 2026-11-20 回報，使用者 2026-11-21 同意比照門處理）")
+    local dirty
+    local function ask() -- 過了冷卻查一次（carl 在 40 格內）
+        T.advance(1000)
+        return T.cmd(carl, "indoor", { x = 11, y = 11, z = 0 })
+    end
+    local function forget(x, y, z)   -- 世界有地板、引擎沒記
+        W.flags[k3(x, y, z)], W.regions = 0, nil
+        W.props[k3(x, y, z)] = { solidfloor = true }
+    end
+    local function lag(x, y)         -- 兩份資料都沒把這格算成有屋頂
+        W.lag[1][k3(x, y, 0)], W.lag[2][k3(x, y, 0)], W.regions = true, true, nil
+    end
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    forget(11, 12, 1)
+    res, skip, fix, dirty = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(r.verdict == "NEED_ROOF" and r.roofs == 15 and holes(r) == "11,12" and triples(fix) == "11,12,1" and #dirty == 0
+        and #W.recalc == 0, "二樓一格世界有地板、引擎沒記：缺屋頂標在它底下，那格另外回（check 只讀）")
+    res = ask()
+    check(res.ok and res.verdict == "NEED_ROOF" and res.fixed == 1 and sorted(W.recalc) == "11,12,1"
+        and printed("indoor: recalculated 1 square(s) near 11,11,0"), "查詢：那格請引擎重算，回覆帶 fixed＝1")
+    W.recalc = {}
+    res = ask()
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil and #W.recalc == 0, "再查：算室內，不再重算")
+
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    forget(11, 11, 0)
+    res, skip, fix, dirty = I.check(11, 11, 0)
+    check(res.verdict == "ROOM" and #fix == 0 and #dirty == 0, "一樓一格世界有地板、引擎沒記：房間一直封閉時引擎照樣算有屋頂，不動")
+    lag(11, 11)   -- 房間不封閉的時候那個 chunk 重算過：那格記成沒屋頂，房間再封閉後沒改回來
+    res, skip, fix, dirty = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(r.verdict == "NEED_ROOF" and r.size - r.roofs == 1 and r.holeCount == 0 and triples(fix) == "11,11,0"
+        and #dirty == 2 and dirty[1] == 1 and dirty[2] == 1,
+        "引擎的屋頂數少一格、照現在的位元卻沒有缺屋頂的格子：漏記地板的那格與房間所在的 chunk 另外回")
+    res = ask()
+    check(res.ok and res.fixed == 2 and bit(fl(11, 11, 0), FLOOR) and W.marked[1] == "1:1,1" and sorted(W.recalc) == "11,11,0"
+        and printed("indoor: roof count out of date, re-marked 1 chunk(s) near 11,11,0"),
+        "查詢：那格重推、chunk 標成重算，fixed＝格數加 chunk 數；那個 chunk 已經排了一格，不另推")
+    W.batch()
+    T.tick(1)
+    check(#W.recalc == 2, "第二輪照樣推一格讓引擎開始跑")
+    W.batch()
+    W.recalc = {}
+    res = ask()
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil and #W.recalc == 0 and #I.redo == 0, "再查：算室內，不再重算")
+
+    -- 位元都對、只有屋頂數過期（玩家 gameover 2026-11-18 的蓋法）：房間跨 4 個 chunk，引擎只把其中一個算有屋頂
+    fresh()
+    box(6, 6, 9, 9)
+    roof(6, 6, 9, 9)
+    for x = 6, 9 do
+        for y = 6, 9 do
+            if x < 8 or y < 8 then lag(x, y) end
+        end
+    end
+    local function ask7()
+        T.advance(1000)
+        return T.cmd(carl, "indoor", { x = 7, y = 7, z = 0 })
+    end
+    local function engineRoofs() return IsoRegions.getIsoWorldRegion(7, 7, 0).getRoofCnt() end
+    -- W.recalc 前 n 筆落在幾個不同的 chunk
+    local function chunksOf(n)
+        local seen, c = {}, 0
+        for i = 1, n do
+            local x, y = string.match(W.recalc[i] or "", "^(%-?%d+),(%-?%d+),")
+            local k = x and (math.floor(x / 8) .. "," .. math.floor(y / 8)) or "?"
+            if not seen[k] then seen[k], c = true, c + 1 end
+        end
+        return c
+    end
+    res, skip, fix, dirty = I.check(7, 7, 0)
+    r = res.rooms[1]
+    check(r.verdict == "PART_ROOF" and r.roofs == 16 and r.gapCount == 0 and r.holeCount == 0 and #fix == 0 and #dirty == 8
+        and engineRoofs() == 4, "引擎說屋頂不到一半、照現在的位元卻全有：四個 chunk 另外回，沒有格子要重推")
+    res = ask7()
+    check(res.ok and res.verdict == "PART_ROOF" and res.fixed == 4 and #W.marked == 4 and string.sub(W.marked[4], 1, 2) == "1:"
+        and #W.recalc == 4 and chunksOf(4) == 4,
+        "查詢：四個 chunk 在前台那一份標成重算，每個 chunk 各推一格（引擎開始跑，客戶端也收到這幾個 chunk）")
+    W.batch()
+    check(engineRoofs() == 4, "引擎跑完一批：重算的是標過的那一份，前台換成另一份，屋頂數還是舊的")
+    T.tick(1)
+    check(#W.marked == 8 and string.sub(W.marked[5], 1, 2) == "2:" and #I.redo == 0 and #W.recalc == 5
+        and printed("indoor: roof count second pass, 4 chunk(s)"), "下一個 tick 看到前台換了：對新的前台再標一次，只推一格")
+    W.batch()
+    check(engineRoofs() == 16, "第二批跑完：前台是修好的那一份")
+    res = ask7()
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil and #W.marked == 8, "再查：算室內，不再標")
+    W.pending = true
+    W.batch()
+    res = ask7()
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil and #W.marked == 8, "引擎再換一次前台：另一份也修好了")
+
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    lag(11, 11)
+    lag(12, 12)
+    res, skip, fix, dirty = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(r.verdict == "NEED_ROOF" and r.roofs == 14 and r.holeCount == 0 and #fix == 0 and #dirty == 2,
+        "位元都對、引擎的屋頂數少兩格（屋頂過半）：一樣回 chunk")
+    res = ask()
+    T.advance(I.REDO_MS)
+    T.tick(1)
+    check(res.fixed == 1 and #I.redo == 0 and #W.marked == 1 and printed("indoor: roof count second pass timed out"),
+        "引擎一直沒換前台：等 REDO_MS 就放掉，不再標")
+
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    wall(10, 11, WALL_W, false)
+    W.props[k3(10, 11, 0)] = { cutW = true }   -- 牆在、引擎沒記
+    res, skip, fix, dirty = I.check(11, 11, 0)
+    r = res.rooms[1]
+    check(r.verdict == "OPEN" and gaps(r) == "10,11W" and triples(fix) == "10,11,0" and #dirty == 0,
+        "世界有牆、引擎沒記：這筆照列成缺牆，那格另外回")
+    res = ask()
+    res = ask()
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil, "重算後再查：算室內")
+
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    W.flags[k3(11, 12, 1)], W.regions = 0, nil   -- 二樓那格真的沒有地板
+    res, skip, fix, dirty = I.check(11, 11, 0)
+    check(res.rooms[1].verdict == "NEED_ROOF" and holes(res.rooms[1]) == "11,12" and #fix == 0 and #dirty == 0,
+        "真的缺屋頂：不重算")
+    fresh()
+    box(5, 5, 20, 20)
+    roof(10, 10, 13, 13)
+    res, skip, fix, dirty = I.check(11, 11, 0)
+    check(res.rooms[1].verdict == "PART_ROOF" and #fix == 0 and #dirty == 0, "圍起來的院子裡的棚子（屋頂數沒過期）：不重算")
+    -- 比對的上限：一格缺屋頂、上方三層都漏記地板（清單只有一筆，上限要靠 ctx.checks 才擋得住）
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for z = 1, 3 do forget(11, 12, z) end
+    I.MAX_MARKS = 2
+    W.reads = 0
+    res, skip, fix = I.check(11, 11, 0)
+    local capReads = W.reads
+    check(#fix == 6, "每次查詢最多比對 MAX_MARKS 格地板與牆（同一欄三層漏記，只比對到第二層）")
+    I.MAX_MARKS = 0
+    W.reads = 0
+    I.check(11, 11, 0)
+    check(capReads - W.reads <= 6, "比對額滿後不再往上讀引擎（" .. (capReads - W.reads) .. "）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    for y = 10, 12 do
+        wall(10, y, WALL_W, false)
+        W.props[k3(10, y, 0)] = { cutW = true }
+    end
+    I.MAX_MARKS = 2
+    res, skip, fix = I.check(11, 11, 0)
+    check(#fix == 6, "三面牆漏記：一樣只比對 MAX_MARKS 格")
+    W.reads = 0
+    I.check(11, 11, 0)
+    local wallReads = W.reads
+    I.MAX_MARKS = 3
+    W.reads = 0
+    I.check(11, 11, 0)
+    I.MAX_MARKS = 2
+    check(W.reads - wallReads >= 1, "缺牆那邊額滿後也不再讀引擎（上限 2 比上限 3 少讀 " .. (W.reads - wallReads) .. " 次）")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    wall(10, 11, WALL_W, false)
+    W.props[k3(10, 11, 0)] = { cutW = true }
+    for x = 11, 12 do W.flags[k3(x, 12, 1)] = 0 end   -- 兩格真的缺屋頂：上一層有資料、沒有地板，各用掉一次比對
+    W.regions = nil
+    res, skip, fix = I.check(11, 11, 0)
+    check(res.rooms[1].holeCount == 2 and triples(fix) == "10,11,0", "缺屋頂的格子把比對額度用完時，漏記的牆照樣回（牆排在前面）")
+    I.MAX_MARKS = marks0
+
+    -- 牆與另一個 chunk 的地板同時漏記：不封閉的分析把那格列成缺屋頂，一筆就兩格一起重推
+    fresh()
+    box(6, 6, 9, 9)
+    roof(6, 6, 9, 9)
+    wall(6, 7, WALL_W, false)
+    W.props[k3(6, 7, 0)] = { cutW = true }
+    forget(9, 9, 0)
+    lag(9, 9)
+    res = ask7()
+    check(res.ok and res.verdict == "OPEN" and res.fixed == 2 and sorted(W.recalc) == "6,7,0 9,9,0",
+        "牆與另一個 chunk 的地板都漏記：兩格一起重推")
+    res = ask7()
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil, "再查：算室內，不再重算")
+
+    -- 讓引擎開始跑的那一格：紀錄和現在的物件不同的不拿來推（Knox Pass「算室內」開著的門片記著牆，重推會把牆清掉）
+    fresh()
+    box(6, 6, 9, 9)
+    roof(6, 6, 9, 9)
+    lag(8, 8)
+    W.flags[k3(7, 7, 0)] = FLOOR + WALL_N
+    W.props[k3(7, 7, 0)] = { cutN = false }
+    W.regions = nil
+    res = ask7()
+    check(res.ok and res.fixed ~= nil and fl(7, 7, 0) == FLOOR + WALL_N and #W.recalc == 4 and chunksOf(4) == 4
+        and not string.find(sorted(W.recalc), "7,7,0", 1, true), "起點那格記著世界沒有的牆：那個 chunk 推別格，那面牆的紀錄不動")
+    -- 第二輪推之前再比一次：兩輪之間那格變了（門開了、紀錄和物件不同了）就不推它，換下一格；都變了就只標、log 寫明沒推
+    local function spoil(s)
+        local kx, ky = string.match(s or "", "^(%d+),(%d+),0$")
+        kx, ky = tonumber(kx), tonumber(ky)
+        W.props[k3(kx, ky, 0)] = { cutN = not bit(fl(kx, ky, 0), WALL_N) }
+    end
+    fresh()
+    box(6, 6, 9, 9)
+    roof(6, 6, 9, 9)
+    lag(8, 8)
+    res = ask7()
+    W.batch()
+    spoil(W.recalc[1])
+    T.tick(1)
+    check(#W.recalc == 5 and W.recalc[5] ~= W.recalc[1] and printed("indoor: roof count second pass, 4 chunk(s)"),
+        "兩輪之間第一格變了：第二輪推別格")
+    fresh()
+    box(6, 6, 9, 9)
+    roof(6, 6, 9, 9)
+    lag(8, 8)
+    res = ask7()
+    W.batch()
+    for i = 1, 4 do spoil(W.recalc[i]) end
+    T.tick(1)
+    check(#W.recalc == 4 and printed("indoor: roof count second pass, 4 chunk(s), no square to push"),
+        "兩輪之間拿來推的格子都變了：第二輪只標不推，那幾格的紀錄不動")
+    fresh()
+    box(10, 10, 10, 10)
+    roof(10, 10, 10, 10)
+    W.props[k3(10, 10, 0)] = { cutN = false, cutW = false }
+    lag(10, 10)
+    I.MAX_MARKS = 1
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 10, y = 10, z = 0 })
+    I.MAX_MARKS = marks0
+    check(res.ok and res.fixed == nil and #W.marked == 0 and #W.recalc == 0 and #I.redo == 0
+        and printed("indoor: roof count out of date near 10,10,0, no square to start a recount with"),
+        "比對額度用完還找不到可以推的格子、也沒有要重推的：不標、不說已經重算，記一行 log")
+    -- 房間在那個 chunk 的格子都不能推（記著世界沒有的牆）：在那個 chunk 的一樓另找一格，客戶端才收得到那個 chunk；
+    -- 另一個 chunk 有格子要重推，不另推
+    local function oneByTwo()
+        fresh()
+        box(7, 10, 8, 10)
+        roof(7, 10, 8, 10)
+        W.flags[k3(7, 10, 0)] = WALL_N + WALL_W            -- 地板漏記
+        W.props[k3(7, 10, 0)] = { solidfloor = true }
+        W.props[k3(8, 10, 0)] = { cutN = false }           -- 記著世界沒有的牆：不能拿來推
+        lag(8, 10)
+        W.regions = nil
+        T.advance(1000)
+        return T.cmd(carl, "indoor", { x = 7, y = 10, z = 0 })
+    end
+    res = oneByTwo()
+    check(res.ok and res.fixed ~= nil and #W.recalc == 2 and W.recalc[1] == "7,10,0" and chunksOf(2) == 2
+        and W.recalc[2] ~= "8,10,0" and fl(8, 10, 0) == FLOOR + WALL_N,
+        "房間在那個 chunk 的格子不能推：推同一個 chunk 的別格（" .. tostring(W.recalc[2]) .. "），那面牆的紀錄不動")
+    -- 連別格也找不到（比對額度用完）、但有格子要重推：借重推的那格給第二輪推，兩份資料都修好
+    I.MAX_MARKS = 1
+    res = oneByTwo()
+    I.MAX_MARKS = marks0
+    check(res.ok and res.verdict == "NEED_ROOF" and res.fixed ~= nil and sorted(W.recalc) == "7,10,0"
+        and fl(8, 10, 0) == FLOOR + WALL_N, "沒有可以推的格子、有一格要重推：照樣標 chunk")
+    W.batch()
+    T.tick(1)
+    W.batch()
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 7, y = 10, z = 0 })
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil and printed("indoor: roof count second pass, 2 chunk(s)"),
+        "第二輪借重推的那格推：兩份資料都修好，再查算室內")
+    -- 挑高的那層整層沒有地板（位元 0）：推同一格的一樓
+    fresh()
+    box(6, 6, 9, 9, 1)
+    roof(6, 6, 9, 9, 1)
+    for x = 6, 9 do
+        for y = 6, 9 do
+            if fl(x, y, 1) < 0 then W.flags[k3(x, y, 1)] = 0 end
+        end
+    end
+    W.lag[1][k3(8, 8, 1)], W.lag[2][k3(8, 8, 1)], W.regions = true, true, nil
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 8, y = 8, z = 1 })
+    check(res.ok and res.verdict == "NEED_ROOF" and res.fixed ~= nil and #W.recalc == 4 and chunksOf(4) == 4
+        and W.recalc[1] == "8,8,0", "二樓那間的屋頂數過期、起點那層沒有記著地板：那個 chunk 推一樓那格")
+    W.batch()
+    T.tick(1)
+    W.batch()
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 8, y = 8, z = 1 })
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil, "兩輪後再查：算室內")
+    -- 那層中間、連同底下的一樓都沒有記著地板（位元 0）：這些格子不佔找格子的額度，照樣找得到邊上記著牆的那一格
+    fresh()
+    box(6, 6, 9, 9, 1)
+    roof(6, 6, 9, 9, 1)
+    for x = 6, 9 do
+        for y = 6, 9 do
+            if fl(x, y, 1) < 0 then
+                W.flags[k3(x, y, 1)], W.flags[k3(x, y, 0)] = 0, 0
+            end
+        end
+    end
+    W.lag[1][k3(8, 8, 1)], W.lag[2][k3(8, 8, 1)], W.regions = true, true, nil
+    I.MAX_MARKS = 2
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 8, y = 8, z = 1 })
+    I.MAX_MARKS = marks0
+    check(res.ok and res.fixed ~= nil and #W.recalc == 2 and string.match(W.recalc[1], ",1$") ~= nil,
+        "位元是 0 的格子不佔額度：走過兩格以上才遇到記著牆的格子，照樣推它（" .. tostring(W.recalc[1]) .. "）")
+    -- 一樓整塊都沒有可以推的格子（紀錄是 0）、二樓那間記著地板：每個 chunk 在房間那一層各找一格
+    fresh()
+    box(6, 6, 9, 9, 1)
+    ground(6, 6, 9, 9, 1)
+    roof(6, 6, 9, 9, 1)
+    for x = 0, 15 do
+        for y = 0, 15 do W.flags[k3(x, y, 0)] = 0 end
+    end
+    W.lag[1][k3(8, 8, 1)], W.lag[2][k3(8, 8, 1)], W.regions = true, true, nil
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 8, y = 8, z = 1 })
+    check(res.ok and res.fixed ~= nil and #W.recalc == 4 and chunksOf(4) == 4 and string.match(W.recalc[4], ",1$") ~= nil,
+        "一樓沒有可以推的格子：每個 chunk 推房間那一層的一格（" .. sorted(W.recalc) .. "）")
+
+    -- 只有一格的房間、頭上唯一的那塊屋頂漏記：附近找不到有屋頂的格子，照樣比對起點那一欄
+    fresh()
+    box(10, 10, 10, 10)
+    forget(10, 10, 1)
+    res, skip, fix = I.check(10, 10, 0)
+    check(res.verdict == "OUTSIDE" and triples(fix) == "10,10,1", "唯一的屋頂漏記：這筆說室外，那格另外回")
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 10, y = 10, z = 0 })
+    T.advance(1000)
+    res = T.cmd(carl, "indoor", { x = 10, y = 10, z = 0 })
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil, "重算後再查：算室內")
+    fresh()
+    box(10, 10, 10, 10)
+    W.flags[k3(10, 10, 1)], W.regions = 0, nil
+    res, skip, fix = I.check(10, 10, 0)
+    check(res.verdict == "OUTSIDE" and #fix == 0, "頭上真的沒有地板：室外，不重算")
+
+    -- 引擎沒有那個 chunk 的資料、格子已經卸載：不標、不比對
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    lag(11, 11)
+    lag(12, 12)
+    W.noChunk["1,1"] = true
+    res = ask()
+    check(res.ok and res.fixed == nil and #I.redo == 0 and #W.recalc == 0, "引擎沒有那個 chunk：不推、不等第二輪、不說已經重算")
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    forget(11, 12, 1)
+    W.noSquare[k3(11, 12, 1)] = true
+    res, skip, fix = I.check(11, 11, 0)
+    check(#fix == 0, "那格已經卸載：不重算")
+
+    -- 前一筆還沒換緩衝時又有人查同一棟：標在同一份、併進同一筆第二輪，不另推一格
+    fresh()
+    box(10, 10, 13, 13)
+    roof(10, 10, 13, 13)
+    lag(11, 11)
+    lag(12, 12)
+    local kick
+    res, skip, fix, dirty, kick = I.check(11, 11, 0)
+    local n1 = I.reroof(dirty, kick, 11, 11, 0)
+    res, skip, fix, dirty, kick = I.check(11, 11, 0)
+    local n2 = I.reroof(dirty, kick, 11, 11, 0)
+    check(#I.redo == 1 and #W.recalc == 1 and #W.marked == 1 and #I.redo[1].chunks == 2 and #I.redo[1].kick == 3
+        and n1 == 1 and n2 == 1, "兩筆查詢同一棟：只推一格、只等一筆第二輪、同一個 chunk 只標一次、只記一格，兩筆都回要重算")
+    W.batch()
+    T.tick(1)
+    W.batch()
+    res = ask()
+    check(res.ok and res.verdict == "ROOM" and res.fixed == nil and #I.redo == 0, "兩輪後再查：算室內")
+    -- 前一筆只替一部分 chunk 找到可以推的格子，後來的查詢找到其他 chunk 的：補推，已經推過的不重推、不重標
+    fresh()
+    box(6, 6, 9, 9)
+    roof(6, 6, 9, 9)
+    lag(8, 8)
+    res, skip, fix, dirty, kick = I.check(7, 7, 0)
+    I.reroof(dirty, { kick[1], kick[2], kick[3] }, 7, 7, 0)
+    check(#W.recalc == 1 and #W.marked == 4, "前一筆四個 chunk 只推到一格")
+    I.reroof(dirty, kick, 7, 7, 0)
+    check(#W.recalc == 4 and chunksOf(4) == 4 and #W.marked == 4 and #I.redo == 1,
+        "後來的查詢補推其他三個 chunk：每個 chunk 一格，不重標")
 
     T.section("室內檢查：關著也不算牆的車庫門鏈（Knox Pass 4 版「算室內」開關；使用者 2026-10-22 裁定面板要提）")
     fresh()
@@ -951,6 +1391,8 @@ return function(T)
     check(v.issues.pool[1].title == "IGUI_MSH_Indoor_DoorStale|2" and v.issues.pool[1].sub == "IGUI_MSH_Indoor_DoorStaleFix"
         and v.issues.pool[2].title == "IGUI_MSH_Indoor_DoorShut|1" and v.issues.pool[2].sub == "IGUI_MSH_Indoor_DoorShutFix",
         "紀錄過期那列說已經更正、稍後再查；不算牆那列說原因與做法")
+    check(lineOf("IGUI_MSH_Indoor_Stale") ~= nil and lineOf("IGUI_MSH_Indoor_StaleStuck|11,11,0") == nil,
+        "回覆帶 fixed：結論底下寫紀錄過期、已請遊戲重算")
     T.tick(5)
     check(m.want and sends() == s0 and lineOf("IGUI_MSH_Indoor_Checking") ~= nil, "冷卻內不送，寫「檢查中...」")
     T.advance(P.GAP_MS)
@@ -959,7 +1401,35 @@ return function(T)
     reply(STALE)
     T.advance(P.GAP_MS)
     T.tick(1)
-    check(not m.want and sends() == s0 + 1, "連著兩筆都帶 fixed（遊戲沒照算）：不再自動查")
+    check(sends() == s0 + 2 and not m.stuck and lineOf("IGUI_MSH_Indoor_Stale") ~= nil,
+        "第二筆也帶 fixed（牆修好後才看得出屋頂數少算）：照樣自己再查，不寫對不上")
+    reply(STALE)
+    T.advance(P.GAP_MS)
+    T.tick(1)
+    check(not m.want and sends() == s0 + 2, "連著 STUCK_RUNS 筆都帶 fixed（遊戲沒照算）：不再自動查")
+    local stuck = lineOf("IGUI_MSH_Indoor_StaleStuck|11,11,0")
+    check(stuck ~= nil and stuck.token == "errorText" and lineOf("IGUI_MSH_Indoor_Stale") == nil,
+        "連著 STUCK_RUNS 筆都帶 fixed：改寫重算後還是對不上、不是蓋錯，附查的座標")
+    T.advance(P.GAP_MS)
+    P.recheck(m)
+    T.tick(1)
+    reply(ROOM)
+    check(lineOf("IGUI_MSH_Indoor_Stale") == nil and lineOf("IGUI_MSH_Indoor_StaleStuck|11,11,0") == nil and not m.stuck,
+        "之後的回覆沒有 fixed：兩行都收掉")
+    T.advance(P.GAP_MS)
+    P.recheck(m)
+    T.tick(1)
+    reply(STALE)
+    me.x = 11.5 + C.LIMIT.INDOOR_REACH + 1
+    T.advance(P.GAP_MS)
+    T.tick(1)
+    check(m.err == "TOO_FAR" and not m.want and lineOf("IGUI_MSH_Indoor_Stale") == nil,
+        "收到 fixed 後走出範圍：重查取消了，不再寫稍後自動再檢查")
+    me.x = 11.5
+    T.advance(P.GAP_MS)
+    P.recheck(m)
+    T.tick(1)
+    reply(ROOM)
 
     T.section("室內檢查面板：關著也不算牆的車庫門鏈（Knox Pass 4 版「算室內」開關；使用者 2026-10-22 裁定「提」）")
     local CHAIN = { verdict = "OPEN", x = 11, y = 11, z = 0, minX = 10, minY = 10, minZ = 0, maxX = 13, maxY = 13, maxZ = 0,

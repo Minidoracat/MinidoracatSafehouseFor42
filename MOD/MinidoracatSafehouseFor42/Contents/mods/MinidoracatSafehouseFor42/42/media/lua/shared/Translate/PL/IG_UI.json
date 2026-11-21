@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "Postaw ścianę lub framugę albo zaznacz „Liczy się jako wnętrze” w czytniku Knox Pass.",
     "IGUI_MSH_Indoor_DoorStale": "Drzwi z nieaktualnym zapisem · pola: %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Zamknięte, ale zapisane jako luka; poprawione, sprawdzam ponownie.",
+    "IGUI_MSH_Indoor_Stale": "Zapis gry dla tego budynku był nieaktualny. Gra przelicza go ponownie; za chwilę sprawdzę jeszcze raz.",
+    "IGUI_MSH_Indoor_StaleStuck": "Po przeliczeniu zapis gry nadal się nie zgadza. To nie jest błąd budowy. Poczekaj kilka sekund i naciśnij „Sprawdź ponownie”; jeśli nic się nie zmieni, zgłoś adminowi współrzędne %1, %2, %3.",
     "IGUI_MSH_Indoor_Pillar": "Ściana ze słupkiem · pola: %1",
     "IGUI_MSH_Indoor_PillarFix": "Usuń słupek; ściana zostaje.",
     "IGUI_MSH_Indoor_Corner": "Automatyczny narożnik · pola: %1",

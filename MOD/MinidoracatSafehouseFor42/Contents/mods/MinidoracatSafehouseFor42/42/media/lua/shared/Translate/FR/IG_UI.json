@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "Ajoutez un mur ou cochez « Compte comme intérieur » sur le lecteur Knox Pass.",
     "IGUI_MSH_Indoor_DoorStale": "Porte à l'enregistrement périmé · cases : %1",
     "IGUI_MSH_Indoor_DoorStaleFix": "Fermée mais enregistrée comme une brèche ; corrigé, nouvelle vérification.",
+    "IGUI_MSH_Indoor_Stale": "L'enregistrement du jeu pour ce bâtiment était périmé. Le jeu le recalcule ; nouvelle vérification dans un instant.",
+    "IGUI_MSH_Indoor_StaleStuck": "Après recalcul, l'enregistrement du jeu ne correspond toujours pas. Ce n'est pas une erreur de construction. Attendez quelques secondes et appuyez sur « Revérifier » ; si rien ne change, signalez les coordonnées %1, %2, %3 à un admin.",
     "IGUI_MSH_Indoor_Pillar": "Mur avec un pilier · cases : %1",
     "IGUI_MSH_Indoor_PillarFix": "Retirez le pilier ; le mur reste.",
     "IGUI_MSH_Indoor_Corner": "Coin automatique · cases : %1",

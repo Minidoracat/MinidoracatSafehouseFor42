@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "壁かドア枠を建てるか、Knox Pass リーダーで「屋内扱い」をオンにしてください。",
     "IGUI_MSH_Indoor_DoorStale": "記録が古いドア · %1マス",
     "IGUI_MSH_Indoor_DoorStaleFix": "閉まっているのにすき間扱いでした。修正して再チェックします。",
+    "IGUI_MSH_Indoor_Stale": "この建物についてのゲーム側の記録が古くなっていました。再計算を依頼したので、まもなく自動で再チェックします。",
+    "IGUI_MSH_Indoor_StaleStuck": "再計算後もゲーム側の記録が合いません。建て方の間違いではありません。数秒待って「再チェック」を押してください。変わらない場合は、座標 %1, %2, %3 を管理者に報告してください。",
     "IGUI_MSH_Indoor_Pillar": "柱のある壁 · %1マス",
     "IGUI_MSH_Indoor_PillarFix": "柱を撤去してください（壁はそのまま）。",
     "IGUI_MSH_Indoor_Corner": "自動で付いた壁の角 · %1マス",

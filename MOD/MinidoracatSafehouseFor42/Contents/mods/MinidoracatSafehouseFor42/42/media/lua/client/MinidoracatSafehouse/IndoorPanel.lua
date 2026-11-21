@@ -13,6 +13,8 @@
 --   （使用者 2026-10-15：「應該明顯一點的亮紅色，然後不應該是用那個木板牆的樣子」）。只在玩家站在那一層時畫（疊色不測
 --   深度，會蓋過樓上）。缺口那條邊上有門（車庫門開著、遊戲不算牆的門）另外列一種列，寫「開著的門」而不是「補上牆」；
 --   門關著、遊戲還記成缺口的寫「紀錄過期的門」：伺服器查到就請遊戲重算（server/…/Indoor.lua），面板過了冷卻自己再查一次。
+--   地板、牆、屋頂數的紀錄過期（2026-11-21）沒有自己的列：回覆帶 fixed 時結論底下寫「已請遊戲重算，稍後自動再檢查」，
+--   連著 STUCK_RUNS 筆都帶就改寫「重算後還是對不上」並附座標，不再自動查。
 --   西邊的缺口那格有牆又有柱子（遊戲整格有柱子就不算那格的西牆，玩家 2026-10-19 回報）也另外列：玩家自己蓋的柱子寫「有柱子的
 --   牆」、叫玩家拆柱子；蓋牆時遊戲自動補的牆角寫「自動補的牆角」，伺服器查到就拆（server/…/Indoor.lua），拆掉後面板照物件
 --   增減自己重查。
@@ -35,6 +37,7 @@ MSH.IndoorPanel = P
 
 P.GAP_MS = 1100       -- 伺服器冷卻 1000 ms＋餘裕，從回覆算
 P.SETTLE_MS = 700     -- 物件增減後多久才查（伺服器重算 IsoRegions；送到客戶端實測 101-206 ms，sh-indoor-1015e）
+P.STUCK_RUNS = 3      -- 連著幾筆回覆都帶 fixed 才寫「重算後還是對不上」（一次重推的格子被遊戲分進兩批時，第二筆還會帶）
 P.NEAR = 4            -- 物件落在檢查範圍外框外幾格內才重查（和伺服器找屋頂的 NEAR 一樣）
 P.DIST_MS = 500       -- 多久更新一次「離你 N 格」
 P.ROWS, P.ROOM_ROWS = 5, 3   -- 問題、同一棟其他房間各最多同時顯示幾列（再多就捲動）
@@ -275,10 +278,12 @@ function P.onReply(m, seq, res)
         m.res, m.err = res, nil
         if res.rooms[m.cur] == nil then m.cur = 1 end
         P.refresh(m)
-        -- 伺服器剛請遊戲重算紀錄過期的門（fixed，玩家 2026-10-22 回報）：這筆是重算前的樣子，過了冷卻自己再查一次。
-        -- 連著兩筆都有就不再自動查（遊戲沒照算時不會一直查下去）
-        if res.fixed ~= nil and not m.fixedLast then ask(m, 0) end
-        m.fixedLast = res.fixed ~= nil
+        -- 伺服器剛請遊戲重算過期的紀錄（fixed：門 2026-10-22、地板與牆與屋頂數 2026-11-21）：這筆是重算前的樣子，過了
+        -- 冷卻自己再查一次。連著 STUCK_RUNS 筆都有就不再自動查（遊戲沒照算時不會一直查下去），面板改寫重算後還是
+        -- 對不上（stuck）
+        m.fixedRuns = res.fixed ~= nil and (m.fixedRuns or 0) + 1 or 0
+        m.stuck = m.fixedRuns >= P.STUCK_RUNS
+        if res.fixed ~= nil and not m.stuck then ask(m, 0) end
     else
         m.err = res.code
         if res.code == "NO_REPLY" and m.view ~= nil then ask(m, 0) end   -- 間隔滿了再試一次
@@ -484,6 +489,12 @@ function P.layout(v)
         local head, sub, token, icon = P.verdict(res, room)
         y = para(v, head, token, icon, y)
         y = para(v, sub, "textMuted", nil, y)
+        -- 「稍後自動再檢查」只在真的還會查時寫（走出範圍時重查已經取消，狀態行寫原因）
+        if m.stuck then
+            y = para(v, getText("IGUI_MSH_Indoor_StaleStuck", m.x, m.y, m.z), "errorText", "warning", y)
+        elseif res.fixed ~= nil and (m.want or m.busy) then
+            y = para(v, getText("IGUI_MSH_Indoor_Stale"), "textMuted", nil, y)
+        end
         if room ~= nil and not P.eaves(room) then
             local line = getText("IGUI_MSH_Indoor_RoomLine", room.size, room.roofs, room.size)
             if P.multiFloor(m) then line = getText("IGUI_MSH_Indoor_OnFloor", room.z + 1, line) end
@@ -736,7 +747,7 @@ local function openUnsafe(opts)
     if m ~= nil then
         -- 已經開著：換查這一格（還在等的那筆回來時丟掉）
         m.x, m.y, m.z, m.seq = x, y, z, m.seq + 1
-        m.res, m.err, m.cur, m.fixedLast = nil, nil, 1, nil
+        m.res, m.err, m.cur, m.fixedRuns = nil, nil, 1, nil
         m.fromManager = m.fromManager or opts.fromManager == true
         P.refresh(m)
         ask(m, 0)

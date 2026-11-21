@@ -779,6 +779,8 @@
     "IGUI_MSH_Indoor_DoorShutFixKnox": "벽이나 문틀을 세우거나 Knox Pass 리더기에서 \"실내로 인정\"을 켜세요.",
     "IGUI_MSH_Indoor_DoorStale": "기록이 오래된 문 · %1타일",
     "IGUI_MSH_Indoor_DoorStaleFix": "닫혔는데 틈으로 기록돼 있었습니다. 고쳤고 다시 검사합니다.",
+    "IGUI_MSH_Indoor_Stale": "이 건물에 대한 게임 기록이 오래돼 있었습니다. 다시 계산하도록 요청했고, 곧 자동으로 다시 검사합니다.",
+    "IGUI_MSH_Indoor_StaleStuck": "다시 계산한 뒤에도 게임 기록이 맞지 않습니다. 잘못 지은 것이 아닙니다. 몇 초 기다린 뒤 '다시 검사'를 누르세요. 그래도 같으면 관리자에게 좌표 %1, %2, %3 위치를 알려 주세요.",
     "IGUI_MSH_Indoor_Pillar": "기둥이 있는 벽 · %1타일",
     "IGUI_MSH_Indoor_PillarFix": "기둥을 치우세요(벽은 그대로).",
     "IGUI_MSH_Indoor_Corner": "자동 벽 모서리 · %1타일",
