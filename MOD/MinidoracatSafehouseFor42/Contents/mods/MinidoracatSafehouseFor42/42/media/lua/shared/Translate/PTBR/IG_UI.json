@@ -278,7 +278,7 @@
     "IGUI_MSH_Slots_Later": "Agora não",
     "IGUI_MSH_Lease_Title": "Aluguel da base",
     "IGUI_MSH_Lease_renewal_due": "O aluguel da sua vaga de nível %1 termina em %2 e a renovação automática está desativada.",
-    "IGUI_MSH_Lease_grace": "O aluguel da sua vaga de nível %1 terminou; faltam %2 de carência. Renove antes disso para manter sua base ativa.",
+    "IGUI_MSH_Lease_grace": "O aluguel da sua vaga de nível %1 terminou; carência restante: %2. Renove antes disso para manter sua base ativa.",
     "IGUI_MSH_Lease_expired": "O aluguel da sua vaga de nível %1 acabou.",
     "IGUI_MSH_Lease_renewal_failed": "A renovação automática da sua vaga de nível %1 falhou: %2",
     "IGUI_MSH_Lease_Lapsed": "Base \"%1\": aluguel vencido, agora mantida. Continua protegida; renove a vaga deste nível antes do fim do prazo para restaurá-la.",

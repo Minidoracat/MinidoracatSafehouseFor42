@@ -278,7 +278,7 @@
     "IGUI_MSH_Slots_Later": "Ahora no",
     "IGUI_MSH_Lease_Title": "Alquiler del refugio",
     "IGUI_MSH_Lease_renewal_due": "El alquiler de tu plaza de nivel %1 vence en %2 y la renovación automática está desactivada.",
-    "IGUI_MSH_Lease_grace": "El alquiler de tu plaza de nivel %1 está vencido; quedan %2 de periodo de gracia. Renuévalo antes para que tu refugio siga activo.",
+    "IGUI_MSH_Lease_grace": "El alquiler de tu plaza de nivel %1 está vencido; periodo de gracia restante: %2. Renuévalo antes para que tu refugio siga activo.",
     "IGUI_MSH_Lease_expired": "El alquiler de tu plaza de nivel %1 ya terminó.",
     "IGUI_MSH_Lease_renewal_failed": "No se pudo renovar automáticamente tu plaza de nivel %1: %2",
     "IGUI_MSH_Lease_Lapsed": "Refugio \"%1\": alquiler vencido, ahora se conserva. Sigue protegido; renueva la plaza de este nivel antes de que termine el plazo de conservación para restaurarlo.",
