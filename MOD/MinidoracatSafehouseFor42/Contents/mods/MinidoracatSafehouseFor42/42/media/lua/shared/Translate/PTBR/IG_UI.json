@@ -632,7 +632,7 @@
     "IGUI_MSH_Vehicle_Blocked": "Você não pode entrar nesta base, nem de veículo.",
     "IGUI_MSH_Vehicle_BlockedRider": "Alguém neste veículo não pode entrar nesta base, então o veículo não pode entrar.",
     "IGUI_MSH_Ladder_Blocked": "Você não pode entrar nesta base, nem por uma escada.",
-    "IGUI_MSH_WhatsNew": "Bases mantidas seguem protegidas. Renovação pausada por novo preço: clique em Concordo.",
+    "IGUI_MSH_WhatsNew": "Tem escritura de nível superior? Melhore a base pelo gerenciador. Os aluguéis avisam antes de vencer; ative a renovação automática ao alugar.",
     "IGUI_MSH_Code_Generic": "O servidor recusou o pedido (%1).",
     "IGUI_MSH_Alert_Title": "Base",
     "IGUI_MSH_Alert_Generic": "Aviso de bases do servidor: %1",

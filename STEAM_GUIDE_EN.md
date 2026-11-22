@@ -28,7 +28,7 @@ A safehouse system for dedicated multiplayer servers: use a deed to mark your ow
 [*] [b]Split-screen[/b]: players 2–4 can't create safehouses.
 [*] [b]Server admins[/b]: change a few vanilla safehouse settings first; see "Server settings".
 [*] [b]Adding mid-save[/b]: safehouses already in the save (vanilla or Better Safehouse) are taken over automatically at server start; see "Taking over existing safehouses".
-[*] [b]Protection[/b]: uses vanilla safehouses, so non-members can't enter or take items; a vehicle with anyone aboard who can't enter can't drive in either (see "Vehicles can't drive in"); zombies can still spawn inside.
+[*] [b]Protection[/b]: uses vanilla safehouses, so non-members can't enter or take items; a vehicle with anyone aboard who can't enter can't drive in either (see "Vehicles can't drive in"); by default zombies still spawn inside as in vanilla, and admins can turn on "No zombie spawns inside safehouses" (see "Known limitations").
 [/list]
 === 🧰 Deeds
 {{img:02-deed-tooltip-en.jpg}}
@@ -114,6 +114,7 @@ Default chances once "Deeds drop as loot" is on:
 [*] [b]Cyan[/b]: the marked area is tinted on the floor; characters still stand on top of it, and tall grass isn't tinted, only the ground beneath it.
 [*] [b]Live numbers[/b]: the panel shows outline, area, pieces and the deed's limits, with the "same as" size next to tile counts.
 [*] [b]Red[/b]: over the limit or breaking the shape rules turns the text and the ground area red.
+[*] [b]Unselected tiles[/b]: only the selected (lit-up) tiles are protected. When tiles inside the outline aren't selected, the marking, check and confirm pages say "Tiles inside the outline that aren't selected: N. Tiles that aren't lit up are not protected."
 [/list]
 [h3]Finishing and creating[/h3]
 [olist]
@@ -171,6 +172,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [*] [b]Margin[/b]: no road within 1 tile outside the area either (adjustable).
 [*] [b]Your driveway[/b]: within a few tiles of a home and its detached garage or shed, only main roads and parking lots count, so you can enclose your own driveway.
 [*] [b]Inside buildings[/b]: floors inside the rooms of the map's own buildings never count as road (some houses have road asphalt in the garage); rooms that players wall in themselves are still judged by their ground.
+[*] [b]Changed road surfaces[/b]: tiles whose road surface players have changed are judged by the original surface the server recorded, and the server remembers it across crashes and restarts; gravel you pour on grass yourself is not road. For surfaces changed before this update, see "Known limitations".
 [*] [b]Parking data[/b]: comes from MiniMap; without it, only main roads block near homes.
 [/list]
 [h3]Resource sites (needs MiniMap)[/h3]
@@ -207,7 +209,17 @@ The server re-checks every rule when you send the area, and the check page lists
 [*] [b]Button[/b]: "Redraw" in the manager window shows the time and uses left.
 [*] [b]Confirm[/b]: after the checks pass, press "Use this area", then "Use new area".
 [*] [b]After the time limit[/b]: to move it, abandon it and create a new one.
-[*] [b]Taken-over safehouses[/b]: can't be redrawn.
+[*] [b]Taken-over safehouses[/b]: can't be redrawn, but can be upgraded with a deed.
+[/list]
+[h3]Upgrade with deed[/h3]
+[list]
+[*] [b]When it shows up[/b]: with a higher-tier deed in your inventory, the manager window shows "Upgrade with deed".
+[*] [b]What carries over[/b]: name, sharing list and respawn point; keep the same area or redraw it at the same time.
+[*] [b]Only upward[/b]: only to a higher tier, never the same or a lower one; it uses one new deed, and your old deed is not refunded.
+[*] [b]Slots[/b]: after upgrading, the safehouse counts against the new tier's slots (free or paid, by the new tier), and the old tier's slot frees up; without a slot in the new tier you can't upgrade.
+[*] [b]Not a redraw[/b]: it doesn't count as a redraw and ignores the redraw time limit; taken-over safehouses can be upgraded too.
+[*] [b]Keep period[/b]: a safehouse kept after its lease expired can't be upgraded.
+[*] [b]Idle-release insurance[/b]: insurance is bought per tier, so insurance for the old tier doesn't move to the new one.
 [/list]
 [h3]Abandon a safehouse[/h3]
 [list]
@@ -222,7 +234,7 @@ Select a safehouse in the manager window and open "Members & sharing". To add so
 [tr][td]Member[/td][td]Entering the safehouse, taking and putting items in containers[/td][/tr]
 [tr][td]Use appliances[/td][td]Appliances, including taking water, light bulbs and batteries in lamps, and wiring, switching, refueling and repairing generators[/td][/tr]
 [tr][td]Move furniture[/td][td]Moving furniture, including picking up generators[/td][/tr]
-[tr][td]Build[/td][td]Building, including dismantling and forcing doors and windows open with a crowbar. Disassembling player-built walls, stairs and other structures that can't be picked up needs both Move furniture and Build[/td][/tr]
+[tr][td]Build[/td][td]Building, including dismantling, pouring and shoveling dirt, gravel and sand, and forcing doors and windows open with a crowbar. Disassembling player-built walls, stairs and other structures that can't be picked up needs both Move furniture and Build[/td][/tr]
 [tr][td]Farm[/td][td]Farming[/td][/tr]
 [tr][td]Remote take[/td][td]When the server allows remote take: standing inside the safehouse, take items from a container elsewhere straight into your inventory[/td][/tr]
 [tr][td]Invite[/td][td]Adding players who can't enter yet[/td][/tr]
@@ -271,7 +283,7 @@ Select a safehouse in the manager window and open "Members & sharing". To add so
 [*] [b]Two lists[/b]: "Mine" and "Shared with me"; with many safehouses the list just scrolls.
 [*] [b]Second line in the list[/b]: in "Mine", the status is followed by the slot that safehouse uses: a free or paid slot with its tier, or "Migrated safehouse" for taken-over ones.
 [*] [b]Three tabs per safehouse[/b]: "Overview", "Members & sharing", "Land rules".
-[*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Set as respawn point", "Redraw", "Abandon safehouse...".
+[*] [b]What you can do[/b]: "Rename" (1–40 characters), check the status, manage sharing, "Set as respawn point", "Redraw", "Upgrade with deed" (see "Upgrade with deed"), "Abandon safehouse...".
 [*] [b]Other buttons[/b]: "Create safehouse", "Indoor check", "Slots"; "Find items" sits next to the safehouse name (see "Item search").
 [*] [b]Idle release[/b]: the "Idle release" row on Overview shows how long is left; see "Idle release and insurance".
 [*] [b]After creating[/b]: the window opens on the new safehouse.
@@ -345,6 +357,7 @@ Pick a safehouse in the manager window and press "Find items" next to its name t
 [*] [b]Taking next to a container[/b]: when you stand next to the container (the same distance at which the loot window lists it), press "Take...", enter how many (up to 50 at a time), and the items move into your inventory one by one with the normal vanilla transfer; moving interrupts it, and what you already took stays with you. This works with any admin setting and without the "Remote take" permission. When you are too far away, the button is greyed out with "Stand next to the container to take items." For a bag inside a container, take the bag out first.
 [*] [b]What it can see[/b]: only places your game has loaded (about 50–80 tiles around you, more on bigger screens); for places too far away the panel says how many tiles were not loaded, so walk closer and press "Rescan".
 [*] [b]Performance[/b]: searching and guiding run in your own game and never ask the server; with the panel closed nothing runs, and opening it scans once, spread over several frames.
+[*] [b]Hotkey[/b]: in the game options' key bindings, the "Safehouse" group lets you bind a key to "Toggle item search" (unbound by default). Press it inside your own safehouse or one shared with you to open that safehouse's item search, and press it again to close it; outside a safehouse, it opens your only safehouse's search if you have one, otherwise the manager window. When you apply options from the main menu, keep this mod ticked in the main menu's mod list, or the game clears this key binding.
 [/list]
 [h3]Remote take[/h3]
 [list]
@@ -385,6 +398,7 @@ Default prices (set per tier by admins):
 [*] [b]Buy and rent[/b]: the buttons are disabled at the limit, with "This tier is at its limit: you can't buy or rent more." underneath.
 [*] [b]Payment results[/b]: shown under the tier you paid for, both while working and when done; a notification also pops up once the payment has a result.
 [*] [b]Leases[/b]: expand to see every lease, renew it or toggle "Auto-renew"; the last line reads "Leases are not tied to a specific safehouse. When a lease ends and this tier has fewer paid slots than safehouses using them, the newest one is kept and stays protected. It comes back once you have a slot for it again; protection ends and it is released only when the keep period runs out."
+[*] [b]Auto-renew offer after renting[/b]: when the server allows auto-renew, a successful rental payment asks right away whether to turn on "Auto-renew"; press "Turn on auto-renew". If you pick "Not now", you can still turn it on any time.
 [*] [b]Nothing to show[/b]: it says "This server offers no slots."
 [*] [b]Live updates[/b]: after a payment, renewal, expiry, creating or abandoning a safehouse, or an admin changing slot numbers, an open slots window and create panel update themselves.
 [/list]
@@ -395,6 +409,13 @@ Default prices (set per tier by admins):
 [*] [b]Restore[/b]: renewing, or getting a slot back for it, restores it; protection ends and the area is released only after the keep period.
 [*] [b]Other tiers[/b]: not affected.
 [*] [b]Refunds or an admin lowering the numbers (free slots included)[/b]: the excess doesn't put anything into the keep period, it only blocks new safehouses.
+[/list]
+[h3]Lease reminders[/h3]
+[list]
+[*] [b]Pop-ups[/b]: when a paid slot lease is about to end, enters grace, has ended, or auto-renew fails to charge, a reminder pops up at the top right.
+[*] [b]With auto-renew on[/b]: no reminder before the lease ends.
+[*] [b]Keep period[/b]: you also get one reminder when a safehouse enters the keep period because its lease expired, and one when it comes back.
+[*] [b]On login[/b]: one summary: how many safehouses are in the keep period, how many slots are in grace, and how many slots end soon without auto-renew.
 [/list]
 [h3]When a tier closes or Economy is removed[/h3]
 [list]
@@ -434,6 +455,7 @@ Players who can't log in for a while can pay to keep their safehouse longer.
 [*] [b]Rented-slot safehouses[/b]: don't need insurance and have no button.
 [*] [b]Not sold by default[/b]: admins turn on "Sell idle-release insurance" on the Rules tab.
 [*] [b]Refunds[/b]: an admin refund takes back the whole purchase.
+[*] [b]Upgrading with a deed[/b]: insurance is bought per tier, so insurance for the old tier doesn't move to the new one.
 [/list]
 Default insurance per day (set per tier by admins on the Paid slots tab):
 [table]
@@ -488,7 +510,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [h3]Six tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, and item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works); also the server settings status, takeover results and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works), and "No zombie spawns inside safehouses"; also the server settings status, takeover results and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
@@ -559,6 +581,7 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][td]Each tier's rentable slots (Tier<N>RentSlots, needs Economy)[/td][td]0 (0–10; how many each player can rent at the same time, 0 = not rented)[/td][/tr]
 [tr][td]Each tier's deed crafting[/td][td]Tier 1 Standard, tiers 2–8 Disabled[/td][/tr]
 [tr][td]Deeds drop as loot[/td][td]Off (chances per tier in "Deeds")[/td][/tr]
+[tr][td]No zombie spawns inside safehouses[/td][td]Off (dedicated servers only; what it does is in "Known limitations")[/td][/tr]
 [/table]
 [list]
 [*] [b]Max per player[/b]: a player's maximum for a tier is free + buyable + rentable; the "Max/player" column on the admin panel's Deeds tab works it out for you.
@@ -646,15 +669,17 @@ Server-side data:
 [tr][td]Takeover records[/td][td]migration-completion.txt in the same folder[/td][/tr]
 [tr][td]Creation records for crash recovery[/td][td]crash-journal.txt in the same folder (cleared at start-up when there's nothing to restore)[/td][/tr]
 [tr][td]No-build zones set by admins[/td][td]zones.txt in the same folder[/td][/tr]
+[tr][td]Original surface of road tiles players changed[/td][td]roads-<save name>.txt in the same folder[/td][/tr]
 [tr][td]Audit log[/td][td]Zomboid/Logs/*_MinidoracatSafehouse.txt (one line per event; refusals summed up once a minute)[/td][/tr]
 [/table]
 [list]
 [*] [b]Backups and restores[/b]: include Zomboid/Lua/MinidoracatSafehouse/<server name>/ whenever you handle the save.
+[*] [b]Changing maps[/b]: if you switch to a different map under the same server name, delete roads-<save name>.txt, or the new map is judged by the old map's road records.
 [*] [b]Rules[/b]: live in the server's sandbox file; see "Sandbox options and defaults".
 [/list]
 === ⚠️ Known limitations
 [list]
-[*] [b]Zombies can still spawn inside[/b]: vanilla safehouses don't stop it, and neither does this mod.
+[*] [b]Zombies[/b]: by default zombies still spawn inside safehouses as in vanilla. When admins turn on the sandbox option "No zombie spawns inside safehouses" (also on the admin panel's Rules tab; dedicated servers only), zombies that appear inside a safehouse (vanilla safehouses included) are removed right away: respawns, zombies that appear as players come near, indoor zombies when an unexplored building first loads, random event zombies, and zombies spawned there by admin commands, debug tools or other mods. Zombies that walk in from outside and corpses that get up are not removed right away; they are removed once no players are near that area and it unloads and later loads again. Players who turn after death are never removed.
 [*] [b]Vanilla protection[/b]: the server stops vanilla clients, but modified clients may get around protection that's only checked client-side; the fine-grained permissions (Use appliances, Move furniture, Build, Farm) are only reliable against vanilla clients. Vehicles too: a modified client may drive in, and the server then takes anyone aboard who can't enter out of the vehicle and outside, leaving the vehicle where it is. Ladders too: the check that stops you climbing in runs on the client, and anyone inside who can't enter is moved outside by the vanilla periodic check.
 [*] [b]No door or window permission[/b]: the server can't stop opening doors with E or toggling windows directly; whether non-members can open doors follows vanilla. Forcing a locked door or window open with a crowbar is the exception: it needs the Build permission.
 [*] [b]No visitors[/b]: "Member" covers both entering and container access, so there's no "enter but don't take" role.
@@ -662,9 +687,11 @@ Server-side data:
 [*] [b]Members removing themselves[/b]: a member who removes themselves with vanilla commands is teleported outside; the list is fixed on the next pass, the position isn't.
 [*] [b]Multi-piece safehouses[/b]: each piece is a separate vanilla safehouse, so a removed player may first land in another piece and is moved out again within about 20 seconds; the higher the piece limit, the more often.
 [*] [b]Server crashes[/b]: changes since the last world save roll back to the save. A just-created safehouse is the exception: it's restored on restart with the area, name and tier it was created with (sharing added later must be set again); released ones aren't restored. If the server crashed within 3½ minutes of creating it, the deed may have gone back to the owner, so it's listed under "Claims needing attention" in the admin panel (marked CRASH_UNCONFIRMED) instead: ask the owner, then press "Release…" if they still have the deed, or "Rebind" it to the original owner if they don't.
+[*] [b]Crash after an upgrade[/b]: if the server crashes after an upgrade with a deed but before the world save, and the new deed was already confirmed as used, only the upgraded safehouse remains after restart; if not, the whole upgrade is rolled back, the old safehouse stays protected, and the audit log records UPGRADE_ROLLED_BACK (the deed should still be in the owner's inventory; if not, an admin should give it back). If two upgrades happen before a save and the server crashes before the second deed is confirmed as used, the safehouse goes back to the tier in the save and the deed used by the first upgrade is not refunded; that audit entry's confirmedTier says which tier to give back.
 [*] [b]Idle release counts visits, not logins[/b]: being online without going back doesn't reset the countdown; stepping into the area resets it within about 20 seconds.
 [*] [b]Server-wide limit[/b]: 256 safehouses (taken-over ones included).
 [*] [b]What item search can see[/b]: bags lying on the floor, corpses and what players carry are not listed, and bags inside containers are opened one level deep only. The game already sends the contents of nearby containers to every player, so the search reveals nothing new.
+[*] [b]Road surfaces changed before this update[/b]: the server's road records only cover surfaces changed after this update; surfaces changed earlier aren't recorded and may not be judged as road, so admins can cover them with a no-build zone when needed.
 [/list]
 [h3]Player identity[/h3]
 [list]
@@ -684,8 +711,8 @@ Server-side data:
 [/list]
 [h3]Not included[/h3]
 [list]
-[*] Blocking zombies.
-[*] Moving or expanding a safehouse (only redrawing right after creation).
+[*] Blocking zombies that walk in from outside ("No zombie spawns inside safehouses" only handles zombies that appear inside, and is off by default).
+[*] Moving or expanding a safehouse (only redrawing right after creation and upgrading with a deed).
 [*] Buying and selling land.
 [*] A server-wide map browser or teleporting (only admins can teleport to no-build zones from the zone window, using the vanilla command).
 [*] Keeping vanilla safehouse chat in sync.
@@ -701,11 +728,16 @@ Server-side data:
 [*] Main roads, streets and parking lots can't be claimed by default, nor anything within 1 tile outside the area.
 [*] Near a home and its detached garage or shed only main roads and parking lots block, so your driveway is fine.
 [*] Town roads cut land into small plots; large areas mostly fit in the countryside.
+[*] Tiles whose road surface players have changed count as the original road; gravel you pour on grass yourself is not road.
 [/list]
 [h3]I marked the wrong area?[/h3]
 [list]
 [*] Use "Redraw" within 30 minutes of creating it (per server settings); no extra deed is used.
 [*] After that, abandon and create a new one; abandoning doesn't refund the deed.
+[/list]
+[h3]Want a higher-tier safehouse?[/h3]
+[list]
+[*] With a higher-tier deed in your inventory, press "Upgrade with deed" in the manager window: name, sharing list and respawn point carry over, so there's no need to abandon and rebuild. Your old deed is not refunded.
 [/list]
 [h3]Sharing says the player isn't known?[/h3]
 [list]
@@ -724,7 +756,7 @@ Server-side data:
 [/list]
 [h3]Why are there zombies inside?[/h3]
 [list]
-[*] Vanilla safehouses don't stop zombie spawns, and neither does this mod.
+[*] By default zombies still spawn inside as in vanilla. When the server turns on "No zombie spawns inside safehouses", zombies that appear inside are removed; ones that walk in from outside or corpses that get up are cleared only after that area reloads, and players who turn after death are never removed.
 [/list]
 [h3]Others can open my doors?[/h3]
 [list]

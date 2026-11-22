@@ -632,7 +632,7 @@
     "IGUI_MSH_Vehicle_Blocked": "이 은신처에 들어갈 수 없어 차량으로도 들어갈 수 없습니다.",
     "IGUI_MSH_Vehicle_BlockedRider": "탑승자 중 이 은신처에 들어갈 수 없는 사람이 있어 차량이 들어갈 수 없습니다.",
     "IGUI_MSH_Ladder_Blocked": "이 은신처에 들어갈 수 없어 사다리로도 들어갈 수 없습니다.",
-    "IGUI_MSH_WhatsNew": "임대가 만료되어 보존 중인 은신처도 보호됩니다. 요금 변경으로 멈춘 자동 갱신은 '동의'를 누르면 다시 켜집니다.",
+    "IGUI_MSH_WhatsNew": "더 높은 등급의 증서가 있으면 관리 창에서 은신처를 바로 업그레이드할 수 있습니다. 임대 만료 전에 알림이 오고, 임대 직후 자동 갱신을 켤 수 있습니다.",
     "IGUI_MSH_Code_Generic": "서버가 요청을 거부했습니다 (%1).",
     "IGUI_MSH_Alert_Title": "은신처",
     "IGUI_MSH_Alert_Generic": "서버 은신처 알림: %1",

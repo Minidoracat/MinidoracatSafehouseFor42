@@ -632,7 +632,7 @@
     "IGUI_MSH_Vehicle_Blocked": "你不能進這間安全屋，開車也進不去。",
     "IGUI_MSH_Vehicle_BlockedRider": "車上有人不能進這間安全屋，車子開不進去。",
     "IGUI_MSH_Ladder_Blocked": "你不能進這間安全屋，爬梯子也進不去。",
-    "IGUI_MSH_WhatsNew": "租約到期的安全屋在保留期內照樣受保護。自動續租因改價暫停時，名額視窗會寫「暫停」，按〔同意〕就恢復。",
+    "IGUI_MSH_WhatsNew": "手上有更高級的地契，可以在管理視窗直接升級安全屋。租約快到期會提醒，租用後可順手開自動續租。",
     "IGUI_MSH_Code_Generic": "伺服器拒絕了這個請求（%1）。",
     "IGUI_MSH_Alert_Title": "安全屋",
     "IGUI_MSH_Alert_Generic": "伺服器的安全屋提示：%1",

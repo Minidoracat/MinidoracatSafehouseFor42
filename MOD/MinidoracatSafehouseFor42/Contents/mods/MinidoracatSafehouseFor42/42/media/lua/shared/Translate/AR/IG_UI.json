@@ -632,7 +632,7 @@
     "IGUI_MSH_Vehicle_Blocked": "No puedes entrar en este refugio, tampoco con un vehículo.",
     "IGUI_MSH_Vehicle_BlockedRider": "Alguien en este vehículo no puede entrar en este refugio, así que el vehículo no puede pasar.",
     "IGUI_MSH_Ladder_Blocked": "No puedes entrar en este refugio, tampoco por una escalera.",
-    "IGUI_MSH_WhatsNew": "Los refugios conservados siguen protegidos. Renovación pausada por cambio de precio: pulsa Aceptar.",
+    "IGUI_MSH_WhatsNew": "¿Escritura de nivel superior? Mejora el refugio desde el gestor. Aviso antes de que venza el alquiler; renovación automática al alquilar.",
     "IGUI_MSH_Code_Generic": "El servidor rechazó la solicitud (%1).",
     "IGUI_MSH_Alert_Title": "Refugio",
     "IGUI_MSH_Alert_Generic": "Aviso de refugios del servidor: %1",
