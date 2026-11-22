@@ -1,6 +1,6 @@
 -- MinidoracatSafehouse/Exclusions.lua：道路／資源點排除，建立確認當下判定一次（計畫 §8.1–8.3）。
 -- 道路＝地面層地板圖塊（只看 getFloor，路緣、標線等覆蓋圖掛在 attachedAnimSprite、不看：CellLoader.java:256-264），
--- 倒土蓋掉的原地板照樣算（floorKind）；地圖房間裡的格子不算路（mapRooms；兩條都是使用者 2026-10-14 裁定）；
+-- 倒土、蓋地板蓋掉的原地板照樣算（floorKind）；地圖房間裡的格子不算路（mapRooms；兩條都是使用者 2026-10-14 裁定）；
 -- 自家車道放寬（使用者 2026-10-10 裁定 driveway、parkingsrc）：住宅外框＋roadMargin＋2 格內只有主要道路與 MiniMap 停車場算路；
 -- 住宅的獨立車庫等附屬建築也有近區（和住宅合起來的外框＋同樣格數，見 addOutbuilding）。
 -- 資源點＝MiniMap `MinidoracatMiniMapResourceAPI.buildingsIn`；MiniMap 缺席或版本不符＝不擋、設定隱藏（§8.2）。
@@ -15,6 +15,7 @@ if isClient() then return end
 require "MinidoracatSafehouse/Contract"
 require "MinidoracatSafehouse/Settings"
 require "MinidoracatSafehouse/Audit"
+require "MinidoracatSafehouse/Registry"
 require "MinidoracatSafehouse/Server"
 
 local MSH = MinidoracatSafehouse
@@ -161,18 +162,141 @@ local function parkingLots(scan)
     return boxes
 end
 
--- 這格算哪一類路（只回勾選的類別）：現在的地板，加上倒土前的地板。倒土／沙等（ISNaturalFloor:create → addFloor）會換掉
--- 原地板，原本的圖塊記在新地板 modData 的 shovelledSprites[1]（ISNaturalFloor.lua:7-13；鏟回去時 ISShovelGround.lua:60-76
--- 用它還原）。B42 蓋的地板疊在原地板後面（ISBuildIsoEntity.lua:742 AddSpecialObject），getFloor 本來就讀到原地板。
--- 兩個都算路時取主要道路（它不吃住宅近區放寬）
-local function floorKind(floor, kinds)
-    local sprite = floor:getSprite()                       -- IsoObject.java:2016
-    local kind = sprite and E.classify(sprite:getName())  -- IsoSprite.java:1956
-    if kind and not kinds[kind] then kind = nil end
-    if kind ~= "main" and floor:hasModData() then         -- 沒有 modData 時不呼叫 getModData（會建一張空表）
+-- 倒土／沙（ISNaturalFloor:create → addFloor）與建造地板（BuildRecipeCode.floor.OnCreate 刪掉格上其他 solidfloor 物件，
+-- buildRecipeCode.lua:372-397）會換掉原地板；第一次鏟碎石路不換物件、但也不留原圖塊（ISShovelGround.lua:77-80）。
+-- 原圖塊記在伺服器私有的道路紀錄檔（每行 R<TAB>x<TAB>y<TAB>圖塊名，- ＝確定原本不是路；同一格只記一次，先寫的為準），
+-- 不記在地板物件：物件 modData 客戶端能整份換掉或清空（ObjectModDataPacket.java:21-27, 50-72 只要求已登入）。
+-- 不用 Global ModData：它只跟世界存檔落盤，地板卻隨區塊卸載落盤，兩者之間當機會留下新地板、丟掉紀錄
+-- （decisions.md「三樣東西各自落盤」）。檔案在動作的同一次 Lua 呼叫寫完、close 就交給作業系統（Registry.writeLines）；
+-- 反過來地板沒存到、紀錄先存了也無妨：紀錄寫的是原本的地板，地板回到原樣時照樣對。
+-- 紀錄只來自伺服器當下讀到的地板圖塊（surfaceRoad）；倒土留在地板上的 shovelledSprites[1]（ISNaturalFloor.lua:7-13，
+-- 客戶端改得到）只能把碎石判成倒上去的、不能把柏油類降級，也只在沒有紀錄的格子（更新前就倒過土）當判定後備、
+-- 不寫進紀錄。地板整個沒了（大鎚、火燒）也照紀錄判。
+-- 檔名帶存檔名（Core.gameSaveWorld：專用伺服器＝伺服器名 IsoWorld.java:1820，單機＝存檔資料夾），同名重開新世界時
+-- 舊紀錄留著：寫的是原地圖那格原本的圖塊，地圖沒換就照樣對。
+E.ROADS_MAX_LINES = 500000
+
+local function roadsPath()
+    local world = getWorld():getWorld()                    -- IsoWorld.java:3220
+    if type(world) ~= "string" or world == "" then world = "default" end
+    return MSH.Registry.privateFile("roads-" .. string.gsub(world, "[^%w_%-]", "_") .. ".txt")
+end
+
+-- 第一次用到時讀檔（E.roadRecs[x][y]＝圖塊名或 false）；讀不開照沒有紀錄判、之後照樣附加
+local function roadStore()
+    local store = E.roadRecs
+    if store ~= nil then return store end
+    store = {}
+    E.roadRecs = store
+    local path = roadsPath()
+    local lines = MSH.Registry.readLines(path, E.ROADS_MAX_LINES + 1)
+    if lines == false then
+        MSH.Audit.write("ROADS_FILE", { code = "FILE_UNREADABLE" })
+        MSH.log("road record file unreadable, tiles recorded before this boot are not applied: " .. path)
+        return store
+    end
+    lines = lines or {}
+    local bad = 0
+    for i = 1, math.min(#lines, E.ROADS_MAX_LINES) do
+        local f = MSH.Registry.splitTabs(lines[i])
+        local x, y = tonumber(f[2]), tonumber(f[3])
+        if f[1] == "R" and #f == 4 and MSH.isInt(x) and MSH.isInt(y) and f[4] ~= "" then
+            local row = store[x] or {}
+            store[x] = row
+            if row[y] == nil then row[y] = f[4] ~= "-" and f[4] end
+        elseif lines[i] ~= "" then
+            bad = bad + 1
+        end
+    end
+    if bad > 0 then MSH.Audit.write("ROADS_FILE", { code = "BAD_LINES", detail = "n=" .. bad }) end
+    if #lines > E.ROADS_MAX_LINES then MSH.Audit.write("ROADS_FILE", { code = "TOO_LONG", detail = "max=" .. E.ROADS_MAX_LINES }) end
+    return store
+end
+
+-- 紀錄：圖塊名、false（確定原本不是路）或 nil（沒有紀錄）
+local function recordAt(store, x, y)
+    local row = store[x]
+    if row == nil then return nil end
+    return row[y]
+end
+
+local function floorSprite(floor)
+    local sprite = floor and floor:getSprite()             -- IsoObject.java:2016
+    return sprite and sprite:getName()                     -- IsoSprite.java:1956
+end
+
+-- 伺服器現在讀到的地板若算原本的路，回圖塊名。碎石玩家倒得出來（ISInventoryBuildMenu 倒碎石，
+-- shovelledSprites[1]＝倒之前的地板）：那一格是不算路的圖塊就當倒上去的、不算；柏油類、人行道玩家倒不出來，不看它
+local function surfaceRoad(floor)
+    local name = floorSprite(floor)
+    local kind = E.classify(name)
+    if kind == nil then return nil end
+    if kind == "gravel" and floor:hasModData() then       -- 沒有 modData 時不呼叫 getModData（會建一張空表）
         local old = floor:getModData().shovelledSprites
-        local k = type(old) == "table" and E.classify(old[1]) or nil
-        if k and kinds[k] and (kind == nil or k == "main") then kind = k end
+        old = type(old) == "table" and old[1]
+        if type(old) == "string" and E.classify(old) == nil then return nil end
+    end
+    return name
+end
+
+-- 建造、鏟土（Permissions 包的 Actions.build、ISShovelGround.complete）前：z=0 各格原本的路（surfaceRoad），
+-- 不算回 false。cells 扁平 x, y…，回扁平 x, y, 圖塊名或 false…（已有紀錄的格子 keepRoads 不看）
+function E.roadTiles(cells)
+    local cell, out = getCell(), {}
+    for i = 1, #cells, 2 do
+        local sq = cell:getGridSquare(cells[i], cells[i + 1], 0)
+        local n = #out
+        out[n + 1], out[n + 2], out[n + 3] = cells[i], cells[i + 1], surfaceRoad(sq and sq:getFloor()) or false
+    end
+    return out
+end
+
+-- 建造、鏟土後，沒有紀錄的格子：原本是路、現在的地板讀不出同一類 → 記原圖塊名（存名不存類別：管理員之後改 RoadKinds
+-- 照樣對）；現在是主要道路就不記（更新前倒的碎石鏟回原本的主要道路時，倒上去那層不能記成原本的路）。
+-- 原本不是路、現在的地板是路（草地倒碎石）→ 記 false，倒上去的碎石不算路、之後鏟回或蓋掉也不會被當成原本的路
+function E.keepRoads(tiles)
+    local cell, store, lines = getCell(), roadStore(), {}
+    for i = 1, #tiles, 3 do
+        local x, y, name = tiles[i], tiles[i + 1], tiles[i + 2]
+        if recordAt(store, x, y) == nil then
+            local sq = cell:getGridSquare(x, y, 0)
+            local now = E.classify(floorSprite(sq and sq:getFloor()))
+            local rec
+            if name then
+                if now ~= E.classify(name) and now ~= "main" then rec = name end
+            elseif now then
+                rec = false
+            end
+            if rec ~= nil then
+                store[x] = store[x] or {}
+                store[x][y] = rec
+                lines[#lines + 1] = string.format("R\t%.0f\t%.0f\t%s", x, y, rec or "-")   -- 同 Journal num：不寫成小數
+            end
+        end
+    end
+    if #lines > 0 and not MSH.Registry.writeLines(roadsPath(), lines, true) then
+        MSH.Audit.throttled("EXCL|roadsWrite", 60000, "ROADS_FILE", { code = "WRITE_FAILED" }, getTimestampMs())
+    end
+end
+
+-- kind 與 name 那一類取較嚴的（只算勾選的類別；主要道路不吃住宅近區放寬）
+local function stricter(kind, name, kinds)
+    local k = E.classify(name)
+    if k and kinds[k] and (kind == nil or k == "main") then return k end
+    return kind
+end
+
+-- 這格算哪一類路（只回勾選的類別）：紀錄是 false 就不算路；有紀錄時取紀錄與現在的地板（surfaceRoad）較嚴的；
+-- 沒有紀錄時現在的地板與倒土前的地板（後備）取較嚴的。地板沒了照紀錄判
+local function floorKind(store, x, y, floor, kinds)
+    local rec = recordAt(store, x, y)
+    if rec == false then return nil end
+    local kind = stricter(nil, rec, kinds)
+    if kind == "main" or floor == nil then return kind end
+    kind = stricter(kind, surfaceRoad(floor), kinds)
+    if rec == nil and kind ~= "main" and floor:hasModData() then   -- 沒有 modData 時不呼叫 getModData（會建一張空表）
+        local old = floor:getModData().shovelledSprites
+        kind = stricter(kind, type(old) == "table" and old[1] or nil, kinds)
     end
     return kind
 end
@@ -227,7 +351,7 @@ end
 function E.roads(rects, cfg)
     if not cfg.avoidRoads then return nil end
     local kinds = cfg.roadKinds
-    local cell = getCell()
+    local cell, store = getCell(), roadStore()
     local near, lots   -- 第一次遇到非主要道路的勾選類別才查（每次 roads 最多一次）
     local rooms        -- 第一次遇到道路格才查
     local hit, st      -- 第一個違規格（回傳的 detail）與合併矩形的狀態
@@ -241,8 +365,8 @@ function E.roads(rects, cfg)
                 -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路
                 local sq = cell:getGridSquare(x, y, 0)
                 if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
-                local floor = sq and sq:getFloor()        -- IsoGridSquare.java:4637（第一個 solidfloor 物件）
-                local kind = floor and floorKind(floor, kinds)
+                -- getFloor：IsoGridSquare.java:4637（第一個 solidfloor 物件）；沒有地板時照紀錄
+                local kind = sq and floorKind(store, x, y, sq:getFloor(), kinds)
                 if kind then
                     rooms = rooms or mapRooms(rects, cfg.roadMargin)
                     if inRoom(rooms, x, y) then kind = nil end

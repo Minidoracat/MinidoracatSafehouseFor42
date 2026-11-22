@@ -41,6 +41,8 @@
     "Sandbox_MinidoracatSafehouse_StorageMode_option3": "遠隔取り出し",
     "Sandbox_MinidoracatSafehouse_StorageReach": "遠隔取り出し：セーフハウス外の範囲（マス）",
     "Sandbox_MinidoracatSafehouse_StorageReach_tooltip": "「遠隔取り出し」のとき、セーフハウスの外でもこのマス数以内に立っていれば取り出せます。0＝セーフハウスの中に立つ必要があります。広がるのは立つ位置だけで、取り出す物はこのセーフハウス内のコンテナにある必要があり、サーバーがその一帯を読み込んでいる必要もあります。",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn": "セーフハウス内にゾンビを出現させない",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip": "オンにすると、セーフハウスの範囲内（バニラのセーフハウスを含む）に現れたゾンビはすぐに消去されます。対象はリスポーン、プレイヤーが近づいたときに現れるゾンビ、未探索の建物を初めて読み込んだときの屋内ゾンビ、ランダムイベントのゾンビ、そして管理者コマンド・デバッグツール・他のMODが範囲内に出現させたゾンビです。\n範囲外から歩いて入ってきたゾンビと、起き上がった死体はその場では消去されません。その一帯の近くにプレイヤーがいなくなり、アンロードされてから再び読み込まれたときに消去されます。死後にゾンビ化したプレイヤーは消去されません。\n専用サーバーでのみ有効です。",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "道路を避ける",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "セーフハウスの範囲に道路を含めることはできません。",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "道路からの余白（マス）",

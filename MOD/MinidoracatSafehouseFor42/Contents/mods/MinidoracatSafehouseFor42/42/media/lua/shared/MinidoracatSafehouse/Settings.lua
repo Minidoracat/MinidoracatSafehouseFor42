@@ -70,6 +70,8 @@ local OPTIONS = {
     { key = "StorageMode", type = "enum", values = 3, default = S.STORAGE.GUIDE },
     -- 遠距拿取可以站在安全屋外幾格內（使用者 2026-10-21：預設 0＝只能站在安全屋裡；拿的東西照樣要在範圍內的容器）
     { key = "StorageReach", type = "int", min = 0, max = 50, default = 0 },
+    -- 安全屋範圍內不生成殭屍（玩家反饋 2026-11-19，使用者 2026-11-22 核准預設關）：只刪範圍內新建立的，走進來的不管（Zombies.lua）
+    { key = "NoZombieSpawn", type = "bool", default = false },
     { key = "AvoidRoads", type = "bool", default = true },
     { key = "RoadMargin", type = "int", min = 0, max = 8, default = 1 },
     { key = "RoadKinds", type = "string", default = "" },
@@ -171,6 +173,7 @@ end
 function S.storageMode() return one("StorageMode") end
 function S.storageReach() return one("StorageReach") end
 function S.allowFactionShare() return one("AllowFactionShare") end
+function S.noZombieSpawn() return one("NoZombieSpawn") end
 
 -- 讀出整份設定；不合法的值夾回範圍並附警告（每次呼叫都重讀，面板或原版畫面改值後立即生效）
 -- 回傳 cfg, warnings（{ "Key" , ... }）。呼叫端只讀、不改：每次呼叫都逐鍵比對 SandboxVars 的原值，和上一次

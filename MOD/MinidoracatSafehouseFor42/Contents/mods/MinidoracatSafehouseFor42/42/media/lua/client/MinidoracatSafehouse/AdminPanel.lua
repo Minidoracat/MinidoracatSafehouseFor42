@@ -703,6 +703,11 @@ function AP.layoutRules(P, pg)
     reach:setEnabled(pg.fields.StorageMode.value == Settings.STORAGE.REMOTE)
     AP.formRow(pg, "StorageReach", sw, { reach })
     F:text("storageHelp", getText("Sandbox_MinidoracatSafehouse_StorageMode_tooltip"), "textMuted")
+    -- 安全屋範圍內不生成殭屍（2026-11-22，預設關）：會連管理員與其他 MOD 生成的一起刪，說明直接寫在底下
+    F.y = F.y + K.GAP
+    F:text("h:zombies", getText("IGUI_MSH_Admin_ZombiesHead"), "text", UIFont.Medium)
+    AP.formRow(pg, "NoZombieSpawn", AP.labelWidth({ "NoZombieSpawn" }), { AP.boolField(P, pg, "NoZombieSpawn") })
+    F:text("zombiesHelp", getText("Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip"), "textMuted")
 end
 
 -- 伺服器狀態（health detail）、遷移狀態、targeted recovery。不符的伺服器設定排成「設定｜目前值｜建議值｜原因」表，必要與建議

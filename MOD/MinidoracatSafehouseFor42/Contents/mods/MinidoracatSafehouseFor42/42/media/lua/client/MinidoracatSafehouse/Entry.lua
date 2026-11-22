@@ -5,10 +5,26 @@
 --   改寫真正屋主與人數；原版「建立安全屋」右鍵選項一律拿掉，管理員區域編輯器對 managed house 的
 --   改名／移交／放棄／成員／離開／重生控制項隱藏。這些只讓誠實玩家不誤觸 anti-cheat（decisions.md「原版安全屋封包」），
 --   惡意封包靠伺服器收斂（§2、§6.3）。
---   家族工具列 Dock（id safehouse、order 60：UI repo ARCHITECTURE §3.16 登記）；地契物品說明（§10.8）。
+--   家族工具列 Dock（id safehouse、order 60：UI repo ARCHITECTURE §3.16 登記）；地契物品說明（§10.8）；物品搜尋快捷鍵。
 -- 原版掛鉤全部在 OnGameStart 才裝（檔案載入時不碰原版 UI 類別；harness 的 bootClient 也會載入本檔）。框架只有
 -- 更新概要在檔案載入時登記（框架契約要早於 OnGameStart）。
 -- 包裝一律只裝一次（E.installed），包裝裡經 MSH.Entry 轉呼叫，熱重載本檔換掉的是實作、不會疊一層包裝。
+
+-- 物品搜尋快捷鍵（選項 → 按鍵綁定 → [MinidoracatSafehouse]；預設不綁，玩家自己挑不撞別的 MOD 的鍵）的登錄放在 isClient
+-- 閘門之前：主選單 isClient 為 false，而在主選單套用任何選項，原版都照 keyBinding 整份重寫 keysB42.ini
+-- （MainOptions.saveKeys），清單裡沒有這一項，多人裡綁好的鍵就被洗掉。寫法同 MiniMap：OnGameBoot 加進原版 keyBinding
+-- （MainOptions.loadKeys 以 [..] 為分組標題），getCore():isKey 判斷
+local BIND_SEARCH = "MinidoracatSafehouse_Search"
+
+local function initBinds()
+    if keyBinding == nil then return end
+    for _, b in ipairs(keyBinding) do
+        if b.value == BIND_SEARCH then return end
+    end
+    table.insert(keyBinding, { value = "[MinidoracatSafehouse]" })
+    table.insert(keyBinding, { value = BIND_SEARCH, key = (Keyboard and Keyboard.KEY_NONE) or 0 })
+end
+Events.OnGameBoot.Add(initBinds)
 
 if not isClient() then return end
 
@@ -427,9 +443,60 @@ function E.install()
     E.registerDock()
 end
 
+-- ===== 快捷鍵：物品搜尋（登錄見檔頭）=====
+E.BIND_SEARCH = BIND_SEARCH
+E.initBinds = initBinds
+
+-- 打字中引擎不送 OnKeyPressed（GameKeyboard.java:43）；暫停選單開著不動（同原版 ISPostDeathUI.lua:234 的判斷）。
+-- 還在等上一次的查詢就當取消（回覆來了也不開，免得關掉後又自己跳出來）；搜尋開著就關；站在自己能用的安全屋裡
+-- 搜那間，不在屋裡但只有一間 active 就搜那間，其餘開管理視窗
+function E.onKeyPressed(key)
+    if key == nil or key == 0 or not getCore():isKey(E.BIND_SEARCH, key) then return end
+    local p = getSpecificPlayer(0)
+    if p == nil or (MainScreen ~= nil and MainScreen.instance ~= nil and MainScreen.instance:isVisible()) then return end
+    local C = MSH.Client
+    if C.isPending(E.searchRid) then
+        C.forget(E.searchRid)
+        E.searchRid = nil
+        return
+    end
+    local SP = MSH.StoragePanel
+    if SP ~= nil and SP.model ~= nil then return SP.close(SP.model) end
+    local id = C.claimAt(p:getX(), p:getY())
+    if id == nil or C.claims.byId[id] == nil then id = E.onlyActive() end
+    if id == nil then return E.openManager(nil) end
+    E.searchRid = C.send("detail", { claimId = id }, function(res)
+        MSH.Entry.searchRid = nil
+        MSH.Entry.searchDetail(id, res)
+    end)
+end
+
+function E.onlyActive()
+    local found
+    for _, list in ipairs({ MSH.Client.claims.mine, MSH.Client.claims.shared }) do
+        for _, row in ipairs(list) do
+            if row.lifecycle == MSH.LIFECYCLE.ACTIVE then
+                if found ~= nil then return nil end
+                found = row.claimId
+            end
+        end
+    end
+    return found
+end
+
+-- 搜不了（租約保留期中、沙盒關了搜尋、框架太舊、沒回覆）或沒開成：開管理視窗那間，原因在那裡看得到
+function E.searchDetail(id, res)
+    local MW = MSH.ManagerWindow
+    if res.ok and MW ~= nil and MW.canSearch ~= nil and MW.canSearch(res) and MSH.StoragePanel.open({ detail = res }) ~= nil then
+        return
+    end
+    E.openManager(id)
+end
+
 if first then
     MSH.Client.on("claims", "entry", function(claims) MSH.Entry.onClaims(claims) end)
     Events.OnGameStart.Add(function() MSH.Entry.install() end)
     Events.OnFillWorldObjectContextMenu.Add(function(p, ctx, wo, test) MSH.Entry.onFillWorldMenu(p, ctx, wo, test) end)
     Events.OnPlayerDeath.Add(function(player) MSH.Entry.onPlayerDeath(player) end)
+    Events.OnKeyPressed.Add(function(key) MSH.Entry.onKeyPressed(key) end)
 end

@@ -197,4 +197,55 @@ return function(T)
     reply(lastSent(), { zones = { A }, rev = 0 })
     check(zonesSent() == z0 + 3 and #C.zones.list == 1 and C.zones.rev == 0, "再過 10 秒送出、拿到清單")
     C.off("zones", "test")
+
+    T.section("Client：開局第一份成功的清單發 login；租約進保留期、恢復各跳一則（比對前後兩份清單）")
+    local toasts, logins = {}, {}
+    local realToast = C.toast
+    C.toast = function(text, _, title) toasts[#toasts + 1] = text .. "|" .. tostring(title) end
+    C.on("login", "test", function(ok) logins[#logins + 1] = ok end)
+    local function row(id, role, lc)
+        return { claimId = id, revision = 1, title = "h" .. id, actorRole = role, bits = MSH.SHARE_ALL, lifecycle = lc }
+    end
+    -- 新的一局（前面的段落已經抓過清單）
+    C.loginSent, C.loginTries, C.claims = nil, nil, { mine = {}, shared = {}, byId = {} }
+    C.onGameStart()
+    T.fire("OnTick")
+    local first = lastSent()
+    reply(first, { ok = false, code = "NO_REPLY" })
+    check(#logins == 0 and C.loginRetryAt ~= nil, "第一份清單失敗：不發 login（摘要不能拿空清單講），排隔一會兒再抓")
+    T.fire("OnTick")
+    check(lastSent() == first, "還沒到時間：不重抓")
+    T.advance(C.LOGIN_RETRY_MS)
+    T.fire("OnTick")
+    check(lastSent() ~= first and lastSent().command == "list", "到時間：重抓")
+    reply(lastSent(), { claims = { row(9, "owner", "active"), row(10, "owner", "lapsed"), row(11, "member", "active") } })
+    check(#logins == 1 and logins[1] == true and #toasts == 0, "重抓成功才發 login(true)；狀態沒變、新出現的那間：不跳")
+    T.fire("OnTick")
+    C.refreshList()
+    reply(lastSent(), { claims = { row(9, "owner", "active"), row(10, "owner", "lapsed"), row(11, "member", "active") } })
+    check(#logins == 1, "login 只發一次")
+    C.refreshList()
+    reply(lastSent(), { claims = { row(9, "owner", "lapsed"), row(10, "owner", "active"), row(11, "member", "lapsed") } })
+    check(#toasts == 2 and toasts[1] == "IGUI_MSH_Lease_Lapsed|IGUI_MSH_Lease_Title"
+        and toasts[2] == "IGUI_MSH_Lease_Restored|IGUI_MSH_Lease_Title", "我的：active→lapsed 跳進保留期、lapsed→active 跳恢復；分享給我的不跳")
+    C.refreshList()
+    reply(lastSent(), { claims = { row(9, "owner", "lapsed"), row(10, "owner", "active") } })
+    check(#toasts == 2, "同一份狀態再抓一次：不重跳")
+    C.loginSent, C.loginTries, logins = nil, nil, {}
+    C.onGameStart()
+    T.fire("OnTick")
+    for i = 1, C.LOGIN_TRIES do
+        reply(lastSent(), { ok = false, code = "NO_REPLY" })
+        if i < C.LOGIN_TRIES then
+            T.advance(C.LOGIN_RETRY_MS)
+            T.fire("OnTick")
+        end
+    end
+    local sent = #T.clientSent
+    T.advance(C.LOGIN_RETRY_MS)
+    T.fire("OnTick")
+    check(#logins == 1 and logins[1] == false and #T.clientSent == sent,
+        "連續失敗到上限：發 login(false)（通知才會開）、不再重抓")
+    C.toast = realToast
+    C.off("login", "test")
 end

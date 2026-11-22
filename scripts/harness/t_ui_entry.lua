@@ -239,6 +239,100 @@ return function(T)
         code = "OK", allowed = true })
     check(E.respawn == nil and E.spawnRegion({}, vanillaRegion) == vanillaRegions, "再死一次、點已失效：清掉舊的、照原版")
 
+    T.section("Entry：物品搜尋快捷鍵")
+    local savedCore, savedKB, savedSP = getCore, keyBinding, MSH.StoragePanel
+    keyBinding = {}
+    E.initBinds()
+    E.initBinds()
+    check(#keyBinding == 2 and keyBinding[1].value == "[MinidoracatSafehouse]" and keyBinding[2].value == E.BIND_SEARCH
+        and keyBinding[2].key == 0, "按鍵設定頁加一組 [MinidoracatSafehouse]，搜尋鍵預設不綁；重複登錄不疊")
+    keyBinding = nil
+    check(pcall(E.initBinds), "沒有 keyBinding：略過、不丟錯")
+    -- 主選單 isClient 為 false：原版在主選單套用選項會照 keyBinding 重寫按鍵檔，這一項不在就洗掉綁好的鍵
+    local savedBoot = T.handlers.OnGameBoot
+    T.mode, keyBinding, T.handlers.OnGameBoot = "menu", {}, nil
+    dofile(T.MEDIA .. "/client/MinidoracatSafehouse/Entry.lua")
+    T.fire("OnGameBoot")
+    check(#keyBinding == 2 and keyBinding[2].value == E.BIND_SEARCH, "主選單（不是多人客戶端）也登錄搜尋鍵")
+    T.mode, T.handlers.OnGameBoot = "client", savedBoot
+    local BOUND = 42
+    getCore = function() return { isKey = function(_, id, key) return id == E.BIND_SEARCH and key == BOUND end } end
+    local sp = {}
+    local openResult = {}
+    MSH.StoragePanel = { close = function(m) sp[#sp + 1] = "close"; MSH.StoragePanel.model = nil end,
+        open = function(o) sp[#sp + 1] = "open:" .. o.detail.claimId return openResult end }
+    MSH.ManagerWindow = { open = function(opts) opened[#opened + 1] = opts end,
+        canSearch = function(d) return d.lifecycle == "active" end }
+    local C = MSH.Client
+    local function active(id, lc) return { claimId = id, lifecycle = lc or "active" } end
+    local function claims(mine, shared)
+        local byId = {}
+        for _, r in ipairs(mine) do byId[r.claimId] = r end
+        for _, r in ipairs(shared or {}) do byId[r.claimId] = r end
+        C.claims = { mine = mine, shared = shared or {}, byId = byId }
+    end
+    local function press(x, y, key)
+        me.x, me.y = x, y
+        local n, o = #T.clientSent, #opened
+        E.onKeyPressed(key or BOUND)
+        local s = T.clientSent[#T.clientSent]
+        return #T.clientSent > n and s or nil, #opened > o and opened[#opened] or nil
+    end
+    local function answer(s, fields)
+        local r = { command = "detail", requestId = s.args.requestId, ok = true, code = "OK", rects = { { x = 100, y = 100, w = 10, h = 10 } } }
+        for k, v in pairs(fields) do r[k] = v end
+        T.fire("OnServerCommand", MSH.MODULE, "result", r)
+    end
+    SafeHouse.addSafeHouse(100, 100, 10, 10, MSH.marker(7))
+    SafeHouse.addSafeHouse(300, 300, 10, 10, MSH.marker(5))
+    claims({ active(7), active(8) })
+    local s, m = press(105, 105, 41)
+    check(s == nil and m == nil and press(105, 105, 0) == nil, "別的鍵、沒綁（0）：不動")
+    s = press(105, 105)
+    check(s ~= nil and s.command == "detail" and s.args.claimId == 7, "站在自己的安全屋裡：要那間的詳情")
+    answer(s, { claimId = 7, lifecycle = "active" })
+    check(sp[#sp] == "open:7", "能搜：直接開那間的物品搜尋")
+    MSH.StoragePanel.model = {}
+    s, m = press(105, 105)
+    check(sp[#sp] == "close" and s == nil and m == nil, "物品搜尋開著：再按一次關掉")
+    s = press(105, 105)
+    answer(s, { claimId = 7, lifecycle = "lapsed" })
+    check(opened[#opened].claimId == 7 and sp[#sp] == "close", "搜不了（租約保留期中）：開管理視窗那間，不開搜尋")
+    s = press(105, 105)
+    answer(s, { ok = false, code = "NO_REPLY" })
+    check(opened[#opened].claimId == 7, "沒回覆：開管理視窗那間")
+    openResult = nil
+    s = press(105, 105)
+    answer(s, { claimId = 7, lifecycle = "active" })
+    check(sp[#sp] == "open:7" and opened[#opened].claimId == 7, "搜尋沒開成（例如框架太舊）：退回管理視窗")
+    openResult = {}
+    s, m = press(0, 0)
+    check(s == nil and m ~= nil and m.claimId == nil, "不在屋裡、兩間 active：開管理視窗（不指定）")
+    claims({ active(7), active(8, "lapsed") })
+    s = press(0, 0)
+    check(s ~= nil and s.args.claimId == 7, "不在屋裡、只有一間 active：搜那間")
+    answer(s, { claimId = 7, lifecycle = "active" })
+    local n0 = #sp
+    s = press(105, 105)
+    local again = press(105, 105)
+    answer(s, { claimId = 7, lifecycle = "active" })
+    check(again == nil and #sp == n0 and not C.isPending(s.args.requestId), "還在等詳情時再按：取消，晚到的回覆不開搜尋")
+    s = press(105, 105)
+    answer(s, { claimId = 7, lifecycle = "active" })
+    check(sp[#sp] == "open:7" and E.searchRid == nil, "取消後再按：照常要、照常開")
+    claims({ active(8, "lapsed") }, { active(9) })
+    s = press(305, 305)
+    check(s ~= nil and s.args.claimId == 9, "站在別人的屋裡＝不在自己的屋裡；分享給我的也算那一間")
+    MainScreen = { instance = { isVisible = function() return true end } }
+    s, m = press(105, 105)
+    check(s == nil and m == nil, "暫停選單開著：不動")
+    MainScreen = nil
+    local online, sent0, opened0 = T.online, #T.clientSent, #opened
+    T.online = {}
+    check(pcall(E.onKeyPressed, BOUND) and #T.clientSent == sent0 and #opened == opened0, "沒有玩家（主選單）：不動、不丟錯")
+    T.online = online
+    getCore, keyBinding, MSH.StoragePanel = savedCore, savedKB, savedSP
+
     for k, v in pairs(saved) do _G[k] = v end
     MSH.ManagerWindow = nil
 end

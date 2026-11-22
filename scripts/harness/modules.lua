@@ -29,6 +29,7 @@ return {
     { dir = "server", name = "MinidoracatSafehouse/Vehicles" },
     { dir = "server", name = "MinidoracatSafehouse/Storage" },
     { dir = "server", name = "MinidoracatSafehouse/Foreign" },
+    { dir = "server", name = "MinidoracatSafehouse/Zombies" },
     { dir = "client", name = "MinidoracatSafehouse/Mirror" },
     { dir = "client", name = "MinidoracatSafehouse/PublicApi" },
     { dir = "client", name = "MinidoracatSafehouse/Client" },
@@ -49,5 +50,6 @@ return {
     { dir = "client", name = "MinidoracatSafehouse/StorageScan" },
     { dir = "client", name = "MinidoracatSafehouse/StoragePanel" },
     { dir = "client", name = "MinidoracatSafehouse/VehiclesClient" },
+    { dir = "client", name = "MinidoracatSafehouse/ZombieSync" },
     { dir = "client", name = "MinidoracatSafehouse/Entry" },
 }

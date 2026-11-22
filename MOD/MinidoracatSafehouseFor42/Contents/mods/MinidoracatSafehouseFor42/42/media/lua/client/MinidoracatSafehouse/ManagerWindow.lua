@@ -424,6 +424,7 @@ function W:build()
     self.lines = self:newLines(self.scroll)
     self.btnDetails = self:button(self.scroll, getText("IGUI_MSH_Manager_Details"), W.onDetails, self, "ghost")
     self.btnRedraw = self:button(self.scroll, "", W.onRedraw, self, nil, nil, 1)     -- 明示寬度：倒數不改寬
+    self.btnUpgrade = self:button(self.scroll, getText("IGUI_MSH_Manager_Upgrade"), W.onUpgrade, self)
     self.btnRelease = self:button(self.scroll, getText("IGUI_MSH_Manager_Release"), W.onRelease, self, "danger")
     self.btnLeave = self:button(self.scroll, getText("IGUI_MSH_Manager_Leave"), W.onLeave, self, "danger")
     self.btnRespawnSet = self:button(self.scroll, getText("IGUI_MSH_Manager_RespawnSet"), W.onRespawnSet, self)
@@ -436,7 +437,7 @@ function W:build()
     self.btnInsure = self:button(self.scroll, getText("IGUI_MSH_Manager_Insure"), W.onInsure, self, nil, "coins")
     self.btnInsureCheck = self:button(self.scroll, getText("IGUI_MSH_Slots_CheckOrder"), W.onInsureCheck, self, "primary")
     self.ins = MW.insurePayer(self)
-    self.overviewWidgets = { self.btnDetails, self.btnRedraw, self.btnRelease, self.btnLeave, self.btnRespawnSet,
+    self.overviewWidgets = { self.btnDetails, self.btnRedraw, self.btnUpgrade, self.btnRelease, self.btnLeave, self.btnRespawnSet,
         self.btnRespawnClear, self.idleHover, self.btnInsure, self.btnInsureCheck }
     self.share = MSH.SharingPage.new(self, self.scroll)
     -- Esc／手把 B：分享頁有選取時先清掉選取（使用者 2026-10-20 核准批量修改），沒有才照框架的預設（收焦點框、關窗）
@@ -1091,6 +1092,12 @@ function W:layoutOverview(d, cw)
         self.redrawShown = math.ceil(left / 1000)
         acts[#acts + 1] = self.btnRedraw
     end
+    -- 用地契升級：背包有比這間高、而且啟用的地契才給（不看重新框選的時限與次數）
+    if d.actorRole == "owner" and d.lifecycle == LC.ACTIVE and MSH.CreatePanel
+        and MSH.CreatePanel.upgradeTier(d.deedTier) ~= nil then
+        self.btnUpgrade:setEnabled(idle)
+        acts[#acts + 1] = self.btnUpgrade
+    end
     -- 重生點：點在這間給〔清除重生點〕，否則〔設為重生點〕（不能設時停用、底下寫原因）
     self.respawnWhy = nil
     if rs and rs.here then
@@ -1280,6 +1287,15 @@ function W.onRedraw(self)
     if d == nil then return end
     MW.openCreate({ mode = "redraw", claimId = d.claimId, revision = d.revision, tier = d.deedTier,
         source = d.source, rects = d.rects })
+end
+
+-- 用地契升級：建立面板的重新框選帶上最低的那張更高級地契，範圍從現在的各塊開始（不改範圍也能直接升級）
+function W.onUpgrade(self)
+    local d = self.detail
+    local tier = d and MSH.CreatePanel and MSH.CreatePanel.upgradeTier(d.deedTier)
+    if tier == nil then return end
+    MW.openCreate({ mode = "redraw", claimId = d.claimId, revision = d.revision, tier = d.deedTier,
+        source = d.source, rects = d.rects, deedType = MSH.deedType(tier) })
 end
 
 function W.onRename(self)

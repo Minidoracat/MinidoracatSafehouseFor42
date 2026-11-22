@@ -288,7 +288,7 @@ return function(T)
     check(roads() == nil, "倒土前是碎石地：預設 main;street 不擋")
     T.pour(105, 105, "blends_natural_01_64", "blends_natural_01_21")
     check(roads() == nil, "倒土前是自然地面：不擋")
-    T.floorMods["105,105"] = {}
+    T.floorMods["105,105"] = { other = 1 }
     check(roads() == nil, "地板有 modData、沒有倒土紀錄：只看現在的地板")
     T.floor(105, 105, nil)
     T.floorMods["105,105"] = nil
@@ -327,6 +327,226 @@ return function(T)
     room.name = "garagestorage"
     T.pour(404, 403, "blends_natural_01_64", "blends_street_01_80")
     check(roads() == nil, "地圖房間裡倒過土：照樣不擋")
+
+    T.section("Exclusions：建造、鏟土換掉路面地板（前後比對、伺服器的道路紀錄）")
+    MSH = T.boot()
+    E = MSH.Exclusions
+    cfg = MSH.Settings.get()
+    rect = { x = 100, y = 100, w = 10, h = 10 }
+    local builder = T.player({ name = "builder", x = 105, y = 105 })
+    -- 假的原版 create：wood＝換成新的地板物件（BuildRecipeCode.floor.OnCreate 刪掉原地板）；dirt／gravel＝照 ISNaturalFloor:create
+    -- 從舊地板帶 shovelledSprites（沒有就用舊地板圖塊）換成土／碎石；wall＝不動地板
+    local POURED = { dirt = "blends_natural_01_64", gravel = "blends_street_01_55" }
+    local made
+    T.onBuild = function(_, a)
+        local key = math.floor(a.x) .. "," .. math.floor(a.y)
+        if made == "wood" then
+            T.floors[key], T.floorMods[key] = "carpentry_02_57", nil
+        elseif POURED[made] then
+            local old = T.floorMods[key] and T.floorMods[key].shovelledSprites or { T.floors[key] }
+            T.floors[key], T.floorMods[key] = POURED[made], { shovelledSprites = old, pouredFloor = made }
+        end
+    end
+    local function build(kind, x, y)
+        made = kind
+        Actions.build(builder, { x = x + 0.5, y = y + 0.5, z = 0, north = false })
+    end
+    -- 鏟土（ISShovelGround.complete）：假的原版照 shovelGround（ISShovelGround.lua:62-80）在同一個地板物件上改：
+    -- 有 shovelledSprites 就還原成 [1]、清掉；沒有就記 shovelled、換成泥土
+    T.onShovel = function(self)
+        local sq = self.sandTile:getSquare()
+        local key = sq:getX() .. "," .. sq:getY()
+        local md = T.floorMods[key] or {}
+        T.floorMods[key] = md
+        if md.shovelledSprites then
+            T.floors[key], md.shovelledSprites, md.pouredFloor = md.shovelledSprites[1], nil, nil
+        else
+            T.floors[key], md.shovelled = "blends_natural_01_64", true
+        end
+    end
+    local function shovel(x, y)
+        return ISShovelGround.complete(T.action("ISShovelGround", { character = builder, sandTile = T.worldObject(x, y) }))
+    end
+    -- 伺服器的道路紀錄（記憶體那份；檔案那份由下面的重開測試驗）；nil＝沒有紀錄
+    local ROADS_FILE = MSH.Registry.privateFile("roads-servertest.txt")
+    local function rec(x, y)
+        local store = E.roadRecs
+        return store and store[x] and store[x][y]
+    end
+    -- 清掉這一格的地板與所有道路紀錄（每個案例各自獨立）
+    local function clear(x, y)
+        T.floor(x, y, nil)
+        T.floorMods[x .. "," .. y] = nil
+        E.roadRecs, T.files[ROADS_FILE] = nil, nil
+    end
+
+    T.floor(105, 105, "blends_street_01_80")
+    build("wood", 105, 105)
+    code, d = roads()
+    check(T.floors["105,105"] == "carpentry_02_57" and code == C.ROAD and d.x == 105 and d.kind == "main",
+        "主要道路蓋成木地板：照原圖塊擋（main）")
+    check(rec(105, 105) == "blends_street_01_80" and T.floorMods["105,105"] == nil,
+        "原圖塊記在伺服器的紀錄，不寫進地板 modData")
+    build("dirt", 105, 105)
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "main" and T.floorMods["105,105"].shovelledSprites[1] == "carpentry_02_57"
+        and rec(105, 105) == "blends_street_01_80", "木地板再倒土（倒土紀錄只有木地板）：紀錄不變、照擋（main）")
+    -- 信任邊界：地板 modData 客戶端能整份換掉或清空（ObjectModDataPacket）
+    T.floorMods["105,105"] = nil
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "main", "地板 modData 被清空：照紀錄擋（main）")
+    T.floorMods["105,105"] = { MSH_road = "blends_natural_01_21", shovelledSprites = { "blends_natural_01_21" } }
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "main", "地板 modData 被塞進非路的假值：照紀錄擋（main）")
+    T.floor(105, 105, nil)
+    code, d = roads()
+    check(code == C.ROAD and d.x == 105 and d.kind == "main", "記錄後地板整個沒了（大鎚、火燒）：照紀錄擋（main）")
+    clear(105, 105)
+    T.floor(102, 102, "blends_natural_01_21")
+    T.floorMods["102,102"] = { MSH_road = "blends_street_01_80" }
+    check(roads() == nil, "草地的地板 modData 被塞進假的 MSH_road：不擋")
+    clear(102, 102)
+    -- 原版倒土本身留得下原圖塊（shovelledSprites），照樣記進紀錄：客戶端清掉地板 modData 之後仍判原本的路
+    T.floor(109, 109, "blends_street_01_96")
+    build("dirt", 109, 109)
+    check(rec(109, 109) == "blends_street_01_96", "路上直接倒土：照樣記進紀錄")
+    T.floorMods["109,109"] = nil
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "street", "倒土後地板 modData 被清掉：照紀錄擋（street）")
+    clear(109, 109)
+    -- 第一筆紀錄只來自伺服器讀到的地板：客戶端改得到的 shovelledSprites 不能把真路降級、也不能把草地升格寫進紀錄
+    T.floor(109, 109, "blends_street_01_80")
+    T.floorMods["109,109"] = { shovelledSprites = { "blends_street_01_55" } }
+    build("wood", 109, 109)
+    code, d = roads()
+    check(rec(109, 109) == "blends_street_01_80" and code == C.ROAD and d.kind == "main",
+        "尚無紀錄、主要道路的地板 modData 被偽造成碎石：照記主要道路")
+    clear(109, 109)
+    T.floor(109, 109, "blends_street_01_80")
+    T.floorMods["109,109"] = { shovelledSprites = { "blends_natural_01_21" } }
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "main", "尚無紀錄、主要道路的地板 modData 被偽造成草地：照擋（柏油類不看倒土欄位）")
+    build("wood", 109, 109)
+    code, d = roads()
+    check(rec(109, 109) == "blends_street_01_80" and code == C.ROAD and d.kind == "main",
+        "尚無紀錄、主要道路的地板 modData 被偽造成草地：改地板後照記成路、照擋")
+    clear(109, 109)
+    T.floor(102, 102, "blends_natural_01_21")
+    T.floorMods["102,102"] = { shovelledSprites = { "blends_street_01_80" } }
+    build("wood", 102, 102)
+    check(rec(102, 102) == nil and roads() == nil, "尚無紀錄、草地的地板 modData 被偽造成路：改地板後不留道路紀錄、不擋")
+    clear(102, 102)
+
+    T.floor(103, 103, "blends_natural_01_21")
+    build("wood", 103, 103)
+    check(rec(103, 103) == nil and roads() == nil, "非路面蓋木地板：不記、不擋")
+    clear(103, 103)
+    T.floor(107, 107, "blends_street_01_96")
+    build("wall", 107, 107)
+    code, d = roads()
+    check(rec(107, 107) == nil and code == C.ROAD and d.kind == "street", "路上蓋牆（地板沒換）：不記，照現在的地板擋")
+    clear(107, 107)
+    -- 存圖塊名不存類別：管理員之後才勾的類別照樣認得
+    T.floor(104, 104, "blends_street_01_32")
+    build("wood", 104, 104)
+    check(rec(104, 104) == "blends_street_01_32" and roads() == nil, "碎石地蓋木地板：記下、預設不擋")
+    cfg.roadKinds.gravel = true
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "gravel", "之後勾 gravel：照紀錄擋")
+    cfg.roadKinds.gravel = nil
+    clear(104, 104)
+
+    T.floor(105, 105, "blends_street_01_55")
+    check(shovel(105, 105) == true and T.floors["105,105"] == "blends_natural_01_64", "鏟碎石路：照原版回傳、換成泥土")
+    check(rec(105, 105) == "blends_street_01_55" and roads() == nil, "鏟掉的碎石路記下原圖塊；沒勾 gravel 不擋")
+    cfg.roadKinds.gravel = true
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "gravel", "勾 gravel：鏟掉的碎石路照擋")
+    cfg.roadKinds.gravel = nil
+    clear(105, 105)
+    T.floor(103, 103, "blends_natural_01_21")
+    shovel(103, 103)
+    check(rec(103, 103) == nil and roads() == nil, "鏟草地：不記、不擋")
+    clear(103, 103)
+    -- 更新前就倒過的（沒有紀錄，只有 shovelledSprites）：鏟回去原版還原，判得出同一類就不記
+    T.pour(106, 106, "blends_street_01_53", "blends_street_01_80")
+    shovel(106, 106)
+    code, d = roads()
+    check(T.floors["106,106"] == "blends_street_01_80" and T.floorMods["106,106"].shovelledSprites == nil
+        and rec(106, 106) == nil and code == C.ROAD and d.kind == "main", "鏟回倒碎石前的主要道路：原版還原、不記")
+    clear(106, 106)
+    -- 玩家倒的碎石不是原本的路：草地倒碎石記成「原本不是路」，鏟回或蓋掉都不留道路紀錄
+    cfg.roadKinds.gravel = true
+    T.floor(103, 103, "blends_natural_01_21")
+    build("gravel", 103, 103)
+    check(rec(103, 103) == false and roads() == nil, "草地倒碎石：記成原本不是路，不鏟不蓋、勾 gravel 也不擋")
+    shovel(103, 103)
+    check(T.floors["103,103"] == "blends_natural_01_21" and rec(103, 103) == false and roads() == nil,
+        "草地→倒碎石→鏟回：不留道路紀錄、勾 gravel 也不擋")
+    clear(103, 103)
+    T.floor(103, 103, "blends_natural_01_21")
+    build("gravel", 103, 103)
+    build("wood", 103, 103)
+    check(rec(103, 103) == false and roads() == nil, "草地→倒碎石→蓋木地板：不留道路紀錄、勾 gravel 也不擋")
+    clear(103, 103)
+    -- 更新前就在草地上倒的碎石（沒有紀錄；shovelledSprites[1]＝草地）：不算原本的路，鏟回或蓋掉都不留道路紀錄
+    T.pour(103, 103, "blends_street_01_53", "blends_natural_01_21")
+    check(roads() == nil, "更新前草地倒的碎石（沒有紀錄）：勾 gravel 也不擋")
+    shovel(103, 103)
+    check(T.floors["103,103"] == "blends_natural_01_21" and rec(103, 103) == nil and roads() == nil,
+        "更新前草地倒的碎石→鏟回：沒有道路紀錄、不擋")
+    clear(103, 103)
+    T.pour(103, 103, "blends_street_01_53", "blends_natural_01_21")
+    build("wood", 103, 103)
+    check(rec(103, 103) == nil and roads() == nil, "更新前草地倒的碎石→蓋木地板：沒有道路紀錄、不擋")
+    clear(103, 103)
+    T.floor(103, 103, "blends_street_01_53")
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "gravel", "對照：沒有倒土欄位的天然碎石路照擋（gravel）")
+    clear(103, 103)
+    cfg.roadKinds.gravel = nil
+    -- 拆地面層地板：原版在同一個地板物件上換成泥土（ISDismantleAction.lua:82-88、ISMoveableSpriteProps.lua:3724-3733）
+    T.floor(108, 108, "blends_street_01_80")
+    build("wood", 108, 108)
+    T.floors["108,108"] = "blends_natural_01_64"
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "main", "主要道路上的木地板拆掉（剩泥土）：照擋（main）")
+    shovel(108, 108)
+    code, d = roads()
+    check(rec(108, 108) == "blends_street_01_80" and code == C.ROAD and d.kind == "main", "拆完再鏟：紀錄不變，照擋")
+    clear(108, 108)
+    -- 紀錄不等世界存檔：當下附加到伺服器私有檔；當機（Global ModData 與 Lua 狀態都沒了、區塊已存下新地板）重開照檔案判
+    T.floor(105, 105, "blends_street_01_80")
+    build("wood", 105, 105)
+    local lines = T.files[ROADS_FILE] and T.files[ROADS_FILE].lines or {}
+    check(#lines == 1 and lines[1] == "R\t105\t105\tblends_street_01_80", "記下時當下附加一行到伺服器私有檔")
+    MSH = T.boot({ keepFiles = true })
+    E = MSH.Exclusions
+    cfg = MSH.Settings.get()
+    T.floor(105, 105, "carpentry_02_57")
+    code, d = roads()
+    check(code == C.ROAD and d.x == 105 and d.kind == "main", "當機重開（只剩新地板與紀錄檔）：照檔案裡的紀錄擋（main）")
+    MSH = T.boot()
+    E = MSH.Exclusions
+    cfg = MSH.Settings.get()
+    T.floor(105, 105, "carpentry_02_57")
+    check(roads() == nil, "對照：沒有紀錄檔時同一塊木地板不擋")
+    -- 壞行略過；同一格先寫的為準
+    T.files[ROADS_FILE] = { lines = { "junk", "R\t105\t105\tblends_street_01_80", "R\t105\t105\t-" } }
+    E.roadRecs = nil
+    code, d = roads()
+    check(code == C.ROAD and d.kind == "main", "紀錄檔有壞行：略過、其餘照讀，同一格先寫的為準")
+    -- 紀錄檔讀不開：照沒有紀錄判，稽核之外 console 也要看得到
+    T.unreadable[ROADS_FILE] = true
+    E.roadRecs = nil
+    T.prints = {}
+    local verdict, seen = roads(), false
+    for _, line in ipairs(T.prints) do
+        if string.find(line, "road record file unreadable", 1, true) then seen = true end
+    end
+    check(verdict == nil and seen, "紀錄檔讀不開：照沒有紀錄判（木地板不擋）、console 打一行")
+    T.unreadable[ROADS_FILE] = nil
+    T.floor(105, 105, nil)
 
     T.section("Exclusions：資源點（MiniMap §3.19）")
     MSH = T.boot()

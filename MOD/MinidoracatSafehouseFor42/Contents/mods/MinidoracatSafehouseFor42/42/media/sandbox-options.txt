@@ -1,6 +1,6 @@
 VERSION = 1,
 
-/* 沙盒選項 80 個：單一定義在 lua/shared/MinidoracatSafehouse/Settings.lua 的 OPTIONS（順序、型別、範圍、預設），
+/* 沙盒選項 83 個：單一定義在 lua/shared/MinidoracatSafehouse/Settings.lua 的 OPTIONS（順序、型別、範圍、預設），
    改這裡要一起改 Settings.lua 與 Sandbox.json；scripts/harness/t_deeds.lua 逐項比對兩邊。
    清單型字串選項 default 留空、預設清單寫在 Lua（ScriptParser 拿逗號當欄位分隔，pitfalls.md「Sandbox 選項」；
    空字串是合法的 string default：CustomStringSandboxOption.java:13-19）。 */
@@ -58,6 +58,9 @@ option MinidoracatSafehouse.StorageMode
 
 option MinidoracatSafehouse.StorageReach
 {type = integer, min = 0, max = 50, default = 0, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_StorageReach,}
+
+option MinidoracatSafehouse.NoZombieSpawn
+{type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_NoZombieSpawn,}
 
 option MinidoracatSafehouse.AvoidRoads
 {type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_AvoidRoads,}

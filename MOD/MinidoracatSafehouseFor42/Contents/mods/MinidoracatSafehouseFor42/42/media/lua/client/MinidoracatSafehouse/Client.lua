@@ -238,10 +238,16 @@ function C.refreshList(cb)
             local mine, shared, byId = {}, {}, {}
             for _, row in ipairs(res.claims or {}) do
                 byId[row.claimId] = row
+                local old = C.claims and C.claims.byId and C.claims.byId[row.claimId]
+                if old ~= nil and row.actorRole == "owner" then C.lifecycleToast(old.lifecycle, row) end
                 if row.actorRole == "owner" then mine[#mine + 1] = row else shared[#shared + 1] = row end
             end
             C.claims = { mine = mine, shared = shared, byId = byId, at = getTimestampMs() }
             C.emit("claims", C.claims)
+            if not C.loginSent then
+                C.loginSent = true
+                C.emit("login", true)
+            end
         end
         C.listRid = nil
         if C.listAgain then C.refreshList() end
@@ -251,6 +257,14 @@ function C.refreshList(cb)
         end
     end)
     return C.listRid
+end
+
+-- 租約到期進保留期、續租恢復：清單由伺服器推送觸發重抓，比對前後兩份才知道是剛變的（第一份清單不比，登入摘要另講）
+function C.lifecycleToast(before, row)
+    local L = MSH.LIFECYCLE
+    local key = (before == L.ACTIVE and row.lifecycle == L.LAPSED and "IGUI_MSH_Lease_Lapsed")
+        or (before == L.LAPSED and row.lifecycle == L.ACTIVE and "IGUI_MSH_Lease_Restored") or nil
+    if key then C.toast(getText(key, row.title or ("#" .. tostring(row.claimId))), nil, getText("IGUI_MSH_Lease_Title")) end
 end
 
 -- ===== 名額摘要（slots）=====
@@ -368,12 +382,31 @@ function C.onTick()
     local now = getTimestampMs()
     C.checkTimeouts(now)
     if C.slotsWanted then C.pumpSlots(now) end
+    if C.loginRetryAt ~= nil and now >= C.loginRetryAt then
+        C.loginRetryAt = nil
+        C.refreshList(C.onFirstList)
+    end
 end
 
--- 開局第一個 tick 抓一次清單（OnGameStart 當下送會走錯路徑，pitfalls.md「MP client 不可在 OnGameStart 直接送」）
+-- 開局第一個 tick 抓一次清單（OnGameStart 當下送會走錯路徑，pitfalls.md「MP client 不可在 OnGameStart 直接送」）。
+-- 第一份成功的清單發 "login"(true)（登入摘要要算保留期的屋）；失敗（NO_REPLY、限流）隔 LOGIN_RETRY_MS 再抓，
+-- LOGIN_TRIES 次都失敗發 "login"(false)，等它的通知才不會整局沒開
+C.LOGIN_TRIES, C.LOGIN_RETRY_MS = 3, 5000
+
+function C.onFirstList(res)
+    if C.loginSent or res.ok then return end
+    C.loginTries = (C.loginTries or 0) + 1
+    if C.loginTries < C.LOGIN_TRIES then
+        C.loginRetryAt = getTimestampMs() + C.LOGIN_RETRY_MS
+        return
+    end
+    C.loginSent = true
+    C.emit("login", false)
+end
+
 local function firstTick()
     Events.OnTick.Remove(firstTick)
-    C.refreshList()
+    C.refreshList(C.onFirstList)
 end
 
 function C.onGameStart()

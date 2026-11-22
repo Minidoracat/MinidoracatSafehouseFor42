@@ -229,7 +229,9 @@ for m in MEDIA_DIRS:
     langs = sorted(d for d in os.listdir(troot) if os.path.isdir(os.path.join(troot, d)))
     tolerant = set(langs) <= {"CH", "CN"}   # 翻譯包偵測
     names = sorted({n for l in langs for n in os.listdir(os.path.join(troot, l)) if n.endswith(".json")})
-    mismatch, badpct, broken = [], [], []
+    mismatch, badpct, broken, misplaced = [], [], [], []
+    # 鍵的前綴決定遊戲從哪個檔讀：放錯檔時畫面顯示鍵名本身（2026-11-22 按鍵設定頁的 UI_ 鍵放在 IG_UI.json）
+    homes = {"UI_": "UI.json", "IGUI_": "IG_UI.json", "Sandbox_": "Sandbox.json"}
     for n in names:
         keysets = {}
         for l in langs:
@@ -245,6 +247,9 @@ for m in MEDIA_DIRS:
                 continue
             keysets[l] = set(data)
             for k, v in data.items():
+                home = next((f for pre, f in homes.items() if k.startswith(pre)), None)
+                if home and home != n:
+                    misplaced.append(f"{l}/{n} 的 {k}（要放 {home}）")
                 if find_bare_pct(v, tolerant):
                     badpct.append(f"{l}/{n} 的 {k}")
         if len(keysets) > 1:
@@ -257,6 +262,7 @@ for m in MEDIA_DIRS:
     else:
         ok("翻譯 JSON 可解析")
     fail("翻譯鍵集一致", mismatch) if mismatch else ok(f"翻譯鍵集一致（{'/'.join(langs)}）")
+    fail("翻譯鍵放在前綴對應的檔", misplaced) if misplaced else ok("翻譯鍵放在前綴對應的檔（UI_／IGUI_／Sandbox_）")
     pct_label = "翻譯值無裸 %（翻譯包模式：另接受 printf 指令）" if tolerant else "翻譯值無裸 %（僅 %1-%9 與 %%）"
     fail(pct_label, sorted(set(badpct))) if badpct else ok(pct_label)
 

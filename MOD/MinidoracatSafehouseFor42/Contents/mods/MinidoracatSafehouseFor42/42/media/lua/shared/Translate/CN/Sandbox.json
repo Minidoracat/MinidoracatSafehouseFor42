@@ -41,6 +41,8 @@
     "Sandbox_MinidoracatSafehouse_StorageMode_option3": "可以远程拿",
     "Sandbox_MinidoracatSafehouse_StorageReach": "远程拿取：安全屋外的范围（格）",
     "Sandbox_MinidoracatSafehouse_StorageReach_tooltip": "「可以远程拿」时，站在安全屋外这么多格内也能直接拿取；0＝要站在安全屋里。只放宽站的位置：拿的物品仍然要在这间安全屋里的容器中，服务器也要已经加载那一带。",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn": "安全屋范围内不生成僵尸",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip": "开启后，在安全屋范围内（包括原版安全屋）新出现的僵尸会被立即移除：重生的僵尸、玩家靠近时出现的僵尸、首次加载未探索建筑时的室内僵尸、随机事件的僵尸，以及管理员指令、调试工具或其他 MOD 在范围内生成的僵尸。\n从范围外走进来的僵尸、地上尸体起身变成的僵尸不会被立即移除；要等那一带没有玩家、卸载后再次加载时才会被移除。玩家死后尸变的僵尸一律不会被移除。\n仅在专用服务器上生效。",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "避开道路",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "安全屋范围不能包含道路。",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "道路安全边界（格）",

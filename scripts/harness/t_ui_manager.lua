@@ -1018,6 +1018,36 @@ return function(T)
     showRespawn(nil)
     check(not rw.btnRespawnSet.visible and not rw.btnRespawnClear.visible, "舊伺服器沒有 respawn 欄位：不顯示")
 
+    T.section("ManagerWindow：〔用地契升級〕只給屋主、active、背包有比這間高又啟用的地契")
+    local function showUp(role, lifecycle)
+        if rw.selectedId ~= 501 then rw:select(501) end
+        rw:loadDetail()
+        local req = T.clientSent[#T.clientSent]
+        T.fire("OnServerCommand", MSH.MODULE, "result", { command = "detail", requestId = req.args.requestId, ok = true,
+            code = "OK", claimId = 501, revision = 3, title = "house 1", rects = { { x = 100, y = 100, w = 10, h = 10 } },
+            actorRole = role or "owner", bits = MSH.SHARE_ALL, lifecycle = lifecycle or "active", healthSummary = "PROTECTED",
+            source = "deed", deedTier = 1, actions = {} })
+        return rw.btnUpgrade.visible
+    end
+    check(not showUp(), "背包沒有更高級的地契：不顯示")
+    me0.inv:AddItem("MinidoracatSafehouse.Deed5")
+    check(not showUp(), "背包只有沒啟用的 5 級：不顯示")
+    me0.inv:AddItem("MinidoracatSafehouse.Deed2")
+    check(showUp() and rw.btnUpgrade:isEnabled(), "屋主、active、背包有 2 級地契：顯示、可按")
+    check(not showUp("member"), "成員：不顯示")
+    check(not showUp("owner", "lapsed"), "停用中：不顯示")
+    T.sandbox("CreateMode", MSH.Settings.CREATE.FREE)
+    check(not showUp(), "免費模式：不顯示")
+    T.sandbox("CreateMode", MSH.Settings.CREATE.DEED)
+    showUp()
+    local realOpenCreate, upOpts = MSH.ManagerWindow.openCreate, nil
+    MSH.ManagerWindow.openCreate = function(o) upOpts = o end
+    rw.btnUpgrade.onClick(rw)
+    MSH.ManagerWindow.openCreate = realOpenCreate
+    check(upOpts and upOpts.mode == "redraw" and upOpts.claimId == 501 and upOpts.revision == 3 and upOpts.tier == 1
+        and upOpts.deedType == "MinidoracatSafehouse.Deed2" and upOpts.rects and upOpts.rects[1].w == 10,
+        "按下：開建立面板的重新框選，帶這間的等級、範圍與最低那張更高級地契")
+
     T.section("ManagerWindow：閒置收回倒數、滑鼠提示與〔延長保留〕（使用者 2026-10-14）")
     local UIv, realGetText2, savedEco = MinidoracatUI.v1, getText, MinidoracatEconomy
     local realShow = UIv.Dialog.show

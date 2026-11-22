@@ -159,6 +159,39 @@ return function(T)
     check(P.queryResult(f) and lastSent().command == "list", "再查詢：重抓清單")
     reply(lastSent(), { claims = { { claimId = 3, actorRole = "owner" }, { claimId = 12, actorRole = "owner" } } })
     check(f.phase == P.DONE and opened[2] and opened[2].claimId == 12, "清單出現新屋 → 當成功")
+    -- 重新框選／升級：舊的那間還在清單就不是這次的結果（多出來的可能是管理員剛轉給我的另一間）
+    local rm = P.newModel({ mode = "redraw", claimId = 3, revision = 4, tier = 1, source = "deed",
+        rects = { { x = 10, y = 10, w = 8, h = 8 } }, deedType = "MinidoracatSafehouse.Deed2" }, 0)
+    rm.phase, rm.known, rm.knownValid = P.PENDING, { [3] = true }, true
+    -- 前面留著一筆還沒回的 list 時，這次的 resolve 會排在它後面重送：回到 resolving 結束為止
+    local function listReply(m, claims)
+        for _ = 1, 3 do
+            if not m.resolving then return end
+            reply(lastSent(), { claims = claims })
+        end
+    end
+    local function row(id, tier) return { claimId = id, actorRole = "owner", deedTier = tier } end
+    check(rm.tier == 2, "升級模型：要求的等級是新地契的 2 級")
+    P.resolve(rm)
+    listReply(rm, { row(3, 1), row(13, 2) })
+    check(rm.phase == P.PENDING and rm.notice == "UNCONFIRMED", "升級待定：舊屋還在、多一間不認得的 → 仍是待定，不當成功")
+    for _, rows in ipairs({ { row(13, 2), row(14, 2) }, { row(14, 2), row(13, 2) } }) do
+        P.resolve(rm)
+        listReply(rm, rows)
+        check(rm.phase == P.PENDING and rm.notice == "UNCONFIRMED",
+            "升級待定：舊屋不在、同時多出兩間（" .. rows[1].claimId .. " 在前）→ 分不出是哪間，仍是待定")
+    end
+    P.resolve(rm)
+    listReply(rm, { row(15, 1) })
+    check(rm.phase == P.PENDING and rm.notice == "UNCONFIRMED", "升級待定：舊屋不在、新屋等級不是這次要的 → 仍是待定")
+    P.resolve(rm)
+    listReply(rm, { row(14, 2) })
+    check(rm.phase == P.DONE and rm.newClaimId == 14, "舊屋不在、恰好一間等級相符的新屋 → 當成功")
+    local cm = P.newModel({ deedType = "MinidoracatSafehouse.Deed2" }, 0)
+    cm.phase, cm.known, cm.knownValid = P.PENDING, { [3] = true }, true
+    P.resolve(cm)
+    listReply(cm, { row(3, 1), row(12, 2), row(16, 2) })
+    check(cm.phase == P.PENDING and cm.notice == "UNCONFIRMED", "建立待定：同時多出兩間 → 分不出是哪間，仍是待定")
 
     T.section("建立面板：死亡 → idle")
     local d = P.newModel({ deedType = "MinidoracatSafehouse.Deed2" }, 0)
@@ -185,6 +218,31 @@ return function(T)
     local rd = lastSent()
     check(rd.command == "redraw" and rd.args.claimId == 3 and rd.args.expectedRevision == 4 and rd.args.title == nil
         and rd.args.deedType == nil, "送 redraw：claimId、expectedRevision、同一等級（不帶地契與名稱）")
+
+    T.section("建立面板：用地契升級（重新框選帶地契）")
+    local D2, D3 = "MinidoracatSafehouse.Deed2", "MinidoracatSafehouse.Deed3"
+    check(P.upgradeTier(1) == 2 and P.upgradeTier(2) == nil, "可升到哪級：背包裡比它高、啟用的最低一級（5 級沒啟用不算）")
+    T.sandbox("CreateMode", MSH.Settings.CREATE.FREE)
+    check(P.upgradeTier(1) == nil, "免費模式：不能用地契升級")
+    T.sandbox("CreateMode", MSH.Settings.CREATE.DEED)
+    local u = P.newModel({ mode = "redraw", claimId = 3, revision = 4, tier = 1, deedType = D2 }, 0)
+    check(u.upgradeFrom == 1 and u.tier == 2 and u.deedType == D2 and P.gate(u) == nil, "升級 model：從 1 級換 2 級、沒有閘門")
+    check(P.gate(P.newModel({ mode = "redraw", claimId = 3, revision = 4, tier = 2, deedType = D2 }, 0)) == MSH.CODE.TIER_DISABLED,
+        "2 級屋、背包只有更高的 5 級（沒啟用）：TIER_DISABLED")
+    check(P.gate(P.newModel({ mode = "redraw", claimId = 3, revision = 4, tier = 5, deedType = D3 }, 0)) == MSH.CODE.NO_DEED,
+        "背包沒有比它高的地契：NO_DEED")
+    p.x, p.y = 30, 30
+    T.advance(1000)
+    walkRect(u, 33, 34)
+    local up = lastSent()
+    check(up.command == "preview" and up.args.claimId == 3 and up.args.deedType == D2, "升級的預檢帶 claimId 與新地契")
+    reply(up, { pass = true, checks = {} })
+    P.toConfirm(u)
+    P.submit(u, "ignored")
+    local ud = lastSent()
+    check(ud.command == "redraw" and ud.args.claimId == 3 and ud.args.expectedRevision == 4 and ud.args.deedType == D2
+        and ud.args.title == nil, "升級送 redraw：claimId、expectedRevision、新地契（不帶名稱）")
+    P.model = nil
 
     T.section("地契右鍵「使用地契」")
     local function menu(playerNum, items)
@@ -374,6 +432,26 @@ return function(T)
         "道路安全邊界 4：門檻降到 90，外框 91 才多寫縮小或分兩間")
     T.sandbox("RoadMargin", 1)
     check(P.undo(vm) and Sel.isEmpty(vm.sel), "（還原）〔復原〕退回空範圍")
+    -- 空心提示：外框裡沒圈到的格子不受保護（L 形 8×8＋4×4 → 外框 12×8＝96 格，圈了 80 格）
+    local function uncovered()
+        for _, l in ipairs(v.lines) do
+            if string.find(l.text, "IGUI_MSH_Select_Uncovered", 1, true) then return l.text end
+        end
+        return nil
+    end
+    p.x, p.y = 10, 10
+    Sel.mark(vm.sel, p)
+    p.x, p.y = 17, 17
+    P.applyPiece(vm)
+    frame()
+    check(uncovered() == nil, "實心矩形：沒有空心提示")
+    p.x, p.y = 18, 10
+    Sel.mark(vm.sel, p)
+    p.x, p.y = 21, 13
+    P.applyPiece(vm)
+    frame()
+    check(uncovered() == "IGUI_MSH_Select_Uncovered|16", "L 形：框選頁寫出外框裡 16 格沒圈到")
+    check(P.undo(vm) and P.undo(vm) and Sel.isEmpty(vm.sel), "（還原）〔復原〕兩次退回空範圍")
     p.x, p.y = 10, 10
     Sel.mark(vm.sel, p)
     p.x, p.y = 17, 17
@@ -429,6 +507,10 @@ return function(T)
     vm.rects = { { x = 10, y = 10, w = 97, h = 10 } }
     P.View.layout(v)
     check(lineTok(nlBig) == "textMuted" and lineTok(nlNear) == nil, "預檢外框 97 × 10 沒載入：多寫外框超過 96 時縮小或分兩間")
+    check(uncovered() == nil, "預檢頁、實心範圍：沒有空心提示")
+    vm.rects = { { x = 10, y = 10, w = 8, h = 8 }, { x = 18, y = 10, w = 4, h = 4 } }
+    P.View.layout(v)
+    check(uncovered() == "IGUI_MSH_Select_Uncovered|16", "預檢頁、L 形：範圍行下面寫 16 格沒圈到")
     vm.checks, vm.rects = savedChecks, savedRects
     P.View.layout(v)
     P.recheck(vm, T.now)
@@ -620,6 +702,24 @@ return function(T)
     n0 = #opened
     P.succeed(done, 77)
     check(#opened == n0 + 1 and opened[#opened].claimId == 77, "建立成功：管理視窗只開一次，開到新的那間")
+
+    T.section("建立面板：用地契升級的畫面（假框架）")
+    local um = P.open({ mode = "redraw", claimId = 3, revision = 4, tier = 1, source = "deed",
+        rects = { { x = 10, y = 10, w = 8, h = 8 } }, deedType = DEED2 })
+    v = um.view
+    check(v.win.title == "IGUI_MSH_Create_UpgradeTitle" and lineTok("IGUI_MSH_Create_UpgradeTier|1,2") == "text"
+        and lineTok("IGUI_MSH_Create_UpgradeHint") == "textMuted", "idle：標題、從 1 級升到 2 級、名單與重生點照舊的說明")
+    um.rects, um.phase = { { x = 10, y = 10, w = 8, h = 8 }, { x = 18, y = 10, w = 4, h = 4 } }, P.CONFIRM
+    P.View.layout(v)
+    check(lineTok("IGUI_MSH_Create_UpgradeSource|2,1") == "text" and lineTok("IGUI_MSH_Create_UpgradeFrees|1") == "textMuted"
+        and uncovered() == "IGUI_MSH_Select_Uncovered|16" and v.btn.confirm.title == "IGUI_MSH_Create_ConfirmUpgrade",
+        "確認頁：用掉哪級地契、舊的不退、空出舊等級名額、空心提示；按鈕寫〔升級〕")
+    check(v.btn.create.title == "IGUI_MSH_Create_ConfirmUpgrade", "預檢頁往確認頁的按鈕也寫〔升級〕")
+    P.close(um)
+    um = P.open({ mode = "redraw", claimId = 3, revision = 4, tier = 1, source = "deed",
+        rects = { { x = 10, y = 10, w = 8, h = 8 } } })
+    check(um.view.btn.create.title == "IGUI_MSH_Create_RedrawBtn", "一般重新框選照舊寫〔改用這個範圍〕")
+    P.close(um)
 
     T.section("建立面板：這次遊戲拖過的位置，下次照那裡開（使用者 2026-10-13）")
     P.lastPos = nil

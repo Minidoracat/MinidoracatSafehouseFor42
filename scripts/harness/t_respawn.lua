@@ -235,4 +235,22 @@ return function(T)
     boot({ keepGmd = true, keepFiles = true, keepHouses = true })
     check(same(R.spawn("gail"), 404, 403, 0) and same(R.spawn("hank"), 404, 403, 0) and not hz:isRespawnInSafehouse("gail")
         and not hz:isRespawnInSafehouse("hank"), "下次開機寫得進去：轉換成功、旗標清掉")
+
+    T.section("用地契升級之後：點還在新範圍內就照樣有效（屋主與成員）")
+    do
+        boot({ sandbox = { Tier2FreeSlots = 1 } })
+        local D1, D2 = "MinidoracatSafehouse.Deed1", "MinidoracatSafehouse.Deed2"
+        local ow = T.player({ name = "ow", x = 305.5, y = 305.5, items = { D1, D2 } })
+        local cid = T.cmd(ow, "create", { rects = { rect(300, 300, 10, 10) }, deedType = D1 }).claimId
+        local old = R.get(cid)
+        old.grants = { { user = "mb", bits = MEMBER } }
+        R.touch(old)
+        local mb = T.player({ name = "mb", x = 302.5, y = 302.5 })
+        check(set(ow, old).ok and set(mb, old).ok, "（前置）屋主與成員都在這間設點")
+        local up = T.cmd(ow, "redraw", { claimId = cid, rects = { rect(300, 300, 12, 12) }, expectedRevision = old.revision,
+            deedType = D2 })
+        local mine = T.cmd(ow, "myRespawn", {})
+        check(up.ok and mine.point ~= nil and mine.claimId == up.claimId, "升級後 myRespawn 指向新的那間")
+        check(moved(newChar("ow"), 305, 305, 0) and moved(newChar("mb"), 302, 302, 0), "升級後：屋主與成員的點照樣有效")
+    end
 end

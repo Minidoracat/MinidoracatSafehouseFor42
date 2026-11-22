@@ -679,13 +679,17 @@ function getCell()
                 TreatAsSolidFloor = function() return T.solid[key .. "," .. tostring(z or 0)] == true end,
                 getFloor = function()
                     if name == nil then return nil end
-                    local mod = T.floorMods[key]
+                    -- getModData 沒有就建一張（IsoObject.java:1042-1048）
                     return { getSprite = function() return { getName = function() return name end } end,
-                        hasModData = function() return mod ~= nil end,
-                        getModData = function() return mod end }
+                        hasModData = function() return T.floorMods[key] ~= nil and next(T.floorMods[key]) ~= nil end,
+                        getModData = function()
+                            T.floorMods[key] = T.floorMods[key] or {}
+                            return T.floorMods[key]
+                        end }
                 end,
             }
         end,
+        getZombieList = function() return T.javaList(T.zombies) end,
     }
 end
 -- 地面標示的假世界（FloorTint、Ranges、建立面板）：每格一個常駐的地板物件，記住 setHighlightColor 的顏色（"r/g/b"）、
@@ -821,6 +825,8 @@ function getWorld()
                 end,
             }
         end,
+        -- IsoWorld.java:3220（Core.gameSaveWorld；專用伺服器＝伺服器名）
+        getWorld = function() return "servertest" end,
     }
 end
 
@@ -839,7 +845,7 @@ T.TIMED_ACTIONS = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveActio
     "ISAddFuel", "ISFixGenerator", "ISTakeGenerator",
     "ISFluidTransferAction", "ISMoveablesAction", "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction",
     "ISUnbarricadeAction", "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction",
-    "ISWaterPlantAction", "ISShovelAction", "ISFertilizeAction", "ISScything", "ISTakeWaterAction" }
+    "ISWaterPlantAction", "ISShovelAction", "ISFertilizeAction", "ISScything", "ISTakeWaterAction", "ISShovelGround" }
 T.ran = {}
 local function ran(key) T.ran[key] = (T.ran[key] or 0) + 1 end
 function T.resetTimedActions()
@@ -849,6 +855,10 @@ function T.resetTimedActions()
         cls.__index = cls
         cls.complete = function() ran(name .. ".complete"); return true end
         _G[name] = cls
+    end
+    -- 鏟土：T.onShovel(self) 換掉原版 shovelGround 對世界的改動（同 T.onBuild）
+    ISShovelGround.complete = function(self)
+        ran("ISShovelGround.complete"); if T.onShovel then T.onShovel(self) end; return true
     end
     -- 取水：serverStart 排 takeFluid，animEvent 以 updateUse 分段把水轉進 item（ISTakeWaterAction.lua:31-48, 151-161），
     -- complete 補到滿（:130-133）；item.water 是已轉入的量
@@ -889,7 +899,8 @@ function T.resetTimedActions()
             return plant
         end,
     } }
-    Actions = { build = function() ran("Actions.build") end }                 -- ActionManager.lua:26
+    -- T.onBuild(character, args)：測試換掉原版 create 對世界的改動（例如換掉地板）；它的回傳值當原函式的回傳值
+    Actions = { build = function(c, a) ran("Actions.build"); if T.onBuild then return T.onBuild(c, a) end end }  -- ActionManager.lua:26
     SFarmingSystemCommands = {}                                               -- farmingCommands.lua:141
     for _, name in ipairs({ "seed", "plow", "harvest", "water", "destroy", "cheat" }) do
         SFarmingSystemCommands[name] = function() ran("farm." .. name) end
@@ -1007,12 +1018,14 @@ local function resetWorld(opts)
     T.failWrites, T.failRemove, T.failAdd, T.noLocation, T.failHouseRemove = false, false, false, false, false
     T.silentWrites = false
     T.floors, T.floorMods, T.unloaded, T.rooms, T.solid = {}, {}, {}, {}, {}
+    T.onBuild, T.onShovel = nil, nil
     T.randQueue = {}
     T.factions = {}
     T.steam = opts.steam or false
     T.activeMods = opts.mods or { "MinidoracatSafehouseFor42" }
     T.squareReads = 0
     T.nextOnlineId = 0
+    T.zombies, T.zombieSeq = {}, 0
     MinidoracatMiniMapResourceAPI = nil
     MinidoracatEconomy = nil   -- 假 Economy 由 T.economy 在 beforeStart 裝上
     MinidoracatSafehouse = nil
@@ -1239,5 +1252,32 @@ end
 
 -- 名單上的人站進某塊：引擎約每 20 秒把那塊的 lastVisited 設成當下（IsoPlayer.java:2177-2185）
 function T.visit(hs) hs.lastVisited = T.now end
+
+-- 殭屍（IsoZombie）：只做 Zombies.lua／ZombieSync.lua 用到的方法，建立時放進 getCell():getZombieList()。
+-- x＝nil 表示 getSquare() 回 nil；o.reanimated＝isReanimatedPlayer；o.id＝指定 onlineID（-1＝建立失敗、回到物件池）。
+-- removed／unsquared／unregistered 記下 removeFromWorld、removeFromSquare、getEmitter():unregister 的次數。
+-- removeFromWorld 從清單拿掉；伺服器上同時把 onlineID 清成 -1（IsoZombie.java:4313-4352）
+function T.zombie(x, y, o)
+    o = o or {}
+    T.zombieSeq = T.zombieSeq + 1
+    local z = { removed = 0, unsquared = 0, unregistered = 0, reanimated = o.reanimated or false,
+        id = o.id or T.zombieSeq }
+    local sq = x ~= nil and T.gridSquare(x, y, 0) or nil
+    local emitter = { unregister = function() z.unregistered = z.unregistered + 1 end }
+    function z:getSquare() return sq end
+    function z:getOnlineID() return self.id end
+    function z:getEmitter() return emitter end
+    function z:isReanimatedPlayer() return self.reanimated end
+    function z:removeFromWorld()
+        self.removed = self.removed + 1
+        for i = #T.zombies, 1, -1 do
+            if T.zombies[i] == self then table.remove(T.zombies, i) end
+        end
+        if T.mode == "server" then self.id = -1 end
+    end
+    function z:removeFromSquare() self.unsquared = self.unsquared + 1 end
+    T.zombies[#T.zombies + 1] = z
+    return z
+end
 
 return T

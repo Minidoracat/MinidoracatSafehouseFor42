@@ -61,6 +61,7 @@ return function(T)
         ISWaterPlantAction = function(x, y) return { sq = T.gridSquare(x, y) } end,
         ISShovelAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
         ISFertilizeAction = function(x, y) return { plant = { x = x, y = y, z = 0 } } end,
+        ISShovelGround = function(x, y) return { sandTile = T.worldObject(x, y) } end,
         ISScything = function(x, y)
             T.plants[x .. "," .. y] = { state = "seeded" }
             return { sq = T.gridSquare(x, y), radius = 1 }
@@ -70,7 +71,7 @@ return function(T)
         USE = { "ISToggleLightAction", "ISLightActions", "ISToggleStoveAction", "ISRadioAction", "ISPlugGenerator",
             "ISActivateGenerator", "ISAddFuel", "ISFixGenerator", "ISFluidTransferAction" },
         MOVE = { "ISMoveablesAction", "ISTakeGenerator" },
-        BUILD = { "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction", "ISUnbarricadeAction" },
+        BUILD = { "ISDestroyStuffAction", "ISDismantleAction", "ISBarricadeAction", "ISUnbarricadeAction", "ISShovelGround" },
         FARM = { "ISPlowAction", "ISSeedActionNew", "ISHarvestPlantAction", "ISCurePlantAction", "ISWaterPlantAction",
             "ISShovelAction", "ISFertilizeAction", "ISScything" },
     }
@@ -186,9 +187,12 @@ return function(T)
     Actions.build(bare, { x = 105, y = 105, z = 0 })
     check(T.ran["Actions.build"] == nil, "沒有 BUILD：不呼叫原 Actions.build")
     check((deniedOf(bare) or {}).bit == B.BUILD, "建造被拒：推 denied（客戶端照樣顯示完成，要靠這則說明）")
-    Actions.build(full, { x = 105, y = 105, z = 0 })
+    T.onBuild = function() return "orig-ret" end
+    local ret = Actions.build(full, { x = 105, y = 105, z = 0 })
+    T.onBuild = nil
     Actions.build(bare, { x = 50, y = 50, z = 0 })
     check(T.ran["Actions.build"] == 2, "有 BUILD、範圍外：照原版")
+    check(ret == "orig-ret", "Actions.build 包裝傳回原函式的回傳值（外層 MOD 拿得到）")
     Actions.build(bare, { x = "105", y = 105, z = 0 })
     Actions.build(full, { x = 105, y = 105, z = 0 / 0 })
     check(T.ran["Actions.build"] == 2, "座標不是有限數：不蓋")

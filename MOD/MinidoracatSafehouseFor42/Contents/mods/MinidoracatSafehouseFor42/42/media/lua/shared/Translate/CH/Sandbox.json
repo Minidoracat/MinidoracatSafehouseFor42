@@ -41,6 +41,8 @@
     "Sandbox_MinidoracatSafehouse_StorageMode_option3": "可以遠距拿",
     "Sandbox_MinidoracatSafehouse_StorageReach": "遠距拿取：安全屋外的範圍（格）",
     "Sandbox_MinidoracatSafehouse_StorageReach_tooltip": "「可以遠距拿」時，站在安全屋外這麼多格內也能直接拿取；0＝要站在安全屋裡。只放寬站的位置：拿的東西照樣要在這間安全屋裡的容器，伺服器也要已經載入那一帶。",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn": "安全屋範圍內不生成殭屍",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip": "開啟後，在安全屋範圍內（包含原版安全屋）新出現的殭屍會立刻移除：重生、玩家靠近時出現的殭屍、第一次載入未探索建築時的室內殭屍、隨機事件的殭屍，以及管理員指令、除錯工具或其他 MOD 在範圍內生成的殭屍。\n從範圍外走進來的殭屍、地上屍體起身變成的殭屍不會當場移除；要等那一帶沒有玩家、卸載後再載入時才會移除。玩家死後屍變的殭屍一律不移除。\n只在專用伺服器生效。",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "避開道路",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "安全屋範圍不能包含道路。",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "道路安全邊界（格）",

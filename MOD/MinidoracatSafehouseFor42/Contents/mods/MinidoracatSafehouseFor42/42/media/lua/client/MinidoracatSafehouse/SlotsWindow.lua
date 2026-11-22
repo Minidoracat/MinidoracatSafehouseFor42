@@ -308,7 +308,7 @@ function SW.visible(w) return w ~= nil and w.win:isVisible() end
 -- 摘要什麼時候重抓：伺服器那邊有東西變了才抓，自己讀 Economy 的回覆不抓——
 --   Economy 推送 entitlement.changed（付款、續租、進寬限、到期、退款；管理員改方案的公開通知）：Economy 客戶端 onPush
 --     （entitlements-api.md「客戶端 API」，ECEntitlementClient.lua:301-321）；
---   自己的安全屋清單重抓了（建立、放棄、停用、恢復：Client 事件 "claims"）、沙盒變了（"sandbox"）。
+--   自己的安全屋清單重抓了（建立、放棄、進保留期、恢復：Client 事件 "claims"）、沙盒變了（"sandbox"）。
 -- 名額視窗或建立面板開著才抓（兩邊都從 "slots" 事件更新；同時一筆、間隔由 Client.refreshSlots 管）。onChanged 是每個
 -- 採用的快照（含自己 requestState 的回覆，ECEntitlementClient.lua:137-150），只重排、不重抓，所以不會自己觸發自己。
 -- 2026-10-13 前用「狀態指紋變了才重抓」：展開的那一級正在讀狀態時，別處來的推送會被當成自己的回覆略過
@@ -322,11 +322,191 @@ function SW.onEconomyPush(args)
 end
 
 function SW.onEconomyChanged(env)
+    if type(env) ~= "table" or env.sourceMod ~= SW.SRC then return end
+    SW.leaseNotice(env)
     local w = SW.instance
-    if SW.visible(w) and type(env) == "table" and env.sourceMod == SW.SRC then SW.layout(w) end
+    if w == nil then return end
+    SW.tryAutoOffer(w)
+    if SW.visible(w) then SW.layout(w) end
 end
 
--- 名額視窗打開、建立面板打開（沒開過名額視窗也要跟上推送）時各試一次；同一個 Economy 客戶端只登記一次。onPush 是
+-- ===== 租約通知（純客戶端）：Economy 寫進快照的 notice（ECEntitlements.lua visitLease／tryRenew），錢包推送與
+-- requestState 會帶同一個 notice 再觸發 onChanged，同一件事只跳一次。同一輪走訪的事件共用同一個 now（進寬限與緊接的
+-- 扣款失敗、兩張租約同一輪到期都一樣），所以 at 不能單獨當識別，要連租約、原因碼、錯誤一起比。第一次看到某產品只記
+-- 基準（登入前的事由登入摘要講）；登入摘要讀完前變了的先不記，結算時拿最新快照再比（SW.endSummary）
+SW.noticeSeen = SW.noticeSeen or {}
+SW.failShown = SW.failShown or {}   -- 租約 id → 已經講過的扣款失敗原因
+SW.LEASE_NOTICE = { renewal_due = true, grace = true, expired = true, renewal_failed = true }
+
+function SW.tierOfEnv(env)
+    return type(env.productId) == "string" and tonumber(string.match(env.productId, "^tier(%d+)$")) or nil
+end
+
+function SW.leaseNotice(env)
+    local tier = SW.tierOfEnv(env)
+    local n = type(env.entitlement) == "table" and env.entitlement.notice or nil
+    if tier == nil then return end
+    n = type(n) == "table" and n or {}
+    local key = n.at ~= nil and table.concat({ tostring(n.rental), tostring(n.code), tostring(n.at), tostring(n.error) }, "|")
+        or ""
+    local last = SW.noticeSeen[env.productId]
+    if last ~= nil and not SW.noticeReady then return end
+    SW.noticeSeen[env.productId] = key
+    if key == "" or key == last then return end
+    -- 寬限中每小時重試扣款都會寫一次新的 renewal_failed：同一張、同一原因只講第一次；這張有別的事就重新算。
+    -- 基準（登入前就失敗的）也要記，否則登入後下一次重試會再講一次。
+    -- 不是針對某張租約的 notice（例如 refunded）沒有 rental，不能拿來當鍵
+    if n.rental ~= nil then
+        if n.code == "renewal_failed" then
+            if SW.failShown[n.rental] == n.error then return end
+            SW.failShown[n.rental] = n.error
+        else
+            SW.failShown[n.rental] = nil
+        end
+    end
+    if last == nil or not SW.LEASE_NOTICE[n.code] then return end
+    local E = SW.api()
+    local r = SW.findRental(env, n.rental)
+    local now = getTimestampMs()
+    local text
+    if n.code == "renewal_failed" then
+        text = getText("IGUI_MSH_Lease_renewal_failed", tier, E and E.errorText(n.error) or tostring(n.error))
+    else
+        -- 開著自動續租的租約：進寬限的同一刻就會扣款（成功沒事、失敗另有 renewal_failed）；暫停中的由 Economy 自己提醒
+        if r ~= nil and SW.autoRenewOn(r) then return end
+        local untilMs = r and r[n.code == "grace" and "graceUntil" or "paidUntil"]
+        local left = (E and type(untilMs) == "number") and E.remainingText(math.max(0, untilMs - now)) or "-"
+        text = getText("IGUI_MSH_Lease_" .. n.code, tier, left)
+    end
+    MSH.Client.toast(text, nil, getText("IGUI_MSH_Lease_Title"))
+end
+
+-- 登入摘要（每次進遊戲一次，不存檔）：安全屋第一份清單成功（login(true)）後讀這個登入的全部產品，合成一則數字：
+-- 保留期中的屋、寬限中的名額、快到期又不會自動續的名額（細節在名額視窗；Toast 最多 5 行，逐級列會把後面的切掉）。
+-- 清單被截（more）就補讀沒列到的級別：回了快照（沒有租約也算）才算讀到，逾時、排不進佇列的隔 SUMMARY_RETRY_MS 只補
+-- 那些，各 SUMMARY_TRIES 次；到上限還有讀不到的，加一句註明數字不完整。保留期屋數是本 MOD 自己的清單，照常講。
+-- SW.summary：nil 還沒開始、"reading" 讀取中、"done" 講完或放棄（之後通知才跳）
+SW.SUMMARY_TRIES, SW.SUMMARY_RETRY_MS = 3, 5000
+-- 付過的期間還沒過（paused_*：付了錢但到期不會續，ECEntitlements.lua rentalState）
+SW.PAID_STATES = { active = true, paused_terms = true, paused_system = true }
+
+function SW.onLogin(ok)
+    if SW.summary ~= nil then return end
+    SW.summary = "reading"
+    SW.listen()
+    if not ok then return SW.endSummary(nil) end
+    SW.sumEnvs, SW.sumMissing = {}, {}
+    SW.readSummary(1)
+end
+
+-- 排下一次（SW.onTick 到時間呼叫）；到上限回 false
+function SW.retrySummary(try, fn)
+    if try >= SW.SUMMARY_TRIES then return false end
+    SW.summaryRetryAt, SW.summaryRetry = getTimestampMs() + SW.SUMMARY_RETRY_MS, function() fn(try + 1) end
+    return true
+end
+
+function SW.readSummary(try)
+    local E = SW.api()
+    if E == nil or type(E.requestList) ~= "function" then return SW.endSummary(SW.sumEnvs, false) end
+    local rid = E.requestList(function(res) SW.onSummaryList(res, try) end)
+    if rid == nil and not SW.retrySummary(try, SW.readSummary) then SW.endSummary(SW.sumEnvs, true) end
+end
+
+-- 只用這次回覆本身：失敗時 getList 還留著上一份成功的清單；逾時後晚到的回覆只更新快取、不再回呼
+function SW.onSummaryList(res, try)
+    if type(res) ~= "table" or res.ok ~= true or type(res.entries) ~= "table" then
+        if not SW.retrySummary(try, SW.readSummary) then SW.endSummary(SW.sumEnvs, true) end
+        return
+    end
+    local seen = {}
+    for _, env in ipairs(res.entries) do
+        local tier = type(env) == "table" and env.sourceMod == SW.SRC and SW.tierOfEnv(env)
+        if tier then SW.sumEnvs[env.productId], seen[tier] = env, true end
+    end
+    if res.more ~= true then return SW.endSummary(SW.sumEnvs, false) end
+    -- 清單跨所有 MOD 只回前 LIST_MAX 個產品（ECEntitlements.lua entitlement.list 的 more）
+    for t = 1, MSH.MAX_TIER do
+        if not seen[t] then SW.sumMissing[t] = true end
+    end
+    SW.readMissing(1)
+end
+
+-- 一輪補讀還缺的級別，這輪全部回來才決定結算或再補
+function SW.readMissing(try)
+    local E = SW.api()
+    local waiting = 1
+    local function done()
+        waiting = waiting - 1
+        if waiting > 0 then return end
+        -- Kahlua 沒有 next()
+        for _ in pairs(SW.sumMissing) do
+            if not SW.retrySummary(try, SW.readMissing) then SW.endSummary(SW.sumEnvs, true) end
+            return
+        end
+        SW.endSummary(SW.sumEnvs, false)
+    end
+    for t in pairs(SW.sumMissing) do
+        waiting = waiting + 1
+        local product = SW.product(t)
+        local rid = E and E.requestState(SW.SRC, product, function(env)
+            if type(env) == "table" and env.ok ~= false and type(env.entitlement) == "table" then
+                SW.sumEnvs[product], SW.sumMissing[t] = env, nil
+            end
+            done()
+        end)
+        if not rid then done() end
+    end
+    done()
+end
+
+-- envs：productId → 讀到的快照（nil＝安全屋清單都沒有，不講）；unknown：有級別讀不到
+function SW.endSummary(envs, unknown)
+    SW.summary, SW.noticeReady, SW.summaryRetryAt, SW.summaryRetry = "done", true, nil, nil
+    SW.sumEnvs, SW.sumMissing = nil, nil
+    local E = SW.api()
+    if envs ~= nil then SW.sayLoginSummary(E, envs, unknown) end
+    -- 讀取期間變了的 notice（leaseNotice 先沒記）：拿最新採用的快照補講
+    for product in pairs(SW.noticeSeen) do
+        local env = E and E.getState(SW.SRC, product)
+        if type(env) == "table" then SW.leaseNotice(env) end
+    end
+end
+
+function SW.sayLoginSummary(E, envs, unknown)
+    local now = getTimestampMs()
+    local lapsed, grace, due = 0, 0, 0
+    for _, row in ipairs(MSH.Client.claims.mine) do
+        if row.lifecycle == MSH.LIFECYCLE.LAPSED then lapsed = lapsed + 1 end
+    end
+    for product, env in pairs(envs) do
+        -- 等其他級別期間可能又推來新快照：用最新採用的
+        env = E and E.getState(SW.SRC, product) or env
+        local plan = env.plan or {}
+        local remind = (tonumber(plan.reminderHours) or 0) * 3600000
+        local ent = type(env.entitlement) == "table" and env.entitlement or {}
+        for _, r in ipairs(type(ent.rentals) == "table" and ent.rentals or {}) do
+            -- 一張租約可以是好幾個名額（伺服器 Economy.lua leases 也照 quantity 算）
+            local q = tonumber(r.quantity) or 1
+            if r.state == "grace" then
+                grace = grace + q
+            elseif SW.PAID_STATES[r.state] and type(r.paidUntil) == "number" and r.paidUntil - now <= remind
+                and not (SW.autoRenewOn(r) and not SW.autoPaused(plan, r)) then
+                due = due + q
+            end
+        end
+    end
+    local parts = {}
+    if lapsed > 0 then parts[#parts + 1] = getText("IGUI_MSH_Lease_SumLapsed", lapsed) end
+    -- 放在數字前面：Toast 切掉的是後面的句子，這句不能被切
+    if unknown then parts[#parts + 1] = getText("IGUI_MSH_Lease_SumUnknown") end
+    if grace > 0 then parts[#parts + 1] = getText("IGUI_MSH_Lease_SumGrace", grace) end
+    if due > 0 then parts[#parts + 1] = getText("IGUI_MSH_Lease_SumDue", due) end
+    -- 框架 Toast 不認 "\n"（Toast.lua wrapText 只走 TextWrap.cut），以空白接成一段再自動換行
+    if #parts > 0 then MSH.Client.toast(table.concat(parts, " "), nil, getText("IGUI_MSH_Lease_Title"), 5) end
+end
+
+-- 登入（SW.onLogin，租約通知要整局聽）、名額視窗打開、建立面板打開時各試一次；同一個 Economy 客戶端只登記一次。onPush 是
 -- Economy 0.15.0 起才有（錢包「名額」分頁）：更舊的沒有推送觸發，只剩本視窗自己付款後重抓
 function SW.listen()
     local E = SW.api()
@@ -599,6 +779,8 @@ function SW.onRent(w, btn)
     local price = t.rentPrice
     SW.confirm(w, getText("IGUI_MSH_Slots_ConfirmRent", t.tier, SW.money(SW.api(), price), price.days or 0), function()
         SW.startQuote(w, t.tier, "rental", 1, { amount = price.amount, currency = price.currency })
+        -- 新租付款成功後直接問要不要開自動續租（續租、管理視窗的保險不問）
+        if w.busy == "quote" then w.pay.offerAuto = true end
     end)
 end
 
@@ -664,7 +846,8 @@ function SW.purchase(w, q)
     local E = SW.api()
     if E == nil or not SW.canPurchase(w) then return SW.relayout(w) end
     w.busy = "purchase"
-    w.order = { quoteId = q.id, orderId = q.orderId, tier = w.pay and w.pay.tier, product = w.pay and w.pay.product }
+    w.order = { quoteId = q.id, orderId = q.orderId, tier = w.pay and w.pay.tier, product = w.pay and w.pay.product,
+        offerAuto = w.pay and w.pay.offerAuto }
     local rid, why = E.purchase(SW.SRC, q.id, function(res) SW.onPurchase(w, res) end)
     if rid == nil then
         w.order = nil
@@ -691,12 +874,31 @@ end
 
 -- 付款有結果：結果寫在那一級底下，同時跳通知（視窗外也看得到）
 function SW.finish(w, key)
+    local o = w.order
     w.order = nil
     local text = getText(w.texts and w.texts[key] or key)
     SW.say(w, text, "text")
     MSH.Client.toast(text)
     SW.reload(w)
     SW.requestState(w)
+    if key == "IGUI_MSH_Slots_PaidDone" and o and o.offerAuto and o.orderId ~= nil then
+        w.autoOffer = { tier = o.tier, id = o.orderId }
+        SW.tryAutoOffer(w)
+    end
+end
+
+-- 付款回覆先採用新快照再回呼（ECEntitlementClient.lua onReply），通常當下就找得到新租約；找不到就等下一個快照
+-- （onEconomyChanged）再試。方案不允許、已經開著或視窗關了就不問
+function SW.tryAutoOffer(w)
+    local a = w.autoOffer
+    if a == nil then return end
+    if not SW.visible(w) then w.autoOffer = nil return end
+    local E = SW.api()
+    local env = E and E.getState(SW.SRC, SW.product(a.tier))
+    local r = SW.findRental(env, a.id)
+    if r == nil then return end
+    w.autoOffer = nil
+    if (env.plan or {}).autoRenewAllowed == true and not SW.autoRenewOn(r) then SW.confirmAuto(w, E, env, r, a.tier, true) end
 end
 
 -- 查詢購買結果：唯讀查同一筆（沒有 orderId 時查原 quoteId），絕不重送購買
@@ -756,13 +958,18 @@ function SW.onAgree(w, b)
     SW.confirmAuto(w, E, env, r, b.tier)
 end
 
--- 確認框寫目前方案的條款；同意才送（帶權益版本與條款版本，Economy 照當下方案記下同意）
-function SW.confirmAuto(w, E, env, r, tier)
+-- 確認框寫目前方案的條款；同意才送（帶權益版本與條款版本，Economy 照當下方案記下同意）。offer＝新租後主動問
+function SW.confirmAuto(w, E, env, r, tier, offer)
     local plan, ent = env.plan or {}, env.entitlement or {}
     local price = { amount = (plan.rentalPrice or 0) * (r.quantity or 1), currency = plan.rentalCurrency }
-    w.UI.Dialog.show(MSH.Client.windowOpts(w.UI, { title = getText("IGUI_MSH_Slots_Title"), theme = w.theme,
-        text = getText("IGUI_MSH_Slots_ConfirmAuto", SW.money(E, price), plan.rentalDays or 0),
-        confirmText = getText("IGUI_MSH_Slots_Agree"), cancelText = getText("UI_Cancel"),
+    local text = getText("IGUI_MSH_Slots_ConfirmAuto", SW.money(E, price), plan.rentalDays or 0)
+    if offer then
+        local left = type(r.paidUntil) == "number" and E.remainingText(math.max(0, r.paidUntil - getTimestampMs())) or "-"
+        text = getText("IGUI_MSH_Slots_OfferAuto", tier, left, SW.money(E, price), plan.rentalDays or 0)
+    end
+    w.UI.Dialog.show(MSH.Client.windowOpts(w.UI, { title = getText("IGUI_MSH_Slots_Title"), theme = w.theme, text = text,
+        confirmText = getText(offer and "IGUI_MSH_Slots_TurnOnAuto" or "IGUI_MSH_Slots_Agree"),
+        cancelText = getText(offer and "IGUI_MSH_Slots_Later" or "UI_Cancel"),
         onResult = function(ok)
             if ok then SW.sendAutoRenew(w, tier, true, ent.revision, plan.revision, r.id) end
         end }))
@@ -788,10 +995,16 @@ function SW.sendAutoRenew(w, tier, enabled, revision, termsRevision, rental)
     SW.layout(w)
 end
 
--- 剩餘時間每分鐘重排一次（不是每幀）
+-- 剩餘時間每分鐘重排一次（不是每幀）；登入摘要讀失敗的補讀也在這裡排
 function SW.onTick()
     local w = SW.instance
-    if SW.visible(w) and w.laidOutAt ~= nil and getTimestampMs() - w.laidOutAt >= 60000 then SW.layout(w) end
+    local now = getTimestampMs()
+    if SW.visible(w) and w.laidOutAt ~= nil and now - w.laidOutAt >= 60000 then SW.layout(w) end
+    if SW.summaryRetryAt ~= nil and now >= SW.summaryRetryAt then
+        local retry = SW.summaryRetry
+        SW.summaryRetryAt, SW.summaryRetry = nil, nil
+        retry()
+    end
 end
 
 if first then
@@ -799,4 +1012,5 @@ if first then
     MSH.Client.on("slots", "SlotsWindow", function(res) MSH.SlotsWindow.onSlots(res) end)
     MSH.Client.on("claims", "SlotsWindow", function() MSH.SlotsWindow.slotsChanged() end)
     MSH.Client.on("sandbox", "SlotsWindow", function() MSH.SlotsWindow.slotsChanged() end)
+    MSH.Client.on("login", "SlotsWindow", function(ok) MSH.SlotsWindow.onLogin(ok) end)
 end

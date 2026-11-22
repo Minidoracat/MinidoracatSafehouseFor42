@@ -27,6 +27,7 @@ require "MinidoracatSafehouse/Registry"
 require "MinidoracatSafehouse/Identity"
 require "MinidoracatSafehouse/Server"
 require "MinidoracatSafehouse/Claims"
+require "MinidoracatSafehouse/Exclusions"
 
 local MSH = MinidoracatSafehouse
 local first = MSH.Permissions == nil
@@ -99,6 +100,8 @@ P.WRAPS = {
     -- 移除作物、施肥與堆肥：complete 才 removePlant／fertilize（ISShovelAction.lua:59-71、ISFertilizeAction.lua:59-64）
     { "ISShovelAction", BIT.FARM, plantSquare },
     { "ISFertilizeAction", BIT.FARM, plantSquare },
+    -- 鏟土、碎石、沙（complete 才換地板圖塊、移除植被，ISShovelGround.lua:58-142）：和倒土（Actions.build）同一類，看 BUILD
+    { "ISShovelGround", BIT.BUILD, function(a) return P.squareOf(a.sandTile) end },        -- ISShovelGround.lua:174
 }
 
 -- 多格圖塊（sprite grid）每一格的 x, y 加進 cells；(x, y) 是 sprite 那一塊所在的格子
@@ -515,7 +518,9 @@ end
 
 -- 全域 Actions.build（ActionManager.lua:26-32）：任一格拒絕就不呼叫原函式；客戶端照樣顯示完成，靠 denied 推送說明。
 -- 只看座標，不需要格子存在（P.deniesAt）。x, y, z 是 BuildAction 從封包的 float 轉的（BuildAction.java:58-61），
--- 不是有限數就不蓋。
+-- 不是有限數就不蓋。z=0 的建造前後各看一次那些格的地板：蓋掉的路照算（使用者 2026-10-14），原版換掉地板物件時
+-- 把原道路圖塊記進伺服器的道路紀錄（MSH.Exclusions.roadTiles／keepRoads）。倒土（ISNaturalFloor）在 MP 也走這裡
+-- （ISBuildingObject:tryBuild → ISBuildAction:start → createBuildAction → BuildAction.perform 的 OnProcessAction "build"）。
 local function wrapBuild()
     if type(Actions) ~= "table" or type(Actions.build) ~= "function" then
         MSH.log("permissions: Actions.build missing, not wrapped")
@@ -523,12 +528,38 @@ local function wrapBuild()
     end
     local orig = Actions.build
     Actions.build = function(character, args)
+        local tiles
         if type(args) == "table" and character ~= nil then
             if not (MSH.isFinite(args.x) and MSH.isFinite(args.y) and MSH.isFinite(args.z)) then return end
-            local cells = P.buildCells(args.item, math.floor(args.x), math.floor(args.y), math.floor(args.z), args.north == true)
+            local z = math.floor(args.z)
+            local cells = P.buildCells(args.item, math.floor(args.x), math.floor(args.y), z, args.north == true)
             if P.deniesCells(character, cells, BIT.BUILD, "Actions.build") then return end
+            if z == 0 then tiles = MSH.Exclusions.roadTiles(cells) end
         end
-        return orig(character, args)
+        -- 原版沒有回傳值、BuildAction.perform 也不看（BuildAction.java:109-117）；照樣傳回，別的 MOD 包在外層時拿得到
+        local ret = orig(character, args)
+        if tiles then MSH.Exclusions.keepRoads(tiles) end
+        return ret
+    end
+end
+
+-- 鏟土（ISShovelGround，MP 由伺服器呼叫 complete：NetTimedAction.java:132-134）：第一次鏟碎石路圖塊時原版在同一個地板物件上
+-- 換成泥土、只記 shovelled、不留原圖塊（ISShovelGround.lua:77-80、ISShovelGroundCursor.lua:108-113），前後比對同 wrapBuild。
+-- 鏟回倒土前的地板（:62-76）原版自己還原圖塊，那格已有紀錄、或還原後讀得出同一類就不寫。回傳原函式的值（NetTimedAction.perform 看它）。
+-- 權限在 P.WRAPS（裝在這層裡面）：被拒時地板沒變，keepRoads 不寫。
+local function wrapShovelGround()
+    local S = ISShovelGround
+    if type(S) ~= "table" or type(S.complete) ~= "function" then
+        MSH.log("permissions: ISShovelGround.complete missing, not wrapped")
+        return
+    end
+    local orig = S.complete
+    S.complete = function(self)
+        local sq = self.sandTile ~= nil and self.sandTile:getSquare() or nil   -- 同原版 :144
+        local tiles = sq ~= nil and sq:getZ() == 0 and MSH.Exclusions.roadTiles({ sq:getX(), sq:getY() }) or nil
+        local ok = orig(self)
+        if tiles then MSH.Exclusions.keepRoads(tiles) end
+        return ok
     end
 end
 
@@ -591,6 +622,7 @@ function P.install()
     wrapTakeWater()
     wrapForceOpen()
     wrapBuild()
+    wrapShovelGround()
     wrapScything()
     wrapFarmingCommands()
 end

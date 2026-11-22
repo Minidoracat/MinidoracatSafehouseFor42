@@ -50,15 +50,30 @@ end
 
 -- ===== 狀態機 =====
 
--- 背包（含巢狀容器）持有的地契等級，由低到高（getFirstTypeRecurse ItemContainer.java:1599）
-function P.heldTiers(p)
+-- 背包（含巢狀容器）持有的地契等級，由低到高（getFirstTypeRecurse ItemContainer.java:1599）；above＝只列比它高的
+function P.heldTiers(p, above)
     local out = {}
     if p == nil then return out end
     local inv = p:getInventory()
-    for n = 1, MSH.MAX_TIER do
+    for n = (above or 0) + 1, MSH.MAX_TIER do
         if inv:getFirstTypeRecurse(MSH.deedType(n)) ~= nil then out[#out + 1] = n end
     end
     return out
+end
+
+-- 管理視窗的〔用地契升級〕：背包裡比 from 高、而且啟用的最低一級；免費模式不用地契，回 nil
+function P.upgradeTier(from)
+    local cfg = MSH.Settings.get()
+    if cfg.createMode == MSH.Settings.CREATE.FREE then return nil end
+    for _, n in ipairs(P.heldTiers(player(), from)) do
+        if cfg.tiers[n].enabled then return n end
+    end
+    return nil
+end
+
+-- 這次會用掉一張地契、佔用新等級的名額：建立，或用地契升級（重新框選帶地契）
+local function newTier(m)
+    return m.mode == "create" or m.upgradeFrom ~= nil
 end
 
 -- 建立模式選地契：免費模式不帶地契（伺服器以 1 級計名額、帶了反而 BAD_DEED，Claims.checkDeed）；
@@ -70,7 +85,7 @@ function P.pickDeed(m, want)
         return
     end
     m.source = SRC.DEED
-    m.held = P.heldTiers(player())
+    m.held = P.heldTiers(player(), m.upgradeFrom)
     local tier = MSH.tierOfDeed(want)
     local has = false
     for _, n in ipairs(m.held) do
@@ -91,6 +106,11 @@ function P.newModel(opts, playerNum)
         m.claimId, m.revision, m.tier = opts.claimId, opts.revision, opts.tier
         m.source = opts.source == SRC.FREE and SRC.FREE or SRC.DEED
         if type(opts.rects) == "table" and #opts.rects > 0 then m.initRects = MSH.Rect.copyList(opts.rects) end
+        -- 帶 deedType＝用地契升級：只能選比舊屋高的等級
+        if opts.deedType ~= nil then
+            m.upgradeFrom = opts.tier
+            P.pickDeed(m, opts.deedType)
+        end
     else
         P.pickDeed(m, opts.deedType)
     end
@@ -118,7 +138,7 @@ end
 -- 名額已滿：照伺服器 checkQuota 的順序——這一級的免費名額（已用 < 免費數）→ 付費名額（usable − 寬限中 > 付費間數）；
 -- 都沒有時，可買、可租都到上限（full）回 TIER_FULL，不然 QUOTA_FULL。沒有 slots 資料就不判斷（預檢與建立仍由伺服器把關）
 function P.quotaGate(m)
-    if m.mode ~= "create" then return nil end
+    if not newTier(m) then return nil end
     local t = P.tierSlots(m)
     if t == nil then return nil end
     local f = t.free or {}
@@ -134,7 +154,8 @@ function P.gate(m)
     local p = player()
     if p == nil then return "OFFLINE" end
     if p:isDead() then return CODE.DEAD end
-    if m.mode == "redraw" then return nil end
+    if not newTier(m) then return nil end
+    if m.upgradeFrom ~= nil and m.deedType == nil then return CODE.NO_DEED end
     if m.source == SRC.DEED then
         if m.tier == nil then return CODE.NO_DEED end
         if not MSH.Settings.get().tiers[m.tier].enabled then return CODE.TIER_DISABLED end
@@ -229,8 +250,9 @@ function P.pump(m, now)
     if not (m.previewWant and m.phase == P.PREVIEW) or P.previewBusy then return end
     if P.previewDoneAt ~= nil and now - P.previewDoneAt < P.PREVIEW_GAP_MS then return end
     m.previewWant, P.previewBusy = false, true
-    local args = { rects = MSH.Rect.copyList(m.rects) }
-    if m.mode == "redraw" then args.claimId = m.claimId else args.deedType = m.deedType end
+    -- 重新框選沒有 deedType；用地契升級才帶
+    local args = { rects = MSH.Rect.copyList(m.rects), deedType = m.deedType }
+    if m.mode == "redraw" then args.claimId = m.claimId end
     m.previewRid = MSH.Client.send("preview", args, function(res)
         P.previewBusy, P.previewDoneAt = false, getTimestampMs()
         P.onPreview(m, res)
@@ -355,7 +377,7 @@ function P.submit(m, titleText)
     for _, row in ipairs(MSH.Client.claims.mine) do m.known[row.claimId] = true end
     local command, args = "create", { rects = MSH.Rect.copyList(m.rects) }
     if m.mode == "redraw" then
-        command, args.claimId, args.expectedRevision = "redraw", m.claimId, m.revision
+        command, args.claimId, args.expectedRevision, args.deedType = "redraw", m.claimId, m.revision, m.deedType
     else
         args.deedType, args.title = m.deedType, title
     end
@@ -383,15 +405,22 @@ function P.succeed(m, claimId)
     changed(m)
 end
 
--- 快取過期（或重送已不可能）：抓 authorized projection，有送出時不認得的我的安全屋＝成功；否則維持待定
+-- 快取過期（或重送已不可能）：抓 authorized projection，恰好多一間送出時不認得的我的安全屋＝成功；否則維持待定
+-- （多出兩間以上分不出哪間是這次的，例：等待期間管理員轉給我另一間）。
+-- 重新框選（含升級）另外要舊的那間已經不在清單、新那間的等級是這次要的（重新框選沿用、升級是新地契的）
 function P.resolve(m)
     m.resolving, m.notice = true, nil
     MSH.Client.refreshList(function(res)
         m.resolving = false
         if m.phase ~= P.PENDING then return end
         if res.ok and m.knownValid then
+            local fresh, n, oldGone = nil, 0, true
             for _, row in ipairs(MSH.Client.claims.mine) do
-                if not m.known[row.claimId] then return P.succeed(m, row.claimId) end
+                if not m.known[row.claimId] then fresh, n = row, n + 1 end
+                if m.mode == "redraw" and row.claimId == m.claimId then oldGone = false end
+            end
+            if n == 1 and (m.mode ~= "redraw" or (oldGone and fresh.deedTier == m.tier)) then
+                return P.succeed(m, fresh.claimId)
             end
         end
         m.notice = "UNCONFIRMED"
@@ -545,11 +574,23 @@ local function row(v, list, y)
     return y + h + GAP
 end
 
+-- 有幾格在外框裡卻沒圈到（空心或凹口）：那些格子不受保護，玩家常以為整個外框都算
+local function uncoveredLine(v, n, y)
+    if n <= 0 then return y end
+    return para(v, getText("IGUI_MSH_Select_Uncovered", n), "text", nil, y)
+end
+
 -- 預檢之後的範圍行：外框、面積、塊數與左上角
 local function areaLine(v, y)
     local rects = v.m.rects
-    local b = MSH.Rect.bounds(rects)
-    return para(v, getText("IGUI_MSH_Create_Area", b.w, b.h, MSH.Rect.listArea(rects), #rects, b.x, b.y), "text", nil, y)
+    local b, area = MSH.Rect.bounds(rects), MSH.Rect.listArea(rects)
+    y = para(v, getText("IGUI_MSH_Create_Area", b.w, b.h, area, #rects, b.x, b.y), "text", nil, y)
+    return uncoveredLine(v, b.w * b.h - area, y)
+end
+
+local function confirmKey(m)
+    if m.upgradeFrom ~= nil then return "IGUI_MSH_Create_ConfirmUpgrade" end
+    return m.mode == "redraw" and "IGUI_MSH_Create_ConfirmRedraw" or "IGUI_MSH_Create_Confirm"
 end
 
 function P.defaultTool()
@@ -559,7 +600,12 @@ end
 
 local function layoutIdle(v, y, list)
     local m, b = v.m, v.btn
-    if m.mode == "redraw" then
+    if m.upgradeFrom ~= nil then
+        if m.tier ~= nil then
+            y = para(v, getText("IGUI_MSH_Create_UpgradeTier", tostring(m.upgradeFrom), tostring(m.tier)), "text", nil, y)
+        end
+        y = para(v, getText("IGUI_MSH_Create_UpgradeHint"), "textMuted", nil, y)
+    elseif m.mode == "redraw" then
         if m.tier ~= nil then y = para(v, getText("IGUI_MSH_Create_Tier", tostring(m.tier)), "text", nil, y) end
         y = para(v, getText("IGUI_MSH_Create_RedrawHint"), "textMuted", nil, y)
     elseif m.source == SRC.FREE then
@@ -572,13 +618,13 @@ local function layoutIdle(v, y, list)
             MSH.Client.areaSquare(v.maxArea)), "textMuted", nil, y)
     end
     local t = P.tierSlots(m)
-    if m.mode == "create" and t ~= nil then
+    if newTier(m) and t ~= nil then
         y = para(v, getText("IGUI_MSH_Create_QuotaTier", tostring(m.tier), tostring(t.owned or 0), tostring(t.max or 0)),
             "textMuted", nil, y)
         local parts = MSH.SlotsWindow and MSH.SlotsWindow.parts(t) or ""
         if parts ~= "" then y = para(v, parts, "textMuted", nil, y) end
     end
-    if m.source == SRC.DEED and m.mode == "create" and #m.held > 1 then
+    if m.source == SRC.DEED and newTier(m) and #m.held > 1 then
         y = para(v, getText("IGUI_MSH_Create_ChooseDeed"), "text", nil, y)
         local chips = {}
         for i, n in ipairs(m.held) do
@@ -621,7 +667,9 @@ local function layoutSelecting(v, y, list)
     local hint = "IGUI_MSH_Select_DragHint"
     if s.tool == Sel.WALK then hint = "IGUI_MSH_Select_WalkHint" elseif joy then hint = "IGUI_MSH_Select_DragHintJoypad" end
     y = para(v, getText(hint), "textMuted", nil, y)
-    if m.mode == "redraw" then y = para(v, getText("IGUI_MSH_Create_RedrawHint"), "textMuted", nil, y) end
+    if m.mode == "redraw" then
+        y = para(v, getText(m.upgradeFrom and "IGUI_MSH_Create_UpgradeHint" or "IGUI_MSH_Create_RedrawHint"), "textMuted", nil, y)
+    end
     local res = Sel.result(s)
     local bad = res.err ~= nil and res.err ~= "EMPTY"
     v.over = res.err ~= "EMPTY" and v.maxSide ~= nil
@@ -630,6 +678,7 @@ local function layoutSelecting(v, y, list)
         local text = res.rects ~= nil and getText("IGUI_MSH_Select_Shape", res.w, res.h, res.area, #res.rects)
             or getText("IGUI_MSH_Select_ShapeRaw", res.w, res.h, res.area)
         y = para(v, text, (bad or v.over) and "errorText" or "text", nil, y)
+        if res.err == nil then y = uncoveredLine(v, res.w * res.h - res.area, y) end
     end
     local max = s.shape.max
     if v.maxSide ~= nil then
@@ -644,7 +693,7 @@ local function layoutSelecting(v, y, list)
     local edge = MSH.Settings.loadSide(cfg.roadMargin)
     if res.err == nil and not v.over and (res.w > edge or res.h > edge) and cfg.avoidRoads then
         y = para(v, getText("IGUI_MSH_Select_BigWarn", tostring(edge), getText("IGUI_MSH_Select_Done"),
-            getText(m.mode == "redraw" and "IGUI_MSH_Create_ConfirmRedraw" or "IGUI_MSH_Create_Confirm")), "warning", "warning", y)
+            getText(confirmKey(m))), "warning", "warning", y)
     end
     v.sizeY, v.sizeW, v.sizeH, v.sizeText = y, nil, nil, nil
     y = y + v.lineH + 4
@@ -719,7 +768,10 @@ end
 local function layoutConfirm(v, y, list, busy)
     local m, b = v.m, v.btn
     y = areaLine(v, y)
-    if m.mode == "redraw" then
+    if m.upgradeFrom ~= nil then
+        y = para(v, getText("IGUI_MSH_Create_UpgradeSource", tostring(m.tier), tostring(m.upgradeFrom)), "text", nil, y)
+        y = para(v, getText("IGUI_MSH_Create_UpgradeFrees", tostring(m.upgradeFrom)), "textMuted", nil, y)
+    elseif m.mode == "redraw" then
         y = para(v, getText("IGUI_MSH_Create_RedrawSource"), "text", nil, y)
         y = para(v, getText("IGUI_MSH_Create_RedrawHint"), "textMuted", nil, y)
     elseif m.source == SRC.FREE then
@@ -934,15 +986,16 @@ local function buildButtons(v, m, UI, theme)
         undo = button("IGUI_MSH_Select_Undo", function() P.undo(m) end),
         clear = button("IGUI_MSH_Select_Clear", function() P.clear(m) end),
         cancel = button("UI_Cancel", function() P.back(m) end),
-        -- 重新框選的預檢頁不是「建立安全屋」（2026-10-12 實機截圖）；確認頁另有〔改用新範圍〕
-        create = button(m.mode == "redraw" and "IGUI_MSH_Create_RedrawBtn" or "IGUI_MSH_Create_CreateBtn",
+        -- 重新框選的預檢頁不是「建立安全屋」（2026-10-12 實機截圖）；確認頁另有〔改用新範圍〕；升級的就寫〔升級〕
+        create = button(m.upgradeFrom and "IGUI_MSH_Create_ConfirmUpgrade"
+            or m.mode == "redraw" and "IGUI_MSH_Create_RedrawBtn" or "IGUI_MSH_Create_CreateBtn",
             function() P.toConfirm(m) end, "primary"),
         recheck = button("IGUI_MSH_Create_Recheck", function() P.recheck(m, now()) end),
         pay = button("IGUI_MSH_Create_Pay", function()
             local ok, err = pcall(MSH.SlotsWindow.open, { tier = m.tier })
             if not ok then MSH.log("SlotsWindow.open failed: " .. tostring(err)) end
         end),
-        confirm = button(m.mode == "redraw" and "IGUI_MSH_Create_ConfirmRedraw" or "IGUI_MSH_Create_Confirm", function()
+        confirm = button(confirmKey(m), function()
             P.submit(m, v.field:getText())
         end, "primary"),
         query = button("IGUI_MSH_Create_Query", function() P.queryResult(m) end, "primary"),
@@ -984,7 +1037,8 @@ function V.build(m, UI)
     end
     local win = UI.Window.new(MSH.Client.windowOpts(UI, { x = x, y = y, width = w, height = 200,
         icon = "house", theme = theme,
-        title = getText(m.mode == "redraw" and "IGUI_MSH_Create_RedrawTitle" or "IGUI_MSH_Create_Title") }))
+        title = getText(m.upgradeFrom and "IGUI_MSH_Create_UpgradeTitle"
+            or m.mode == "redraw" and "IGUI_MSH_Create_RedrawTitle" or "IGUI_MSH_Create_Title") }))
     v.win, v.top = win, win:contentTop()
     local body = bodyClass():new(0, v.top, w, 100)
     body.background = false

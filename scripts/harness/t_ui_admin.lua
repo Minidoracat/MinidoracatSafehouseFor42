@@ -360,6 +360,10 @@ return function(T)
     check(rules["f:StorageReach"].enabled ~= false, "點〔可以遠距拿〕：範圍欄馬上可以改")
     fw.click(rules["f:StorageMode:2"])
     check(rules["f:StorageReach"].enabled == false, "改回〔只指引〕：範圍欄又反灰")
+    -- 安全屋範圍內不生成殭屍（2026-11-22，預設關）：副作用（管理員與其他 MOD 生成的也會刪）寫在欄位底下
+    check(rules["f:NoZombieSpawn"] ~= nil and not rules["f:NoZombieSpawn"]:getChecked()
+        and rules["zombiesHelp#1"] ~= nil and rules["zombiesHelp#1"].text == "Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip",
+        "規則頁有「範圍內不生成殭屍」：預設不勾，底下寫選項說明")
     local tiers = P.pages.deeds.fields.TiersEnabled
     fw.click(deeds.tierAdd)
     check(tiers.value == 4 and shown("f:Tier4Side") and shown("f:Tier4Craft"), "〔新增第 4 級〕：多出第 4 級那一列")

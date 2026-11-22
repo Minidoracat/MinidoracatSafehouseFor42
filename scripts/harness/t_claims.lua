@@ -640,6 +640,125 @@ return function(T)
     check(res.code == "SERVER_FULL" and cur.lifecycle == "active" and R.md.nextClaimId == nextR,
         "tombstone 到軟上限：重畫也回 SERVER_FULL")
 
+    T.section("用地契升級（重新框選帶 deedType）：只能換更高級、扣新地契、沿用名單標題與建立時間")
+    do
+        boot({ sandbox = many({ Tier3FreeSlots = 5 }) })
+        local ug = T.player({ name = "ug", x = 6505, y = 6505, items = { D1, D2, D2, D3 } })
+        local uf = T.player({ name = "uf", x = 0, y = 0, items = { D3 } })
+        res = T.cmd(ug, "create", { rects = { rect(6500, 6500, 10, 10) }, deedType = D2, title = "升級屋" })
+        local up = R.get(res.claimId)
+        up.grants = { { user = "uf", bits = 3 } }
+        R.touch(up)
+        local upAt = up.createdAt
+        local same = rect(6500, 6500, 10, 10)
+        local function counts(p) return deeds(p, D1) .. "," .. deeds(p, D2) .. "," .. deeds(p, D3) .. "," .. deeds(p, D4) end
+        -- 被拒的升級：結果碼相符，舊屋原樣（同一筆、active、原生在）、地契與物品同步、nextClaimId 都沒變
+        local function upRejects(p, rec, deedType, code, label, rects)
+            local houses, recs, syncs, nextId, inv = #T.houses, recCount(), #T.itemSyncs, R.md.nextClaimId, counts(p)
+            local lc = rec.lifecycle
+            local r = T.cmd(p, "redraw", { claimId = rec.claimId, rects = { rects or same }, expectedRevision = rec.revision,
+                deedType = deedType })
+            local ok = #T.houses == houses and recCount() == recs and #T.itemSyncs == syncs and R.md.nextClaimId == nextId
+                and counts(p) == inv and R.get(rec.claimId) == rec and rec.lifecycle == lc
+            check(r ~= nil and r.code == code and ok, label .. "（實際 " .. tostring(r and r.code) .. "）")
+            return r
+        end
+        local r = upRejects(ug, up, D2, "TIER_NOT_HIGHER", "同級地契：TIER_NOT_HIGHER")
+        check(r.tier == 2, "TIER_NOT_HIGHER 帶這間目前的等級")
+        upRejects(ug, up, D1, "TIER_NOT_HIGHER", "降級：TIER_NOT_HIGHER")
+        local d3 = ug.inv:getFirstTypeRecurse(D3)
+        ug.inv:Remove(d3)
+        upRejects(ug, up, D3, "NO_DEED", "地契不在背包：NO_DEED")
+        ug.inv:AddItem(d3)
+        ug.inv:AddItem(D4)
+        upRejects(ug, up, D4, "TIER_DISABLED", "等級未啟用（預設前 3 級）：TIER_DISABLED")
+        upRejects(uf, up, D3, "NOT_OWNER", "不是屋主（成員也一樣）：NOT_OWNER")
+        T.sandbox("Tier3FreeSlots", 0)
+        r = upRejects(ug, up, D3, "QUOTA_FULL", "新等級沒有名額：QUOTA_FULL")
+        check(r.tier == 3, "QUOTA_FULL 帶新等級")
+        T.sandbox("Tier3FreeSlots", 5)
+        T.sandbox("CreateMode", MSH.Settings.CREATE.FREE)
+        upRejects(ug, up, D3, "BAD_DEED", "免費模式帶地契：BAD_DEED")
+        T.sandbox("CreateMode", MSH.Settings.CREATE.DEED)
+        local pv = T.cmd(ug, "preview", { rects = { same }, claimId = up.claimId, deedType = D2 })
+        local row
+        for _, c in ipairs(pv.checks or {}) do if c.name == "deed" then row = c end end
+        check(pv.ok and not pv.pass and row and row.code == "TIER_NOT_HIGHER", "升級預檢：同級在地契項目回 TIER_NOT_HIGHER")
+        T.advance(1000)   -- 預檢每人 500 ms 一次
+        pv = T.cmd(ug, "preview", { rects = { same }, claimId = up.claimId, deedType = D3 })
+        check(pv.ok and pv.pass and counts(ug) == "1,1,1,1", "升級預檢通過、不扣地契")
+
+        -- 超過 RedrawMinutes：一般重新框選關了（回歸），升級照樣可以
+        T.advance(31 * 60000)
+        upRejects(ug, up, nil, "REDRAW_CLOSED", "（回歸）沒帶地契的重新框選照舊受 RedrawMinutes 限制")
+        -- 全服間數上限：升級不多一間，不擋
+        local maxClaims = MSH.LIMIT.MAX_CLAIMS
+        MSH.LIMIT.MAX_CLAIMS = R.liveCount()
+        local syncs0 = #T.itemSyncs
+        res = T.cmd(ug, "redraw", { claimId = up.claimId, rects = { rect(6500, 6500, 12, 12) },
+            expectedRevision = up.revision, deedType = D3 })
+        MSH.LIMIT.MAX_CLAIMS = maxClaims
+        local nu = res.ok and R.get(res.claimId)
+        check(res.ok and res.replaced == up.claimId and res.deedTier == 3 and nu,
+            "升級成功（過了重新框選時限、全服間數已滿也可以；實際 " .. tostring(res.code) .. "）")
+        nu = nu or up
+        check(nu.deedTier == 3 and nu.source == "deed" and nu.title == "升級屋" and nu.createdAt == upAt
+            and #nu.grants == 1 and nu.grants[1].user == "uf" and nu.redraws == 0, "新屋 3 級、沿用標題、建立時間、分享；不算一次重畫")
+        check(counts(ug) == "1,1,0,1" and #T.itemSyncs == syncs0 + 1 and T.itemSyncs[#T.itemSyncs].op == "remove",
+            "扣掉一張 3 級地契並同步；舊的 2 級地契不退")
+        check(up.lifecycle == "released" and up.releaseReason == "REDRAWN" and T.houseOf("@MSH:" .. up.claimId) == nil
+            and T.houseOf("@MSH:" .. nu.claimId).players:contains("uf"), "舊屋 tombstone、新原生帶成員")
+        check(T.logged("UPGRADE"), "audit 記 UPGRADE")
+        local s = MSH.Claims.slots("ug", MSH.Settings.get())
+        check(s.tiers[2].used == 0 and s.tiers[3].used == 1, "名額：2 級空出、3 級佔一間")
+        ug.inv:AddItem(D3)
+        upRejects(ug, nu, D3, "TIER_NOT_HIGHER", "升級後再用同級（背包有 3 級地契）：TIER_NOT_HIGHER")
+
+        -- legacy 可以升級，升級後成為地契屋
+        ug.x, ug.y = 6605, 6605
+        local leg = seed("ug", rect(6600, 6600, 10, 10), { source = MSH.SOURCE.LEGACY })
+        ug.inv:AddItem(D2)
+        res = T.cmd(ug, "redraw", { claimId = leg.claimId, rects = { rect(6600, 6600, 10, 10) },
+            expectedRevision = leg.revision, deedType = D2 })
+        check(res.ok and R.get(res.claimId).source == "deed" and R.get(res.claimId).deedTier == 2, "legacy 升級：變成 2 級地契屋")
+        local lap = seed("ug", rect(6700, 6700, 10, 10), { lifecycle = "lapsed", noNative = true })
+        upRejects(ug, lap, D3, "WRONG_LIFECYCLE", "停用中（lapsed）不能升級：WRONG_LIFECYCLE", rect(6700, 6700, 10, 10))
+
+        -- 交易失敗：地契放回、舊屋原樣
+        ug.x, ug.y = 6805, 6805
+        res = T.cmd(ug, "create", { rects = { rect(6800, 6800, 10, 10) }, deedType = D1 })
+        local tx = R.get(res.claimId)
+        local function failed(code, label)
+            local inv, nextId, houses = counts(ug), R.md.nextClaimId, #T.houses
+            local rr = T.cmd(ug, "redraw", { claimId = tx.claimId, rects = { rect(6801, 6800, 10, 10) },
+                expectedRevision = tx.revision, deedType = D3 })
+            local back = T.houseOf("@MSH:" .. tx.claimId)
+            check(rr.code == code and counts(ug) == inv and ug.inv:getFirstTypeRecurse(D3):getContainer() == ug.inv
+                and R.get(tx.claimId) == tx and tx.lifecycle == "active" and tx.deedTier == 1 and back ~= nil and back.x == 6800
+                and #T.houses == houses and R.md.nextClaimId == nextId + 1 and MSH.Srv.locked == false,
+                label .. "（實際 " .. tostring(rr.code) .. "）")
+        end
+        T.noLocation = true
+        failed("NATIVE_FAILED", "新原生建不起來：NATIVE_FAILED、地契保留、舊屋原樣")
+        T.noLocation = false
+        T.failRemove = true
+        local itemSyncs = #T.itemSyncs
+        failed("DEED_REMOVE_FAILED", "扣地契失手：DEED_REMOVE_FAILED、新原生移除、舊屋原樣")
+        check(#T.itemSyncs == itemSyncs and T.logged("DEED_REMOVE_FAILED"), "扣地契失手：不送物品同步、寫 audit")
+        T.failRemove = false
+        local origPut = R.put
+        R.put = function() error("put boom") end
+        failed("INTERNAL_ERROR", "放棄舊屋之後丟錯：地契放回、舊屋寫回 active、原生重建")
+        R.put = origPut
+        SafeHouse.addSafeHouse(6900, 6900, 3, 3, MSH.marker(tx.claimId))   -- 同標記、對不上任何一塊 → 放棄時 MISMATCH
+        local inv0 = counts(ug)
+        res = T.cmd(ug, "redraw", { claimId = tx.claimId, rects = { rect(6801, 6800, 10, 10) },
+            expectedRevision = tx.revision, deedType = D3 })
+        check(res.code == "RELEASE_FAILED" and counts(ug) == inv0 and T.houseOf("@MSH:" .. (R.md.nextClaimId - 1)) == nil,
+            "舊屋放棄失敗：RELEASE_FAILED、地契放回、新原生移除")
+        T.houses[#T.houses] = nil
+    end
+
     T.section("改名")
     boot()
     local pam = T.player({ name = "pam", x = 7005, y = 7005, items = { D1 } })

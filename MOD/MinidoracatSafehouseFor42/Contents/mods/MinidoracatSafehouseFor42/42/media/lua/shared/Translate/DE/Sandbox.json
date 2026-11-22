@@ -41,6 +41,8 @@
     "Sandbox_MinidoracatSafehouse_StorageMode_option3": "Fernentnahme",
     "Sandbox_MinidoracatSafehouse_StorageReach": "Fernentnahme: Reichweite außerhalb des Safehouses (Kacheln)",
     "Sandbox_MinidoracatSafehouse_StorageReach_tooltip": "Bei „Fernentnahme“ können Mitglieder auch Gegenstände nehmen, wenn sie bis zu so vielen Kacheln außerhalb des Safehouses stehen; 0 bedeutet, sie müssen im Safehouse stehen. Das erweitert nur den Standort: Die Gegenstände müssen weiterhin in den Behältern dieses Safehouses liegen, und der Server muss die Gegend geladen haben.",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn": "Kein Zombie-Spawn in Safehouses",
+    "Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip": "Wenn aktiviert, werden Zombies, die in einem Safehouse erscheinen (auch in Vanilla-Safehouses), sofort entfernt: Respawns, Zombies, die erscheinen, wenn Spieler näher kommen, Zombies in Innenräumen, wenn ein unerkundetes Gebäude zum ersten Mal geladen wird, Zombies aus Zufallsereignissen sowie Zombies, die dort per Admin-Befehl, Debug-Werkzeug oder von anderen Mods gespawnt werden.\nZombies, die von außen hereinlaufen, und Leichen, die aufstehen, werden nicht sofort entfernt; sie werden entfernt, sobald keine Spieler mehr in der Nähe sind und die Gegend entladen und später wieder geladen wird. Spieler, die sich nach dem Tod verwandeln, werden nie entfernt.\nNur auf dedizierten Servern.",
     "Sandbox_MinidoracatSafehouse_AvoidRoads": "Straßen meiden",
     "Sandbox_MinidoracatSafehouse_AvoidRoads_tooltip": "Der Bereich eines Safehouses darf keine Straßen enthalten.",
     "Sandbox_MinidoracatSafehouse_RoadMargin": "Abstand zu Straßen (Kacheln)",

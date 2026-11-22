@@ -40,10 +40,12 @@ function C.newCheck(ctx, cfg, rects, deedType, title)
         title = title, idx = N.index(), roster = { [ctx.who] = true } }
 end
 
--- 重新框選：等級、來源、標題沿用舊紀錄；舊屋的名單可以站在新範圍內；重疊與撞號略過舊屋自己
+-- 重新框選：等級、來源、標題沿用舊紀錄；舊屋的名單可以站在新範圍內；重疊與撞號略過舊屋自己。
+-- 帶 deedType＝用地契升級：等級與來源由 checkDeed 照新地契填
 function C.useOld(v, old)
     v.old, v.skipId = old, old.claimId
-    v.source, v.tier, v.cleanTitle = old.source, old.deedTier, old.title
+    v.cleanTitle = old.title
+    if v.deedType == nil then v.source, v.tier = old.source, old.deedTier end
     for _, u in ipairs(N.desiredPlayers(old)) do v.roster[u] = true end
 end
 
@@ -62,7 +64,7 @@ end
 
 -- 地契：等級只由 full type 決定；背包含巢狀容器都找（ItemContainer.java:1599，compareType 帶點號時比 full type :1245-1249）
 function C.checkDeed(v)
-    if v.old then return nil end
+    if v.old and v.deedType == nil then return nil end
     local cfg = v.cfg
     if cfg.createMode == MSH.Settings.CREATE.FREE then
         v.source, v.tier = SRC.FREE, 1      -- 免費模式以 tier1 計名額（§1.3）
@@ -73,9 +75,11 @@ function C.checkDeed(v)
     v.source, v.tier = SRC.DEED, MSH.tierOfDeed(v.deedType)
     v.item = v.player:getInventory():getFirstTypeRecurse(v.deedType)   -- IsoGameCharacter.java:3355
     -- 沒有這張地契或這一級停用時記 v.badDeed：預檢照樣報大小與名額，但不照這一級的上限掃地圖（客戶端能指定任何等級）
-    v.badDeed = v.item == nil or v.tier > cfg.tiersEnabled
+    local low = v.old ~= nil and v.tier <= v.old.deedTier
+    v.badDeed = v.item == nil or v.tier > cfg.tiersEnabled or low
     if v.item == nil then return CODE.NO_DEED end
     if v.tier > cfg.tiersEnabled then return CODE.TIER_DISABLED, { tier = v.tier } end
+    if low then return CODE.TIER_NOT_HIGHER, { tier = v.old.deedTier } end
     return nil
 end
 
@@ -154,8 +158,9 @@ end
 -- 調低前已經買或租的名額照常可用。tombstone 軟上限重畫也要看：每次重畫都多一筆 tombstone（審查 HIGH：重畫洗滿 registry）
 function C.checkQuota(v)
     if R.tombstoneCount() >= LIMIT.TOMBSTONE_SOFT then return CODE.SERVER_FULL end
-    if v.old then return nil end
-    if R.liveCount() >= LIMIT.MAX_CLAIMS then return CODE.SERVER_FULL end
+    if v.old and v.deedType == nil then return nil end
+    -- 升級不多一間（舊屋同一筆交易放棄）：全服上限不看；名額照新等級算，舊屋在舊等級、不佔新等級的位
+    if v.old == nil and R.liveCount() >= LIMIT.MAX_CLAIMS then return CODE.SERVER_FULL end
     local by, s = C.paidClaims(v.who, v.cfg)
     local f = s.tiers[v.tier]
     if f ~= nil and f.used < f.n then return nil end
@@ -282,7 +287,7 @@ function C.redraws(rec)
     return MSH.isInt(rec.redraws) and rec.redraws or 0
 end
 
--- 新紀錄（交易與容量估算共用）；重畫的新紀錄帶 redraws＝舊的＋1（每間上限沙盒 RedrawLimit）
+-- 新紀錄（交易與容量估算共用）；重畫的新紀錄帶 redraws＝舊的＋1（每間上限沙盒 RedrawLimit），升級不算一次重畫
 function C.draft(v, claimId)
     local old = v.old
     local f = { claimId = claimId, rects = v.rects, title = v.cleanTitle, deedTier = v.tier, owner = v.who,
@@ -297,7 +302,7 @@ function C.draft(v, claimId)
         end
     end
     local rec = R.newRecord(f)
-    if old then rec.redraws = C.redraws(old) + 1 end
+    if old then rec.redraws = C.redraws(old) + (v.deedType == nil and 1 or 0) end
     return rec
 end
 
@@ -364,36 +369,45 @@ end
 
 -- ===== 交易（§7.4）=====
 
+-- 扣地契：Remove 會清掉 item.container，所以先記容器（ItemContainer.java:2084-2116；void、miss 靜默）
+local function takeDeed(item, st)
+    if item == nil then return nil end
+    local c = item:getContainer()                                         -- InventoryItem.java:3872
+    st.container = c
+    st.removed = true
+    c:Remove(item)
+    if c:contains(item) or item:getContainer() ~= nil then return CODE.DEED_REMOVE_FAILED end   -- :693
+    return nil
+end
+
+-- 地契放回原容器（客戶端沒看過移除，不送網路）
+local function putBackDeed(st, item, actor, claimId)
+    local c = st.container
+    if st.removed and not c:contains(item) then
+        c:AddItem(item)                                                   -- ItemContainer.java:515
+        if not c:contains(item) or item:getContainer() ~= c then
+            MSH.Audit.write("ROLLBACK_ITEM_FAILED", { actor = actor, claimId = claimId })
+        end
+    end
+end
+
 -- 原生（每塊一個）→ 地契 → 紀錄；st 記錄做到哪一步，給反序回滾用
 local function createBody(v, rec, st)
     st.houses = {}
     local houses, code = N.build(rec, st.houses)
     if houses == nil then return code end
-    local item = v.item
-    if item ~= nil then
-        -- Remove 會清掉 item.container，所以先記容器（ItemContainer.java:2084-2116；void、miss 靜默）
-        local c = item:getContainer()                                     -- InventoryItem.java:3872
-        st.container = c
-        st.removed = true
-        c:Remove(item)
-        if c:contains(item) or item:getContainer() ~= nil then return CODE.DEED_REMOVE_FAILED end   -- :693
-    end
+    code = takeDeed(v.item, st)
+    if code then return code end
     for i, h in ipairs(houses) do rec.rects[i].created = h:getDatetimeCreated() end
     R.put(rec)
     st.put = true
     return nil
 end
 
--- 反序回滾：紀錄 → 地契（放回原容器；客戶端沒看過移除，不送網路）→ 原生
+-- 反序回滾：紀錄 → 地契 → 原生
 function C.rollback(rec, st, item)
     if st.put then R.unput(rec.claimId) end
-    local c = st.container
-    if st.removed and not c:contains(item) then
-        c:AddItem(item)                                                   -- ItemContainer.java:515
-        if not c:contains(item) or item:getContainer() ~= c then
-            MSH.Audit.write("ROLLBACK_ITEM_FAILED", { actor = rec.owner, claimId = rec.claimId })
-        end
-    end
+    putBackDeed(st, item, rec.owner, rec.claimId)
     for _, h in ipairs(st.houses or {}) do
         if not N.remove(h) then
             -- 留下沒有紀錄的標記原生：sweep 不會收它，要等下次開服 Reconcile startup 才轉 quarantined(recovered)（§6.2），
@@ -500,19 +514,23 @@ function C.redrawRemainingMs(rec, cfg, now)
     return math.max(0, rec.createdAt + cfg.redrawMinutes * 60000 - now)
 end
 
--- 重新框選的對象：自己的、active、不是 legacy、還在 RedrawMinutes 內、重畫次數未滿（§7.6）
+-- 重新框選的對象：自己的、active、不是 legacy、還在 RedrawMinutes 內、重畫次數未滿（§7.6）。
+-- 帶 deedType＝用地契升級：只要自己的、active；不看時限與次數（每次都扣一張更高級的地契，次數有上限）
 function C.redrawTarget(ctx, cfg)
+    if ctx.args.deedType ~= nil then return C.owned(ctx, ACTIVE) end
     local rec, code = C.owned(ctx, nil)
     if rec == nil then return nil, code end
     if C.redrawRemainingMs(rec, cfg, ctx.now) <= 0 then return nil, CODE.REDRAW_CLOSED end
     return rec
 end
 
--- 新原生（每塊一個）→ 放棄舊屋（送出先收在 sends）→ 新紀錄
-local function redrawBody(ctx, old, rec, st)
+-- 新原生（每塊一個）→ 升級的地契 → 放棄舊屋（送出先收在 sends）→ 新紀錄
+local function redrawBody(ctx, v, old, rec, st)
     st.houses = {}
     local houses, code = N.build(rec, st.houses)
     if houses == nil then return code end
+    code = takeDeed(v.item, st)
+    if code then return code end
     st.releasing = true
     local ok, why = MSH.Lifecycle.release(old, "REDRAWN", ctx.args.requestId, ctx.now,
         function(fn) st.sends[#st.sends + 1] = fn end)
@@ -552,10 +570,11 @@ end
 function C.commitRedraw(ctx, v, old)
     local id = R.allocId()
     local rec = C.draft(v, id)
-    local st = { sends = {} }
-    local ok, code = pcall(redrawBody, ctx, old, rec, st)
+    local item, st = v.item, { sends = {} }
+    local ok, code = pcall(redrawBody, ctx, v, old, rec, st)
     if not ok or code ~= nil then
         if st.put then R.unput(id) end
+        putBackDeed(st, item, ctx.who, id)
         for _, h in ipairs(st.houses or {}) do
             if not N.remove(h) then MSH.Audit.write("ROLLBACK_NATIVE_FAILED", { actor = ctx.who, claimId = id }) end
         end
@@ -565,16 +584,27 @@ function C.commitRedraw(ctx, v, old)
             MSH.Audit.write("REDRAW_ROLLBACK", { actor = ctx.who, claimId = old.claimId, detail = tostring(code) })
             return S.fail(CODE.INTERNAL_ERROR)
         end
+        if code == CODE.DEED_REMOVE_FAILED then
+            MSH.Audit.write("DEED_REMOVE_FAILED", { actor = ctx.who, claimId = id })
+        end
         return S.fail(code)
     end
     for _, fn in ipairs(st.sends) do ctx.defer(fn) end
+    if item ~= nil then
+        local c = st.container
+        ctx.defer(function() sendRemoveItemFromContainer(c, item) end)
+    end
     local houses = st.houses
     ctx.defer(function()
         for _, h in ipairs(houses) do N.broadcast(h) end
     end)
-    MSH.Audit.write("REDRAW", { actor = ctx.who, claimId = id,
-        detail = "from " .. tostring(old.claimId) .. " " .. Rect.listKey(rec.rects) })
-    MSH.Journal.redrawn(old, rec)
+    local detail = "from " .. tostring(old.claimId) .. " " .. Rect.listKey(rec.rects)
+    if item ~= nil then
+        MSH.Audit.write("UPGRADE", { actor = ctx.who, claimId = id, code = old.deedTier .. ">" .. rec.deedTier, detail = detail })
+    else
+        MSH.Audit.write("REDRAW", { actor = ctx.who, claimId = id, detail = detail })
+    end
+    MSH.Journal.redrawn(old, rec, ctx.now)
     return S.ok({ claimId = id, revision = rec.revision, rects = Rect.copyList(rec.rects), title = rec.title,
         deedTier = rec.deedTier, replaced = old.claimId })
 end
@@ -583,7 +613,7 @@ function C.redraw(ctx)
     local cfg = MSH.Settings.get()
     local old, code = C.redrawTarget(ctx, cfg)
     if old == nil then return S.fail(code) end
-    local v = C.newCheck(ctx, cfg, ctx.args.rects)
+    local v = C.newCheck(ctx, cfg, ctx.args.rects, ctx.args.deedType)
     C.useOld(v, old)
     local detail
     code, detail = C.validate(v)
@@ -764,7 +794,8 @@ S.define("preview", { kind = "query", cooldownMs = 500,
     run = function(ctx) return MSH.Claims.preview(ctx) end })
 S.define("release", { kind = "mutation", whenBlocked = true, fields = { claimId = "claimId", expectedRevision = "revision" },
     run = function(ctx) return MSH.Claims.release(ctx) end })
-S.define("redraw", { kind = "mutation", fields = { claimId = "claimId", rects = "rects", expectedRevision = "revision" },
+S.define("redraw", { kind = "mutation",
+    fields = { claimId = "claimId", rects = "rects", expectedRevision = "revision", deedType = "deedType?" },
     run = function(ctx) return MSH.Claims.redraw(ctx) end })
 S.define("rename", { kind = "mutation", fields = { claimId = "claimId", title = "title", expectedRevision = "revision" },
     run = function(ctx) return MSH.Claims.rename(ctx) end })
