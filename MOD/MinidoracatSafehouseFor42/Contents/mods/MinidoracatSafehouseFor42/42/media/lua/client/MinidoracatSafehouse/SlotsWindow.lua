@@ -378,7 +378,7 @@ function SW.leaseNotice(env)
         local left = (E and type(untilMs) == "number") and E.remainingText(math.max(0, untilMs - now)) or "-"
         text = getText("IGUI_MSH_Lease_" .. n.code, tier, left)
     end
-    MSH.Client.toast(text, nil, getText("IGUI_MSH_Lease_Title"))
+    MSH.Client.toast(text, nil, getText("IGUI_MSH_Lease_Title"), 5)
 end
 
 -- 登入摘要（每次進遊戲一次，不存檔）：安全屋第一份清單成功（login(true)）後讀這個登入的全部產品，合成一則數字：

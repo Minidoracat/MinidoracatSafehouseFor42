@@ -278,7 +278,7 @@
     "IGUI_MSH_Slots_Later": "나중에",
     "IGUI_MSH_Lease_Title": "은신처 임대",
     "IGUI_MSH_Lease_renewal_due": "%1등급 슬롯 임대가 %2 후 끝나며, 자동 갱신이 꺼져 있습니다.",
-    "IGUI_MSH_Lease_grace": "%1등급 슬롯 임대가 끝났습니다. 유예 기간이 %2 남았으며, 그 전에 갱신하면 은신처가 중지되지 않습니다.",
+    "IGUI_MSH_Lease_grace": "%1등급 슬롯 임대가 끝났습니다. 유예 기간이 %2 남았으며, 그 전에 갱신하면 은신처가 보존 기간에 들어가지 않습니다.",
     "IGUI_MSH_Lease_expired": "%1등급 슬롯 임대가 종료되었습니다.",
     "IGUI_MSH_Lease_renewal_failed": "%1등급 슬롯 자동 갱신 실패: %2",
     "IGUI_MSH_Lease_Lapsed": "은신처 \"%1\": 임대가 만료되어 보존 기간에 들어갔습니다. 보호는 유지되며, 보존 기간이 끝나기 전에 이 등급의 슬롯을 갱신하면 복구됩니다.",

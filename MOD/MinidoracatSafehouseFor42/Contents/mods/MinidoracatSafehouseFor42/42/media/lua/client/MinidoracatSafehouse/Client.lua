@@ -264,7 +264,8 @@ function C.lifecycleToast(before, row)
     local L = MSH.LIFECYCLE
     local key = (before == L.ACTIVE and row.lifecycle == L.LAPSED and "IGUI_MSH_Lease_Lapsed")
         or (before == L.LAPSED and row.lifecycle == L.ACTIVE and "IGUI_MSH_Lease_Restored") or nil
-    if key then C.toast(getText(key, row.title or ("#" .. tostring(row.claimId))), nil, getText("IGUI_MSH_Lease_Title")) end
+    -- 5 行：德文的保留期提示 3 行放不完（2026-11-22 實機被截）
+    if key then C.toast(getText(key, row.title or ("#" .. tostring(row.claimId))), nil, getText("IGUI_MSH_Lease_Title"), 5) end
 end
 
 -- ===== 名額摘要（slots）=====
