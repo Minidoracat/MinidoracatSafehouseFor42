@@ -12,6 +12,9 @@
 [list]
 [*] [b]租約到期的安全屋在保留期內照樣受保護[/b]：付費名額的租約到期、寬限也結束後，那一級最新建的安全屋會進入保留期（預設 7 天）。以前保留期一開始保護就暫停，別人可以走進去、開走裡面的車；現在保留期內照樣受保護，名單上的人照常進出，別人進不去。續租或補回名額就恢復，保留期滿才解除保護並釋出。保留期內要先續租，才能改分享、設重生點、搜尋物品（含遠距拿取）、改名或重新框選。
 [*] [b]付費名額的預設寬限從 24 小時改成 3 天（72 小時）[/b]：只影響第一次接上經濟系統的世界（新世界，或之前沒裝經濟系統）。已經接上過經濟系統的世界照原本的值（之前的預設是 24 小時），就算從沒改過付費頁也一樣；要改請到管理面板的「付費」頁改寬限。改寬限不會暫停玩家的自動續租，已經在跑的那一期照購買當時的寬限，下一期才換新值。
+[*] Fixed: a finished house could be treated as having no roof, so warmth and wind chill were calculated as outdoors, while the indoor check said the roof was missing but could not mark a single tile (or marked tiles that do have a roof), and checking again changed nothing.
+[*] The indoor check now notices when the game's record of the house is out of date, asks the game to recalculate, and checks again by itself a moment later. Open the indoor check once after updating and the house is treated as indoors again.
+[*] If the record still does not match after recalculating, the panel says it is not a building mistake and shows the coordinates to report to an admin.
 [/list]
 
 [h3]🔧 修正[/h3]
