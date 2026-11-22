@@ -277,7 +277,7 @@
     "IGUI_MSH_Slots_TurnOnAuto": "开启自动续租",
     "IGUI_MSH_Slots_Later": "暂不",
     "IGUI_MSH_Lease_Title": "安全屋租约",
-    "IGUI_MSH_Lease_renewal_due": "%1 级名额的租约还剩 %2 到期，未开启自动续租。",
+    "IGUI_MSH_Lease_renewal_due": "%1 级名额的租约还剩 %2到期，未开启自动续租。",
     "IGUI_MSH_Lease_grace": "%1 级名额的租约已到期，宽限期还剩 %2；期满前续租，安全屋就不会进入保留期。",
     "IGUI_MSH_Lease_expired": "%1 级名额的租约已结束。",
     "IGUI_MSH_Lease_renewal_failed": "%1 级名额自动续租失败：%2",
