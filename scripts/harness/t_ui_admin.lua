@@ -364,6 +364,10 @@ return function(T)
     check(rules["f:NoZombieSpawn"] ~= nil and not rules["f:NoZombieSpawn"]:getChecked()
         and rules["zombiesHelp#1"] ~= nil and rules["zombiesHelp#1"].text == "Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip",
         "規則頁有「範圍內不生成殭屍」：預設不勾，底下寫選項說明")
+    check(rules["f:ClearZombiesAtHome"] ~= nil and not rules["f:ClearZombiesAtHome"]:getChecked()
+        and rules["zombiesHomeHelp#1"] ~= nil
+        and rules["zombiesHomeHelp#1"].text == "Sandbox_MinidoracatSafehouse_ClearZombiesAtHome_tooltip",
+        "規則頁有「有人在家時清除殭屍」：預設不勾，底下寫選項說明")
     local tiers = P.pages.deeds.fields.TiersEnabled
     fw.click(deeds.tierAdd)
     check(tiers.value == 4 and shown("f:Tier4Side") and shown("f:Tier4Craft"), "〔新增第 4 級〕：多出第 4 級那一列")

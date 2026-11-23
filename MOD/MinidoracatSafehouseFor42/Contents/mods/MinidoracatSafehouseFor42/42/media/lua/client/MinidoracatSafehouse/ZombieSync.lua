@@ -1,4 +1,5 @@
--- MinidoracatSafehouse/ZombieSync.lua：伺服器刪掉安全屋範圍內新建立的殭屍後廣播 zombiesRemoved（server Zombies.lua）。
+-- MinidoracatSafehouse/ZombieSync.lua：伺服器刪掉安全屋範圍內的殭屍後廣播 zombiesRemoved（server Zombies.lua：新建立的，
+-- 以及有人在家時範圍內的）。
 -- 同一幀已送出的那幾隻，客戶端要自己拿掉，否則留到 5 秒沒更新才清（IsoZombie.java:3450-3453）。
 -- 移除照原版收到刪除封包的做法（ZombieDeleteOnClientPacket.parse → VirtualZombieManager.removeZombieFromWorld :69-75）。
 -- 殭屍同步走不可靠封包（ZombieSynchronizationUnreliablePacket），可能比通知晚到；查無此 id 時原版會照封包建立

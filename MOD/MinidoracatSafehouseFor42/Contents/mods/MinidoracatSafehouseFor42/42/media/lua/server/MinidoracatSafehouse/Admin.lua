@@ -33,7 +33,7 @@ A.FILTERS = { all = true, owners = true, overrides = true }
 
 -- ===== 沙盒選項 =====
 
--- 送整份 81 鍵快照給每位在線玩家（getOnlinePlayers LuaManager.java:4474；sendServerCommand(player, ...) :8902-8906）
+-- 送整份快照給每位在線玩家（getOnlinePlayers LuaManager.java:4474；sendServerCommand(player, ...) :8902-8906）
 function A.pushSync(snapshot)
     local list = getOnlinePlayers()
     for i = 0, list:size() - 1 do

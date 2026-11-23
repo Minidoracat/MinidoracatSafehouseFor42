@@ -1,4 +1,5 @@
--- 安全屋範圍內不生成殭屍（Zombies.lua；沙盒 NoZombieSpawn，預設關）：OnZombieCreate 排隊、下一個 OnTick 看所在格再刪，
+-- 安全屋範圍內的殭屍（Zombies.lua，兩個沙盒選項都預設關）。
+-- NoZombieSpawn：OnZombieCreate 排隊、下一個 OnTick 看所在格再刪。ClearZombiesAtHome：名單上的活人在家時每秒掃一次。
 -- 刪掉的 onlineId 廣播給客戶端（ZombieSync.lua 照原版刪除封包的做法移除）。
 return function(T)
     local check = T.check
@@ -128,4 +129,114 @@ return function(T)
     reuse.id = 20
     T.tick()
     check(reuse.removed == 0 and live(reuse), "過期後同一個 id 再出現（id 繞回重用）：不碰")
+
+    do
+        T.section("在家清殭屍：選項關著、沒人在家")
+        local MSH = T.boot()
+        local Z = MSH.Zombies
+        local function failures()
+            local c = 0
+            for _, line in ipairs(T.prints) do
+                if string.find(line, "tick hook zombies failed", 1, true) then c = c + 1 end
+            end
+            return c
+        end
+        local function sent() return #T.broadcastsOf("zombiesRemoved") end
+        local function sweepNow() Z.lastSweep = nil; T.tick() end
+        SafeHouse.addSafeHouse(100, 100, 14, 14, "carol")
+        local carol = T.player({ name = "carol", x = 105.5, y = 105.5 })
+        -- 掃到它就丟錯：用來看這一輪有沒有走殭屍清單
+        local bomb = T.zombie(105, 105)
+        function bomb:getX() error("boom") end
+        local base = failures()
+        sweepNow()
+        check(failures() == base and sent() == 0, "預設關：屋主在家也不走殭屍清單")
+        T.sandbox("ClearZombiesAtHome", "true")
+        sweepNow()
+        check(failures() == base, "沙盒值型別不對（字串）：照預設關")
+        T.sandbox("ClearZombiesAtHome", true)
+        carol.x = 114.5
+        sweepNow()
+        check(failures() == base, "開著、屋主站在屋外緊鄰那格：沒人在家，不走殭屍清單")
+        carol.x, carol.dead = 105.5, true
+        sweepNow()
+        check(failures() == base, "屋主死在屋內：不算在家")
+        carol.dead = false
+        T.disconnect(carol)
+        T.player({ name = "dave", admin = true, x = 105.5, y = 105.5 })
+        T.player({ name = "erin", x = 106.5, y = 106.5 })
+        sweepNow()
+        check(failures() == base, "屋主離線，管理員和不在名單上的人站在屋內：不算在家")
+
+        T.section("在家清殭屍：屋主在家")
+        T.online[#T.online + 1] = carol
+        sweepNow()
+        check(failures() == base + 1, "屋主在家：走殭屍清單；讀座標丟錯由 hook 記 log")
+        bomb:removeFromWorld()
+        local corner = T.zombie(100, 113)
+        local out = T.zombie(114, 105)
+        local corpse = T.zombie(105, 105, { reanimated = true })
+        local pooled = T.zombie(105, 105, { id = -1 })
+        local dying = T.zombie(105, 105, { dead = true })
+        local ghost = T.zombie(105, 105, { x = 120.5, y = 105.5 })
+        local runner = T.zombie(120, 105, { x = 105.5, y = 105.5 })
+        local cornerId, runnerId = corner.id, runner.id
+        local before = sent()
+        sweepNow()
+        check(failures() == base + 1, "上一輪丟錯不影響下一輪")
+        check(corner.removed == 1 and corner.unsquared == 1, "屋內（邊角那格）原本就在的：removeFromWorld＋removeFromSquare")
+        check(runner.removed == 1, "所在格在屋外、實際座標在屋內（走進來了）：刪")
+        check(ghost.removed == 0, "所在格在屋內、實際座標在屋外（客戶端送來的預測格）：留著")
+        local all = T.broadcastsOf("zombiesRemoved")
+        local ids = all[#all] and all[#all].ids or {}
+        check(#all == before + 1 and #ids == 2 and (ids[1] == cornerId or ids[2] == cornerId)
+            and (ids[1] == runnerId or ids[2] == runnerId), "這一輪刪掉的用刪除前的 onlineId 合成一則廣播")
+        check(out.removed == 0, "屋外緊鄰那格：留著")
+        check(corpse.removed == 0, "玩家屍變：留著")
+        check(pooled.removed == 0, "onlineId -1：不碰")
+        check(dying.removed == 0, "已經死亡、還沒變成屍體：留著")
+        T.tick()
+        check(sent() == before + 1, "下一幀不重複通知")
+        Z.lastSweep = T.now
+        local late = T.zombie(103, 103)
+        T.tick(9)
+        check(late.removed == 0, "上一輪之後不到 1 秒：不掃")
+        T.tick()
+        check(late.removed == 1, "滿 1 秒：掃到剛走進來的")
+
+        T.section("在家清殭屍：成員、多塊安全屋、兩個選項一起開")
+        local plot = SafeHouse.addSafeHouse(200, 200, 10, 10, "@MSH:1")
+        SafeHouse.addSafeHouse(220, 200, 5, 5, "@MSH:1")
+        plot:addPlayer("bob")
+        SafeHouse.addSafeHouse(300, 300, 10, 10, "frank")
+        T.player({ name = "bob", x = 205.5, y = 205.5 })
+        carol.x = 500.5
+        local inPlot, inOtherPlot, inFrank, inCarol = T.zombie(201, 201), T.zombie(222, 202), T.zombie(305, 305), T.zombie(105, 105)
+        sweepNow()
+        check(inPlot.removed == 1 and inOtherPlot.removed == 1, "成員站在多塊安全屋的其中一塊：同一個 owner 標記的每一塊一起清")
+        check(inFrank.removed == 0 and inCarol.removed == 0, "沒有屋主或成員在裡面的屋不清（管理員還站在 carol 屋內）")
+        T.sandbox("NoZombieSpawn", true)
+        local born = spawn(202, 202)
+        local walker = T.zombie(203, 203)
+        local bornId, walkerId = born.id, walker.id
+        before = sent()
+        sweepNow()
+        all = T.broadcastsOf("zombiesRemoved")
+        ids = all[#all] and all[#all].ids or {}
+        check(born.removed == 1 and walker.removed == 1 and #all == before + 1 and #ids == 2
+            and ids[1] == bornId and ids[2] == walkerId, "同一幀新建的和走進來的：各刪一次，合成一則廣播")
+
+        T.section("在家清殭屍：閘門")
+        local pre = T.zombie(204, 204)
+        MSH.Srv.netUp = false
+        sweepNow()
+        check(pre.removed == 0, "開服前（沒有連線）：不掃")
+        MSH.Srv.netUp = true
+        MSH.Srv.enabled = false
+        sweepNow()
+        check(pre.removed == 0, "不是專用伺服器：不掃")
+        MSH.Srv.enabled = true
+        sweepNow()
+        check(pre.removed == 1, "閘門恢復：照常清")
+    end
 end

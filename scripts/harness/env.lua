@@ -465,7 +465,13 @@ function T.house(x, y, w, h, owner)
     function hs:setLastVisited(t) self.lastVisited = t end
     function hs:getLocation() return self.location end
     function hs:getOnlineID() return self.onlineId end
-    function hs:playerAllowed(u) return self.players:contains(u) or self.owner == u end
+    -- 兩個多載（SafeHouse.java:282-290）：傳 IsoPlayer 的含管理員能力，傳名字的只看名單與 owner
+    function hs:playerAllowed(u)
+        if type(u) == "table" then
+            return self:playerAllowed(u:getUsername()) or u:getRole():hasCapability(Capability.CanGoInsideSafehouses)
+        end
+        return self.players:contains(u) or self.owner == u
+    end
     -- 原版重生旗標（SafeHouse.java:648-650、759-771）
     hs.respawn = T.javaList({})
     function hs:getPlayersRespawn() return self.respawn end
@@ -529,6 +535,13 @@ SafeHouse = {
         if type(x) == "table" then return findHouse(x) end
         for _, hs in ipairs(T.houses) do
             if hs.x == x and hs.y == y and hs.w == w and hs.h == h then return hs end
+        end
+        return nil
+    end,
+    -- 和矩形 [x1, x2) × [y1, y2) 有重疊的第一間（SafeHouse.java:181-189）
+    getSafehouseOverlapping = function(x1, y1, x2, y2)
+        for _, hs in ipairs(T.houses) do
+            if x1 < hs.x + hs.w and x2 > hs.x and y1 < hs.y + hs.h and y2 > hs.y then return hs end
         end
         return nil
     end,
@@ -1255,19 +1268,23 @@ function T.visit(hs) hs.lastVisited = T.now end
 
 -- 殭屍（IsoZombie）：只做 Zombies.lua／ZombieSync.lua 用到的方法，建立時放進 getCell():getZombieList()。
 -- x＝nil 表示 getSquare() 回 nil；o.reanimated＝isReanimatedPlayer；o.id＝指定 onlineID（-1＝建立失敗、回到物件池）。
+-- o.x／o.y＝實際座標（預設在所在格中央；伺服器上有 owner 的殭屍，所在格可能不是實際位置）；o.dead＝isDead。
 -- removed／unsquared／unregistered 記下 removeFromWorld、removeFromSquare、getEmitter():unregister 的次數。
 -- removeFromWorld 從清單拿掉；伺服器上同時把 onlineID 清成 -1（IsoZombie.java:4313-4352）
 function T.zombie(x, y, o)
     o = o or {}
     T.zombieSeq = T.zombieSeq + 1
     local z = { removed = 0, unsquared = 0, unregistered = 0, reanimated = o.reanimated or false,
-        id = o.id or T.zombieSeq }
+        id = o.id or T.zombieSeq, x = o.x or (x or 0) + 0.5, y = o.y or (y or 0) + 0.5, dead = o.dead or false }
     local sq = x ~= nil and T.gridSquare(x, y, 0) or nil
     local emitter = { unregister = function() z.unregistered = z.unregistered + 1 end }
     function z:getSquare() return sq end
     function z:getOnlineID() return self.id end
     function z:getEmitter() return emitter end
     function z:isReanimatedPlayer() return self.reanimated end
+    function z:getX() return self.x end
+    function z:getY() return self.y end
+    function z:isDead() return self.dead end
     function z:removeFromWorld()
         self.removed = self.removed + 1
         for i = #T.zombies, 1, -1 do

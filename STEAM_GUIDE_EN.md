@@ -28,7 +28,7 @@ A safehouse system for dedicated multiplayer servers: use a deed to mark your ow
 [*] [b]Split-screen[/b]: players 2–4 can't create safehouses.
 [*] [b]Server admins[/b]: change a few vanilla safehouse settings first; see "Server settings".
 [*] [b]Adding mid-save[/b]: safehouses already in the save (vanilla or Better Safehouse) are taken over automatically at server start; see "Taking over existing safehouses".
-[*] [b]Protection[/b]: uses vanilla safehouses, so non-members can't enter or take items; a vehicle with anyone aboard who can't enter can't drive in either (see "Vehicles can't drive in"); by default zombies still spawn inside as in vanilla, and admins can turn on "No zombie spawns inside safehouses" (see "Known limitations").
+[*] [b]Protection[/b]: uses vanilla safehouses, so non-members can't enter or take items; a vehicle with anyone aboard who can't enter can't drive in either (see "Vehicles can't drive in"); by default zombies still spawn inside as in vanilla, and admins can turn on "No zombie spawns inside safehouses" and "Clear zombies inside safehouses while someone is home" (see "Known limitations").
 [/list]
 === 🧰 Deeds
 {{img:02-deed-tooltip-en.jpg}}
@@ -510,7 +510,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [h3]Six tabs[/h3]
 {{img:10-admin-deeds-en.jpg}}
 [list]
-[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works), and "No zombie spawns inside safehouses"; also the server settings status, takeover results and safehouses needing attention.
+[*] [b]Rules[/b]: creation mode, gap, max pieces, share limit, keep days, idle release days and "Sell idle-release insurance", faction sharing, redraw time and count, which other safehouses players see on the ground, item search (Off / Guide only / Remote take, plus how many tiles outside the safehouse remote take still works), "No zombie spawns inside safehouses" and "Clear zombies inside safehouses while someone is home"; also the server settings status, takeover results and safehouses needing attention.
 [*] [b]Deeds[/b]: only enabled tiers, with "Add tier N" / "Remove tier N" below the table (up to 8 tiers; takes effect on "Apply changes").
 [list]
 [*] The master "Deeds drop as loot" switch; the loot column is greyed out while it's off.
@@ -582,6 +582,7 @@ Everything is on the "Minidoracat Safehouse" sandbox page and can be set before 
 [tr][td]Each tier's deed crafting[/td][td]Tier 1 Standard, tiers 2–8 Disabled[/td][/tr]
 [tr][td]Deeds drop as loot[/td][td]Off (chances per tier in "Deeds")[/td][/tr]
 [tr][td]No zombie spawns inside safehouses[/td][td]Off (dedicated servers only; what it does is in "Known limitations")[/td][/tr]
+[tr][td]Clear zombies inside safehouses while someone is home[/td][td]Off (dedicated servers only; what it does is in "Known limitations")[/td][/tr]
 [/table]
 [list]
 [*] [b]Max per player[/b]: a player's maximum for a tier is free + buyable + rentable; the "Max/player" column on the admin panel's Deeds tab works it out for you.
@@ -680,6 +681,8 @@ Server-side data:
 === ⚠️ Known limitations
 [list]
 [*] [b]Zombies[/b]: by default zombies still spawn inside safehouses as in vanilla. When admins turn on the sandbox option "No zombie spawns inside safehouses" (also on the admin panel's Rules tab; dedicated servers only), zombies that appear inside a safehouse (vanilla safehouses included) are removed right away: respawns, zombies that appear as players come near, indoor zombies when an unexplored building first loads, random event zombies, and zombies spawned there by admin commands, debug tools or other mods. Zombies that walk in from outside and corpses that get up are not removed right away; they are removed once no players are near that area and it unloads and later loads again. Players who turn after death are never removed.
+[*] [b]Clearing zombies while someone is home[/b]: when admins turn on the sandbox option "Clear zombies inside safehouses while someone is home" (also on the admin panel's Rules tab; dedicated servers only), while the owner or a member (a player shared with the "Member" permission, or a faction member when shared with a faction) is inside the safehouse, the server checks once a second and removes every zombie inside that safehouse: ones that walk in, ones that chase someone in, and ones already there. A zombie is gone within about a second of stepping in; no corpse and no loot are left, and a weapon stuck in the zombie goes with it. Nothing is removed while no owner or member is inside; admins and players not on the list do not count. Players who turn after death and zombies that are already killed are not removed. Characters other mods build on zombies are removed too. Vanilla safehouses count as well.
+[*] [b]The two zombie options are independent[/b]: both off = vanilla. Only "No zombie spawns inside safehouses" = nothing new appears inside, but zombies that walk in stay until that area reloads. Only "Clear zombies inside safehouses while someone is home" = the safehouse is cleared while someone is home; while nobody is home zombies spawn and walk in as in vanilla, and they go about a second after someone comes home. Both on = nothing new appears inside even while nobody is home, and zombies that walk in are cleared while someone is home.
 [*] [b]Vanilla protection[/b]: the server stops vanilla clients, but modified clients may get around protection that's only checked client-side; the fine-grained permissions (Use appliances, Move furniture, Build, Farm) are only reliable against vanilla clients. Vehicles too: a modified client may drive in, and the server then takes anyone aboard who can't enter out of the vehicle and outside, leaving the vehicle where it is. Ladders too: the check that stops you climbing in runs on the client, and anyone inside who can't enter is moved outside by the vanilla periodic check.
 [*] [b]No door or window permission[/b]: the server can't stop opening doors with E or toggling windows directly; whether non-members can open doors follows vanilla. Forcing a locked door or window open with a crowbar is the exception: it needs the Build permission.
 [*] [b]No visitors[/b]: "Member" covers both entering and container access, so there's no "enter but don't take" role.
@@ -711,7 +714,7 @@ Server-side data:
 [/list]
 [h3]Not included[/h3]
 [list]
-[*] Blocking zombies that walk in from outside ("No zombie spawns inside safehouses" only handles zombies that appear inside, and is off by default).
+[*] Blocking zombies that walk in from outside while no owner or member is home ("Clear zombies inside safehouses while someone is home" is off by default, and only clears while someone is home).
 [*] Moving or expanding a safehouse (only redrawing right after creation and upgrading with a deed).
 [*] Buying and selling land.
 [*] A server-wide map browser or teleporting (only admins can teleport to no-build zones from the zone window, using the vanilla command).
@@ -757,6 +760,7 @@ Server-side data:
 [h3]Why are there zombies inside?[/h3]
 [list]
 [*] By default zombies still spawn inside as in vanilla. When the server turns on "No zombie spawns inside safehouses", zombies that appear inside are removed; ones that walk in from outside or corpses that get up are cleared only after that area reloads, and players who turn after death are never removed.
+[*] When the server turns on "Clear zombies inside safehouses while someone is home", zombies inside (ones that walk in included) are gone within about a second while the owner or a member is home; while nobody is home, zombies that walk in stay until someone comes home. Players who turn after death are never removed.
 [/list]
 [h3]Others can open my doors?[/h3]
 [list]
