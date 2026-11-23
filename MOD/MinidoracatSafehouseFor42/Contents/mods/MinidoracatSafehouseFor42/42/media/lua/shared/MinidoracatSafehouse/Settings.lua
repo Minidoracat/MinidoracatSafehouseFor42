@@ -72,7 +72,7 @@ local OPTIONS = {
     { key = "StorageReach", type = "int", min = 0, max = 50, default = 0 },
     -- 安全屋範圍內不生成殭屍（玩家反饋 2026-11-19，使用者 2026-11-22 核准預設關）：只刪範圍內新建立的，走進來的由下一鍵管（Zombies.lua）
     { key = "NoZombieSpawn", type = "bool", default = false },
-    -- 有人在家時清掉範圍內的活殭屍，走進來的也算（玩家提問 2026-11-23，使用者同日核准預設關；成本量過，E2E homesweep-mp）
+    -- 有人在家時清掉範圍內的活殭屍，走進來的也算（玩家提問 2026-11-23，使用者同日核准預設關；成本見 E2E homeclear-mp）
     { key = "ClearZombiesAtHome", type = "bool", default = false },
     { key = "AvoidRoads", type = "bool", default = true },
     { key = "RoadMargin", type = "int", min = 0, max = 8, default = 1 },
