@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "Só admins podem fazer isso.",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "Peça ajuda a um admin.",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "Alterações de bases estão pausadas porque a configuração do servidor está incompleta.",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Peça a um admin para conferir o status do servidor no painel de administração.",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Peça a um admin para clicar em \"Corrigir configuração do servidor\" na aba Regras do painel de administração de bases.",
     "IGUI_MSH_Code_INTERNAL_ERROR": "O servidor encontrou um erro.",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "Tente de novo e, se continuar acontecendo, avise um admin.",
     "IGUI_MSH_Code_NOT_FOUND": "Esta base não existe mais, ou você não tem mais acesso a ela.",

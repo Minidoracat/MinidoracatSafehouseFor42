@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "Only admins can do this.",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "Ask an admin for help.",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "Safehouse changes are paused because the server setup is incomplete.",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Ask an admin to check the server status in the admin panel.",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Ask an admin to press [Fix server settings] on the Rules page of the safehouse admin panel.",
     "IGUI_MSH_Code_INTERNAL_ERROR": "The server ran into an error.",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "Try again. If it keeps happening, tell an admin.",
     "IGUI_MSH_Code_NOT_FOUND": "This safehouse no longer exists, or you no longer have access to it.",

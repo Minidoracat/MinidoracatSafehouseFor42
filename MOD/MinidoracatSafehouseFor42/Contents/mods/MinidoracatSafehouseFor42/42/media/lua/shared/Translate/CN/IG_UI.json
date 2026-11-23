@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "只有管理员能执行这个操作。",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "请找管理员协助。",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "服务器设置不完整，安全屋变更暂停中。",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "请管理员到管理员面板查看服务器状态。",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "请管理员打开安全屋管理员面板，在「规则」页按〔修正服务器设置〕。",
     "IGUI_MSH_Code_INTERNAL_ERROR": "服务器发生错误。",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "请再试一次；一直发生的话请通知管理员。",
     "IGUI_MSH_Code_NOT_FOUND": "这间安全屋已不存在，或你已没有权限。",

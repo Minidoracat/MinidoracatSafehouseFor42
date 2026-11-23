@@ -412,6 +412,18 @@ function AP.onAlert(a)
     if type(a) == "table" and a.code == "FOREIGN_APPEARED" and AP.visible(P) then AP.loadForeign(P) end
 end
 
+-- 登入時安全屋變更已經暫停：補一則管理員提示。伺服器只在變成暫停的當下通知在線的管理員（Health.evaluate），
+-- 開服就不符（原版預設值就不符）時沒有人在線，之後上線的管理員收不到
+function AP.onLogin()
+    if not AP.isAdmin() then return end
+    MSH.Client.send("adminOptions", {}, function(res)
+        local h = res.ok and res.health
+        if type(h) ~= "table" or not h.blocked then return end
+        local C = MSH.Client
+        C.toast(C.alertText("HEALTH_BLOCKED", table.concat(h.blockers or {}, ",")), nil, getText("IGUI_MSH_Alert_Title"), 5)
+    end)
+end
+
 -- 禁建區清單（adminZones：zones、max）：排除頁只寫個數；讀不到時留著上一次的個數、另寫原因
 function AP.loadZones(P)
     MSH.Client.send("adminZones", {}, function(res) AP.onZones(P, res) end)
@@ -1880,4 +1892,5 @@ end
 if first then
     Events.OnTick.Add(function() MSH.AdminPanel.onTick() end)
     MSH.Client.on("alert", "adminPanel", function(a) MSH.AdminPanel.onAlert(a) end)
+    MSH.Client.on("login", "adminPanel", function() MSH.AdminPanel.onLogin() end)
 end

@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "Solo los administradores pueden hacer esto.",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "Pide ayuda a un administrador.",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "Los cambios de refugios están en pausa porque la configuración del servidor está incompleta.",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Pide a un administrador que revise el estado del servidor en el panel de administración.",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Pide a un administrador que pulse \"Corregir ajustes del servidor\" en la pestaña Reglas del panel de administración de refugios.",
     "IGUI_MSH_Code_INTERNAL_ERROR": "El servidor tuvo un error.",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "Inténtalo de nuevo y, si sigue pasando, avisa a un administrador.",
     "IGUI_MSH_Code_NOT_FOUND": "Este refugio ya no existe o ya no tienes acceso a él.",

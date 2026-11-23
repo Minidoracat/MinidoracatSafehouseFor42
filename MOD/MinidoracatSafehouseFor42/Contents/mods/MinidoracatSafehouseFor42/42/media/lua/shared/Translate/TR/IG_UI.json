@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "Bunu yalnızca yöneticiler yapabilir.",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "Bir yöneticiden yardım isteyin.",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "Sunucu kurulumu eksik olduğundan güvenli ev değişiklikleri duraklatıldı.",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Bir yöneticiden yönetim panelinde sunucu durumunu kontrol etmesini isteyin.",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Bir yöneticiden güvenli ev yönetici panelinin Kurallar sayfasındaki \"Sunucu ayarlarını düzelt\" düğmesine basmasını isteyin.",
     "IGUI_MSH_Code_INTERNAL_ERROR": "Sunucuda bir hata oluştu.",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "Tekrar deneyin; sorun sürerse bir yöneticiye bildirin.",
     "IGUI_MSH_Code_NOT_FOUND": "Bu güvenli ev artık yok veya artık erişiminiz yok.",

@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "この操作は管理者のみ実行できます。",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "管理者に相談してください。",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "サーバー設定が未完了のため、セーフハウスの変更は一時停止中です。",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "管理者に管理パネルでサーバーの状態を確認してもらってください。",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "管理者に、セーフハウス管理者パネルの「ルール」ページで「サーバー設定を修正」を押してもらってください。",
     "IGUI_MSH_Code_INTERNAL_ERROR": "サーバーでエラーが発生しました。",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "もう一度試し、繰り返し起こる場合は管理者に伝えてください。",
     "IGUI_MSH_Code_NOT_FOUND": "このセーフハウスは存在しないか、アクセス権がなくなりました。",

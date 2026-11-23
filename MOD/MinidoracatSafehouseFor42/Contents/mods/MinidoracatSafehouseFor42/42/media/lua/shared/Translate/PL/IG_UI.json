@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "Tylko admini mogą to zrobić.",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "Poproś admina o pomoc.",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "Zmiany schronień są wstrzymane, bo konfiguracja serwera jest niepełna.",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Poproś admina o sprawdzenie stanu serwera w panelu administracyjnym.",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Poproś admina, aby nacisnął „Popraw ustawienia serwera” na karcie Zasady w panelu administracyjnym schronień.",
     "IGUI_MSH_Code_INTERNAL_ERROR": "Na serwerze wystąpił błąd.",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "Spróbuj ponownie. Jeśli to się powtarza, powiadom admina.",
     "IGUI_MSH_Code_NOT_FOUND": "To schronienie już nie istnieje lub nie masz już do niego dostępu.",

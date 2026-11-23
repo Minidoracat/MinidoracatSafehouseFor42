@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "Это доступно только админам.",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "Обратитесь к админу.",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "Изменения убежищ приостановлены: сервер настроен не полностью.",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Попросите админа проверить состояние сервера в админ-панели.",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "Попросите админа нажать «Исправить настройки сервера» на вкладке «Правила» в админ-панели убежищ.",
     "IGUI_MSH_Code_INTERNAL_ERROR": "На сервере произошла ошибка.",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "Попробуйте снова, а если ошибка повторяется, сообщите админу.",
     "IGUI_MSH_Code_NOT_FOUND": "Этого убежища больше нет или у вас больше нет к нему доступа.",

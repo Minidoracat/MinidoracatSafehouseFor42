@@ -1112,6 +1112,26 @@ return function(T)
     check(pool["f:MaxShares"]:getText() == "7", "只重抓狀態：還沒套用的規則編輯留著")
     AP.select(PF, "paid")
     check(PF.message == nil, "換到別的分頁：上一頁的結果訊息（已修正）清掉")
+
+    T.section("AdminPanel：管理員登入時安全屋變更已經暫停 → 補一則提示（開服就不符時沒有人在線，伺服器的提示送不到）")
+    local nLogin, nToast = countCmd("adminOptions"), #fw.toasts
+    -- 假 getText 回原鍵，alertText 會當成沒有這個碼的字：換掉它，直接看碼與 detail
+    local realAlertText = MSH.Client.alertText
+    MSH.Client.alertText = function(code, detail) return code .. ":" .. detail end
+    MSH.Client.emit("login", true)
+    check(countCmd("adminOptions") == nLogin + 1, "管理員登入：查一次伺服器狀態")
+    answer("adminOptions", blockedOptions())
+    MSH.Client.alertText = realAlertText
+    check(#fw.toasts == nToast + 1 and fw.toasts[#fw.toasts] == "HEALTH_BLOCKED:PlayerSafehouse,SandboxVars,AntiCheatSafeHouse",
+        "暫停中：跳管理員提示（和在線時伺服器送的同一個碼，帶不符的項目）")
+    MSH.Client.emit("login", false)
+    answer("adminOptions", { values = values, settingsWarnings = {}, resourceApi = false, parkingApi = false,
+        health = { blocked = false, blockers = {}, warnings = {}, wants = {} } })
+    check(countCmd("adminOptions") == nLogin + 2 and #fw.toasts == nToast + 1, "清單抓不到也查；檢查通過：不跳")
+    boss.admin = false
+    MSH.Client.emit("login", true)
+    check(countCmd("adminOptions") == nLogin + 2, "一般玩家登入：不查（查了也只會被拒）")
+    boss.admin = true
     SendCommandToServer, boss.canOptions, AP.instance = savedSend, nil, nil
 
     MinidoracatEconomy = nil

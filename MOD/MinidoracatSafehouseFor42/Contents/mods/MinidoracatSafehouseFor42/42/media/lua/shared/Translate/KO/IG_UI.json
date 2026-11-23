@@ -663,7 +663,7 @@
     "IGUI_MSH_Code_NOT_ADMIN": "관리자만 할 수 있습니다.",
     "IGUI_MSH_CodeAction_NOT_ADMIN": "관리자에게 도움을 요청하세요.",
     "IGUI_MSH_Code_HEALTH_BLOCKED": "서버 설정이 완료되지 않아 은신처 변경이 일시 중지되었습니다.",
-    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "관리자에게 관리자 패널에서 서버 상태를 확인해 달라고 요청하세요.",
+    "IGUI_MSH_CodeAction_HEALTH_BLOCKED": "관리자에게 은신처 관리자 패널의 '규칙' 탭에서 '서버 설정 수정'을 눌러 달라고 요청하세요.",
     "IGUI_MSH_Code_INTERNAL_ERROR": "서버에 오류가 발생했습니다.",
     "IGUI_MSH_CodeAction_INTERNAL_ERROR": "다시 시도하세요. 계속 발생하면 관리자에게 알리세요.",
     "IGUI_MSH_Code_NOT_FOUND": "이 은신처가 더 이상 없거나 접근 권한이 없습니다.",
