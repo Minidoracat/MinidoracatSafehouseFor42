@@ -31,7 +31,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building (including shoveling dirt, gravel and sand) and farming separately
 [*] [b]Manager window[/b]: rename, share or release your safehouses, set a respawn point, move up a tier with "Upgrade with deed", and see nearby safehouses and no-build zones on the ground
 [*] [b]Item search[/b]: search every container in your safehouse and follow an arrow or walk there automatically, or bind a "Toggle item search" hotkey in key bindings; when the server allows it, take items straight from where you stand inside
-[*] [b]Vanilla protection[/b]: non-members cannot enter or take items; zombies still spawn inside by default, and servers can turn on "No zombie spawns inside safehouses" and "Clear zombies inside safehouses while someone is home"
+[*] [b]Vanilla protection[/b]: non-members cannot enter or take items; zombies still spawn inside by default, and servers can turn on "No zombie spawns inside safehouses"
 [*] [b]No driving in[/b]: if anyone aboard can't enter, the vehicle can't drive in, trailers included
 [*] [b]Admin panel[/b]: adjust every rule in game, including deeds, exclusions and paid slots
 [*] [b]Idle release[/b]: safehouses nobody visits for too long are released; owners can buy insurance to keep them longer
