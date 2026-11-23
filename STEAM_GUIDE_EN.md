@@ -159,7 +159,7 @@ The server re-checks every rule when you send the area, and the check page lists
 [tr][td]You haven't survived long enough on this server to claim a safehouse.[/td][td]Survive a while longer and try again.[/td][/tr]
 [tr][td]This name can't be used.[/td][td]Use 1 to 40 characters.[/td][/tr]
 [tr][td]This exact position clashes with another safehouse's internal ID.[/td][td]Move the area by one tile and try again.[/td][/tr]
-[tr][td]Safehouse changes are paused because the server setup is incomplete.[/td][td]Ask an admin to check the server status in the admin panel.[/td][/tr]
+[tr][td]Safehouse changes are paused because the server setup is incomplete.[/td][td]Ask an admin to press "Fix server settings" on the Rules page of the safehouse admin panel.[/td][/tr]
 [tr][td]The server has reached its safehouse limit.[/td][td]Tell an admin.[/td][/tr]
 [tr][td]The server-wide safehouse member list is full.[/td][td]Tell an admin.[/td][/tr]
 [/table]
@@ -465,7 +465,7 @@ Default insurance per day (set per tier by admins on the Paid slots tab):
 [tr][td]Tier 3 and up[/td][td]70[/td][/tr]
 [/table]
 === ⚙️ Server settings
-This mod never changes server settings itself. If any vanilla option below is wrong, the server goes into "Server setup incomplete": creating, sharing and other changes stop, while existing safehouses stay protected, members stay in sync, admins can still act, and online admins get a notice.
+This mod never changes server settings itself. If any vanilla option below is wrong, the server goes into "Server setup incomplete": creating, sharing and other changes stop, while existing safehouses stay protected, members stay in sync and admins can still act. Online admins get a notice, and an admin who logs in while changes are still paused gets one too.
 [h3]Required[/h3]
 [table]
 [tr][th]Option[/th][th]Must be[/th][th]Why[/th][/tr]
