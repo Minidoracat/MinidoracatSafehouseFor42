@@ -258,4 +258,23 @@ return function(T)
         sweepNow()
         check(pre.removed == 1, "閘門恢復：照常清")
     end
+
+    do
+        T.section("在家清殭屍：Steam 模式的身分")
+        local MSH = T.boot({ steam = true })
+        local Z = MSH.Zombies
+        T.sandbox("ClearZombiesAtHome", true)
+        SafeHouse.addSafeHouse(100, 100, 14, 14, "carol")
+        MSH.Registry.setBinding("carol", 76561198000000201, "NEWGAME", T.now)
+        local fake = T.player({ name = "carol", sid = 76561198000000299, x = 105.5, y = 105.5 })
+        local z = T.zombie(105, 105)
+        Z.lastSweep = nil
+        T.tick()
+        check(z.removed == 0, "同名但 SteamID 和綁定不符：不算在家")
+        T.disconnect(fake)
+        T.player({ name = "carol", sid = 76561198000000201, x = 105.5, y = 105.5 })
+        Z.lastSweep = nil
+        T.tick()
+        check(z.removed == 1, "SteamID 和綁定相符：照常清")
+    end
 end
