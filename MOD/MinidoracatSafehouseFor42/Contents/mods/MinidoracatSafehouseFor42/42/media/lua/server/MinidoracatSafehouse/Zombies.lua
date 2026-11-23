@@ -70,11 +70,11 @@ function Z.flush()
 end
 
 -- 有人在家的屋用什麼認：受管屋每塊同一個 owner 標記，整間一起清；原版屋的 owner 是人名，同一個名字名下
--- 可能不只一間（管理員建的、遷移留下的、其他 MOD 建的），用那間自己的 id（SafeHouse.getId :592）
+-- 可能不只一間（管理員建的、遷移留下的、其他 MOD 建的），用那間的物件自己（引擎每次回清單裡同一個物件）
 local function keyOf(house)
     local owner = house:getOwner()
     if MSH.claimIdOf(owner) ~= nil then return owner end
-    return house:getId()
+    return house
 end
 
 -- 有人在家的屋（keyOf → true）；沒有就 nil。名字是 owner 標記的不算（playerAllowed 會拿它和 owner 比）
@@ -108,14 +108,20 @@ function Z.sweep(now)
     end
 end
 
--- 兩個選項這一幀刪掉的合成一則。flush／sweep 中途丟錯（hook 記 log）時 Z.out 留著，下一個 OnTick 送出：已經刪掉的不能漏
-function Z.tick(now)
-    Z.flush()
-    Z.sweep(now)
+local function send()
     local ids = Z.out
     if ids == nil then return end
     Z.out = nil
     if MSH.Srv.netUp then sendServerCommand(MSH.MODULE, "zombiesRemoved", { ids = ids }) end
+end
+
+-- 兩個選項這一幀刪掉的合成一則。flush／sweep 中途丟錯（hook 記 log）時 Z.out 留著，下一個 OnTick 一開頭就送：
+-- 已經刪掉的不能漏（owner 客戶端自己模擬的殭屍沒有 5 秒自清，IsoZombie.java:3300）
+function Z.tick(now)
+    send()
+    Z.flush()
+    Z.sweep(now)
+    send()
 end
 
 MSH.Srv.hook("tick", "zombies", function(now) MSH.Zombies.tick(now) end)

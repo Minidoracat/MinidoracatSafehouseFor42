@@ -172,14 +172,23 @@ return function(T)
 
         T.section("在家清殭屍：屋主在家")
         T.online[#T.online + 1] = carol
+        T.sandbox("NoZombieSpawn", true)
         local early = T.zombie(106, 106)   -- 清單倒著走：比 bomb 晚建立的先掃到
-        local earlyId = early.id
+        local queued = spawn(107, 107)     -- 這隻走 flush
+        local earlyId, queuedId = early.id, queued.id
         sweepNow()
         check(failures() == base + 1, "屋主在家：走殭屍清單；讀座標丟錯由 hook 記 log")
-        check(early.removed == 1 and sent() == 0, "丟錯之前已經刪掉一隻：這一幀還沒通知")
+        check(early.removed == 1 and queued.removed == 1 and sent() == 0, "丟錯之前 flush 和 sweep 各刪了一隻：這一幀還沒通知")
+        local bad = spawn(108, 108)
+        function bad:getSquare() error("boom2") end
         T.tick()
         local held = T.broadcastsOf("zombiesRemoved")
-        check(#held == 1 and #held[1].ids == 1 and held[1].ids[1] == earlyId, "下一幀補送：丟錯之前刪掉的不漏")
+        check(failures() == base + 2 and #held == 1 and #held[1].ids == 2 and held[1].ids[1] == queuedId
+            and held[1].ids[2] == earlyId, "下一幀 flush 也丟錯：上一幀 flush 和 sweep 刪掉的照樣先補送")
+        T.tick()
+        check(sent() == 1, "補送過的不再送")
+        T.sandbox("NoZombieSpawn", false)
+        bad:removeFromWorld()
         bomb:removeFromWorld()
         local corner = T.zombie(100, 113)
         local out = T.zombie(114, 105)
@@ -193,7 +202,7 @@ return function(T)
         local cornerId, runnerId = corner.id, runner.id
         local before = sent()
         sweepNow()
-        check(failures() == base + 1, "上一輪丟錯不影響下一輪")
+        check(failures() == base + 2, "上一輪丟錯不影響下一輪")
         check(corner.removed == 1 and corner.unsquared == 1, "屋內（邊角那格）原本就在的：removeFromWorld＋removeFromSquare")
         check(runner.removed == 1, "所在格在屋外、實際座標在屋內（走進來了）：刪")
         check(ghost.removed == 0, "所在格在屋內、實際座標在屋外（客戶端送來的預測格）：留著")
@@ -244,6 +253,13 @@ return function(T)
         check(born.removed == 1 and walker.removed == 1 and #all == before + 1 and #ids == 2
             and ids[1] == bornId and ids[2] == walkerId, "同一幀新建的和走進來的：各刪一次，合成一則廣播")
         check(stillborn.removed == 0, "建立時已經死亡、還沒變成屍體的：兩個選項都不刪")
+        -- 起點相同、形狀不同的兩間原版屋（同時建立，SafeHouse.getId 一樣）：不能當成同一間
+        SafeHouse.addSafeHouse(600, 600, 10, 2, "gina")
+        SafeHouse.addSafeHouse(600, 600, 2, 10, "hank")
+        T.player({ name = "gina", x = 608.5, y = 600.5 })
+        local inHank = T.zombie(600, 608)
+        sweepNow()
+        check(inHank.removed == 0, "起點相同的另一間原版屋（屋主不同、裡面沒人）：留著")
 
         T.section("在家清殭屍：閘門")
         local pre = T.zombie(204, 204)

@@ -450,7 +450,7 @@ function T.house(x, y, w, h, owner)
     function hs:getW() return self.w end
     function hs:getH() return self.h end
     function hs:getOwner() return self.owner end
-    -- 每間一個（SafeHouse.java:588-594，座標＋建立時間）
+    -- 座標＋建立時間，不保證每間不同（SafeHouse.java:588-594）
     function hs:getId() return self.x .. "," .. self.y .. " at " .. tostring(self.created) end
     -- setOwner 會把新 owner 從 players 移除（SafeHouse.java:660-662）
     function hs:setOwner(o) self.players:remove(o) self.owner = o end
