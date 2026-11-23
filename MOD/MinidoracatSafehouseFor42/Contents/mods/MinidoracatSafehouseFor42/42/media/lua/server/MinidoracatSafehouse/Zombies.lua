@@ -30,7 +30,7 @@ local Z = MSH.Zombies or {}
 MSH.Zombies = Z
 Z.queue = Z.queue or {}
 
-Z.SWEEP_MS = 1000   -- shortcut: 一次掃完整份殭屍清單，清單上萬隻、單次超過 5 ms 再分幀
+Z.SWEEP_MS = 1000   -- shortcut: 一次掃完整份殭屍清單（2,000 隻、301 間屋約 2 ms，E2E homeclear-mp），清單常態超過 5,000 隻再分幀
 
 -- 照實際座標找包住它的原生安全屋。不用 getSquare()：伺服器上有 owner 的殭屍，current 是 owner 客戶端送來的
 -- 預測／目標點所在格（NetworkZombiePacker.applyZombie :225-233），追人的殭屍還在屋外時那一格就可能在屋內
