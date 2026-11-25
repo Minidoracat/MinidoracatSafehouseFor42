@@ -703,6 +703,7 @@ Server-side data:
 [*] [b]What item search can see[/b]: bags lying on the floor, corpses and what players carry are not listed, and bags inside containers are opened one level deep only. The game already sends the contents of nearby containers to every player, so the search reveals nothing new.
 [*] [b]Road surfaces changed before this update[/b]: the server's road records only cover surfaces changed after this update; surfaces changed earlier aren't recorded and may not be judged as road, so admins can cover them with a no-build zone when needed.
 [/list]
+=== ⚠️ Known limitations (continued)
 [h3]Player identity[/h3]
 [list]
 [*] [b]Automatic binding[/b]: on Steam servers, a player's username is bound to the Steam account they log in with (also when creating a character or a safehouse); after that, a different Steam account can't manage it.
