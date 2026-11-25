@@ -143,6 +143,7 @@ return function(T)
         end
         local function sent() return #T.broadcastsOf("zombiesRemoved") end
         local function sweepNow() Z.lastSweep = nil; T.tick() end
+        T.sandbox("ClearZombiesAfterHours", 0)   -- 屋齡門檻另有一節；這幾節的夾具都是剛建的屋，先設 0 才驗得到開關本身
         SafeHouse.addSafeHouse(100, 100, 14, 14, "carol")
         local carol = T.player({ name = "carol", x = 105.5, y = 105.5 })
         -- 掃到它就丟錯：用來看這一輪有沒有走殭屍清單
@@ -155,7 +156,6 @@ return function(T)
         sweepNow()
         check(failures() == base, "沙盒值型別不對（字串）：照預設關")
         T.sandbox("ClearZombiesAtHome", true)
-        T.sandbox("ClearZombiesAfterHours", 0)   -- 屋齡門檻另有一節；這幾節的夾具都是剛建的屋
         carol.x = 114.5
         sweepNow()
         check(failures() == base, "開著、屋主站在屋外緊鄰那格：沒人在家，不走殭屍清單")
@@ -346,12 +346,21 @@ return function(T)
         sweepNow()
         check(ahead.removed == 0, "設 24：建立時間在未來不清")
         ahead:removeFromWorld()
+        fresh.created = 0   -- 舊存檔載入的原版屋沒有建立時間
+        local unknown = T.zombie(306, 306)
+        sweepNow()
+        check(unknown.removed == 0, "設 24：建立時間是 0（屋齡不明）不清")
+        T.sandbox("ClearZombiesAfterHours", 0)
+        sweepNow()
+        check(unknown.removed == 1, "設 0：建立時間是 0 也照清")
+        T.sandbox("ClearZombiesAfterHours", 24)
         fresh.created = T.now - 2 * H
         for _, v in ipairs({ "1", -1, 721, 1.5 }) do
             T.sandbox("ClearZombiesAfterHours", v)
             local z = T.zombie(307, 307)
             sweepNow()
-            check(z.removed == 0, "不合法的值（" .. tostring(v) .. "）：照預設 24，建立 2 小時的屋不清")
+            check(z.removed == 0 and MSH.Settings.clearZombiesAfterHours() == 24,
+                "不合法的值（" .. tostring(v) .. "）：照預設 24，建立 2 小時的屋不清")
             z:removeFromWorld()
         end
         T.sandbox("ClearZombiesAfterHours", 1)
@@ -413,5 +422,8 @@ return function(T)
         local inB1 = T.zombie(9001, 9001)
         sweepNow()
         check(inB1.removed == 0, "人站在新的那一塊：未滿 24 小時，整間都不清")
+        b2.created = T.now - 48 * H
+        sweepNow()
+        check(inB1.removed == 1, "新的那一塊也滿 24 小時：人站在那一塊就清")
     end
 end

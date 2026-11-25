@@ -79,9 +79,11 @@ local function keyOf(house)
 end
 
 -- 有人在家的屋（keyOf → true）；沒有就 nil。名字是 owner 標記的不算（playerAllowed 會拿它和 owner 比）。
--- 屋齡門檻（ClearZombiesAfterHours）看人站的那一塊原生的建立時間（現實 ms，SafeHouse.java:68-75、681；和 now 同為
--- getTimestampMs）：建立、重新框選、用地契升級都是新原生，從那時重新起算。不用紀錄的 createdAt：重畫與升級保留它
--- （Claims.draft），拿更高級的地契就能把老屋搬進屍群立即清
+-- 屋齡門檻（ClearZombiesAfterHours）看人站的那一塊原生的建立時間（addSafeHouse 傳 0，setDatetimeCreated 換成
+-- Calendar.getTimeInMillis，SafeHouse.java:73、690-695；和 now 的 getTimestampMs 同為 System.currentTimeMillis）：
+-- 建立、重新框選、用地契升級都是新原生，從那時重新起算。不用紀錄的 createdAt：重畫與升級保留它
+-- （Claims.draft），拿更高級的地契就能把老屋搬進屍群立即清。建立時間 0（世界版號 < 223 的舊存檔載入時不設，
+-- SafeHouse.java:360-363；重開後 setDatetimeCreated(0) 變成當下）當成屋齡不明、不清，免得同一間重開前後一清一不清
 local function homes(now)
     local wait = MSH.Settings.clearZombiesAfterHours() * 3600000
     local home = nil
@@ -91,7 +93,7 @@ local function homes(now)
         local house = not p:isDead() and houseAt(p) or nil
         local who = house ~= nil and MSH.Identity.principal(p) or nil
         if who ~= nil and MSH.claimIdOf(who) == nil and house:playerAllowed(who)
-            and (wait == 0 or now - house:getDatetimeCreated() >= wait) then
+            and (wait == 0 or (house:getDatetimeCreated() > 0 and now - house:getDatetimeCreated() >= wait)) then
             home = home or {}
             home[keyOf(house)] = true
         end

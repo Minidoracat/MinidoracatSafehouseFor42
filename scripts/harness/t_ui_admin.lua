@@ -368,7 +368,7 @@ return function(T)
         and rules["zombiesHomeHelp#1"] ~= nil
         and rules["zombiesHomeHelp#1"].text == "Sandbox_MinidoracatSafehouse_ClearZombiesAtHome_tooltip",
         "規則頁有「有人在家時清除殭屍」：預設不勾，底下寫選項說明")
-    -- 在家清除的屋齡門檻（2026-11-24，預設 24 小時）：開關沒勾時反灰，勾了不用存檔就能改
+    -- 在家清除的屋齡門檻（2026-11-25，預設 24 小時）：開關沒勾時反灰，勾了不用存檔就能改
     check(rules["f:ClearZombiesAfterHours"] ~= nil and rules["f:ClearZombiesAfterHours"]:getText() == "24"
         and rules["f:ClearZombiesAfterHours"].enabled == false, "「建立後等待（小時）」預設 24、開關沒勾時反灰")
     rules["f:ClearZombiesAtHome"]:setChecked(true)
