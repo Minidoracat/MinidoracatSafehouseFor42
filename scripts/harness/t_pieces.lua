@@ -335,4 +335,56 @@ return function(T)
     res = T.cmd(alice, "redraw", { claimId = fiveId, rects = stairs(4), expectedRevision = rec.revision })
     check(res ~= nil and res.ok and #housesOf(MSH.marker(res.claimId)) == 4 and #housesOf(MSH.marker(fiveId)) == 0,
         "（對照）重新框選四塊：照常換成新屋")
+
+    T.section("細分權限：claimAt 內聯後和逐筆呼叫 Rect.listContains 一樣")
+    MSH = T.boot()
+    R = MSH.Registry
+    local LC, P = MSH.LIFECYCLE, MSH.Permissions
+    -- 規格：內聯前的寫法
+    local function spec(x, y)
+        for id, sr in pairs(R.md.claims) do
+            if MSH.isInt(id) and type(sr) == "table" and not sr.malformed and MSH.GUARDED[sr.lifecycle]
+                and MSH.Rect.listContains(sr.rects, x, y) then
+                return sr
+            end
+        end
+        return nil
+    end
+    local function put(rects, lifecycle)
+        local pr = R.newRecord({ claimId = R.allocId(), rects = rects, title = "c", owner = "alice", source = MSH.SOURCE.DEED,
+            deedTier = 1, createdAt = T.now, lifecycle = lifecycle })
+        R.put(pr)
+        return pr
+    end
+    R.md.claims[0] = { lifecycle = LC.ACTIVE, rects = {} }   -- 沒驗過的紀錄（見下面 id ≤ 0），沒有塊
+    check(P.claimAt(nil, nil) == nil, "受保護的紀錄都沒有塊：座標不是數字也照舊回 nil（碰到第一塊才取整）")
+    local A = put(L(100, 100))                                 -- 兩塊
+    local lapsed = put({ r(120, 100, 6, 6) }, LC.LAPSED)
+    put({ r(100, 120, 6, 6) }, LC.RELEASING)
+    put({ r(110, 120, 6, 6) }, LC.QUARANTINED)
+    put({ r(120, 120, 6, 6) }).malformed = true
+    local o1, o2 = put({ r(140, 100, 10, 6) }), put({ r(145, 100, 10, 6) })   -- 部分重疊：接管沒排除的那種
+    R.md.claims[1.5] = { lifecycle = LC.ACTIVE, rects = { r(130, 100, 4, 4) } }       -- 不是整數的 id
+    R.md.claims[math.huge] = { lifecycle = LC.ACTIVE, rects = { r(130, 110, 4, 4) } }
+    R.md.claims[R.allocId()] = "junk"
+    R.md.claims[R.allocId()] = true
+    -- id ≤ 0 不會被驗證（quarantineMalformed 只記 MALFORMED_KEY）：範圍中間有洞、座標是數字字串、邊界是小數
+    local zero = { lifecycle = LC.ACTIVE, rects = { r(100, 130, 4, 4), nil, r(110, 130, 4, 4) } }
+    local negative = { lifecycle = LC.ACTIVE, rects = { { x = "120", y = "130", w = 4, h = 4 } } }
+    local frac = { lifecycle = LC.ACTIVE, rects = { { x = 125.5, y = 130, w = 4, h = 4 } } }
+    R.md.claims[0], R.md.claims[-1], R.md.claims[-2] = zero, negative, frac
+    local n = 0
+    for y = 95, 135, 0.5 do                                    -- x 兩個方向都掃：記住上一間的快取在重疊處會和逐筆掃不同
+        for x = 95, 160, 0.5 do
+            if P.claimAt(x, y) ~= spec(x, y) then n = n + 1 end
+        end
+        for x = 160, 95, -0.5 do
+            if P.claimAt(x, y) ~= spec(x, y) then n = n + 1 end
+        end
+    end
+    local overlap = spec(147, 103)
+    check(n == 0 and P.claimAt(101.5, 109.9) == A and P.claimAt(105, 107) == A and P.claimAt(121, 101) == lapsed
+        and (overlap == o1 or overlap == o2) and P.claimAt(101, 131) == zero and P.claimAt(111, 131) == nil
+        and P.claimAt(121, 131) == negative and P.claimAt(125.75, 131) == nil and P.claimAt(126, 131) == frac,
+        "各種 lifecycle、malformed、不是整數的 id、部分重疊、沒驗過的紀錄（有洞、數字字串、小數邊界）、小數座標：和逐筆掃一樣")
 end

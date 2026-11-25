@@ -235,17 +235,25 @@ P.CELL_WRAPS = {
 
 -- ===== 判定 =====
 
--- 含 (x, y) 的受保護 claim（MSH.GUARDED：active、lapsed；legacy 匯入的是 active），看每一塊。範圍互不重疊（§7.3），第一筆就是，
--- 所以不必排序：直接走 R.md.claims（同 R.list 的篩選：整數 id、table、非 malformed），每個包裝到的動作都會走這裡，
--- 不配置、不排序（照 Admin.lua、Sharing.lua 的直接走訪）。
+local floor = math.floor
+
+-- 含 (x, y) 的受保護 claim（MSH.GUARDED：active、lapsed；legacy 匯入的是 active），看每一塊。直接走 R.md.claims、不排序
+-- （同 R.list 的篩選：整數 id、table、非 malformed；照 Admin.lua、Sharing.lua 的直接走訪）。範圍原則上不重疊（§7.3），但接管
+-- 不排除所有部分重疊的 legacy（Migration.lua candidates），重疊處回走訪順序的第一筆，所以不記上一次找到的那間。
+-- 每個包裝到的動作、每個作物指令都走這裡：MSH.isInt 與 Rect.listContains／containsPoint（d＝0）內聯，其餘照原寫法：ipairs 停在
+-- 第一個洞、`- 0` 讓數字字串照舊轉成數字（id ≤ 0 與唯讀 registry 的紀錄沒驗過）；碰到第一塊才取整（沒有受保護的塊時舊版不取整）。
 function P.claimAt(x, y)
     local md = MSH.Registry.md
     if md == nil then return nil end
     local GUARDED = MSH.GUARDED
+    local fx, fy
     for id, rec in pairs(md.claims) do
-        if MSH.isInt(id) and type(rec) == "table" and not rec.malformed and GUARDED[rec.lifecycle]
-            and MSH.Rect.listContains(rec.rects, x, y) then
-            return rec
+        if type(id) == "number" and id * 0 == 0 and id == floor(id)   -- MSH.isInt
+            and type(rec) == "table" and not rec.malformed and GUARDED[rec.lifecycle] then
+            for _, r in ipairs(rec.rects) do
+                if fx == nil then fx, fy = floor(x), floor(y) end
+                if fx >= r.x - 0 and fx < r.x + r.w and fy >= r.y - 0 and fy < r.y + r.h then return rec end
+            end
         end
     end
     return nil
@@ -563,10 +571,15 @@ local function wrapShovelGround()
     end
 end
 
+local function sameXY(p, q)
+    return p ~= nil and q ~= nil and p:getX() == q:getX() and p:getY() == q:getY()
+end
+
 -- SFarmingSystemCommands（farmingCommands.lua:13-141）：SFarmingSystem:OnClientCommand 每次以欄位查表（SFarmingSystem.lua:84, 577），
 -- 換欄位就生效。player 為 nil 是伺服器自己呼叫（SFarmingSystem.lua:640 destroyPlant），照原版。
 -- 指令照 args.x, y, z 找作物（getPlantAt，:9-11），plow 另外照同一組座標找格子（:68）：兩個都用原版的呼叫找，
--- 找到的作物或格子在安全屋裡而沒有 FARM 就不執行。
+-- 找到的作物或格子在安全屋裡而沒有 FARM 就不執行。三個目標平常是同一格：判定只看 x, y（deniesAt），和已放行的同一格就不再查
+-- （作物指令可能很密集，P.claimAt 是熱路徑）。
 -- cheat（:127-139，照 args.var 改作物的欄位）不接受 var 是 x 或 y，不分安全屋內外：原版找到作物之後照這兩個欄位找格子
 -- 與世界物件（SGlobalObject.lua:30-36），各處的判定都當它等於作物所在的位置。原版選單只送生長、水分、病蟲害與健康
 -- （ISFarmingMenu.lua:468-490, 1431-1450）。
@@ -587,10 +600,10 @@ local function wrapFarmingCommands()
             if player ~= nil and type(args) == "table" then
                 if name == "cheat" and (args.var == "x" or args.var == "y") then return end
                 local a, b = P.plantAt(args.x, args.y, args.z)
-                if P.denies(player, a, BIT.FARM, label) or P.denies(player, b, BIT.FARM, label)
-                    or P.denies(player, getCell():getGridSquare(args.x, args.y, args.z), BIT.FARM, label) then
-                    return
-                end
+                if P.denies(player, a, BIT.FARM, label) then return end
+                if not sameXY(b, a) and P.denies(player, b, BIT.FARM, label) then return end
+                local sq = getCell():getGridSquare(args.x, args.y, args.z)
+                if not sameXY(sq, a) and not sameXY(sq, b) and P.denies(player, sq, BIT.FARM, label) then return end
             end
             return orig(player, args)
         end

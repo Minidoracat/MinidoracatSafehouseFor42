@@ -630,6 +630,28 @@ return function(T)
     SFarmingSystemCommands.destroy(bare, { x = 106, y = 106, z = 0 })
     T.unloaded["106,106"] = nil
     check(T.ran["farm.destroy"] == 1, "農務指令：作物查表的位置在安全屋裡、那格沒載入、沒有 FARM → 被拒")
+    -- 三個目標只差一軸也要查：查表的位置與格子在範圍外，作物 Lua 欄位只差 x 或只差 y、落在 claim 裡
+    local onlyX = SFarmingSystem.instance:getLuaObjectAt(95, 105, 0)
+    onlyX.x = 105
+    local onlyY = SFarmingSystem.instance:getLuaObjectAt(105, 95, 0)
+    onlyY.y = 105
+    local watered = T.ran["farm.water"] or 0
+    deniedOf(bare)
+    SFarmingSystemCommands.water(bare, { x = 95, y = 105, z = 0 })
+    local dx = deniedOf(bare) or {}
+    SFarmingSystemCommands.water(bare, { x = 105, y = 95, z = 0 })
+    local dy = deniedOf(bare) or {}
+    check(MSH.Permissions.claimAt(95, 105) == nil and MSH.Permissions.claimAt(105, 95) == nil
+        and (T.ran["farm.water"] or 0) == watered and dx.bit == B.FARM and dx.claimId == rec.claimId
+        and dy.bit == B.FARM and dy.claimId == rec.claimId,
+        "農務指令：作物 Lua 欄位和查表的位置只差 x 或只差 y、在安全屋裡 → 照樣查，被拒並推 denied")
+    -- 熱路徑：三個目標同一格、放行時只查一次 claim（作物指令可能很密集）
+    local Pm, lookups = MSH.Permissions, 0
+    local realClaimAt = Pm.claimAt
+    Pm.claimAt = function(...) lookups = lookups + 1; return realClaimAt(...) end
+    SFarmingSystemCommands.water(farmer, { x = 105, y = 105, z = 0 })
+    Pm.claimAt = realClaimAt
+    check(lookups == 1 and (T.ran["farm.water"] or 0) == watered + 1, "農務指令：三個目標同一格、有 FARM → 只查一次 claim，照原版")
     -- cheat 不能改作物的 x, y（不分安全屋內外、有沒有 FARM）；其他欄位照一般農務指令判定
     SFarmingSystemCommands.cheat(bare, { x = 50, y = 50, z = 0, var = "x", count = 1 })
     SFarmingSystemCommands.cheat(farmer, { x = 105, y = 105, z = 0, var = "y", count = 1 })
