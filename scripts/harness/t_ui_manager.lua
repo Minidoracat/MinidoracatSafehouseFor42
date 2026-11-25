@@ -753,8 +753,18 @@ return function(T)
     local edges = 0
     for _ in pairs(FT.cells.rangeZones) do edges = edges + 1 end
     check(edges == 0, "外框模式、外緣都在畫面外：大禁建區一格都不畫")
-    pushZones(4, {})
-    check(next((drawn(0))) == nil, "禁建區刪光：推送後取消")
+    -- 道路豁免區：rangeExempt 圖層、虛線（每段頭尾一定畫）、染色往黑色拉（review R13、R26）
+    pushZones(4, { { id = 5, kind = "roadexempt", name = "Dot", rects = { { x = 3010, y = 3005, w = 1, h = 1 } } },
+        { id = 6, kind = "roadexempt", name = "Line", rects = { { x = 3002, y = 3008, w = 6, h = 1 } } } })
+    drawn(0)
+    local ex, exC = FT.cells.rangeExempt, Rg.COLORS.roadexempt
+    check(ex[key(3010, 3005, 0)] == exC and not FT.dashed(3010, 3005) and ex[key(3002, 3008, 0)] == exC
+        and ex[key(3007, 3008, 0)] == exC and ex[key(3004, 3008, 0)] == exC and ex[key(3003, 3008, 0)] == nil
+        and ex[key(3006, 3008, 0)] == nil and FT.cells.rangeZones[key(3010, 3005, 0)] == nil
+        and (exC.r + exC.g + exC.b) / 3 <= 0.5 and exC.a < 1,
+        "地面範圍的道路豁免區：rangeExempt 圖層虛線，1×1 也畫、每段頭尾一定畫、中間 2 亮 2 空；染色往黑色拉（review R13、R26）")
+    pushZones(5, {})
+    check(next((drawn(0))) == nil, "區域刪光：推送後取消")
     C.zones = { list = nil, rev = -1 }
     Rg.setOn(false)
     drawn(0)
@@ -950,14 +960,15 @@ return function(T)
     check(e.rangesBox.visible and e.fillBox.visible and eb <= footY,
         "沒有安全屋、最小大小：說明與〔建立安全屋〕底下的範圍那塊（含整片顯示）在頁尾上面（" .. eb .. " ≤ " .. footY .. "）")
 
-    T.section("ManagerWindow：在地面顯示範圍五顆 chip（含禁建區）、chip 下一列〔整片顯示〕（使用者 2026-10-16）")
+    T.section("ManagerWindow：在地面顯示範圍六顆 chip（含禁建區、道路豁免區）、chip 下一列〔整片顯示〕（使用者 2026-10-16）")
     local kinds, chipBottom = {}, 0
     for _, k in ipairs(b.rangeChips) do
         kinds[#kinds + 1] = k.internal
         chipBottom = math.max(chipBottom, k.y + k.height)
     end
-    check(table.concat(kinds, ",") == "own,shared,faction,others,zones"
-        and b.rangeChips[5].title == getText("IGUI_MSH_Ranges_zones"), "五顆 chip，第五顆是禁建區")
+    check(table.concat(kinds, ",") == "own,shared,faction,others,zones,roadexempt"
+        and b.rangeChips[5].title == getText("IGUI_MSH_Ranges_zones")
+        and b.rangeChips[6].title == getText("IGUI_MSH_Ranges_roadexempt"), "六顆 chip，第五顆禁建區、第六顆道路豁免區")
     check(b.fillBox ~= nil and b.fillBox.y >= chipBottom and b.fillBox.x == b.rangesBox.x,
         "〔整片顯示〕在 chip 下一列、和總開關對齊")
     MSH.Ranges.setOn(false)

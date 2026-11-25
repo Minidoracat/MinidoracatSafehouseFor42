@@ -12,6 +12,8 @@
 --     isMouseButtonDown(0)（LuaManager.java:7963-7967）更新終點、放開就套用。
 --   走位（walk）：照原版管理員安全區工具 media/lua/client/ISUI/AdminPanel/ISAddSafeZoneUI.lua——
 --     起點＝按〔設第一角〕時玩家所在格（:176）、終點＝玩家目前位置（:84）、每幀畫範圍（:107），走到對角按〔加入這塊〕。
+--   輸入座標（coords，只有管理員區域的新增面板用，使用者 2026-11-25 核准）：面板填兩個對角，S.setPreview 讓地上畫出這塊、
+--     〔加入這塊〕用 S.place 走和拉好一塊同一條路（S.commit）。不吃滑鼠與十字鍵。
 -- 地上的範圍由建立面板的 prerender 每幀呼叫 Sel.draw，交給 FloorTint：範圍、顏色或位置變了才動地板。
 -- 每幀路徑（update／bounds／draw）不配置 table 或 closure（形狀結果在 Shape.result 快取到下一次改動）。
 -- 出處：反編譯 D:/github/pz-decompiled-reference/snapshots/42.22.2-20261109/pz/zombie/Lua/LuaManager.java
@@ -30,6 +32,7 @@ local Shape = MSH.Shape
 
 S.DRAG = "drag"
 S.WALK = "walk"
+S.COORDS = "coords"
 
 -- 地面上框選的顏色與強度（FloorTint：把地板的光照色往顏色拉這個比例）。顏色不用主題的 accent（黃）：草地本來就偏黃綠，
 -- 黃色染上去幾乎看不出來（2026-10-12 使用者選「換明顯一點的顏色」）。sh-tintcolor-1012b 在白天的院子草地上量和沒染的
@@ -45,7 +48,8 @@ S.RAW_TINT = { 0.85 }
 S.PENDING_TINT = 1.0
 S.CURSOR_TINT = 1.0
 
--- s = { tool, playerNum, ax, ay（第一角）, bx, by（終點）, cx, cy（手把游標）, dragging, cut（挖掉模式）, shape }
+-- s = { tool, playerNum, ax, ay（第一角）, bx, by（終點）, cx, cy（手把游標）, dragging, cut（挖掉模式）, shape,
+--       px, py, pw, ph（輸入座標的那塊，地上預覽用） }
 -- rects：重新框選時從現有範圍開始；max：最多幾塊（不傳＝沙盒 MaxPieces，Shape.new；禁建區用硬上限 LIMIT.MAX_PIECES）
 function S.new(tool, playerNum, rects, max)
     local s = { tool = tool == S.WALK and S.WALK or S.DRAG, playerNum = playerNum or 0, dragging = false, cut = false,
@@ -74,11 +78,22 @@ local function setWorldMenu(disabled)
     if ISWorldObjectContextMenu then ISWorldObjectContextMenu.disableWorldMenu = disabled end
 end
 
--- 換工具（拖曳／走位）：拉到一半的那塊取消，範圍與復原紀錄保留
+-- 換工具（拖曳／走位／輸入座標）：拉到一半的那塊取消，範圍與復原紀錄保留
 function S.setTool(s, tool)
-    s.ax, s.ay, s.bx, s.by, s.dragging = nil, nil, nil, nil, false
-    s.tool = tool == S.WALK and S.WALK or S.DRAG
+    s.ax, s.ay, s.bx, s.by, s.dragging, s.px = nil, nil, nil, nil, false, nil
+    s.tool = (tool == S.WALK or tool == S.COORDS) and tool or S.DRAG
     setWorldMenu(false)
+end
+
+-- 輸入座標的那塊（x, y, w, h；x＝nil 清掉）：只畫在地上，不算進範圍
+function S.setPreview(s, x, y, w, h)
+    s.px, s.py, s.pw, s.ph = x, y, w, h
+end
+
+-- 兩個對角（含頭含尾）照模式加入或挖掉；回 true＝形狀變了
+function S.place(s, x1, y1, x2, y2)
+    s.ax, s.ay, s.bx, s.by = x1, y1, x2, y2
+    return S.commit(s)
 end
 
 function S.result(s)
@@ -204,10 +219,13 @@ function S.draw(s, player, ok, bad, over)
     Tint.setRects("shape", res.draw, c, res.rects ~= nil and S.PIECE_TINT or S.RAW_TINT, z)
     local pc = s.cut and bad or ok
     local x, y, w, h = S.bounds(s)
+    if x == nil and s.tool == S.COORDS and s.px ~= nil then x, y, w, h = s.px, s.py, s.pw, s.ph end
     if x ~= nil then
         Tint.setRect("pending", x, y, w, h, z, Tint.color(pc, S.PENDING_TINT))
         return
     end
+    -- 輸入座標沒有游標格（setRect 傳 nil＝清掉，已經清了就不動）
+    if s.tool == S.COORDS then return Tint.setRect("pending", nil, nil, nil, nil, z, nil) end
     local cx, cy = px, py
     if s.tool == S.DRAG then
         if s.cx ~= nil and S.usingJoypad(s) then

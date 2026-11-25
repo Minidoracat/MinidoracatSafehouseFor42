@@ -53,9 +53,14 @@ MSH.LIMIT = {
     -- 客戶端只染畫面看得到的格子（FloorTint.setRects 照視窗裁切）
     MAX_ZONES = 100,
     ZONE_SIDE = 1000,
+    MAX_ZONE_ID = 999999999,       -- 區域編號上限（zones.json 的 id／next、adminRemoveZone 的 zoneId）；下一個編號超過就不能新增
     STORAGE_PICKS = 50,            -- 遠距拿取一次最多幾件（server Storage.lua；客戶端數量對話框照這個上限）
     MAX_SHARES = 32,               -- 沙盒 MaxShares 的最大值；shareEdit／unshareMany 一次最多幾位（server Server.lua TYPES.users）
 }
+
+-- 管理員畫的區域種類（server Zones.lua；zones.json 的 kind、zones／zonesSync／adminZones 每筆的 kind、adminAddZone 的 kind）：
+-- 禁建區擋建立；道路豁免區只豁免道路這一步。兩種共用 LIMIT.MAX_ZONES
+MSH.ZONE_KIND = { NOBUILD = "nobuild", ROADEXEMPT = "roadexempt" }
 
 MSH.LIFECYCLE = {
     ACTIVE = "active",

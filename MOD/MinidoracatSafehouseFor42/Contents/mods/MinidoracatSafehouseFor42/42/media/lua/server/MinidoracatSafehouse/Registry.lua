@@ -638,8 +638,11 @@ function R.writeLines(path, lines, append)
     return written and closed
 end
 
--- 回傳行陣列（最多 max 行）；檔案不存在回 nil；存在卻讀不開回 false
-function R.readLines(path, max)
+-- 回傳行陣列（最多 max 行）；檔案不存在回 nil；存在卻讀不開回 false。選填第三個參數＝字數預算：累計（每行加換行 1）
+-- 超過就停止讀、關檔、回 false（手改的檔不必整份讀進記憶體才知道太大）。預算以行為單位：沒有換行的超大單行仍會先整行
+-- 讀進來；用到預算的檔都只有主機寫得到，不再細分
+function R.readLines(path, max, ...)
+    local maxChars = ...
     local reader
     -- getFileReader 吞掉 IOException 回 nil（LuaManager.java:5910；UTF-8）；用 cacheFileExists（LuaManager.java:5571）分辨不存在與讀不開
     local opened = pcall(function() reader = getFileReader(path, false) end)
@@ -648,17 +651,24 @@ function R.readLines(path, max)
         if ok and not exists then return nil end
         return false
     end
-    local lines = {}
+    local lines, chars, over = {}, 0, false
     -- readLine 也會丟 IOException：讀到一半壞掉一樣回 false（讀不開），不讓例外中斷開服的載入、留下讀了一半當成讀完的資料
     local read = pcall(function()
         while #lines < max do
             local line = reader:readLine()
             if line == nil then break end
+            if maxChars ~= nil then
+                chars = chars + #line + 1
+                if chars > maxChars + 1 then
+                    over = true
+                    break
+                end
+            end
             lines[#lines + 1] = line
         end
     end)
     pcall(function() reader:close() end)
-    if not read then return false end
+    if not read or over then return false end
     return lines
 end
 

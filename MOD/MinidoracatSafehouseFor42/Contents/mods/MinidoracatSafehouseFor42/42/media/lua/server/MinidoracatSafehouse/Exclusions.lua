@@ -348,25 +348,60 @@ local function addRun(st, x0, x1, y)
     st.cur[x0] = i
 end
 
-function E.roads(rects, cfg)
+-- 豁免盒（扁平 x0, y0, x1, y1）照 x0 排序成 { {x0, y0, x1, y1}, … }：每次 roads 排一次
+local function sortBoxes(flat)
+    local boxes = {}
+    for k = 1, #flat, 4 do boxes[#boxes + 1] = { flat[k], flat[k + 1], flat[k + 2], flat[k + 3] } end
+    return MSH.sortSafe(boxes, function(a, b) return a[1] < b[1] end)
+end
+
+-- 第 y 列被豁免的格：蓋到這一列的盒合併成不相交、由左到右的半開區間，扁平 a1, b1, a2, b2…（相接的併成一段）
+local function exemptRow(boxes, y)
+    local out, n = {}, 0
+    for _, b in ipairs(boxes) do
+        if y >= b[2] and y < b[4] then
+            if n > 0 and b[1] <= out[n] then
+                if b[3] > out[n] then out[n] = b[3] end
+            else
+                out[n + 1], out[n + 2] = b[1], b[3]
+                n = n + 2
+            end
+        end
+    end
+    return out
+end
+
+-- exempt（選填）：道路豁免區的盒（Zones.exemptBoxes，扁平 x0, y0, x1, y1），盒內的格不讀地板、不算路。不逐格比對每個盒
+-- （最多 800 個）：盒先照 x0 排序，每列算一次合併後的區間，x 往右走時用指標前進
+function E.roads(rects, cfg, exempt)
     if not cfg.avoidRoads then return nil end
     local kinds = cfg.roadKinds
     local cell, store = getCell(), roadStore()
     local near, lots   -- 第一次遇到非主要道路的勾選類別才查（每次 roads 最多一次）
     local rooms        -- 第一次遇到道路格才查
     local hit, st      -- 第一個違規格（回傳的 detail）與合併矩形的狀態
+    local boxes = exempt ~= nil and sortBoxes(exempt) or nil
     for _, rect in ipairs(rects) do
         local scan = Rect.expand(rect, cfg.roadMargin)
         local xEnd = scan.x + scan.w
         if st ~= nil then st.prev, st.cur = {}, {} end   -- 換一塊：上一塊最後一列的段不往下接
         for y = scan.y, scan.y + scan.h - 1 do
             local run = nil   -- 這一列進行中的違規段起點
+            local ex, k = boxes and exemptRow(boxes, y), 1   -- 這一列的豁免區間與目前指到的那段
             for x = scan.x, xEnd - 1 do
-                -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路
-                local sq = cell:getGridSquare(x, y, 0)
-                if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
-                -- getFloor：IsoGridSquare.java:4637（第一個 solidfloor 物件）；沒有地板時照紀錄
-                local kind = sq and floorKind(store, x, y, sq:getFloor(), kinds)
+                -- 伺服器走 ServerMap，chunk 沒載入回 nil（IsoCell.java:3190-3192）；已經確定是 ROAD 時只當成不是路。
+                -- 道路豁免格先跳過、不讀地板：整塊在道路豁免區內時道路這一步不會 NOT_LOADED
+                local kind, skip = nil, false
+                if ex then
+                    while ex[k] ~= nil and x >= ex[k + 1] do k = k + 2 end
+                    skip = ex[k] ~= nil and x >= ex[k]
+                end
+                if not skip then
+                    local sq = cell:getGridSquare(x, y, 0)
+                    if sq == nil and hit == nil then return CODE.NOT_LOADED, { x = x, y = y } end
+                    -- getFloor：IsoGridSquare.java:4637（第一個 solidfloor 物件）；沒有地板時照紀錄
+                    kind = sq and floorKind(store, x, y, sq:getFloor(), kinds)
+                end
                 if kind then
                     rooms = rooms or mapRooms(rects, cfg.roadMargin)
                     if inRoom(rooms, x, y) then kind = nil end

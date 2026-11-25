@@ -406,10 +406,25 @@ function AP.loadForeign(P)
     end)
 end
 
--- 伺服器提示多了原版屋（Client 事件 "alert"）：開著的面板重抓原版安全屋頁
+-- 伺服器提示（Client 事件 "alert"）：多了原版屋就重抓原版安全屋頁；zones.json 套用了就重抓排除頁的區域個數。
+-- 清單有變時伺服器先推 zonesSync（AP.onZonesSync 已經重抓）才發 ZONES_RELOADED（Zones.lua take）：
+-- 正在抓、或手上已是公開清單那一版就不再送（只有錯誤解除、內容沒變時個數也沒變）
 function AP.onAlert(a)
     local P = AP.instance
-    if type(a) == "table" and a.code == "FOREIGN_APPEARED" and AP.visible(P) then AP.loadForeign(P) end
+    if type(a) ~= "table" or not AP.visible(P) then return end
+    if a.code == "FOREIGN_APPEARED" then
+        AP.loadForeign(P)
+    elseif a.code == "ZONES_RELOADED" then
+        if P.zonesLoading or (P.zones ~= nil and P.zonesError == nil and P.zonesRev == MSH.Client.zones.rev) then return end
+        AP.loadZones(P)
+    end
+end
+
+-- 公開清單換了版本（Client 事件 "zones"：zonesSync 推播或 zones 回覆）：面板開著、和手上那一版不同才重抓
+function AP.onZonesSync(z)
+    local P = AP.instance
+    if type(z) ~= "table" or not MSH.isInt(z.rev) or not AP.visible(P) or z.rev == P.zonesRev then return end
+    AP.loadZones(P, z.rev)
 end
 
 -- 登入時安全屋變更已經暫停：補一則管理員提示。伺服器只在變成暫停的當下通知在線的管理員（Health.evaluate），
@@ -424,15 +439,35 @@ function AP.onLogin()
     end)
 end
 
--- 禁建區清單（adminZones：zones、max）：排除頁只寫個數；讀不到時留著上一次的個數、另寫原因
-function AP.loadZones(P)
-    MSH.Client.send("adminZones", {}, function(res) AP.onZones(P, res) end)
+-- 禁建區清單（adminZones：zones、max、rev）：排除頁只寫個數；讀不到時留著上一次的個數、另寫原因。
+-- 同時只送一筆：送出中又要抓就記下來（帶 rev＝要的版本，不帶＝無條件），回覆後還不夠新才再抓一次
+function AP.loadZones(P, ...)
+    local want = ...
+    if P.zonesLoading then
+        if want == nil or P.zonesAgain == true then
+            P.zonesAgain = true
+        else
+            P.zonesAgain = math.max(want, P.zonesAgain or want)
+        end
+        return
+    end
+    P.zonesLoading = true
+    local rid = MSH.Client.send("adminZones", {}, function(res) AP.onZonesLoaded(P, res) end)
+    if rid == nil then P.zonesLoading = nil end
+end
+
+function AP.onZonesLoaded(P, res)
+    local again = P.zonesAgain
+    P.zonesLoading, P.zonesAgain = nil, nil
+    AP.onZones(P, res)
+    if again ~= nil and not (again ~= true and res.ok and MSH.isInt(res.rev) and res.rev >= again) then AP.loadZones(P) end
 end
 
 -- adminZones 的回覆
 function AP.onZones(P, res)
     if res.ok then
         P.zones, P.zonesMax, P.zonesError = res.zones or {}, res.max or MSH.LIMIT.MAX_ZONES, nil
+        P.zonesRev = MSH.isInt(res.rev) and res.rev or nil
     else
         P.zonesError = res.code
     end
@@ -1457,6 +1492,8 @@ function AP.layoutExclusions(P, pg)
     -- 自家車道放寬用的停車場資料來源（§8.1；MiniMap parkingIn v4 有沒有）
     F:text("parking", getText(P.options and P.options.parkingApi and "IGUI_MSH_Admin_ParkingMiniMap"
         or "IGUI_MSH_Admin_ParkingNone"), "textMuted")
+    -- 服主關掉避開道路之前先看到另一個選擇：只在某個地方放行道路（設計稿 plan-allowzone-1125）
+    F:text("roadsExempt", getText("IGUI_MSH_Admin_RoadsExemptHint"), "textMuted")
     F.y = F.y + K.GAP
     F:text("h:res", getText("IGUI_MSH_Admin_ResourcesHead"), "text", UIFont.Medium)
     -- 沒有 MiniMap：這組設定藏起來，只寫要裝小地圖 MOD 才有這個功能（使用者 2026-10-12：「可以判斷隱藏，或者顯示
@@ -1473,9 +1510,9 @@ function AP.layoutExclusions(P, pg)
     AP.layoutZones(P, pg)
 end
 
--- ===== 禁建區（伺服器 Zones.lua；不看小地圖，一律顯示）=====
--- 這頁只寫個數與〔管理禁建區〕：清單、搜尋、傳送、新增、刪除在側邊的禁建區視窗（ZoneList.lua；使用者 2026-10-16：數量多了
--- 要另外的視窗管理、能傳送過去看）。框架不合時按鈕停用並寫原因
+-- ===== 管理員區域：禁建區與道路豁免區（伺服器 Zones.lua；不看小地圖，一律顯示）=====
+-- 這頁只寫各種類的個數與〔管理區域〕：清單、搜尋、傳送、新增、刪除、檔案狀態在側邊的管理員區域視窗（ZoneList.lua；使用者
+-- 2026-10-16：數量多了要另外的視窗管理、能傳送過去看）。框架不合時按鈕停用並寫原因
 function AP.layoutZones(P, pg)
     local F = pg.flow
     F.y = F.y + K.GAP
@@ -1483,7 +1520,12 @@ function AP.layoutZones(P, pg)
     F:text("zhint", getText("IGUI_MSH_Admin_ZonesHint"), "textMuted")
     if P.zonesError ~= nil then F:text("zerr", AP.codeText(P.zonesError), "errorText") end
     if P.zones ~= nil then
-        F:text("zcount", getText("IGUI_MSH_Admin_ZonesCount", #P.zones, P.zonesMax or MSH.LIMIT.MAX_ZONES), "textMuted")
+        local nEx = 0
+        for _, z in ipairs(P.zones) do
+            if z.kind == MSH.ZONE_KIND.ROADEXEMPT then nEx = nEx + 1 end
+        end
+        F:text("zcount", getText("IGUI_MSH_Admin_ZonesKindCount", #P.zones - nEx, nEx, P.zonesMax or MSH.LIMIT.MAX_ZONES),
+            "textMuted")
     elseif P.zonesError == nil then
         F:text("zload", getText("IGUI_MSH_Admin_Loading"), "textMuted")
     end
@@ -1900,5 +1942,6 @@ end
 if first then
     Events.OnTick.Add(function() MSH.AdminPanel.onTick() end)
     MSH.Client.on("alert", "adminPanel", function(a) MSH.AdminPanel.onAlert(a) end)
+    MSH.Client.on("zones", "adminPanel", function(z) MSH.AdminPanel.onZonesSync(z) end)
     MSH.Client.on("login", "adminPanel", function() MSH.AdminPanel.onLogin() end)
 end

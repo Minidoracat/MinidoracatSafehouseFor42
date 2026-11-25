@@ -186,12 +186,13 @@ The server re-checks every rule when you send the area, and the check page lists
 [/list]
 [*] [b]Without MiniMap[/b]: resource sites aren't checked.
 [/list]
-[h3]No-build zones (set by admins)[/h3]
+[h3]Admin zones: no-build and road-exempt[/h3]
+Admins can draw two kinds of zones in the admin panel:
 [list]
-[*] [b]What they are[/b]: places an admin marks in the admin panel where safehouses can't be built, such as dirt roads the road check can't detect.
-[*] [b]How they're checked[/b]: if the area covers any tile of one, you can't create or redraw it there. Only touching the edge is fine, and admins are blocked too.
-[*] [b]Can I see them?[/b] Yes. The "No-build zones" kind of "Show ranges on the ground" in Safehouse Manager (on by default) draws the zones near you in bright red, and updates right away when an admin adds or deletes one. When a check fails, the covered part is also marked red and the zone's name is shown.
-[*] [b]Existing safehouses[/b]: a zone added later doesn't remove them.
+[*] [b]No-build zones[/b]: places where safehouses can't be built, such as dirt roads the road check can't detect. If the area covers any tile of one, you can't create or redraw it there. Only touching the edge is fine, and admins are blocked too.
+[*] [b]Road-exempt zones[/b]: roads don't block claims here. Useful for letting players build next to a roadside gas station or parking lot without turning off Avoid roads for the whole server. Only the road check is skipped: resource points, no-build zones, size, distance and overlap are still checked, and where a no-build zone overlaps a road-exempt zone, the no-build zone wins. If only part of the area is inside, roads outside it still block, and the check says so.
+[*] [b]Can I see them?[/b] Yes. The "No-build zones" (bright red) and "Road-exempt zones" (dashed white) kinds of "Show ranges on the ground" in Safehouse Manager (on by default) draw the zones near you. They update right away when an admin adds or deletes a zone in game; a hand-edited zones.json shows up once it's applied (about 5–10 seconds, or right away with "Reload" in the zone window). When a no-build check fails, the covered part is also marked red and the zone's name is shown; when the whole area is inside a road-exempt zone, the road line says roads don't block it.
+[*] [b]Existing safehouses[/b]: a no-build zone added later, or a road-exempt zone deleted later, doesn't remove them; the new zones apply the next time they're redrawn.
 [/list]
 [h3]This server's rules[/h3]
 {{img:05-land-rules-en.jpg}}
@@ -291,7 +292,7 @@ Select a safehouse in the manager window and open "Members & sharing". To add so
 [*] [b]Vanilla UI[/b]: the vanilla claim-safehouse right-click option is removed; the vanilla safehouse window opens this manager for this mod's safehouses.
 [/list]
 [h3]Show ranges on the ground[/h3]
-A switch under the list (on by default) marks the safehouses and no-build zones near you on the ground:
+A switch under the list (on by default) marks the safehouses and admin zones near you on the ground:
 [table]
 [tr][th]Kind[/th][th]Color[/th][th]Who sees it[/th][/tr]
 [tr][td]Mine[/td][td]Cyan[/td][td]Always[/td][/tr]
@@ -299,13 +300,14 @@ A switch under the list (on by default) marks the safehouses and no-build zones 
 [tr][td]Faction[/td][td]Orange[/td][td]If the server allows it (on by default)[/td][/tr]
 [tr][td]Other players[/td][td]Magenta[/td][td]If the server allows it (off by default)[/td][/tr]
 [tr][td]No-build zones[/td][td]Bright red[/td][td]Always[/td][/tr]
+[tr][td]Road-exempt zones[/td][td]Dashed white (dashed dark gray on the "darker tiles" below)[/td][td]Always[/td][/tr]
 [/table]
 [list]
 [*] [b]Same color everywhere[/b]: grass and asphalt show the same color, and the swatch next to each switch is what you see on the ground.
 [*] [b]Darker tiles[/b]: near characters, and where a building would hide it, the color is tinted into the floor and looks darker; characters still stand on it and buildings still cover it.
 [*] [b]Fill areas[/b]: only the edges are drawn by default; with "Fill areas" on (off by default) the whole area gets a darker color and the edge is drawn in a brighter one.
 [*] [b]Overlaps[/b]: where a safehouse and a no-build zone overlap, the safehouse's color is shown.
-[*] [b]Per kind[/b]: each of the five kinds can be turned on or off.
+[*] [b]Per kind[/b]: each of the six kinds can be turned on or off.
 [*] [b]Stays on[/b]: after you close the window and next time you play; also switchable on the Mods page in Options.
 [*] [b]Display only[/b]: the game already sends every safehouse's area to all players, so a server turning a kind off doesn't keep it secret.
 [/list]
@@ -519,7 +521,7 @@ The admin panel reminds you if these differ; nothing is disabled.
 [*] The slot columns "Free", "Buy" and "Rent" take numbers (free safehouses per player, max bought, max rented at the same time); "Max/player" shows the three added together.
 [*] With a supported Economy, an extra "List in the Economy shop" button.
 [/list]
-[*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod); no-build zones: "Manage no-build zones" hides the panel and opens the no-build zone window on the right side of the screen. Each zone in the list shows its top-left corner, outline and piece count; you can search names, press "Teleport" to go to its center (needs the teleport-to-coordinates permission) and "Delete" (asks first); safehouses already inside a zone are listed under it (they aren't removed, so the admin decides what to do). While the window is open, zones are drawn bright red on the ground and the one you teleported to is yellow. "Add no-build zone" opens the same area tool as creating a safehouse (drag or walk to two corners, add or cut pieces), then you name it and press "Save zone"; saving or canceling brings you back to the zone window. Up to 100 zones; closing the zone window returns to the admin panel.
+[*] [b]Exclusions[/b]: roads, margin and road kinds; resource detection and categories (hidden without MiniMap, with a note that it needs the MiniMap mod); admin zones (no-build and road-exempt): "Manage zones" hides the panel and opens the zone window on the right side of the screen. The top line shows where zones.json is, when it was applied and how many zones there are. Each zone in the list is labeled with its kind in words (No-build / Road-exempt) and shows its top-left corner, outline and piece count; you can filter by All / No-build / Road-exempt, search names, press "Teleport" to go to its center (needs the teleport-to-coordinates permission; the row you teleported to says "Marked in yellow" and the zone is yellow on the ground) and "Delete" (asks first); safehouses already inside a zone are listed under it (they aren't removed, so the admin decides what to do). "Add zone" asks for the kind first, then opens the same area tool as creating a safehouse (drag or walk to two corners, add or cut pieces) or "Enter coordinates" (type two opposite corners of a piece and press "Add this piece", no need to walk there); name it and press "Save no-build zone" or "Save road-exempt zone"; saving or canceling brings you back to the zone window. Up to 100 zones of both kinds together; closing the zone window returns to the admin panel. You can also edit the file directly; see "Editing zones.json" below.
 [*] [b]Players[/b]: server-side paged search (50 per page); "Tier 1 free slots…" changes one player's tier 1 free slots (tier 1 only; leave it empty to use the server default), view, or release on their behalf (logged to the audit log).
 [*] [b]Vanilla safehouses[/b]: vanilla safehouses this mod doesn't manage; see "Vanilla safehouses" below.
 [*] [b]Paid slots[/b] (with Economy available): buy price, rent per period and insurance per day for each enabled tier, plus shared currency, period, grace, reminder and auto-renew.
@@ -670,13 +672,16 @@ Server-side data:
 [tr][td]Account-to-Steam bindings, personal tier 1 free slots, players' respawn points[/td][td]Zomboid/Lua/MinidoracatSafehouse/<server name>/private.txt[/td][/tr]
 [tr][td]Takeover records[/td][td]migration-completion.txt in the same folder[/td][/tr]
 [tr][td]Creation records for crash recovery[/td][td]crash-journal.txt in the same folder (cleared at start-up when there's nothing to restore)[/td][/tr]
-[tr][td]No-build zones set by admins[/td][td]zones.txt in the same folder[/td][/tr]
+[tr][td]No-build and road-exempt zones set by admins[/td][td]zones.json in the same folder (hand-editable, see below); an old zones.txt is moved into zones.json at the first start-up and the original is left as it is; zones-migration.txt in the same folder records that move, so do not edit or delete it[/td][/tr]
 [tr][td]Original surface of road tiles players changed[/td][td]roads-<save name>.txt in the same folder[/td][/tr]
 [tr][td]Audit log[/td][td]Zomboid/Logs/*_MinidoracatSafehouse.txt (one line per event; refusals summed up once a minute)[/td][/tr]
 [/table]
 [list]
 [*] [b]Backups and restores[/b]: include Zomboid/Lua/MinidoracatSafehouse/<server name>/ whenever you handle the save.
 [*] [b]Changing maps[/b]: if you switch to a different map under the same server name, delete roads-<save name>.txt, or the new map is judged by the old map's road records.
+[*] [b]Editing zones.json[/b]: saved changes apply within about 5–10 seconds (the server looks every 5 seconds and only applies a version it read the same twice, so a half-saved file is never picked up), or press "Reload" in the zone window to apply right away; admins online then get "zones.json applied (added, removed, changed)". Format: [code]{"zones": [{"id": 1, "kind": "nobuild", "name": "Spawn road", "rects": [{"x": 10600, "y": 9300, "w": 40, "h": 12}]}, {"id": 2, "kind": "roadexempt", "name": "Clover Lake base", "rects": [{"x": 5800, "y": 12250, "w": 122, "h": 96}]}]}[/code]Every entry needs all four fields, and any other field rejects the whole file: id is any unique integer from 1 to 999999999 (no need to be consecutive), kind is nobuild or roadexempt, name, and rects (1–8 pieces; x, y is the top-left corner and w, h the size; pieces can't overlap, must form one connected shape without holes, and the outline is at most 1000 tiles per side). JSON has no comments; adding or deleting in game rewrites the whole file, one zone per line.
+[*] [b]If zones.json has an error[/b]: while the server is running, none of it is applied, both kinds keep the previous version, and admins online get one notice. The zone window says where the error is (line, entry or field), and zones can't be added or deleted in game until the file is fixed, so your hand edits aren't overwritten. If it's already broken at start-up, there's no previous version to keep, so creating safehouses is paused (the admin panel's rules tab says so) until the file is fixed; no restart needed. The same pause happens if an old zones.txt can't be moved in on the first start-up, and the zone window says what to do.
+[*] [b]To clear all zones[/b]: change the contents to [code]{"zones":[]}[/code] instead of deleting the file. If zones.json is deleted while the server runs, the previous version is kept, and adding or deleting a zone in game rebuilds the file from the current list. If you restart before that, an old zones.txt (if it's still there) is moved in again, so zones added since then and all road-exempt zones are lost; with no old file, the list is empty.
 [*] [b]Rules[/b]: live in the server's sandbox file; see "Sandbox options and defaults".
 [/list]
 === ⚠️ Known limitations
@@ -719,7 +724,7 @@ Server-side data:
 [*] Blocking zombies that walk in from outside while no owner or member is home ("Clear zombies inside safehouses while someone is home" is off by default, and only clears while someone is home).
 [*] Moving or expanding a safehouse (only redrawing right after creation and upgrading with a deed).
 [*] Buying and selling land.
-[*] A server-wide map browser or teleporting (only admins can teleport to no-build zones from the zone window, using the vanilla command).
+[*] A server-wide map browser or teleporting (only admins can teleport to admin zones from the zone window, using the vanilla command).
 [*] Keeping vanilla safehouse chat in sync.
 [*] Adding new deed kinds in game (8 tiers max).
 [/list]

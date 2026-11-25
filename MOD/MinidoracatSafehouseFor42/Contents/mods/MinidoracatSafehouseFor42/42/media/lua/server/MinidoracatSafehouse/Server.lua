@@ -140,7 +140,8 @@ S.TYPES = {
         return type(v) == "table" and exactKeys(v, RECT_KEYS) and MSH.isInt(v.x) and MSH.isInt(v.y)
             and MSH.isInt(v.w) and MSH.isInt(v.h)
     end,
-    zoneId = function(v) return MSH.isInt(v) and v >= 1 and v < 1e9 end,
+    zoneId = function(v) return MSH.isInt(v) and v >= 1 and v <= MSH.LIMIT.MAX_ZONE_ID end,
+    zoneKind = function(v) return v == MSH.ZONE_KIND.NOBUILD or v == MSH.ZONE_KIND.ROADEXEMPT end,
     deedType = function(v) return MSH.tierOfDeed(v) ~= nil end,
     title = function(v) return type(v) == "string" and #v <= 120 and not MSH.hasControl(v) end,
     username = function(v) return MSH.validUsername(v) end,
@@ -417,7 +418,7 @@ end
 -- ===== 開服時序（§6 sequenceDiagram）=====
 -- OnInitGlobalModData：registry 可讀、native 還沒載入；OnLoadedMapZones：native 清單完整 → 首輪 reconcile → 開放 dispatcher。
 
--- 私有目錄的檔案：private.txt 與禁建區 zones.txt 都要在首次 Health.evaluate 之前讀好（讀不開＝PrivateStore blocker）
+-- 私有目錄的檔案：private.txt 與區域 zones.json 都要在首次 Health.evaluate 之前讀好（讀不開＝PrivateStore／ZonesFile blocker）
 local function loadPrivateFiles()
     MSH.Registry.loadPrivate()
     if MSH.Zones ~= nil then MSH.Zones.load() end

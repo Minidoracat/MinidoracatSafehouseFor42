@@ -261,10 +261,11 @@ function C.checkOccupancy(v)
     return nil
 end
 
--- 道路與資源點由 Exclusions 判定（§8）；模組不在就不擋
+-- 道路與資源點由 Exclusions 判定（§8）；模組不在就不擋。道路豁免區（Zones.lua）只豁免道路這一步；AvoidRoads 關閉時不算豁免盒
 function C.checkRoads(v)
-    if MSH.Exclusions == nil then return nil end
-    return MSH.Exclusions.roads(v.rects, v.cfg)
+    if MSH.Exclusions == nil or not v.cfg.avoidRoads then return nil end
+    local exempt = MSH.Zones and MSH.Zones.exemptBoxes(v.rects, v.cfg.roadMargin)
+    return MSH.Exclusions.roads(v.rects, v.cfg, exempt)
 end
 
 function C.checkResources(v)
@@ -272,7 +273,7 @@ function C.checkResources(v)
     return MSH.Exclusions.resources(v.rects, v.cfg)
 end
 
--- 管理員禁建區（Zones.lua）：任一塊壓到就拒絕；沒有禁建區時預檢不列這一項（STEPS 的 active）
+-- 管理員禁建區（Zones.lua，只看 nobuild）：任一塊壓到就拒絕；沒有禁建區時預檢不列這一項（STEPS 的 active）
 function C.checkZones(v)
     if MSH.Zones == nil then return nil end
     return MSH.Zones.hit(v.rects)

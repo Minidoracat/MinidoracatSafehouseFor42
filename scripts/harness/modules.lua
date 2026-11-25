@@ -13,6 +13,7 @@ return {
     { dir = "server", name = "MinidoracatSafehouse/Server" },
     { dir = "server", name = "MinidoracatSafehouse/Journal" },
     { dir = "server", name = "MinidoracatSafehouse/Exclusions" },
+    { dir = "server", name = "MinidoracatSafehouse/Json" },
     { dir = "server", name = "MinidoracatSafehouse/Zones" },
     { dir = "server", name = "MinidoracatSafehouse/Claims" },
     { dir = "server", name = "MinidoracatSafehouse/Reconcile" },

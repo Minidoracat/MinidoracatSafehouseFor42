@@ -3,6 +3,8 @@
 --    自己的深度重畫那一格（FBORenderCell.java:1125-1134；地板用 FloorShaper 的 tint，IsoObject.java:3689-3703），站在上面
 --    的人物、前面的房子照樣擋得住它（floortint-sp、sh-ranges-1012c 實機）。tint 把地板的光照色往顏色拉 a（Color.tintABGR，
 --    Color.java:243-253），最後乘上地板貼圖：草地幾乎沒有藍，藍、洋紅在草地上出不來（sh-tintbright-1012b）。
+--    乘上貼圖代表染色最亮只到貼圖本身的顏色：往白色拉等於沒染（shzd1-view-b zv-b08：臥室 7 格染白，地毯上看不到），
+--    所以白色疊色的道路豁免區染色時改往黑色拉（深灰，Ranges.COLORS.roadexempt）。
 -- 2. 疊色（顏色帶 ov 的：地面顯示範圍、禁建區）：在 RenderOpaqueObjectsInWorld（FBORenderCell.java:1123，原版建造游標
 --    ISBuildingObject.lua:697-701 的畫法）用 IsoSprite:RenderGhostTileColor 疊一張白色菱形貼圖（IsoSprite.java:519-556），
 --    顏色照 alpha 混進地面，任何地面上都是同一個色相（sh-overlay-1012a：四類彼此、和標紅的色差都 ≥ 38）。但它關掉深度
@@ -26,10 +28,12 @@ local first = MSH.FloorTint == nil
 local F = MSH.FloorTint or {}
 MSH.FloorTint = F
 
--- 前面的蓋過後面的；"zoneSel"＝禁建區視窗〔傳送〕過去的那個（蓋過其他禁建區），"zones"＝禁建區視窗與禁建區面板畫的
--- 既有禁建區（新框的範圍蓋在上面）；"ranges"＝地面範圍的安全屋，"rangeZones"＝地面範圍的禁建區（安全屋蓋過禁建區：
--- 已經建好、後來被框進禁建區的那間照樣看得出範圍）
-F.ORDER = { "marks", "indoor", "indoorArea", "pending", "shape", "zoneSel", "zones", "ranges", "rangeZones" }
+-- 前面的蓋過後面的；"zoneSel"＝管理員區域視窗〔傳送〕過去的那個（蓋過其他區域），"zones"／"zonesExempt"＝管理員區域視窗
+-- 與新增區域面板畫的既有禁建區／道路豁免區（新框的範圍蓋在上面）；"ranges"＝地面範圍的安全屋，"rangeZones"／
+-- "rangeExempt"＝地面範圍的禁建區／道路豁免區（安全屋蓋過區域：已經建好、後來被框進禁建區的那間照樣看得出範圍）。
+-- 兩種區域分兩層：重疊的格子取消其中一種時，不會連另一種一起取消
+F.ORDER = { "marks", "indoor", "indoorArea", "pending", "shape", "zoneSel", "zones", "zonesExempt", "ranges", "rangeZones",
+    "rangeExempt" }
 F.MARGIN = 4
 F.SCAN_MS = 500
 -- 被房子擋住：每層樓（牆）在畫面上 OCC_ROWS 列高，屋頂再 OCC_ROOF 列（sh-rangesov-1013c 一層樓：後面第 4 列被屋頂蓋住、
@@ -364,8 +368,11 @@ function F.window(z)
 end
 
 -- 一層換成這組矩形（flat：x, y, w, h, …）；第 i 個的顏色＝base 照 alphas 輪流的強度，後面的矩形蓋過前面的。
+-- 第 6 個參數（選填）dash＝true 畫虛線：只染 F.dashed 的格子（道路豁免區的外緣），每段的頭尾兩格一定染（1×1 的區也看得到）。
+-- 選填參數從 ... 取：Kahlua 少傳的參數不保證是 nil（家族 pitfalls.md）。
 -- 只染 F.window 裡的格子。和上次同一張 flat、同一個 base、同一張 alphas、範圍沒換就不動；變了只動顏色不同的格子
-function F.setRects(name, flat, base, alphas, z)
+function F.setRects(name, flat, base, alphas, z, ...)
+    local dash = (...) == true
     local v = F.window(z)
     local l = F.last[name]
     if l ~= nil and l.flat == flat and l.base == base and l.alphas == alphas and l.seq == v.seq then return end
@@ -373,10 +380,16 @@ function F.setRects(name, flat, base, alphas, z)
     local old, want = F.cells[name], {}
     for i = 1, #flat, 4 do
         local c = F.color(base, alphas[((i - 1) / 4) % #alphas + 1])
-        local x0, y0 = math.max(flat[i], v.x0), math.max(flat[i + 1], v.y0)
-        local x1, y1 = math.min(flat[i] + flat[i + 2] - 1, v.x1), math.min(flat[i + 1] + flat[i + 3] - 1, v.y1)
+        local fx, fy = flat[i], flat[i + 1]
+        local lx, ly = fx + flat[i + 2] - 1, fy + flat[i + 3] - 1
+        local x0, y0 = math.max(fx, v.x0), math.max(fy, v.y0)
+        local x1, y1 = math.min(lx, v.x1), math.min(ly, v.y1)
         for x = x0, x1 do
-            for y = y0, y1 do want[key(x, y, z)] = c end
+            for y = y0, y1 do
+                if not dash or F.dashCell(x, y, fx, fy, lx, ly) then
+                    want[key(x, y, z)] = c
+                end
+            end
         end
     end
     F.cells[name] = want
@@ -387,6 +400,16 @@ function F.setRects(name, flat, base, alphas, z)
     for k in pairs(old) do
         if want[k] == nil then show(cell, k) end
     end
+end
+
+-- 虛線的格子：沿著橫線或直線每 2 格亮、2 格空（x＋y 每走一格加一）
+function F.dashed(x, y)
+    return math.floor((x + y) / 2) % 2 == 0
+end
+
+-- 一段外緣（fx, fy）～（lx, ly）上的這格要不要畫成虛線的亮格：照 F.dashed，頭尾兩格一定畫（1×1 的區也看得到）
+function F.dashCell(x, y, fx, fy, lx, ly)
+    return F.dashed(x, y) or (x == fx and y == fy) or (x == lx and y == ly)
 end
 
 -- 一層只有一個矩形（拉到一半那塊、游標格；x 為 nil＝沒有），只染 F.window 裡的格子：只動新舊範圍不重疊的格子，

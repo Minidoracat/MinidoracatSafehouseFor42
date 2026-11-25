@@ -511,6 +511,60 @@ return function(T)
     vm.rects = { { x = 10, y = 10, w = 8, h = 8 }, { x = 18, y = 10, w = 4, h = 4 } }
     P.View.layout(v)
     check(uncovered() == "IGUI_MSH_Select_Uncovered|16", "預檢頁、L 形：範圍行下面寫 16 格沒圈到")
+    -- 道路豁免區（plan-allowzone-1125）：伺服器不回略過哪些格，客戶端用公開清單算這塊在不在區內
+    local savedZones = MSH.Client.zones.list
+    local function ex(id, rects) return { id = id, kind = "roadexempt", name = "Hwy" .. id, rects = rects } end
+    local box = { { x = 10, y = 10, w = 8, h = 8 } }
+    local c1a, n1 = P.exemptCover(box, { ex(1, { { x = 0, y = 0, w = 30, h = 30 } }) })
+    local c2a = P.exemptCover(box, { ex(2, { { x = 10, y = 10, w = 4, h = 8 } }), ex(3, { { x = 14, y = 10, w = 4, h = 8 } }) })
+    local c3a = P.exemptCover(box, { ex(4, { { x = 10, y = 10, w = 8, h = 7 } }) })
+    local c4a = P.exemptCover(box, { ex(5, { { x = 18, y = 18, w = 5, h = 5 } }), { id = 6, kind = "nobuild", name = "N", rects = box } })
+    check(c1a == "all" and n1 == "Hwy1" and c2a == "all" and c3a == "part" and c4a == nil,
+        "整塊在區內＝all（兩個區拼起來蓋滿也算）；差一列＝part；只碰到角或是禁建區＝不算")
+    vm.rects, vm.checks = box, { { name = "roads", ok = true } }
+    MSH.Client.zones.list = { ex(1, { { x = 0, y = 0, w = 30, h = 30 } }) }
+    P.View.layout(v)
+    check(lineTok("IGUI_MSH_Create_RoadsExempt|Hwy1") == "text" and lineTok("IGUI_MSH_Create_Check_roads") == nil,
+        "預檢道路過了、整塊在道路豁免區內：那一項改寫「在道路豁免區內，道路不擋」")
+    MSH.Client.zones.list = { ex(4, { { x = 10, y = 10, w = 8, h = 7 } }) }
+    P.View.layout(v)
+    check(lineTok("IGUI_MSH_Create_Check_roads") == "text" and lineTok("IGUI_MSH_Create_RoadsExemptPart|Hwy4") == "textMuted",
+        "一部分在區內：道路照常一項，下面補一句區外的道路照擋")
+    local sep = getText("IGUI_MSH_Admin_ListSep")
+    local twoZones = { ex(2, { { x = 10, y = 10, w = 4, h = 8 } }), ex(3, { { x = 14, y = 10, w = 4, h = 8 } }) }
+    local _, n2 = P.exemptCover(box, twoZones)
+    MSH.Client.zones.list = twoZones
+    P.View.layout(v)
+    check(n2 == "Hwy2" .. sep .. "Hwy3" and lineTok("IGUI_MSH_Create_RoadsExempt|Hwy2" .. sep .. "Hwy3") == "text",
+        "兩個區拼起來蓋滿：兩個區名都寫，用清單分隔符號串起來（review R12）")
+    -- 很多個區拼起來蓋滿：最多寫兩個區名，其餘寫「等 N 區」，那一項不會長到把按鈕推出畫面（review round2 Q7）
+    local five, longName = {}, {}
+    local maxName = MSH.LIMIT.TITLE_CHARS
+    for i = 1, 5 do
+        longName[i] = string.rep(string.char(64 + i), maxName - 3) .. " #" .. i
+        local r = i < 5 and { x = 8 + 2 * i, y = 10, w = 2, h = 8 } or { x = 10, y = 16, w = 8, h = 2 }
+        five[i] = { id = 10 + i, kind = "roadexempt", name = longName[i], rects = { r } }
+    end
+    local c5, n5 = P.exemptCover(box, five)
+    MSH.Client.zones.list = five
+    P.View.layout(v)
+    local want5 = getText("IGUI_MSH_Create_ExemptNamesMore", longName[1] .. sep .. longName[2], 5, 3)
+    local row5 = getText("IGUI_MSH_Create_RoadsExempt", want5)
+    five[6] = { id = 16, kind = "roadexempt", name = string.rep("F", maxName), rects = { { x = 10, y = 10, w = 8, h = 1 } } }
+    local _, n6 = P.exemptCover(box, five)
+    five[6] = nil
+    check(c5 == "all" and n5 == want5 and not string.find(n5, longName[3], 1, true) and not string.find(n5, longName[5], 1, true)
+        and lineTok(row5) == "text"
+        and n6 == getText("IGUI_MSH_Create_ExemptNamesMore", longName[1] .. sep .. longName[2], 6, 4),
+        "五個長名稱的區拼起來蓋滿：只寫前兩個區名＋等 5 區（其餘 3 區）；再多一區也只改數字，那一項不會變長")
+    MSH.Client.zones.list = { ex(1, { { x = 0, y = 0, w = 30, h = 30 } }) }
+    T.sandbox("AvoidRoads", false)
+    P.View.layout(v)
+    local offExempt = lineTok("IGUI_MSH_Create_RoadsExempt|Hwy1")
+    local offRoads = lineTok("IGUI_MSH_Create_Check_roads")
+    T.sandbox("AvoidRoads", true)
+    check(offExempt == nil and offRoads == "text", "避開道路關著：道路本來就不擋，不寫道路豁免區（review R12）")
+    MSH.Client.zones.list = savedZones
     vm.checks, vm.rects = savedChecks, savedRects
     P.View.layout(v)
     P.recheck(vm, T.now)
@@ -519,6 +573,27 @@ return function(T)
     local c6, k6 = frame()
     check(count(c6) == 64 and k6["12,13"] == acc and k6["10,10"] == acc and not c6["5,5"],
         "預檢通過：只剩範圍，問題格回到範圍的顏色、範圍外的取消")
+    -- 區域清單換了版本：停在預檢畫面就重新預檢（review R25）
+    vm.previewZonesRev = 4
+    local pv25 = #sentOf("preview")
+    MSH.Client.emit("zones", { list = {}, rev = 4 })
+    local kept = vm.checks ~= nil and not vm.previewWant
+    MSH.Client.emit("zones", { list = {}, rev = 5 })
+    check(kept and vm.checks == nil and vm.previewWant and #sentOf("preview") == pv25,
+        "清單 rev 和送預檢時一樣：結果留著；變了：清掉舊結果、照冷卻排程重新預檢（不立刻送）")
+    T.tick(7)
+    check(#sentOf("preview") == pv25 + 1, "冷卻過了送新的預檢")
+    reply(lastSent(), { pass = true, checks = { { name = "roads", ok = true } } })
+    vm.previewZonesRev = -1
+    MSH.Client.emit("zones", { list = {}, rev = 6 })
+    local base6 = vm.checks ~= nil and not vm.previewWant and vm.previewZonesRev == 6
+    MSH.Client.emit("zones", { list = {}, rev = 6 })
+    local same6 = vm.checks ~= nil and not vm.previewWant
+    MSH.Client.emit("zones", { list = {}, rev = 7 })
+    check(base6 and same6 and vm.checks == nil and vm.previewWant,
+        "送預檢時還沒有清單（rev -1）：第一份清單 rev 6 記成基準、不重送；同版不重送；之後換成 rev 7 才重新預檢（review round2 Q6）")
+    T.tick(7)
+    reply(lastSent(), { pass = true, checks = { { name = "roads", ok = true } } })
     P.toConfirm(vm)
     local c7 = frame()
     check(vm.phase == P.CONFIRM and count(c7) == 64, "confirm 照樣畫範圍")

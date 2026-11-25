@@ -192,9 +192,11 @@ return function(T)
     local function shown(pool, key) return pool[key] ~= nil and pool[key]:isVisible() end
     check(lastCmd("adminZones") ~= nil and shown(ex, "zload#1") and shown(ex, "zmanage") and ex.zmanage.enabled,
         "開面板就抓禁建區個數；回覆前寫讀取中，〔管理禁建區〕可以按")
-    answer("adminZones", { zones = { MALL, FARM }, max = 100, unreadable = false })
+    local HWY = { id = 8, kind = "roadexempt", name = "Highway", rects = { { x = 70, y = 10, w = 5, h = 2 } }, claims = {}, claimCount = 3 }
+    answer("adminZones", { zones = { MALL, FARM, HWY }, max = 100, unreadable = false })
     check(shown(ex, "noMiniMap#1") and shown(ex, "h:zones#1") and not shown(ex, "zload#1")
-        and ex["zcount#1"].text == tr("IGUI_MSH_Admin_ZonesCount", 2, 100), "沒有小地圖：資源點那組藏起來，禁建區個數照樣寫「2 / 100」")
+        and ex["zcount#1"].text == tr("IGUI_MSH_Admin_ZonesKindCount", 2, 1, 100),
+        "沒有小地圖：資源點那組藏起來，區域個數照樣寫（禁建區 2、道路豁免區 1、最多 100）")
     local stray = {}
     for k in pairs(ex) do
         if k == "zadd" or string.match(k, "^z[dtnac]%d") then stray[#stray + 1] = k end
@@ -263,6 +265,229 @@ return function(T)
     check(shown(pool, "empty#1") and not shown(pool, "noMatch#1") and not shown(pool, "zn1"), "一個禁建區都沒有：寫還沒有禁建區")
     ZL.load(m)
     answer("adminZones", { zones = { MALL, FARM }, max = 100, unreadable = false })
+
+    T.section("管理員區域視窗：種類標籤、分隔線、篩選、設定檔那一行（plan-allowzone-1125）")
+    local PATH = "Zomboid/Lua/MinidoracatSafehouseFor42/zones.json"
+    local AT = 13 * 3600000 + 5 * 60000
+    ZL.load(m)
+    answer("adminZones", { zones = { MALL, FARM, HWY }, max = 100, unreadable = false, rev = 5, file = { path = PATH, appliedAt = AT } })
+    check(pool.zknobuild1.title == tr("IGUI_MSH_ZoneKindTag_nobuild") and pool.zkroadexempt8.title == tr("IGUI_MSH_ZoneKindTag_roadexempt")
+        and pool["zc8#1"].text == tr("IGUI_MSH_ZoneList_ExemptClaims", 3) and pool["zc8#1"].color == colors.textMuted,
+        "每列前面用文字標種類（不只靠顏色）；道路豁免區寫區內有幾間，不當成問題列出屋主")
+    check(shown(pool, "zr4") and shown(pool, "zr8") and not shown(pool, "zr1") and pool.zr4.y > pool.zn1.y and pool.zr4.y < pool.zn4.y,
+        "列與列之間一條分隔線（第一列上面沒有）")
+    check(pool["file#1"].text == tr("IGUI_MSH_ZoneList_File", PATH, "13:05", 3, 100) and not shown(pool, "count#1")
+        and pool.zadd.enabled and pool.zd1.enabled and pool.zreload.enabled,
+        "設定檔那一行：路徑、幾點套用（本地 HH:MM）、共幾個／最多幾個，取代舊的個數行")
+    ZL.frame(v)
+    local cells = MSH.FloorTint.cells
+    local function key0(x, y) return MSH.FloorTint.key(x, y, 0) end
+    check(cells.zonesExempt[key0(70, 10)] ~= nil and cells.zones[key0(70, 10)] == nil and cells.zonesExempt[key0(5, 5)] == nil,
+        "地上：道路豁免區畫在 zonesExempt（白色虛線），不混進禁建區的紅色")
+    -- 染色乘在地板貼圖上，往白色拉等於沒染（e2e shzd1-view-b zv-b08）：染色要往暗色拉、強度看得出來但不是全黑；疊色仍是白色
+    local function darkTint(c)
+        return c ~= nil and (c.r + c.g + c.b) / 3 <= 0.5 and c.a >= 0.3 and c.a < 1
+    end
+    local function whiteOv(c) return c ~= nil and c.ov ~= nil and c.ov.r >= 0.8 and c.ov.g >= 0.8 and c.ov.b >= 0.8 end
+    local Rg = MSH.Ranges
+    local ec = cells.zonesExempt[key0(70, 10)]
+    check(darkTint(ec) and whiteOv(ec) and darkTint(Rg.COLORS.roadexempt) and whiteOv(Rg.COLORS.roadexempt)
+        and darkTint(Rg.FILL_COLORS.roadexempt) and Rg.FILL_COLORS.roadexempt.a < Rg.COLORS.roadexempt.a,
+        "道路豁免區染色往黑色拉（屋裡、人物蓋著的格子是深灰虛線），疊色照舊白色；地面範圍外緣與整片內部也一樣（review R26）")
+    local FTd = MSH.FloorTint   -- 借 zoneSel 層試（圖層要在 F.ORDER 裡）；下一幀 ZL.frame 照選取重畫
+    FTd.setRects("zoneSel", { 1, 1, 1, 1, 0, 3, 6, 1 }, ZL.SEL_COLOR, ZL.SEL_ALPHAS, 0, true)
+    local dc = FTd.cells.zoneSel
+    check(dc[key0(1, 1)] ~= nil and dc[key0(0, 3)] ~= nil and dc[key0(5, 3)] ~= nil and dc[key0(1, 3)] ~= nil
+        and dc[key0(3, 3)] == nil and dc[key0(4, 3)] == nil and not FTd.dashed(1, 1) and not FTd.dashed(0, 3),
+        "虛線：每段頭尾兩格一定畫（1×1 的區也看得到），中間照 2 亮 2 空（review R13）")
+    FTd.setRects("zoneSel", { 0, 3, 6, 1 }, ZL.SEL_COLOR, ZL.SEL_ALPHAS, 0)
+    check(FTd.cells.zoneSel[key0(3, 3)] ~= nil and FTd.cells.zoneSel[key0(4, 3)] ~= nil, "沒傳第 6 個參數：實線，每格都畫")
+    FTd.setRects("zoneSel", {}, ZL.SEL_COLOR, ZL.SEL_ALPHAS, 0)
+    check(pool.fAll.title == tr("IGUI_MSH_ZoneList_FilterAll", 3) and pool.fNo.title == tr("IGUI_MSH_ZoneList_FilterNobuild", 2)
+        and pool.fEx.title == tr("IGUI_MSH_ZoneList_FilterExempt", 1) and pool.fAll.active and not pool.fEx.active,
+        "篩選 chip 寫各種幾個，預設全部")
+    fw.click(pool.fEx)
+    check(m.kind == "roadexempt" and shown(pool, "zn8") and not shown(pool, "zn1") and not shown(pool, "zn4") and pool.fEx.active
+        and not pool.fAll.active and pool["matched#1"].text == tr("IGUI_MSH_ZoneList_Matched", 1), "按〔道路豁免區〕：只列這一種，寫符合幾個")
+    -- 只篩種類、沒輸入搜尋字時也會寫這句：句子不能說「符合搜尋」（e2e zn-a10），中英文都看
+    local function langText(lang, k)
+        local fh = assert(io.open("MOD/MinidoracatSafehouseFor42/Contents/mods/MinidoracatSafehouseFor42/42/media/lua/shared/"
+            .. "Translate/" .. lang .. "/IG_UI.json", "r"))
+        local s
+        for line in fh:lines() do
+            local lk, v = string.match(line, '^%s*"([%w_]+)":%s*"(.*)",?%s*$')
+            if lk == k then s = v end
+        end
+        fh:close()
+        return s
+    end
+    local chM, enM = langText("CH", "IGUI_MSH_ZoneList_Matched"), langText("EN", "IGUI_MSH_ZoneList_Matched")
+    check(m.query == "" and shown(pool, "matched#1") and chM ~= nil and not has(chM, "搜尋") and enM ~= nil
+        and not has(string.lower(enM), "search"),
+        "只篩種類、沒有搜尋字：那句寫「符合條件」，不寫「符合搜尋」（e2e zn-a10）")
+    fw.click(pool.fAll)
+    fw.click(pool.zknobuild1)
+    check(m.kind == "nobuild" and shown(pool, "zn1") and shown(pool, "zn4") and not shown(pool, "zn8"), "按列上的種類標籤：只看那一種")
+    fw.click(pool.fAll)
+    check(m.kind == nil and shown(pool, "zn8") and not shown(pool, "matched#1"), "〔全部〕：篩選拿掉")
+    fw.dialog = nil
+    fw.click(pool.zd8)
+    check(fw.dialog ~= nil and fw.dialog.text == tr("IGUI_MSH_Admin_ZoneRemoveAsk" .. "Exempt", "Highway", 3)
+        and ZL.removeAsk({ kind = "roadexempt", name = "X", claims = {} }) == tr("IGUI_MSH_Admin_ZoneRemoveAskExemptEmpty", "X"),
+        "刪道路豁免區：確認框寫區內的安全屋保留幾間；區內沒有就寫另一句")
+    fw.dialog.onResult(false)
+
+    T.section("管理員區域視窗：刪除帶 rev，檔案剛被手改就換成最新清單")
+    local removes0 = countCmd("adminRemoveZone")
+    fw.click(pool.zd1)
+    fw.dialog.onResult(true)
+    check(countCmd("adminRemoveZone") == removes0 + 1 and lastCmd("adminRemoveZone").args.rev == 5, "刪除帶看到這份清單時的 rev")
+    local HWY1 = { id = 1, kind = "roadexempt", name = "Highway", rects = HWY.rects, claims = {} }
+    answer("adminRemoveZone", { ok = false, code = "STALE_REVISION", zones = { HWY1 }, max = 100, unreadable = false, rev = 6,
+        file = { path = PATH, appliedAt = AT } })
+    check(m.busy == nil and m.rev == 6 and shown(pool, "zkroadexempt1") and not shown(pool, "zknobuild1") and not shown(pool, "zn4")
+        and pool["status#1"].text == tr("IGUI_MSH_ZoneList_Stale") and pool["status#1"].color == colors.warning
+        and countCmd("adminRemoveZone") == removes0 + 1,
+        "STALE_REVISION：換成回覆的最新清單（同編號換了種類，標籤跟著換），請管理員確認後再刪，不自己重送")
+
+    T.section("管理員區域視窗：確認框開著時清單重抓，確定後仍帶開框時的 rev（review R2）")
+    fw.dialog = nil
+    local removes2 = countCmd("adminRemoveZone")
+    fw.click(pool.zd1)
+    ZL.load(m)
+    answer("adminZones", { zones = { HWY1 }, max = 100, unreadable = false, rev = 7, file = { path = PATH, appliedAt = AT } })
+    local reloaded = m.rev == 7
+    fw.dialog.onResult(true)
+    check(reloaded and countCmd("adminRemoveZone") == removes2 + 1 and lastCmd("adminRemoveZone").args.rev == 6,
+        "確認框開著時清單換成 rev 7：確定送的是開框時看到的 rev 6（伺服器才擋得到中間的手改）")
+    answer("adminRemoveZone", { ok = false, code = "STALE_REVISION", zones = { HWY1 }, max = 100, unreadable = false, rev = 7,
+        file = { path = PATH, appliedAt = AT } })
+
+    T.section("管理員區域視窗：送出中收到清單變了，回覆處理完補抓（review R9）")
+    fw.click(pool.zreload)
+    local asked9 = countCmd("adminZones")
+    ZL.refresh(8)
+    local held = countCmd("adminZones") == asked9 and m.busy
+    answer("adminReloadZones", { zones = { HWY1 }, max = 100, unreadable = false, rev = 8, file = { path = PATH, appliedAt = AT } })
+    check(held and m.busy == nil and countCmd("adminZones") == asked9,
+        "送出中收到 rev 8 的推送先記著；回覆已經是 rev 8：不必再抓")
+    fw.click(pool.zreload)
+    asked9 = countCmd("adminZones")
+    ZL.refresh(9)
+    answer("adminReloadZones", { zones = { HWY1 }, max = 100, unreadable = false, rev = 8, file = { path = PATH, appliedAt = AT } })
+    check(countCmd("adminZones") == asked9 + 1, "回覆還是 rev 8、推送是 rev 9：清掉 busy 後補抓一次，不漏掉這次變更")
+    answer("adminZones", { zones = { HWY1 }, max = 100, unreadable = false, rev = 9, file = { path = PATH, appliedAt = AT } })
+    ZL.say(m, nil)
+
+    T.section("管理員區域視窗：一次只有一筆 adminZones；第一次沒抓到也跟著提示重抓（review round2 Q4）")
+    local keepZones, keepRev = m.zones, m.rev
+    m.zones, m.rev = nil, nil   -- 回到剛開窗、清單還沒到的狀態
+    local q4 = countCmd("adminZones")
+    ZL.load(m)
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_FILE", detail = "JSON,3" })
+    ZL.refresh(9)
+    local merged = countCmd("adminZones") == q4 + 1
+    answer("adminZones", { ok = false, code = "NO_REPLY", pending = false })
+    local followed = countCmd("adminZones") == q4 + 2 and m.zones == nil
+    answer("adminZones", { ok = false, code = "NO_REPLY", pending = false })
+    check(merged and followed and countCmd("adminZones") == q4 + 2 and not m.loading,
+        "第一次抓的回覆前收到提示與推送：不另送，回覆後補抓剛好一次；補抓的回覆後不再送")
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_FILE", detail = "JSON,3" })
+    check(countCmd("adminZones") == q4 + 3, "第一次就失敗（還沒有清單、沒有送出中）：之後的提示照樣重抓")
+    answer("adminZones", { zones = keepZones, max = 100, unreadable = false, rev = keepRev, file = { path = PATH, appliedAt = AT } })
+    check(m.zones ~= nil and m.rev == keepRev and not m.loading, "（對照）抓到清單")
+    fw.click(pool.zreload)
+    ZL.refresh(10)
+    local q4b = countCmd("adminZones")
+    answer("adminReloadZones", { ok = false, code = "NO_REPLY", pending = false, expired = true })
+    local once = countCmd("adminZones") == q4b + 1
+    answer("adminZones", { zones = keepZones, max = 100, unreadable = false, rev = 10, file = { path = PATH, appliedAt = AT } })
+    check(once and countCmd("adminZones") == q4b + 1, "重新載入送出中收到推送、結果未知：只補抓一筆，不另外再抓")
+    local zd = keepZones[1].id
+    ZL.sendRemove(m, zd, m.rev)
+    ZL.refresh(11)
+    local q4c = countCmd("adminZones")
+    answer("adminRemoveZone", { ok = false, code = "NOT_FOUND" })
+    local once2 = countCmd("adminZones") == q4c + 1
+    answer("adminZones", { zones = keepZones, max = 100, unreadable = false, rev = 11, file = { path = PATH, appliedAt = AT } })
+    check(once2 and countCmd("adminZones") == q4c + 1, "刪除送出中收到推送、回 NOT_FOUND：只補抓一筆")
+    ZL.say(m, nil)
+
+    T.section("管理員區域視窗：zones.json 有錯時寫橫幅、鎖住新增與刪除；跟著伺服器重抓")
+    local asked = countCmd("adminZones")
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_FILE", detail = "JSON,12" })
+    check(countCmd("adminZones") == asked + 1, "收到 ZONES_FILE 提示（rev 不變）：開著的視窗重抓清單")
+    answer("adminZones", { zones = { MALL, HWY }, max = 100, unreadable = false, rev = 6,
+        file = { path = PATH, appliedAt = AT, error = { code = "JSON", line = 12 } } })
+    check(pool["fileBad#1"].text == tr("IGUI_MSH_ZoneList_FileBad") and pool["fileWhy#1"].text == tr("IGUI_MSH_ZoneFile_JSON", 12)
+        and pool["fileKeep#1"].text == tr("IGUI_MSH_ZoneList_FileKeepAt", "13:05", 2)
+        and pool["filePath#1"].text == tr("IGUI_MSH_ZoneList_FilePath", PATH) and not shown(pool, "file#1"),
+        "橫幅：標題、哪一行錯、目前沿用幾點套用的那一份（幾個）、檔案路徑")
+    check(not pool.zadd.enabled and not pool.zd1.enabled and not pool.zd8.enabled and pool.zreload.enabled
+        and pool["block#1"].text == tr("IGUI_MSH_ZoneList_FileLock"), "檔案有錯：新增、刪除停用並寫原因；〔重新載入〕照樣可按")
+    local removes1 = countCmd("adminRemoveZone")
+    ZL.sendRemove(m, 1, 6)
+    ZL.onAdd(m)
+    check(countCmd("adminRemoveZone") == removes1 and Z.model == nil and not m.closed, "（直接呼叫）檔案有錯：不送刪除、不開新增面板")
+    local fe = ZL.fileErrorText
+    local known = true
+    for _, e in ipairs({ { code = "JSON", line = 3 }, { code = "NO_ZONES" }, { code = "TOO_MANY", max = 100 }, { code = "BAD_ID", index = 1 },
+        { code = "DUP_ID", index = 2, id = 3 }, { code = "BAD_KIND", index = 1 }, { code = "BAD_NAME", index = 1 },
+        { code = "BAD_RECTS", index = 1, reason = "PIECES" }, { code = "BAD_RECTS", index = 1, reason = "OVERLAP" },
+        { code = "BAD_RECTS", index = 1, reason = "SPLIT" }, { code = "BAD_RECTS", index = 1, reason = "HOLE" },
+        { code = "BAD_RECTS", index = 1, reason = "SIDE" }, { code = "UNKNOWN_FIELD", index = 1, field = "x" },
+        { code = "UNKNOWN_FIELD", field = "x" }, { code = "UNREADABLE" }, { code = "MISSING" } }) do
+        local s = fe(e)
+        if s == tr("IGUI_MSH_ZoneFile_Other", e.code) or has(s, "IGUI_") then known = false end
+    end
+    check(known and fe({ code = "UNKNOWN_FIELD", field = "zonez" }) == tr("IGUI_MSH_ZoneFile_UNKNOWN_FIELD_TOP", "zonez")
+        and fe({ code = "UNKNOWN_FIELD", index = 2, field = "nmae" }) == tr("IGUI_MSH_ZoneFile_UNKNOWN_FIELD", 2, "nmae")
+        and fe({ code = "BAD_RECTS", index = 3, reason = "SIDE" }) == tr("IGUI_MSH_ZoneFile_BAD_RECTS_SIDE", 3, MSH.LIMIT.ZONE_SIDE)
+        and fe({ code = "BAD_RECTS", index = 1, reason = "PIECES" }) == tr("IGUI_MSH_ZoneFile_BAD_RECTS_PIECES", 1, MSH.LIMIT.MAX_PIECES)
+        and fe({ code = "DUP_ID", index = 4, id = 7 }) == tr("IGUI_MSH_ZoneFile_DUP_ID", 4, 7)
+        and fe({ code = "BAD_ID", index = 2, id = 1000000000 }) == tr("IGUI_MSH_ZoneFile_BAD_ID", 2, MSH.LIMIT.MAX_ZONE_ID)
+        and has(fe({ code = "BAD_ID", index = 2 }), "999999999")
+        and MSH.Client.alertText("ZONES_FILE", "MIGRATE") == tr("IGUI_MSH_Alert_ZONES_FILE_MIGRATE")
+        and fe({ code = "TOO_MANY", max = 100 }) == tr("IGUI_MSH_ZoneFile_TOO_MANY", 100)
+        and fe({ code = "WHAT" }) == tr("IGUI_MSH_ZoneFile_Other", "WHAT"),
+        "錯誤句：每個碼都有自己的句子；最上層的未知欄位沒有 index 用另一句；BAD_RECTS 照 reason；不認得的碼寫通用句")
+    ZL.load(m)
+    answer("adminZones", { zones = { MALL, HWY }, max = 100, unreadable = false, rev = 6,
+        file = { path = PATH, appliedAt = AT, error = { code = "MISSING" } } })
+    check(not shown(pool, "fileBad#1") and pool["fileWhy#1"].text == tr("IGUI_MSH_ZoneFile_MISSING")
+        and pool["fileWhy#1"].color == colors.warning and not shown(pool, "fileKeep#1") and pool.zadd.enabled and pool.zd1.enabled
+        and not shown(pool, "block#1")
+        and MSH.Client.alertText("ZONES_FILE", "MISSING") == tr("IGUI_MSH_Alert_ZONES_FILE_MISSING"),
+        "zones.json 被刪（MISSING）：不算錯、不鎖新增與刪除（伺服器照目前清單重建），只寫一句沿用上一份與之後會怎樣（review R15）")
+    ZL.load(m)
+    answer("adminZones", { zones = {}, max = 100, unreadable = true, rev = 6, file = { path = PATH, error = { code = "MISSING" } } })
+    check(not shown(pool, "fileBad#1") and pool["fileWhy#1"].text == tr("IGUI_MSH_ZoneFile_MISSING_NoList")
+        and pool["fileWhy#1"].color == colors.errorText and not shown(pool, "fileKeep#1") and shown(pool, "unreadable#1")
+        and not pool.zadd.enabled and pool.zreload.enabled,
+        "開服就讀不開、之後檔案被刪：不寫「沿用上一份」，改寫錯誤色的沒有清單、暫停建立、重開伺服器會怎樣（review round2 Q9）")
+    fw.click(pool.zreload)
+    local rl = lastCmd("adminReloadZones")
+    check(rl ~= nil and MSH.Client.isPending(rl.args.requestId) and m.busy and not pool.zreload.enabled,
+        "〔重新載入〕送 adminReloadZones（mutation）；送出中停用")
+    answer("adminReloadZones", { zones = { MALL, FARM, HWY }, max = 100, unreadable = false, rev = 7,
+        file = { path = PATH, appliedAt = AT + 4 * 60000 } })
+    check(m.busy == nil and not shown(pool, "fileBad#1") and pool["file#1"].text == tr("IGUI_MSH_ZoneList_File", PATH, "13:09", 3, 100)
+        and pool["status#1"].text == tr("IGUI_MSH_ZoneList_Reloaded", 3) and pool.zadd.enabled and pool.zd1.enabled,
+        "修好後〔重新載入〕：橫幅收掉、設定檔那一行回來、狀態列寫共幾個、新增與刪除恢復")
+    MSH.Client.zones.rev = -1
+    asked = countCmd("adminZones")
+    MSH.Client.takeZones({ zones = {}, rev = 7 })
+    local sameRev = countCmd("adminZones") == asked
+    MSH.Client.takeZones({ zones = {}, rev = 8 })
+    check(sameRev and countCmd("adminZones") == asked + 1, "公開清單的 rev 和手上一樣不重抓；變了才重抓")
+    answer("adminZones", { zones = { MALL, FARM, HWY }, max = 100, unreadable = false, rev = 8, file = { path = PATH } })
+    asked = countCmd("adminZones")
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_RELOADED", detail = "0,0,0" })
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "CLAIM_DRIFT", detail = "3" })
+    check(countCmd("adminZones") == asked + 1 and pool["file#1"].text == tr("IGUI_MSH_ZoneList_FileNoTime", PATH, 3, 100),
+        "收到 ZONES_RELOADED 也重抓（別的提示不抓）；沒有套用時間時設定檔那一行不寫幾點")
+    answer("adminZones", { zones = { MALL, FARM }, max = 100, unreadable = false })
+    ZL.say(m, nil)
 
     T.section("禁建區視窗：傳送的落點")
     local tx, ty = ZL.target({ rects = { { x = 10, y = 20, w = 5, h = 4 } } })
@@ -419,6 +644,7 @@ return function(T)
     check(countCmd("adminAddZone") == adds + 1 and add.args.name == "Mall 2" and #ar == 1 and ar[1].x == 6 and ar[1].y == 6
         and ar[1].w == 10 and ar[1].h == 8 and MSH.Client.isPending(add.args.requestId),
         "〔儲存禁建區〕送 adminAddZone：去頭尾空白的名稱與框好的範圍（mutation）")
+    check(add.args.kind == "nobuild", "沒選種類：送禁建區")
     check(not pool.save.enabled and pool["busy#1"].text == tr("IGUI_MSH_Create_Waiting"), "等結果時不能再按儲存")
     answer("adminAddZone", { ok = false, code = "SAVE_FAILED" })
     check(Z.model == zm and not zm.closed and has(pool["fail#1"].text, tr("IGUI_MSH_Code_SAVE_FAILED"))
@@ -491,6 +717,139 @@ return function(T)
     Z.layout(v)
     check(v.win:getY() == 30, "放得下：留在使用者拖到的位置")
     getCore = realCore
+
+    T.section("新增區域：種類（禁建區／道路豁免區）")
+    check(Z.defaultName({ MALL, FARM, HWY }, "roadexempt") == tr("IGUI_MSH_Zone_DefaultNameExempt", 2)
+        and Z.defaultName({ MALL, FARM, HWY }, "nobuild") == tr("IGUI_MSH_Zone_DefaultName", 3), "預設名稱照同種類的個數＋1")
+    check(zm.kind == "nobuild" and pool.kindNo.active and not pool.kindEx.active and pool["hint#1"].text == tr("IGUI_MSH_Zone_Hint")
+        and pool.save.title == tr("IGUI_MSH_Zone_Save") and pool["needArea#1"].text == tr("IGUI_MSH_Zone_SaveNeedArea"),
+        "預設禁建區；範圍空著時寫出〔儲存〕為什麼不能按")
+    fw.click(pool.kindEx)
+    check(zm.kind == "roadexempt" and pool.kindEx.active and pool["hint#1"].text == tr("IGUI_MSH_Zone_HintExempt")
+        and pool.save.title == tr("IGUI_MSH_Zone_SaveExempt") and v.field:getText() == tr("IGUI_MSH_Zone_DefaultNameExempt", 1),
+        "換成道路豁免區：說明、〔儲存道路豁免區〕；名稱框還是預設名稱就換成「道路豁免區 1」")
+    v.field:setText("Hwy")
+    fw.click(pool.kindNo)
+    fw.click(pool.kindEx)
+    check(v.field:getText() == "Hwy", "名稱改過：換種類不蓋掉")
+
+    T.section("新增區域：輸入座標（plan-zonecoords-1125）")
+    fw.click(pool.coords)
+    check(zm.sel.tool == Sel.COORDS and pool.coords.active and shown(pool, "cf1") and shown(pool, "cf4")
+        and pool["toolHint#1"].text == tr("IGUI_MSH_Zone_CoordHint", 20, 20) and not shown(pool, "coordErr#1")
+        and not pool.coordApply.enabled, "〔輸入座標〕：四格、說明寫你現在的格子；四格都空不寫錯、〔加入這塊〕停用")
+    local function typ(i, s) pool["cf" .. i].onChange(pool["cf" .. i], s) end
+    local function cname(c, axis) return tr("IGUI_MSH_Zone_CoordField", tr("IGUI_MSH_Zone_Corner" .. c), axis) end
+    typ(1, "30")
+    typ(2, "25")
+    check(pool["coordErr#1"].text == tr("IGUI_MSH_Zone_CoordMissing", cname(2, "X") .. tr("IGUI_MSH_Admin_ListSep") .. cname(2, "Y"))
+        and not pool.coordApply.enabled, "填一半：寫哪幾格還沒填，不能加")
+    typ(3, "1.5")
+    check(pool["coordErr#1"].text == tr("IGUI_MSH_Zone_CoordNotInt", cname(2, "X")) and not pool.coordApply.enabled, "不是整數：寫哪一格")
+    typ(3, "21")
+    typ(4, " 22 ")
+    local cr = Z.coordPiece(zm)
+    check(cr ~= nil and cr.x == 21 and cr.y == 22 and cr.w == 10 and cr.h == 4 and pool["coordPiece#1"].text == tr("IGUI_MSH_Zone_CoordPiece", 10, 4, 40)
+        and not shown(pool, "coordFar#1") and pool.coordApply.enabled and pool.coordApply.style == "primary" and pool.save.style == "normal",
+        "兩角照任何順序（右下先填）：左上 (21, 22)、10 × 4（含頭含尾）；在附近不寫距離；範圍空著時〔加入這塊〕是主要按鈕")
+    Z.frame(v)
+    check(FT.cells.pending[FT.key(21, 22, 0)] ~= nil and FT.cells.pending[FT.key(30, 25, 0)] ~= nil
+        and FT.cells.pending[FT.key(31, 25, 0)] == nil and FT.cells.pending[FT.key(21, 26, 0)] == nil, "地上預覽填好的那一塊，邊界照兩角")
+    typ(1, "0")
+    typ(2, "0")
+    typ(3, tostring(side - 1))
+    typ(4, "5")
+    local wide = Z.coordPiece(zm)
+    check(wide ~= nil and wide.w == side and pool.coordApply.enabled, "剛好 " .. side .. " 格寬：可以加")
+    typ(3, tostring(side))
+    check(Z.coordPiece(zm) == nil and pool["coordErr#1"].text == tr("IGUI_MSH_Zone_CoordTooWide", side, side + 1)
+        and not pool.coordApply.enabled, "寬 " .. (side + 1) .. "：寫上限與實際寬度，不能加")
+    typ(3, "5")
+    typ(4, tostring(side))
+    check(pool["coordErr#1"].text == tr("IGUI_MSH_Zone_CoordTooTall", side, side + 1), "高超過也擋")
+    typ(1, "-1")
+    typ(2, "0")
+    typ(3, "5")
+    typ(4, "5")
+    local negErr = Z.coordPiece(zm) == nil and pool["coordErr#1"].text == tr("IGUI_MSH_Zone_CoordRange", 0, 999999)
+        and not pool.coordApply.enabled
+    typ(1, "999999")
+    typ(3, "1000000")
+    check(negErr and Z.coordPiece(zm) == nil and pool["coordErr#1"].text == tr("IGUI_MSH_Zone_CoordRange", 0, 999999)
+        and not pool.coordApply.enabled, "負的座標、超過 999999：寫座標範圍，不能加（同伺服器的 Rect.valid）（review R10）")
+    typ(1, "100")
+    typ(2, "20")
+    typ(3, "102")
+    typ(4, "21")
+    check(pool["coordFar#1"].text == tr("IGUI_MSH_Zone_CoordFar", 80), "離你 80 格：寫距離、提醒走近才看得到")
+    typ(1, "30")
+    typ(2, "25")
+    typ(3, "21")
+    typ(4, "22")
+    fw.click(pool.coordApply)
+    local cres = Sel.result(zm.sel)
+    check(#cres.rects == 1 and cres.rects[1].x == 21 and cres.rects[1].y == 22 and cres.rects[1].w == 10 and cres.rects[1].h == 4
+        and pool.save.enabled and pool.save.style == "primary" and not shown(pool, "needArea#1")
+        and zm.coord[1] == "" and zm.coord[4] == "" and pool.cf1:getText() == "" and pool.cf4:getText() == "",
+        "〔加入這塊〕：那一塊加進範圍（和拉好一塊同一條路），四格清空，〔儲存〕變主要按鈕")
+    zm.sel.shape.max = 1
+    typ(1, "31")
+    typ(2, "22")
+    typ(3, "33")
+    typ(4, "23")
+    check(Z.coordPiece(zm) == nil and pool["coordErr#1"].text == tr("IGUI_MSH_Select_Err_COMPLEX", 1) and not pool.coordApply.enabled,
+        "加上去會超過塊數上限：先寫原因、不能加（形狀不動）")
+    zm.sel.shape.max = MSH.LIMIT.MAX_PIECES
+    check(#Sel.result(zm.sel).rects == 1, "（對照）試算沒改到範圍")
+    fw.click(pool.cut)
+    typ(1, "21")
+    typ(2, "22")
+    typ(3, "22")
+    typ(4, "25")
+    check(pool.coordApply.title == tr("IGUI_MSH_Select_ApplyCut") and pool.coordApply.enabled, "挖掉模式：按鈕寫〔挖掉這塊〕")
+    fw.click(pool.coordApply)
+    cres = Sel.result(zm.sel)
+    check(#cres.rects == 1 and cres.rects[1].x == 23 and cres.rects[1].w == 8 and cres.rects[1].h == 4, "挖掉左邊兩欄：剩 8 × 4")
+    -- 加入後合併的外框超過上限：先擋，不加入、不清空四格、〔儲存〕也不能按（review round2 Q5）
+    fw.click(pool.add)
+    local x2 = tostring(23 + side)
+    typ(1, "31")
+    typ(2, "22")
+    typ(3, x2)
+    typ(4, "25")
+    local addsQ5 = countCmd("adminAddZone")
+    local blocked = Z.coordPiece(zm) == nil and pool["coordErr#1"].text == tr("IGUI_MSH_Zone_CoordTooBig", side, side + 1, 4)
+        and not pool.coordApply.enabled and not pool.save.enabled
+    local direct = not Z.applyCoords(zm) and not Z.save(zm, "Hwy")
+    cres = Sel.result(zm.sel)
+    check(blocked and direct and countCmd("adminAddZone") == addsQ5 and #cres.rects == 1 and cres.w == 8
+        and zm.coord[1] == "31" and zm.coord[3] == x2 and zm.coord[4] == "25",
+        "既有 8 寬＋相鄰 " .. (side - 7) .. " 寬：合併 " .. (side + 1) .. " 寬，寫合併後的大小；〔加入這塊〕〔儲存〕都停用，直接呼叫也不加、不送，四格保留")
+    fw.click(pool.cut)
+    check(Z.coordPiece(zm) ~= nil and pool.coordApply.enabled, "挖掉模式不擋外框（挖不會變大）")
+    for i = 1, 4 do typ(i, "") end
+
+    T.section("新增區域：送出種類、填好沒按〔加入這塊〕的那塊也存進去、磁碟上的檔案有錯")
+    adds = countCmd("adminAddZone")
+    typ(1, "29")
+    local halfOff = not pool.save.enabled and not Z.save(zm, "Hwy") and countCmd("adminAddZone") == adds
+    typ(2, "22")
+    typ(3, "30")
+    typ(4, "25")
+    check(halfOff and pool.save.enabled, "四格填一半：〔儲存〕停用、直接呼叫也不送（原因寫在四格下面）；填好就能存（review R16）")
+    fw.click(pool.save)
+    local addEx = lastCmd("adminAddZone")
+    check(countCmd("adminAddZone") == adds + 1 and addEx.args.kind == "roadexempt" and addEx.args.name == "Hwy"
+        and addEx.args.rects[1].x == 23 and addEx.args.rects[1].w == 6 and zm.coord[1] == "",
+        "〔儲存道路豁免區〕送 kind roadexempt、名稱與範圍；四格填好還沒按〔挖掉這塊〕的那塊也算進去（剩 6 × 4）（review R16）")
+    answer("adminAddZone", { ok = false, code = "SAVE_FAILED", reason = "FILE" })
+    check(not zm.closed and pool["fail#1"].text == tr("IGUI_MSH_Zone_SaveFileBad") and pool.save.enabled,
+        "zones.json 有錯（SAVE_FAILED＋FILE）：寫檔案有錯、不會蓋掉手改的檔，面板留著")
+    fw.click(pool.save)
+    answer("adminAddZone", { ok = false, code = "BAD_ARGS", reason = "ID_RANGE" })
+    check(pool["fail#1"].text == tr("IGUI_MSH_Zone_IdRange", "999999999") and has(pool["fail#1"].text, "999999999")
+        and not zm.closed and pool.save.enabled,
+        "區域編號用到上限（BAD_ARGS＋ID_RANGE）：寫編號上限與把 id 改小，不寫請求不正確（review round2 Q8）")
 
     T.section("禁建區面板與建立面板一次只開一個")
     local DEED2 = "MinidoracatSafehouse.Deed2"

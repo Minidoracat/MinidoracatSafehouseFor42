@@ -175,6 +175,22 @@ return function(T)
     check(#C.zones.list == 1 and C.zones.list[1].id == 2 and events == 3, "同一個 rev 照收（同一次開服的同一版）")
     serverCmd("zonesSync", { zones = "x", rev = 9 })
     check(C.zones.rev == 3 and events == 3, "格式不對的推送不收")
+    serverCmd("zonesSync", { zones = { { id = 4, kind = "roadexempt", name = "Hwy", rects = A.rects },
+        { id = 5, kind = "weird", name = "W", rects = B.rects }, B }, rev = 4 })
+    check(C.zones.list[1].kind == "roadexempt" and C.zones.list[2].kind == "nobuild" and C.zones.list[3].kind == "nobuild",
+        "kind 帶進清單：道路豁免區照收，不認得的與沒帶的（舊伺服器）當禁建區")
+
+    T.section("Client：區域設定檔的管理員提示（detail 逗號分隔）")
+    local realGT = getText
+    getText = function(k, ...) return k .. "|" .. table.concat({ ... }, "|") end
+    check(C.alertText("ZONES_FILE", "JSON,12") == "IGUI_MSH_Alert_ZONES_FILE_LINE|12"
+        and C.alertText("ZONES_FILE", "MISSING") == "IGUI_MSH_Alert_ZONES_FILE_MISSING|"
+        and C.alertText("ZONES_FILE", "MIGRATE") == "IGUI_MSH_Alert_ZONES_FILE_MIGRATE|"
+        and C.alertText("ZONES_FILE", "BAD_KIND") == "IGUI_MSH_Alert_ZONES_FILE|BAD_KIND|0|0"
+        and C.alertText("ZONES_RELOADED", "1,0,2") == "IGUI_MSH_Alert_ZONES_RELOADED|1|0|2",
+        "ZONES_FILE 有行號才用寫第幾行那句、檔案被刪（MISSING）用沿用上一份那句、遷移失敗（MIGRATE）用 zones.txt 搬不過來那句；"
+            .. "ZONES_RELOADED 拆成新增、刪除、修改")
+    getText = realGT
 
     T.section("Client：禁建區查詢失敗後 ZONES_RETRY_MS 內不重送")
     C.zones = { list = nil, rev = -1 }

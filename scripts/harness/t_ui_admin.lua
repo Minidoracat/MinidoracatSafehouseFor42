@@ -338,8 +338,43 @@ return function(T)
     foreignAsks = sends("adminForeign")
     T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "FOREIGN_APPEARED", detail = "1" })
     check(sends("adminForeign") == foreignAsks + 1, "面板開著時收到多了原版屋的提示：重抓原版安全屋頁")
+    answer("adminZones", { zones = {}, max = 100, unreadable = false })   -- 開面板那一筆
+    local zoneAsks = sends("adminZones")
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_RELOADED", detail = "1,0,0" })
+    check(sends("adminZones") == zoneAsks + 1 and sends("adminForeign") == foreignAsks + 1,
+        "收到 zones.json 套用了的提示：重抓排除頁的區域個數，不抓原版安全屋（review R23）")
+    answer("adminZones", { zones = {}, max = 100, unreadable = false })
     T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "INTERFERENCE", detail = "9" })
-    check(sends("adminForeign") == foreignAsks + 1, "其他提示不重抓")
+    check(sends("adminForeign") == foreignAsks + 1 and sends("adminZones") == zoneAsks + 1, "其他提示不重抓")
+    -- 公開清單換版（zonesSync）：排除頁的個數跟著重抓；伺服器先推 zonesSync 再發 ZONES_RELOADED，兩個一起來只送一筆（review round2 Q10）
+    local C = MSH.Client
+    local r0 = C.zones.rev
+    local z0 = sends("adminZones")
+    C.takeZones({ zones = {}, rev = r0 + 1 })
+    local afterSync = sends("adminZones")
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_RELOADED", detail = "1,0,0" })
+    local afterAlert = sends("adminZones")
+    answer("adminZones", { zones = { { id = 1, kind = "nobuild", name = "A", rects = { { x = 0, y = 0, w = 5, h = 5 } } } },
+        max = 100, unreadable = false, rev = r0 + 1 })
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_RELOADED", detail = "0,0,0" })
+    C.takeZones({ zones = {}, rev = r0 + 1 })
+    check(afterSync == z0 + 1 and afterAlert == z0 + 1 and sends("adminZones") == z0 + 1 and P.zonesRev == r0 + 1
+        and #P.zones == 1, "zonesSync 換版：面板開著就重抓；送出中再來 ZONES_RELOADED 不另送；手上已是那一版時提示與同版推播都不送")
+    -- 先送出（沒指定版本）、送出中又換版：回覆不是那一版就再抓一次，是了就停
+    AP.loadZones(P)
+    C.takeZones({ zones = {}, rev = r0 + 2 })
+    local inflight = sends("adminZones")
+    answer("adminZones", { zones = {}, max = 100, unreadable = false, rev = r0 + 1 })
+    local refetch = sends("adminZones")
+    answer("adminZones", { zones = {}, max = 100, unreadable = false, rev = r0 + 2 })
+    check(inflight == z0 + 2 and refetch == z0 + 3 and sends("adminZones") == z0 + 3 and P.zonesRev == r0 + 2,
+        "送出中換版：回覆比要的舊就再抓一次（只一次），回到要的那一版就停")
+    P.win:setVisible(false)
+    C.takeZones({ zones = {}, rev = r0 + 3 })
+    T.fire("OnServerCommand", MSH.MODULE, "alert", { code = "ZONES_RELOADED", detail = "1,0,0" })
+    local hidden = sends("adminZones")
+    P.win:setVisible(true)
+    check(hidden == z0 + 3, "面板關著：換版與提示都不抓")
     local deeds = P.pages.deeds.flow.pool
     local function shown(key) return deeds[key] ~= nil and deeds[key]:isVisible() end
     check(shown("f:Tier1Side") and shown("f:Tier3RentSlots") and not shown("f:Tier4Side") and not shown("warn1#1")

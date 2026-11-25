@@ -114,6 +114,97 @@ return function(T)
     T.unloaded["104,103"] = nil
     check(roads() == nil, "清掉後通過")
 
+    T.section("Exclusions：道路豁免區（Claims.checkRoads → Zones.exemptBoxes，往外擴 RoadMargin）")
+    local Zn = MSH.Zones
+    local function zone(id, kind, x, y, w, h)
+        return { id = id, kind = kind, name = "z" .. id, rects = { { x = x, y = y, w = w, h = h } } }
+    end
+    local function checked(rs)
+        T.squareReads = 0
+        return MSH.Claims.checkRoads({ rects = rs or { rect }, cfg = cfg })
+    end
+    -- 安全屋剛好等於豁免區 (100,100) 10×10：掃描範圍 [99,111) 正好是區往外擴 1，貼邊那格的路也放行
+    Zn.list = { zone(1, "roadexempt", 100, 100, 10, 10) }
+    T.floor(99, 105, "blends_street_01_96")
+    T.floor(105, 105, "blends_street_01_80")
+    check(checked() == nil and T.squareReads == 0,
+        "整塊在豁免區內：區內與貼邊（RoadMargin）的路都放行、不讀地板（實際讀 " .. T.squareReads .. " 格）")
+    T.unloaded["104,103"], T.unloaded["99,99"] = true, true
+    check(checked() == nil, "豁免範圍內沒載入：不回 NOT_LOADED")
+    T.unloaded["104,103"], T.unloaded["99,99"] = nil, nil
+    -- 跨出區外：安全屋 (100,100) 15×10 → 掃描 [99,116)；豁免盒 [99,111)；區外 (113,105) 的路照擋，區內的不回
+    T.floor(113, 105, "blends_street_01_80")
+    code, d = checked({ { x = 100, y = 100, w = 15, h = 10 } })
+    check(code == C.ROAD and d.x == 113 and sameAreas(d.areas, { 113, 105, 1, 1 }), "跨出豁免區：只回區外的路格")
+    T.floor(113, 105, nil)
+    Zn.list = { zone(1, "nobuild", 100, 100, 10, 10) }
+    check(checked() == C.ROAD, "禁建區不給豁免")
+    Zn.list = { zone(1, "roadexempt", 300, 300, 10, 10) }
+    check(Zn.exemptBoxes({ rect }, 1) == nil and checked() == C.ROAD, "遠處的豁免區：不傳盒、不放行")
+    cfg.avoidRoads = false
+    Zn.list = { zone(1, "roadexempt", 100, 100, 10, 10) }
+    local realBoxes, boxCalls = Zn.exemptBoxes, 0
+    Zn.exemptBoxes = function(...)
+        boxCalls = boxCalls + 1
+        return realBoxes(...)
+    end
+    check(checked() == nil and T.squareReads == 0 and boxCalls == 0, "AvoidRoads 關：結果不變、不掃、不算豁免盒")
+    Zn.exemptBoxes = realBoxes
+    cfg.avoidRoads = true
+    Zn.list = {}
+    T.floor(99, 105, nil)
+    T.floor(105, 105, nil)
+
+    -- 每列的豁免區間（排序、合併、指標前進）和逐格比對每個盒等價：隨機盒（重疊、相接、蓋滿整列），兩塊的掃描範圍重疊；
+    -- 每格讀不讀地板（讀幾次）要和「落在任一盒內就不讀」完全一致
+    local seed = 12345
+    local function rnd(n)
+        seed = (seed * 16807) % 2147483647
+        return seed % n
+    end
+    local rs = { { x = 500, y = 500, w = 30, h = 20 }, { x = 528, y = 505, w = 10, h = 10 } }
+    local flat = { 480, 510, 560, 511 }   -- 蓋滿第 510 列
+    local function box(x0, y0, x1, y1)
+        flat[#flat + 1], flat[#flat + 2], flat[#flat + 3], flat[#flat + 4] = x0, y0, x1, y1
+    end
+    for _ = 1, 60 do
+        local x0, y0, w, h = 495 + rnd(50), 495 + rnd(30), 1 + rnd(8), 1 + rnd(6)
+        box(x0, y0, x0 + w, y0 + h)
+        if rnd(3) == 0 then box(x0 + w, y0, x0 + w + 1 + rnd(3), y0 + h) end   -- 緊貼右邊
+        if rnd(4) == 0 then box(x0 + 1, y0, x0 + w + 4, y0 + 1) end           -- 和上一個重疊、伸得更遠
+    end
+    local function inBox(x, y)
+        for k = 1, #flat, 4 do
+            if x >= flat[k] and y >= flat[k + 1] and x < flat[k + 2] and y < flat[k + 3] then return true end
+        end
+        return false
+    end
+    local reads, realGetCell = {}, getCell
+    getCell = function()
+        local c = realGetCell()
+        return { getGridSquare = function(_, x, y, z)
+            reads[x .. "," .. y] = (reads[x .. "," .. y] or 0) + 1
+            return c:getGridSquare(x, y, z)
+        end }
+    end
+    local eqCode = E.roads(rs, cfg, flat)
+    getCell = realGetCell
+    local want, cells, skipped = {}, 0, 0
+    local m = cfg.roadMargin
+    for _, r in ipairs(rs) do
+        for y = r.y - m, r.y + r.h + m - 1 do
+            for x = r.x - m, r.x + r.w + m - 1 do
+                cells = cells + 1
+                if inBox(x, y) then skipped = skipped + 1 else want[x .. "," .. y] = (want[x .. "," .. y] or 0) + 1 end
+            end
+        end
+    end
+    local same = true
+    for k, n in pairs(want) do same = same and reads[k] == n end
+    for k, n in pairs(reads) do same = same and want[k] == n end
+    check(eqCode == nil and same and skipped > 0 and skipped < cells, "豁免區間和逐格比對每個盒的結果完全相同（"
+        .. cells .. " 格、豁免 " .. skipped .. " 格）")
+
     T.section("Exclusions：自家車道放寬（住宅外框＋邊界＋2）")
     -- 住宅外框 (200,200) 10×10；邊界 1 → 近區 [197,213)；範圍 (200,200) 20×10 → 掃描 [199,221)×[199,211)
     rect = { x = 200, y = 200, w = 20, h = 10 }
@@ -595,6 +686,10 @@ return function(T)
     buildings = { { x = 111, y = 100, w = 4, h = 4, cats = { medical = true } } }
     code, d = E.resources({ rect }, cfg)
     check(code == C.RESOURCE and d.cat == "medical", "間距內（中間隔 1 格、claimGap 2）的建築擋")
+    MSH.Zones.list = { { id = 1, kind = "roadexempt", name = "z", rects = { { x = 90, y = 90, w = 40, h = 40 } } } }
+    code, d = MSH.Claims.checkResources({ rects = { rect }, cfg = cfg })
+    MSH.Zones.list = {}
+    check(code == C.RESOURCE and d.cat == "medical", "道路豁免區不豁免資源點")
     buildings = { { x = 112, y = 100, w = 4, h = 4, cats = { medical = true } } }
     check(E.resources({ rect }, cfg) == nil, "隔滿 claimGap 格的建築不擋")
     cfg.resourceRule = MSH.Settings.RULE.ROOMS

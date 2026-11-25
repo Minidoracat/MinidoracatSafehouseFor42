@@ -300,7 +300,8 @@ end
 C.ZONES_RETRY_MS = 10000
 
 -- 回覆或推送 { zones, rev }：格式不對回 false；rev 舊的忽略（回 true）；否則換掉清單、發 "zones" 事件。
--- 只留形狀合法的（Rect.shapeError：塊數、各塊合法、不重疊、連成一片）：地面範圍照 rects 算外緣、逐格走各塊
+-- 只留形狀合法的（Rect.shapeError：塊數、各塊合法、不重疊、連成一片）：地面範圍照 rects 算外緣、逐格走各塊。
+-- kind 只認道路豁免區，其餘（含舊伺服器沒帶 kind）都當禁建區
 function C.takeZones(args)
     if type(args.zones) ~= "table" or not MSH.isInt(args.rev) then return false end
     local z = C.zones
@@ -308,7 +309,9 @@ function C.takeZones(args)
     local list = {}
     for _, e in ipairs(args.zones) do
         if type(e) == "table" and MSH.isInt(e.id) and MSH.Rect.shapeError(e.rects) == nil then
-            list[#list + 1] = { id = e.id, name = type(e.name) == "string" and e.name or "", rects = MSH.Rect.copyList(e.rects) }
+            local kind = e.kind == MSH.ZONE_KIND.ROADEXEMPT and e.kind or MSH.ZONE_KIND.NOBUILD
+            list[#list + 1] = { id = e.id, kind = kind, name = type(e.name) == "string" and e.name or "",
+                rects = MSH.Rect.copyList(e.rects) }
         end
     end
     z.list, z.rev = list, args.rev
@@ -353,10 +356,27 @@ function C.bitsAt(x, y)
     return row and row.bits or 0, id
 end
 
--- 伺服器給在線管理員的提示（Audit.alertAdmins：code、detail）：每個碼一句「發生什麼、到哪裡處理」，不認得的碼寫通用句
+-- 伺服器給在線管理員的提示（Audit.alertAdmins：code、detail）：每個碼一句「發生什麼、到哪裡處理」，不認得的碼寫通用句。
+-- 區域設定檔的兩個碼 detail 是逗號分隔的數字：ZONES_FILE＝"錯誤碼" 或 "錯誤碼,行號"（有行號才寫第幾行；
+-- MISSING＝檔案被刪，不算錯；MIGRATE＝zones.json 是遷移 zones.txt 失敗留下的說明：各有專屬的句子），ZONES_RELOADED＝"新增,刪除,修改"
 function C.alertText(code, detail)
     local key = "IGUI_MSH_Alert_" .. tostring(code)
-    local text = getText(key, tostring(detail or "-"))
+    local text
+    if code == "ZONES_FILE" or code == "ZONES_RELOADED" then
+        local parts = {}
+        for s in string.gmatch(tostring(detail or ""), "[^,]+") do parts[#parts + 1] = s end
+        if code == "ZONES_FILE" and (parts[1] == "MISSING" or parts[1] == "MIGRATE") then
+            key = key .. "_" .. parts[1]
+            text = getText(key)
+        elseif code == "ZONES_FILE" and parts[2] ~= nil then
+            key = key .. "_LINE"
+            text = getText(key, parts[2])
+        else
+            text = getText(key, parts[1] or "0", parts[2] or "0", parts[3] or "0")
+        end
+    else
+        text = getText(key, tostring(detail or "-"))
+    end
     if text == key then text = getText("IGUI_MSH_Alert_Generic", tostring(code)) end
     return text
 end

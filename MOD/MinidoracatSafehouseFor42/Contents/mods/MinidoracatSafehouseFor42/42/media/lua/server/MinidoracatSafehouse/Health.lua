@@ -70,10 +70,10 @@ function H.evaluate(now)
     if not MSH.Settings.readable() then blockers[#blockers + 1] = "SandboxVars" end
     local R = MSH.Registry
     if R ~= nil and R.readOnly then blockers[#blockers + 1] = "RegistrySchema" end
-    -- 禁建區檔（Zones.lua，同一個私有目錄）讀不開也算：不然玩家能在讀不到的禁建區裡建立
-    if R ~= nil and (R.privateUnreadable or (MSH.Zones ~= nil and MSH.Zones.unreadable)) then
-        blockers[#blockers + 1] = "PrivateStore"
-    end
+    if R ~= nil and R.privateUnreadable then blockers[#blockers + 1] = "PrivateStore" end
+    -- 區域檔（Zones.lua，同一個私有目錄）開服就讀不開或不合規：不然玩家能在讀不到的禁建區裡建立。另列一項：修好 zones.json
+    -- 輪詢採用就解除，不必重開服（PrivateStore 要查權限、重開服）
+    if MSH.Zones ~= nil and MSH.Zones.unreadable then blockers[#blockers + 1] = "ZonesFile" end
     local _, settingsWarnings = MSH.Settings.get()
     local st = {
         blocked = #blockers > 0,

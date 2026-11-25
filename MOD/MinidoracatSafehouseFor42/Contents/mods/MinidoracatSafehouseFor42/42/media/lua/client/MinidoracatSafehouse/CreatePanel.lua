@@ -253,6 +253,7 @@ function P.pump(m, now)
     -- 重新框選沒有 deedType；用地契升級才帶
     local args = { rects = MSH.Rect.copyList(m.rects), deedType = m.deedType }
     if m.mode == "redraw" then args.claimId = m.claimId end
+    m.previewZonesRev = MSH.Client.zones.rev   -- 區域清單之後換了版本就重新預檢（P.onZones）
     m.previewRid = MSH.Client.send("preview", args, function(res)
         P.previewBusy, P.previewDoneAt = false, getTimestampMs()
         P.onPreview(m, res)
@@ -323,6 +324,22 @@ function P.recheck(m, now)
         return false
     end
     P.schedulePreview(m, now)
+    changed(m)
+    return true
+end
+
+-- 公開的區域清單換了版本（道路豁免區或禁建區變了）：停在預檢畫面就照預檢排程重送一次，道路結果不留舊的。
+-- 送出時還沒有清單（rev -1：開面板的第一份清單晚到）：第一份有效的 rev 記成基準、不重送，之後換版才重送。回 true＝重送了
+function P.onZones(m, z)
+    local rev = type(z) == "table" and z.rev or nil
+    if m.phase ~= P.PREVIEW or m.rects == nil or m.previewWant or not MSH.isInt(rev) or rev < 0 then return false end
+    local sent = m.previewZonesRev
+    if not MSH.isInt(sent) or sent < 0 then
+        m.previewZonesRev = rev
+        return false
+    end
+    if rev == sent then return false end
+    P.schedulePreview(m, getTimestampMs())
     changed(m)
     return true
 end
@@ -727,6 +744,53 @@ local function layoutSelecting(v, y, list)
     return y
 end
 
+-- 範圍在道路豁免區內的程度："all"＝整塊都在（道路一定不擋）、"part"＝一部分、nil＝沒碰到；第二個回傳是碰到的區名
+-- （多個區合起來蓋住時用 Admin_ListSep 串起來，最多 EXEMPT_NAMES 個，其餘寫「等 N 區」：最多 100 區 × 40 字，全列會把按鈕推出畫面）。
+-- 伺服器的道路步驟不回略過哪些格，客戶端用公開清單自己算：座標壓縮，每格只看左上角那個取樣點
+P.EXEMPT_NAMES = 2
+function P.exemptCover(rects, zones)
+    local Rect = MSH.Rect
+    local ex, names, hits = {}, {}, 0
+    for _, z in ipairs(zones or {}) do
+        if z.kind == MSH.ZONE_KIND.ROADEXEMPT and type(z.rects) == "table" then
+            local hit = false
+            for _, e in ipairs(z.rects) do
+                for _, r in ipairs(rects) do
+                    if Rect.overlaps(r, e, 0) then
+                        ex[#ex + 1], hit = e, true
+                        break
+                    end
+                end
+            end
+            if hit then
+                hits = hits + 1
+                if hits <= P.EXEMPT_NAMES then names[hits] = tostring(z.name) end
+            end
+        end
+    end
+    if #ex == 0 then return nil end
+    local name = table.concat(names, getText("IGUI_MSH_Admin_ListSep"))
+    if hits > P.EXEMPT_NAMES then name = getText("IGUI_MSH_Create_ExemptNamesMore", name, hits, hits - P.EXEMPT_NAMES) end
+    local xs, ys = {}, {}
+    for _, list in ipairs({ rects, ex }) do
+        for _, r in ipairs(list) do
+            xs[#xs + 1], xs[#xs + 2], ys[#ys + 1], ys[#ys + 2] = r.x, r.x + r.w, r.y, r.y + r.h
+        end
+    end
+    local function less(a, b) return a < b end
+    MSH.sortSafe(xs, less)
+    MSH.sortSafe(ys, less)
+    for i = 1, #xs - 1 do
+        if xs[i + 1] > xs[i] then
+            for j = 1, #ys - 1 do
+                local x, y = xs[i], ys[j]
+                if ys[j + 1] > y and Rect.listContains(rects, x, y) and not Rect.listContains(ex, x, y) then return "part", name end
+            end
+        end
+    end
+    return "all", name
+end
+
 local function layoutPreview(v, y, list)
     local m, b = v.m, v.btn
     y = areaLine(v, y)
@@ -741,7 +805,14 @@ local function layoutPreview(v, y, list)
         local side = P.outlineSide(m)
         for _, c in ipairs(m.checks) do
             local label = getText("IGUI_MSH_Create_Check_" .. tostring(c.name))
-            if c.ok then
+            local cover, zoneName = nil, nil
+            -- 避開道路關著：道路本來就不擋，不寫道路豁免區
+            if c.name == "roads" and MSH.Settings.get().avoidRoads == true then
+                cover, zoneName = P.exemptCover(m.rects, MSH.Client.zones.list)
+            end
+            if c.ok and cover == "all" then
+                y = para(v, getText("IGUI_MSH_Create_RoadsExempt", zoneName), "text", "check", y)
+            elseif c.ok then
                 y = para(v, label, "text", "check", y)
             else
                 local reason, action = P.reasonOf(c.code, c, side)
@@ -753,6 +824,8 @@ local function layoutPreview(v, y, list)
                     pay = pay or more
                 end
             end
+            -- 一部分在道路豁免區內：區外那部分的道路照擋（過或沒過都寫）
+            if cover == "part" then y = para(v, getText("IGUI_MSH_Create_RoadsExemptPart", zoneName), "textMuted", nil, y) end
         end
         if m.pass then y = para(v, getText("IGUI_MSH_Create_AllPassed"), "textMuted", nil, y) end
     end
@@ -1118,6 +1191,7 @@ local function openUnsafe(opts)
         return P.fallback()
     end
     local m = P.newModel(opts, opts.playerNum)
+    MSH.Client.ensureZones()   -- 預檢的道路那一項要寫「在道路豁免區內」（P.exemptCover）
     P.model = m
     V.build(m, UI)
     if m.playerNum == 0 then
@@ -1174,5 +1248,12 @@ if first then
     MSH.Client.on("slots", "CreatePanel", function(res)
         local m = MSH.CreatePanel.model
         if m ~= nil then MSH.CreatePanel.onSlots(m, res) end
+    end)
+    -- 區域清單變了：停在預檢畫面就重新預檢（P.onZones）；其餘只重排預檢的道路那一項
+    MSH.Client.on("zones", "CreatePanel", function(z)
+        local P = MSH.CreatePanel
+        local m = P.model
+        if m == nil or P.onZones(m, z) then return end
+        if m.checks ~= nil and m.onChange ~= nil then m.onChange(m) end
     end)
 end

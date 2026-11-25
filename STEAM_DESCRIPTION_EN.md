@@ -27,7 +27,7 @@ A safehouse system for multiplayer servers: use a deed to claim the area you cho
 [list]
 [*] [b]Tiered deeds[/b]: the deed tier sets how large your safehouse can be
 [*] [b]Custom area[/b]: drag or walk to two corners to mark the area, and join pieces into L or U shapes; you're warned about tiles inside the outline that aren't selected and won't be protected
-[*] [b]Avoids roads, resource points and no-build zones[/b]: roads, parking lots, buildings such as military, police and medical sites, and no-build zones set by admins cannot be claimed; road surfaces players changed still count as the original road
+[*] [b]Avoids roads, resource points and no-build zones[/b]: roads, parking lots, buildings such as military, police and medical sites, and no-build zones set by admins cannot be claimed; road surfaces players changed still count as the original road. Admins can also draw road-exempt zones where roads don't block a claim; both kinds can be drawn in game or edited in zones.json, taking effect within seconds
 [*] [b]Per-permission sharing[/b]: share with players or your faction, granting appliances, building (including shoveling dirt, gravel and sand) and farming separately
 [*] [b]Manager window[/b]: rename, share or release your safehouses, set a respawn point, move up a tier with "Upgrade with deed", and see nearby safehouses and no-build zones on the ground
 [*] [b]Item search[/b]: search every container in your safehouse and follow an arrow or walk there automatically, or bind a "Toggle item search" hotkey in key bindings; when the server allows it, take items straight from where you stand inside

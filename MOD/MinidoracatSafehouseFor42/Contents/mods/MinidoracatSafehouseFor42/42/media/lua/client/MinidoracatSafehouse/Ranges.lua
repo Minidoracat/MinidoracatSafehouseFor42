@@ -1,9 +1,9 @@
 -- MinidoracatSafehouse/Ranges.lua — 在地面顯示範圍（客戶端）
 -- 使用者 2026-10-11：「能不能增加安全屋範圍顯示開關在安全屋面板?這樣就能隨時知道自己的範圍吧」；2026-10-12：「打開就
 -- 持續顯示，可以看隊友的，也能看其他玩家的，但是這些管理員面板跟沙盒也要可以設定，預設就開啟自己跟同陣營的，每一種都不同顏色顯示」。
--- 五類各一種顏色：自己的（屋主是我）、分享給我的（我在名單裡）、同陣營的（屋主和我同一個陣營）、其他玩家的，以及管理員設的
---   禁建區（使用者 2026-10-16「那玩家是不是也應該要可以從畫面上看到禁建區?」；清單由 Client.ensureZones 向伺服器要一次，
---   之後伺服器推 zonesSync，Zones.lua）。
+-- 六類各一種顏色：自己的（屋主是我）、分享給我的（我在名單裡）、同陣營的（屋主和我同一個陣營）、其他玩家的，以及管理員設的
+--   禁建區（使用者 2026-10-16「那玩家是不是也應該要可以從畫面上看到禁建區?」）與道路豁免區（2026-11-25 設計稿：白色虛線）；
+--   區域清單由 Client.ensureZones 向伺服器要一次，之後伺服器推 zonesSync，Zones.lua）。
 -- 伺服器開放哪幾類：自己的、分享給我的與禁建區一定可以；同陣營的、其他玩家的看沙盒 RangesFaction（預設開）、RangesOthers（預設關）。
 --   這只是畫面：原版本來就把每一間的範圍傳給所有客戶端（MetaDataPacket、SafehouseSync），改過的客戶端照樣看得到。
 -- 玩家自己的開關：總開關（預設開）＋每一類（預設都開；伺服器沒開放的那類照樣不畫）＋整片顯示（RangesFill，預設關＝只畫
@@ -16,7 +16,7 @@
 --   registry。屋主還沒查到的先算其他玩家的。安全屋的四類互不重疊：關掉同陣營的，同陣營的屋不會改用其他玩家的顏色畫出來。
 -- 照原生畫（保留期內的 lapsed 也有原生，照畫）。清單、原生、陣營（SyncFaction）、屋主表（OnReceiveGlobalModData）、沙盒（sandboxSync）、
 --   禁建區清單（Client 事件 zones）或開關一變就標記重算，重算時才配置。
--- 畫法交給 FloorTint（安全屋在圖層 "ranges"、禁建區在 "rangeZones"，安全屋蓋過禁建區；建立面板的框選與標紅、管理員的
+-- 畫法交給 FloorTint（安全屋在圖層 "ranges"、禁建區在 "rangeZones"、道路豁免區在 "rangeExempt"，安全屋蓋過區域；建立面板的框選與標紅、管理員的
 --   禁建區視窗蓋在它們上面）：格子平常是疊色（顏色帶 ov），在屋裡、前方有房子、有玩家站在附近的格子改用同一個顏色的地板
 --   染色（FloorTint.lua 檔頭有為什麼）。整片時各塊本身先用較暗的 FILL_COLORS 放、外緣再用 COLORS 放（同一格後放的勝）。
 --   每 SCAN_MS，或鏡頭移出 FloorTint 畫的範圍（畫面看得到的格子外加幾格）時，每一筆只走「這一筆的各塊 ∩ 新範圍」與
@@ -41,11 +41,11 @@ MSH.Ranges = R
 R.OPTIONS_ID = "MinidoracatSafehouse"
 R.SCAN_MS = 500                                            -- 多久掃一次附近的外緣格
 -- 整片顯示時內部的顏色（R.FILL_COLORS，照 R.COLORS 算）：疊色 rgb 乘 FILL_DIM、透明度不變；改染色時往顏色拉的比例
--- FILL_TINT_A。外緣照 R.COLORS。疊色的透明度幾乎沒作用，調不淡（sh-zview-1016b：內部 0.25、0.1、0.05 拍起來一樣，
+-- 是外緣的比例乘 FILL_TINT_A（外緣 1.0 的就是 FILL_TINT_A）。外緣照 R.COLORS。疊色的透明度幾乎沒作用，調不淡（sh-zview-1016b：內部 0.25、0.1、0.05 拍起來一樣，
 -- 0.25 和外緣 0.45 也只差一點），所以內部改調暗：sh-zview-1016c 比了 0.6 與 0.35，0.6 內部仍看得出顏色、外緣明顯
 R.FILL_DIM = 0.6
 R.FILL_TINT_A = 0.6
-R.KINDS = { "own", "shared", "faction", "others", "zones" }
+R.KINDS = { "own", "shared", "faction", "others", "zones", "roadexempt" }
 -- 每一類兩種畫法的顏色：r, g, b, a 是地板染色用的（a 是往這個顏色拉的比例，Color.tintABGR，Color.java:243-253），
 -- ov 是疊色用的（a 是透明度）。疊色照 alpha 混進地面，任何地面上都是同一個色相；截圖量到的比照 alpha 混合算出來的亮
 -- （原因沒查），所以 rgb 寫暗一點（sh-overlay-1012a：未調暗時 0.45 的透明度在草地上已經到 255）。使用者 2026-10-12 要「和
@@ -61,10 +61,16 @@ R.COLORS = {
     faction = { r = 1.0, g = 0.55, b = 0.1, a = 1.0, ov = { r = 0.8, g = 0.36, b = 0.02, a = 0.45 } },
     others = { r = 1.0, g = 0.35, b = 0.95, a = 1.0, ov = { r = 0.71, g = 0.05, b = 0.8, a = 0.45 } },
     zones = { r = 1.0, g = 0.3, b = 0.3, a = 1.0, ov = { r = 1.0, g = 0.08, b = 0.08, a = 0.5 } },
+    -- 道路豁免區：疊色白色、外緣畫虛線（R.DASHED），和禁建區的紅色實線分得開（設計稿 plan-allowzone-1125）。
+    -- 染色不能用白色：染色乘在地板貼圖上，最亮只到貼圖本身，往白色拉等於沒染（shzd1-view-b zv-b08：臥室 7 格染白、
+    -- 地毯上看不到，FloorTint.lua 檔頭）。所以屋裡、人物身體蓋著的格子往黑色拉，畫成深灰虛線；0.6 在深藍地毯、深色
+    -- 地墊上只比旁邊暗一點（shzd1-view-f zv-b09z），照禁建區的前例加到 0.85
+    roadexempt = { r = 0.0, g = 0.0, b = 0.0, a = 0.85, ov = { r = 0.85, g = 0.85, b = 0.85, a = 0.5 } },
 }
+R.DASHED = { roadexempt = true }
 R.FILL_COLORS = {}
 for kind, c in pairs(R.COLORS) do
-    R.FILL_COLORS[kind] = { r = c.r, g = c.g, b = c.b, a = R.FILL_TINT_A,
+    R.FILL_COLORS[kind] = { r = c.r, g = c.g, b = c.b, a = c.a * R.FILL_TINT_A,
         ov = { r = c.ov.r * R.FILL_DIM, g = c.ov.g * R.FILL_DIM, b = c.ov.b * R.FILL_DIM, a = c.ov.a } }
 end
 -- 管理視窗 chip 上的色塊是地上實際看到的疊色（使用者 2026-10-12：「按鈕顏色，應該要更接近一點實際顏色，避免誤會」）：
@@ -76,12 +82,15 @@ R.SWATCHES = {
     faction = { r = 1.0, g = 0.61, b = 0.2, a = 1 },
     others = { r = 0.81, g = 0.14, b = 0.85, a = 1 },
     zones = { r = 0.94, g = 0.12, b = 0.07, a = 1 },
+    roadexempt = { r = 0.92, g = 0.92, b = 0.92, a = 1 },   -- shortcut: 沒有實機截圖量過，量到後照上面幾類換成中位數
 }
-R.OPT_IDS = { own = "ShowOwn", shared = "ShowShared", faction = "ShowFaction", others = "ShowOthers", zones = "ShowZones" }
+R.OPT_IDS = { own = "ShowOwn", shared = "ShowShared", faction = "ShowFaction", others = "ShowOthers", zones = "ShowZones",
+    roadexempt = "ShowRoadExempt" }
 R.list = R.list or {}
 R.allow = R.allow or { own = true, shared = true, faction = true, others = false }
-R.allow.zones = true   -- 伺服器不設限
-R.session = R.session or { on = true, own = true, shared = true, faction = true, others = true, zones = true, fill = false }
+R.allow.zones, R.allow.roadexempt = true, true   -- 伺服器不設限
+R.session = R.session or { on = true, own = true, shared = true, faction = true, others = true, zones = true, roadexempt = true,
+    fill = false }
 R.walked = 0           -- R.light／R.dim 走過的格子數（harness 看有沒有走整塊）
 R.dirty = true
 
@@ -263,11 +272,12 @@ function R.kindOf(sh, id, known, me, myFaction)
     return "others"
 end
 
--- 一筆要畫的：外緣 areas（扁平 x, y, w, h）、外框 x1..x2、y1..y2（半開）、顏色、圖層；整片時另有 fill（各塊本身）與內部較暗的顏色
+-- 一筆要畫的：外緣 areas（扁平 x, y, w, h）、外框 x1..x2、y1..y2（半開）、顏色、圖層、外緣是不是虛線；整片時另有 fill（各塊本身）與內部較暗的顏色
+local LAYERS = { zones = "rangeZones", roadexempt = "rangeExempt" }
 local function entry(kind, rects)
     local b = MSH.Rect.bounds(rects)
     local c = { areas = R.outline(rects), x1 = b.x, y1 = b.y, x2 = b.x + b.w, y2 = b.y + b.h,
-        color = R.COLORS[kind], kind = kind, layer = kind == "zones" and "rangeZones" or "ranges" }
+        color = R.COLORS[kind], kind = kind, layer = LAYERS[kind] or "ranges", dash = R.DASHED[kind] == true }
     if R.isFill() then
         local f = {}
         for i, r in ipairs(rects) do f[i * 4 - 3], f[i * 4 - 2], f[i * 4 - 1], f[i * 4] = r.x, r.y, r.w, r.h end
@@ -312,8 +322,16 @@ function R.rebuild()
         local g = groups[key]
         out[#out + 1] = entry(g.kind, g.rects)
     end
-    if R.shown("zones") then
-        for _, z in ipairs(MSH.Client.ensureZones() or {}) do out[#out + 1] = entry("zones", z.rects) end
+    local nobuild, exempt = R.shown("zones"), R.shown("roadexempt")
+    if nobuild or exempt then
+        local EX = MSH.ZONE_KIND.ROADEXEMPT
+        for _, z in ipairs(MSH.Client.ensureZones() or {}) do
+            if z.kind == EX then
+                if exempt then out[#out + 1] = entry("roadexempt", z.rects) end
+            elseif nobuild then
+                out[#out + 1] = entry("zones", z.rects)
+            end
+        end
     end
     R.list = out
 end
@@ -333,8 +351,8 @@ function R.update()
         R.rebuild()
     end
     if not on then return R.dimAll() end
-    -- 禁建區清單還沒拿到（上一次失敗）：每次掃描問一次，Client 自己管間隔
-    if MSH.Client.zones.list == nil and R.shown("zones") then MSH.Client.ensureZones() end
+    -- 區域清單還沒拿到（上一次失敗）：每次掃描問一次，Client 自己管間隔
+    if MSH.Client.zones.list == nil and (R.shown("zones") or R.shown("roadexempt")) then MSH.Client.ensureZones() end
     if z ~= R.litZ then
         R.dimAll()
         R.litZ = z
@@ -357,20 +375,28 @@ local function act(Tint, cell, layer, x, y, z, col)
 end
 
 -- 扁平矩形 a（x, y, w, h…）在 x0..x1、y0..y1（含）裡的格子，跳過 keep 範圍 kx0..kx1、ky0..ky1（含；kx0 是 nil＝不跳）
--- 裡的：col 有值就交出這個顏色，沒有就取消。只走交集，跳過的那段整段略過；回走過的格子數
-local function paint(a, x0, y0, x1, y1, kx0, ky0, kx1, ky1, cell, layer, z, col)
+-- 裡的：col 有值就交出這個顏色，沒有就取消；dash（選填，放在 ... 裡：Kahlua 少傳的固定參數不保證是 nil）＝只動
+-- FloorTint.dashed 的格子（放與取消同一組）。只走交集，跳過的那段整段略過；回走過的格子數
+local function paint(a, x0, y0, x1, y1, kx0, ky0, kx1, ky1, cell, layer, z, col, ...)
+    local dash = ...
     local Tint, n = MSH.FloorTint, 0
     for k = 1, #a, 4 do
-        local ax0, ay0 = math.max(a[k], x0), math.max(a[k + 1], y0)
-        local ax1, ay1 = math.min(a[k] + a[k + 2] - 1, x1), math.min(a[k + 1] + a[k + 3] - 1, y1)
+        local fx, fy = a[k], a[k + 1]
+        local lx, ly = fx + a[k + 2] - 1, fy + a[k + 3] - 1
+        local ax0, ay0 = math.max(fx, x0), math.max(fy, y0)
+        local ax1, ay1 = math.min(lx, x1), math.min(ly, y1)
         for x = ax0, ax1 do
             local skip = kx0 ~= nil and x >= kx0 and x <= kx1
             local top = skip and math.min(ay1, ky0 - 1) or ay1
-            for y = ay0, top do act(Tint, cell, layer, x, y, z, col) end
+            for y = ay0, top do
+                if not dash or Tint.dashCell(x, y, fx, fy, lx, ly) then act(Tint, cell, layer, x, y, z, col) end
+            end
             if top >= ay0 then n = n + top - ay0 + 1 end
             if skip then
                 local from = math.max(ay0, ky1 + 1)
-                for y = from, ay1 do act(Tint, cell, layer, x, y, z, col) end
+                for y = from, ay1 do
+                    if not dash or Tint.dashCell(x, y, fx, fy, lx, ly) then act(Tint, cell, layer, x, y, z, col) end
+                end
                 if ay1 >= from then n = n + ay1 - from + 1 end
             end
         end
@@ -394,13 +420,13 @@ function R.light(c, cell, z, v)
         local kx0, ky0, kx1, ky1 = nil, nil, nil, nil
         if same then kx0, ky0, kx1, ky1 = x0, y0, x1, y1 end
         n = paint(fill, ox0, oy0, ox1, oy1, kx0, ky0, kx1, ky1, cell, layer, oz, nil)
-            + paint(c.areas, ox0, oy0, ox1, oy1, kx0, ky0, kx1, ky1, cell, layer, oz, nil)
+            + paint(c.areas, ox0, oy0, ox1, oy1, kx0, ky0, kx1, ky1, cell, layer, oz, nil, c.dash)
     end
     if newOk then
         local kx0, ky0, kx1, ky1 = nil, nil, nil, nil
         if same then kx0, ky0, kx1, ky1 = ox0, oy0, ox1, oy1 end
         n = n + paint(fill, x0, y0, x1, y1, kx0, ky0, kx1, ky1, cell, layer, z, c.fillColor)
-            + paint(c.areas, x0, y0, x1, y1, kx0, ky0, kx1, ky1, cell, layer, z, c.color)
+            + paint(c.areas, x0, y0, x1, y1, kx0, ky0, kx1, ky1, cell, layer, z, c.color, c.dash)
     end
     c.litZ, c.lx0, c.ly0, c.lx1, c.ly1 = z, x0, y0, x1, y1
     R.walked = R.walked + n
@@ -413,12 +439,13 @@ function R.dim(c)
     c.litZ = nil
     local cell, x0, y0, x1, y1 = getCell(), c.lx0, c.ly0, c.lx1, c.ly1
     R.walked = R.walked + paint(c.fill or NONE, x0, y0, x1, y1, nil, nil, nil, nil, cell, c.layer, z, nil)
-        + paint(c.areas, x0, y0, x1, y1, nil, nil, nil, nil, cell, c.layer, z, nil)
+        + paint(c.areas, x0, y0, x1, y1, nil, nil, nil, nil, cell, c.layer, z, nil, c.dash)
 end
 
 function R.dimAll()
     MSH.FloorTint.clear("ranges")
     MSH.FloorTint.clear("rangeZones")
+    MSH.FloorTint.clear("rangeExempt")
     for i = 1, #R.list do R.list[i].litZ = nil end
 end
 
