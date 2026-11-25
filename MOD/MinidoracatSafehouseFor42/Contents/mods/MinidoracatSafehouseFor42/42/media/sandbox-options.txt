@@ -63,6 +63,8 @@ option MinidoracatSafehouse.NoZombieSpawn
 {type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_NoZombieSpawn,}
 option MinidoracatSafehouse.ClearZombiesAtHome
 {type = boolean, default = false, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_ClearZombiesAtHome,}
+option MinidoracatSafehouse.ClearZombiesAfterHours
+{type = integer, min = 0, max = 720, default = 24, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_ClearZombiesAfterHours,}
 
 option MinidoracatSafehouse.AvoidRoads
 {type = boolean, default = true, page = MinidoracatSafehouse, translation = MinidoracatSafehouse_AvoidRoads,}

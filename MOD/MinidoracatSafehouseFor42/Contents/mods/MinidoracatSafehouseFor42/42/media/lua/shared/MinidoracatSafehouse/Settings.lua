@@ -74,6 +74,8 @@ local OPTIONS = {
     { key = "NoZombieSpawn", type = "bool", default = false },
     -- 有人在家時清掉範圍內的活殭屍，走進來的也算（玩家提問 2026-11-23，使用者同日核准預設關；成本見 E2E homeclear-mp）
     { key = "ClearZombiesAtHome", type = "bool", default = false },
+    -- 上一鍵的屋齡門檻（現實小時，0＝建立後馬上清；服主回報 2026-11-24，使用者同日裁定）：擋地契當成即時清怪工具
+    { key = "ClearZombiesAfterHours", type = "int", min = 0, max = 720, default = 24 },
     { key = "AvoidRoads", type = "bool", default = true },
     { key = "RoadMargin", type = "int", min = 0, max = 8, default = 1 },
     { key = "RoadKinds", type = "string", default = "" },
@@ -177,6 +179,7 @@ function S.storageReach() return one("StorageReach") end
 function S.allowFactionShare() return one("AllowFactionShare") end
 function S.noZombieSpawn() return one("NoZombieSpawn") end
 function S.clearZombiesAtHome() return one("ClearZombiesAtHome") end
+function S.clearZombiesAfterHours() return one("ClearZombiesAfterHours") end
 
 -- 讀出整份設定；不合法的值夾回範圍並附警告（每次呼叫都重讀，面板或原版畫面改值後立即生效）
 -- 回傳 cfg, warnings（{ "Key" , ... }）。呼叫端只讀、不改：每次呼叫都逐鍵比對 SandboxVars 的原值，和上一次

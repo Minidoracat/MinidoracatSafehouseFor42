@@ -716,13 +716,17 @@ function AP.layoutRules(P, pg)
     AP.formRow(pg, "StorageReach", sw, { reach })
     F:text("storageHelp", getText("Sandbox_MinidoracatSafehouse_StorageMode_tooltip"), "textMuted")
     -- 殭屍（兩個都預設關）：範圍內不生成（2026-11-22）、有人在家時清掉範圍內的（2026-11-23）；會連管理員與其他 MOD 生成的一起刪，
-    -- 說明直接寫在各自底下
+    -- 說明直接寫在各自底下。在家清除的屋齡門檻（2026-11-24）緊接在開關下一列，開關沒勾時反灰，切換就重排（同 DeedLoot）
     F.y = F.y + K.GAP
     F:text("h:zombies", getText("IGUI_MSH_Admin_ZombiesHead"), "text", UIFont.Medium)
-    local zw = AP.labelWidth({ "NoZombieSpawn", "ClearZombiesAtHome" })
+    local zw = AP.labelWidth({ "NoZombieSpawn", "ClearZombiesAtHome", "ClearZombiesAfterHours" })
     AP.formRow(pg, "NoZombieSpawn", zw, { AP.boolField(P, pg, "NoZombieSpawn") })
     F:text("zombiesHelp", getText("Sandbox_MinidoracatSafehouse_NoZombieSpawn_tooltip"), "textMuted")
-    AP.formRow(pg, "ClearZombiesAtHome", zw, { AP.boolField(P, pg, "ClearZombiesAtHome") })
+    local home = AP.boolField(P, pg, "ClearZombiesAtHome", nil, AP.onRelayout)
+    AP.formRow(pg, "ClearZombiesAtHome", zw, { home })
+    local hours = AP.numField(P, pg, "ClearZombiesAfterHours", AP.fieldW("ClearZombiesAfterHours", 70))
+    hours:setEnabled(home:getChecked())
+    AP.formRow(pg, "ClearZombiesAfterHours", zw, { hours })
     F:text("zombiesHomeHelp", getText("Sandbox_MinidoracatSafehouse_ClearZombiesAtHome_tooltip"), "textMuted")
 end
 

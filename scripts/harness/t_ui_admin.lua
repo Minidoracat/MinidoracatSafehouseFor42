@@ -368,6 +368,13 @@ return function(T)
         and rules["zombiesHomeHelp#1"] ~= nil
         and rules["zombiesHomeHelp#1"].text == "Sandbox_MinidoracatSafehouse_ClearZombiesAtHome_tooltip",
         "規則頁有「有人在家時清除殭屍」：預設不勾，底下寫選項說明")
+    -- 在家清除的屋齡門檻（2026-11-24，預設 24 小時）：開關沒勾時反灰，勾了不用存檔就能改
+    check(rules["f:ClearZombiesAfterHours"] ~= nil and rules["f:ClearZombiesAfterHours"]:getText() == "24"
+        and rules["f:ClearZombiesAfterHours"].enabled == false, "「建立後等待（小時）」預設 24、開關沒勾時反灰")
+    rules["f:ClearZombiesAtHome"]:setChecked(true)
+    check(rules["f:ClearZombiesAfterHours"].enabled ~= false, "勾起在家清除：時數欄馬上可以改")
+    rules["f:ClearZombiesAtHome"]:setChecked(false)
+    check(rules["f:ClearZombiesAfterHours"].enabled == false, "取消勾選：時數欄又反灰")
     local tiers = P.pages.deeds.fields.TiersEnabled
     fw.click(deeds.tierAdd)
     check(tiers.value == 4 and shown("f:Tier4Side") and shown("f:Tier4Craft"), "〔新增第 4 級〕：多出第 4 級那一列")

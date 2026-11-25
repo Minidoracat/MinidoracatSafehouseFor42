@@ -155,6 +155,7 @@ return function(T)
         sweepNow()
         check(failures() == base, "沙盒值型別不對（字串）：照預設關")
         T.sandbox("ClearZombiesAtHome", true)
+        T.sandbox("ClearZombiesAfterHours", 0)   -- 屋齡門檻另有一節；這幾節的夾具都是剛建的屋
         carol.x = 114.5
         sweepNow()
         check(failures() == base, "開著、屋主站在屋外緊鄰那格：沒人在家，不走殭屍清單")
@@ -280,6 +281,7 @@ return function(T)
         local MSH = T.boot({ steam = true })
         local Z = MSH.Zombies
         T.sandbox("ClearZombiesAtHome", true)
+        T.sandbox("ClearZombiesAfterHours", 0)
         SafeHouse.addSafeHouse(100, 100, 14, 14, "carol")
         MSH.Registry.setBinding("carol", 76561198000000201, "NEWGAME", T.now)
         local fake = T.player({ name = "carol", sid = 76561198000000299, x = 105.5, y = 105.5 })
@@ -292,5 +294,124 @@ return function(T)
         Z.lastSweep = nil
         T.tick()
         check(z.removed == 1, "SteamID 和綁定相符：照常清")
+    end
+
+    do
+        T.section("在家清殭屍：屋齡門檻（預設 24 小時）")
+        local MSH = T.boot({ sandbox = { Tier1FreeSlots = 5, Tier2FreeSlots = 5 } })
+        local Z, R = MSH.Zombies, MSH.Registry
+        local H = 3600000
+        local D1, D2 = "MinidoracatSafehouse.Deed1", "MinidoracatSafehouse.Deed2"
+        local function rect(x, y, w, h) return { x = x, y = y, w = w, h = h } end
+        local function sweepNow() Z.lastSweep = nil; T.tick() end
+        local function failures()
+            local c = 0
+            for _, line in ipairs(T.prints) do
+                if string.find(line, "tick hook zombies failed", 1, true) then c = c + 1 end
+            end
+            return c
+        end
+        T.sandbox("ClearZombiesAtHome", true)
+        local young = SafeHouse.addSafeHouse(100, 100, 14, 14, "carol")
+        T.player({ name = "carol", x = 105.5, y = 105.5 })
+        local bomb = T.zombie(105, 105)
+        function bomb:getX() error("boom") end
+        local base = failures()
+        sweepNow()
+        check(failures() == base and bomb.removed == 0, "剛建的原版屋、屋主在家：未滿 24 小時不算在家，不走殭屍清單")
+        bomb:removeFromWorld()
+        -- T.tick 先前進 100 ms 才掃：建立時間設成 now - 24h + 101，掃的那一刻差 1 ms
+        young.created = T.now - 24 * H + 101
+        local edge = T.zombie(106, 106)
+        sweepNow()
+        check(edge.removed == 0, "差 1 ms 滿 24 小時：留著")
+        young.created = T.now - 24 * H + 100
+        sweepNow()
+        check(edge.removed == 1, "剛好滿 24 小時：清掉")
+
+        local fresh = SafeHouse.addSafeHouse(300, 300, 10, 10, "frank")
+        T.player({ name = "frank", x = 305.5, y = 305.5 })
+        local inOld, inNew = T.zombie(107, 107), T.zombie(305, 305)
+        sweepNow()
+        check(inOld.removed == 1 and inNew.removed == 0, "老屋和新屋都有屋主在家：只清老屋")
+        T.sandbox("ClearZombiesAfterHours", 0)
+        sweepNow()
+        check(inNew.removed == 1, "設 0：新屋馬上清（和 0.17.0 一樣）")
+        fresh.created = T.now + H
+        local ahead = T.zombie(306, 306)
+        sweepNow()
+        check(ahead.removed == 1, "設 0：建立時間在未來（時鐘回撥）也照清")
+        T.sandbox("ClearZombiesAfterHours", 24)
+        ahead = T.zombie(306, 306)
+        sweepNow()
+        check(ahead.removed == 0, "設 24：建立時間在未來不清")
+        ahead:removeFromWorld()
+        fresh.created = T.now - 2 * H
+        for _, v in ipairs({ "1", -1, 721, 1.5 }) do
+            T.sandbox("ClearZombiesAfterHours", v)
+            local z = T.zombie(307, 307)
+            sweepNow()
+            check(z.removed == 0, "不合法的值（" .. tostring(v) .. "）：照預設 24，建立 2 小時的屋不清")
+            z:removeFromWorld()
+        end
+        T.sandbox("ClearZombiesAfterHours", 1)
+        local hour = T.zombie(307, 307)
+        sweepNow()
+        check(hour.removed == 1, "設 1：建立 2 小時的屋清掉")
+
+        T.section("在家清殭屍：屋齡門檻，升級與重新框選換位置")
+        T.sandbox("ClearZombiesAfterHours", 24)
+        local ug = T.player({ name = "ug", x = 6505, y = 6505, items = { D1, D2 } })
+        local res = T.cmd(ug, "create", { rects = { rect(6500, 6500, 10, 10) }, deedType = D1 })
+        T.advance(24 * H)
+        local a = T.zombie(6502, 6502)
+        sweepNow()
+        check(res.ok and a.removed == 1, "地契建立滿 24 小時：屋主在家照清")
+        local old = R.get(res.claimId)
+        ug.x, ug.y = 7005, 7005
+        res = T.cmd(ug, "redraw", { claimId = old.claimId, rects = { rect(7000, 7000, 10, 10) },
+            expectedRevision = old.revision, deedType = D2 })
+        local nu = res.ok and R.get(res.claimId)
+        check(nu and nu.createdAt == old.createdAt, "用地契升級把範圍換到別處（紀錄的建立時間沿用舊的；實際 " .. tostring(res.code) .. "）")
+        local b = T.zombie(7002, 7002)
+        sweepNow()
+        check(b.removed == 0, "升級換位置：新範圍從升級時重新起算，不清")
+        T.advance(24 * H)
+        sweepNow()
+        check(b.removed == 1, "升級後滿 24 小時：清掉")
+
+        T.sandbox("RedrawMinutes", 1440)
+        T.sandbox("ClearZombiesAfterHours", 1)
+        local rd = T.player({ name = "rd", x = 8005, y = 8005, items = { D1 } })
+        res = T.cmd(rd, "create", { rects = { rect(8000, 8000, 10, 10) }, deedType = D1 })
+        T.advance(61 * 60000)
+        local c = T.zombie(8002, 8002)
+        sweepNow()
+        check(res.ok and c.removed == 1, "門檻 1 小時、建立 61 分鐘：清掉")
+        old = R.get(res.claimId)
+        rd.x, rd.y = 8505, 8505
+        res = T.cmd(rd, "redraw", { claimId = old.claimId, rects = { rect(8500, 8500, 10, 10) }, expectedRevision = old.revision })
+        local d = T.zombie(8502, 8502)
+        sweepNow()
+        check(res.ok and d.removed == 0, "重新框選到別處：從重畫時重新起算，不清（實際 " .. tostring(res.code) .. "）")
+        T.advance(60 * 60000)
+        sweepNow()
+        check(d.removed == 1, "重畫後滿 1 小時：清掉")
+
+        T.section("在家清殭屍：屋齡門檻，多塊安全屋只有一塊是新的")
+        T.sandbox("ClearZombiesAfterHours", 24)
+        local b1 = SafeHouse.addSafeHouse(9000, 9000, 10, 10, "@MSH:90")
+        local b2 = SafeHouse.addSafeHouse(9020, 9000, 5, 5, "@MSH:90")
+        b1.created, b2.created = T.now - 48 * H, T.now
+        b1:addPlayer("mia")
+        b2:addPlayer("mia")
+        local mia = T.player({ name = "mia", x = 9005.5, y = 9005.5 })
+        local inB2 = T.zombie(9021, 9001)
+        sweepNow()
+        check(inB2.removed == 1, "人站在老的那一塊：新補的那一塊（同一間）一起清")
+        mia.x, mia.y = 9021.5, 9001.5
+        local inB1 = T.zombie(9001, 9001)
+        sweepNow()
+        check(inB1.removed == 0, "人站在新的那一塊：未滿 24 小時，整間都不清")
     end
 end

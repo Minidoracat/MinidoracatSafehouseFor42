@@ -15,6 +15,7 @@
 -- 「在家」照原生名單（SafeHouse.playerAllowed(String) :288-290，引擎記到訪也用它）：管理員路過、不在名單上的人不算；
 -- 名字先過 Identity.principal（分割畫面次座位、SteamID 對不上的不算）。
 -- 多塊安全屋每塊同一個 owner 標記（Native.lua），人站在其中一塊就整間一起清；原版屋一間一間算。
+-- 那一塊原生建立未滿 ClearZombiesAfterHours（現實小時，預設 24）時，站在裡面不算在家（homes 註解）。
 -- 刪掉已經有 owner 客戶端的殭屍：removeFromWorld 把它移出 zombieMap、清掉 owner（IsoZombie.java:4335-4349），owner 之後
 -- 送上來的同步查不到 id 就丟（NetworkZombiePacker.parseZombie :71-74），不會建回來。
 -- 沒人在家時只走一次在線玩家、不碰殭屍清單；選項關著時每秒讀一次鍵。
@@ -77,15 +78,20 @@ local function keyOf(house)
     return house
 end
 
--- 有人在家的屋（keyOf → true）；沒有就 nil。名字是 owner 標記的不算（playerAllowed 會拿它和 owner 比）
-local function homes()
+-- 有人在家的屋（keyOf → true）；沒有就 nil。名字是 owner 標記的不算（playerAllowed 會拿它和 owner 比）。
+-- 屋齡門檻（ClearZombiesAfterHours）看人站的那一塊原生的建立時間（現實 ms，SafeHouse.java:68-75、681；和 now 同為
+-- getTimestampMs）：建立、重新框選、用地契升級都是新原生，從那時重新起算。不用紀錄的 createdAt：重畫與升級保留它
+-- （Claims.draft），拿更高級的地契就能把老屋搬進屍群立即清
+local function homes(now)
+    local wait = MSH.Settings.clearZombiesAfterHours() * 3600000
     local home = nil
     local list = getOnlinePlayers()
     for i = 0, list:size() - 1 do
         local p = list:get(i)
         local house = not p:isDead() and houseAt(p) or nil
         local who = house ~= nil and MSH.Identity.principal(p) or nil
-        if who ~= nil and MSH.claimIdOf(who) == nil and house:playerAllowed(who) then
+        if who ~= nil and MSH.claimIdOf(who) == nil and house:playerAllowed(who)
+            and (wait == 0 or now - house:getDatetimeCreated() >= wait) then
             home = home or {}
             home[keyOf(house)] = true
         end
@@ -98,7 +104,7 @@ function Z.sweep(now)
     Z.lastSweep = now
     -- 開服前 getOnlinePlayers 會 NPE（Server.lua S.netUp）
     if not MSH.Srv.netUp or not MSH.Settings.clearZombiesAtHome() then return end
-    local home = homes()
+    local home = homes(now)
     if home == nil then return end
     local zl = getCell():getZombieList()
     for i = zl:size() - 1, 0, -1 do   -- removeFromWorld 會把自己移出清單，倒著走
