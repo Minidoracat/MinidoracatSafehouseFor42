@@ -34,7 +34,10 @@ def ok(label):
 
 
 def fail(label, details=None):
-    details = details or []
+    if not details:  # 說失敗卻沒附細節（例：子程序結束碼非零但沒輸出）也是失敗；空清單走下面會記成 PASS
+        failed.append(label)
+        print(f"  FAIL  {label}")
+        return
     kept = [d for d in details if not any(p in d for p in IGNORE_PATTERNS)]
     waived = [d for d in details if any(p in d for p in IGNORE_PATTERNS)]
     for d in waived:

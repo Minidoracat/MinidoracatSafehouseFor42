@@ -74,7 +74,7 @@
                          （ISClothingExtraAction:createItemNew 換穿時把帶磨損、染血字樣的 getName() 當成改名，:76-79）
  19. repo 專屬檢查        — scripts/verify_local.py（選用）：只有單一 MOD 用得到的靜態檢查放那裡，不改本檔
                           （本檔是家族模板的副本，照模板更新時整份覆寫）。它照本檔格式印 PASS／FAIL／SKIP／WARN 行
-                          （行首要有空白），本檔逐行轉印並算進總結；結束碼非零卻沒印 FAIL 行也算 FAIL。
+                          （兩個空白、狀態、兩個空白、標籤），本檔逐行轉印並算進總結；結束碼非零卻沒印 FAIL 行也算 FAIL。
                           verify_ignore.txt 不套用到它的輸出，豁免由它自己決定
                           （Builder 管理面板規則頁的標籤寬：ES、PT 的譯文從 0.2.0 起被截，2026-11-01 才由 E2E 看到）
 
@@ -776,9 +776,9 @@ for f in LUA_FILES:
             for name in FORBIDDEN:
                 for mm in re.finditer(rf"(?<![\w_:.]){name}\s*\(", code):
                     hits_forbidden.append(f"{rel}:{lineno} 用了 {name}()")
-            for name in FORBIDDEN_MEMBERS:
-                if re.search(rf"(?<![\w_.]){re.escape(name)}\s*\(", code):
-                    hits_forbidden.append(f"{rel}:{lineno} 用了 {name}()")
+            for name in FORBIDDEN_MEMBERS:  # 任何引用都擋：別名（local c = os.clock）炸在呼叫處，訊息看不出是 os.clock
+                if re.search(r"(?<![\w.])" + r"\s*\.\s*".join(map(re.escape, name.split("."))) + r"\b", code):
+                    hits_forbidden.append(f"{rel}:{lineno} 用了 {name}")
             if re.search(r"(?<![\w_])table\.sort\s*\(", code):
                 hits_sort.append(f"{rel}:{lineno}")
 fail("Kahlua 禁用全域（next/xpcall/os.clock）", hits_forbidden) if hits_forbidden \
@@ -948,7 +948,7 @@ def _u8(s):
 
 
 for _g in _guides:
-    with open(os.path.join(REPO, _g), encoding="utf-8") as fh:
+    with open(os.path.join(REPO, _g), encoding="utf-8", errors="replace", newline="") as fh:  # 同 steam_guide.js：只換 \r\n
         _lines = fh.read().replace("\r\n", "\n").split("\n")
     _meta = {}
     for _line in _lines:
@@ -1528,7 +1528,7 @@ if os.path.isfile(_local):
         if not _line.strip():
             continue
         print(_line)
-        _m = re.match(r"^\s+(PASS|FAIL|SKIP|WARN)\s+(\S.*)$", _line)
+        _m = re.match(r"^  (PASS|FAIL|SKIP|WARN)  (\S.*)$", _line)  # 只認本檔格式，縮排的細節行（Lua 測試輸出）不計
         if _m:
             _lists[_m[1]].append(f"verify_local：{_m[2]}")
             _seen[_m[1]] += 1
