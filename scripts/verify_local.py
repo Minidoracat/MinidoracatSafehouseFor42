@@ -2,7 +2,6 @@
 """Safehouse 專屬的靜態檢查：scripts/verify_mod.py 第 19 項會呼叫；單獨跑 `python scripts/verify_local.py`。
 從換成家族模板前的 verify_mod.py 原樣搬來（模板沒有，或條件比模板嚴）：
   - 翻譯鍵放在前綴對應的檔 — UI_／IGUI_／Sandbox_ 鍵放錯檔時畫面顯示鍵名本身
-  - Kahlua 禁用全域        — 模板只禁 next/xpcall；這裡另禁 os.clock（Kahlua 的 os 只有 time／date／difftime）
   - craftRecipe 腳本       — module Base、必要欄位、輸入行 token、物品存在、OnTest／OnAddToMenu 函式存在
                            （OnAddToMenu 不得有點號）、每個 Translate 資料夾的 Recipes.json 都有配方名；
                            解析錯誤整條配方靜默消失、找不到 OnTest 直接放行、點號 OnAddToMenu 整條永遠被藏
@@ -80,8 +79,6 @@ if not MEDIA_DIRS:
     print("找不到 MOD/*/Contents/mods/*/42/media，中止")
     sys.exit(2)
 
-LUA_FILES = [f for m in MEDIA_DIRS for f in iter_files(os.path.join(m, "lua"), {".lua"})
-             if os.path.isdir(os.path.join(m, "lua"))]
 PZ_PATH = os.environ.get("PZ_PATH", r"D:\SteamLibrary\steamapps\common\ProjectZomboid")
 
 # ---- 翻譯鍵放在前綴對應的檔 ----
@@ -110,25 +107,6 @@ for m in MEDIA_DIRS:
                 if home and home != n:
                     misplaced.append(f"{l}/{n} 的 {k}（要放 {home}）")
     fail("翻譯鍵放在前綴對應的檔", misplaced) if misplaced else ok("翻譯鍵放在前綴對應的檔（UI_／IGUI_／Sandbox_）")
-
-# ---- Kahlua 禁用全域（含 os.clock）----
-FORBIDDEN = ("next", "xpcall")
-# os 只有 time／date／difftime（OsLib.java:322-324）：os.clock 在 Kahlua 是 nil
-FORBIDDEN_MEMBERS = ("os.clock",)
-hits_forbidden = []
-for f in LUA_FILES:
-    rel = os.path.relpath(f, REPO)
-    with open(f, encoding="utf-8") as fh:
-        for lineno, line in enumerate(fh, 1):
-            code = line.split("--", 1)[0]
-            for name in FORBIDDEN:
-                for mm in re.finditer(rf"(?<![\w_:.]){name}\s*\(", code):
-                    hits_forbidden.append(f"{rel}:{lineno} 用了 {name}()")
-            for name in FORBIDDEN_MEMBERS:
-                if re.search(rf"(?<![\w_]){re.escape(name)}\s*\(", code):
-                    hits_forbidden.append(f"{rel}:{lineno} 用了 {name}()")
-fail("Kahlua 禁用全域（next/xpcall/os.clock）", hits_forbidden) if hits_forbidden \
-    else ok("Kahlua 禁用全域（next/xpcall/os.clock）")
 
 # ---- craftRecipe 腳本 ----
 # 照 MiniMapWatch verify_mod.py 第 18 項移植。引擎逐 token 解析輸入行（InputScript.java:617-766）：mode 的 key 字面大小寫

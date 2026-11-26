@@ -19,7 +19,8 @@
   4. 裸 % 檢查           — 42.20.1 起 formatted() 遇裸 % 崩潰；只允許 %1-%9 與 %%
  4b. 翻譯佔位與 EN 相同   — 各語系同一鍵的 %1-%9（多重集合）與 %% 數量要和 EN 一樣：漏掉的佔位少顯示資料，
                           多出的沒有參數可填（12 語多數是 AI 翻譯，鍵集一致與裸 % 檢查都抓不到）
-  5. Kahlua 禁用全域       — next/xpcall 不存在（BaseLib 未註冊），呼叫→
+  5. Kahlua 禁用全域       — next/xpcall 不存在（BaseLib 未註冊），os.clock 也沒有（OsLib 只註冊 date／difftime／time，
+                           OsLib.java:322-324；2026-11-26 從 Safehouse 移來），呼叫→
                            「Object tried to call nil」。luac 與標準 Lua 測試都攔不住
                            （語法合法、標準 Lua 有這些函式），只能靜態掃描
                            assert 不在此列：遊戲根目錄 stdlib.lua 以 Lua 定義，Kahlua 可用
@@ -34,6 +35,10 @@
                          （Tesla 首發 2026-10-29 照舊文件用 APNG）。已發布只 PASS 註明：preview.png 只在首發用
   8. 佔位符殘留            — {{TOKEN}} 漏替換（略過根層 temp/、output/ 與各層 node_modules/）
   9. Steam 描述位元組      — 各語言 ≤8000 UTF-8 bytes（中日文 3 bytes/字，容易低估）
+ 9b. Steam 指南稿長度     — STEAM_GUIDE.md／STEAM_GUIDE_EN.md 照 pz-family-docs/scripts/steam_guide.js 的 parse 切章：
+                          檔頭要有標題／摘要註解，標題、章名 ≤128 bytes，摘要、每章內文 ≤8000 bytes（{{img:名}} 以
+                          最長的 previewicon 標籤估算）。超過時上傳工具送到一半才丟錯（2026-11-26 從 Builder 移來）。
+                          沒有指南稿則 SKIP
  10. 沙盒選項翻譯配對       — 每個 option 要有 Sandbox_<translation> 標題＋ _tooltip＋分頁名
  11. 公開文件洩漏掃描      — CHANGELOG bullet 與 STEAM_*.md 都會原樣貼到公開 Steam 頁；掃基礎設施
                            樣式（/home/ 路徑、IP、SteamID64、ssh、主機名）當最後防線。
@@ -68,7 +73,9 @@
                          本來就要改名的 repo（翻譯包）寫進 verify_ignore.txt 並註明理由。抓不到原版程式寫進的名字
                          （ISClothingExtraAction:createItemNew 換穿時把帶磨損、染血字樣的 getName() 當成改名，:76-79）
  19. repo 專屬檢查        — scripts/verify_local.py（選用）：只有單一 MOD 用得到的靜態檢查放那裡，不改本檔
-                          （本檔是家族模板的副本，照模板更新時整份覆寫）。它照本檔格式印 PASS／FAIL 行，結束碼非零＝FAIL
+                          （本檔是家族模板的副本，照模板更新時整份覆寫）。它照本檔格式印 PASS／FAIL／SKIP／WARN 行
+                          （行首要有空白），本檔逐行轉印並算進總結；結束碼非零卻沒印 FAIL 行也算 FAIL。
+                          verify_ignore.txt 不套用到它的輸出，豁免由它自己決定
                           （Builder 管理面板規則頁的標籤寬：ES、PT 的譯文從 0.2.0 起被截，2026-11-01 才由 E2E 看到）
 
 新增檢查時：同步把對應的坑記進 AGENTS.md 踩坑錄，並依「踩坑進化協議」回流到
@@ -119,6 +126,10 @@ def _unwaived(label, details):
 
 
 def fail(label, details=None):
+    if not details:  # 沒帶細節也是失敗；不能經 _unwaived，空清單在那裡會記成 PASS
+        failed.append(label)
+        print(f"  FAIL  {label}")
+        return
     kept = _unwaived(label, details)
     if not kept:
         return
@@ -755,6 +766,7 @@ fail("Lua 字串字面值純 ASCII（Kahlua 截斷）", nonascii) if nonascii \
 
 # ---- 5+6. Kahlua 禁用全域 / table.sort ----
 FORBIDDEN = ("next", "xpcall")
+FORBIDDEN_MEMBERS = ("os.clock",)  # OsLib.java:322-324 只註冊 date／difftime／time，os.clock 是 nil
 hits_forbidden, hits_sort = [], []
 for f in LUA_FILES:
     rel = os.path.relpath(f, REPO)
@@ -764,10 +776,13 @@ for f in LUA_FILES:
             for name in FORBIDDEN:
                 for mm in re.finditer(rf"(?<![\w_:.]){name}\s*\(", code):
                     hits_forbidden.append(f"{rel}:{lineno} 用了 {name}()")
+            for name in FORBIDDEN_MEMBERS:
+                if re.search(rf"(?<![\w_.]){re.escape(name)}\s*\(", code):
+                    hits_forbidden.append(f"{rel}:{lineno} 用了 {name}()")
             if re.search(r"(?<![\w_])table\.sort\s*\(", code):
                 hits_sort.append(f"{rel}:{lineno}")
-fail("Kahlua 禁用全域（next/xpcall）", hits_forbidden) if hits_forbidden \
-    else ok("Kahlua 禁用全域（next/xpcall）")
+fail("Kahlua 禁用全域（next/xpcall/os.clock）", hits_forbidden) if hits_forbidden \
+    else ok("Kahlua 禁用全域（next/xpcall/os.clock）")
 fail("無 table.sort（用迭代 sortSafe，見 AGENTS.md）", hits_sort) if hits_sort \
     else ok("無 table.sort")
 
@@ -918,6 +933,55 @@ for f in descs:
         over.append(f"{f}: {size} bytes（上限 8000）")
 if descs:
     fail("Steam 描述 ≤8000 bytes", over) if over else ok(f"Steam 描述 ≤8000 bytes（{len(descs)} 檔）")
+
+# ---- 9b. Steam 指南稿長度 ----
+# 照 pz-family-docs/scripts/steam_guide.js 的 parse()（改那邊就要照著改這裡）：整行 <!-- --> 註解不送；以行首「=== 」切章、
+# 第一行是章名；內文頭尾去空白、章內 [h3] 前補一個空行；{{img:名}} 以最長的 previewicon 標籤估算。上限出處：
+# pz-family-docs/release.md「長度上限都算 UTF-8 位元組」（2026-10-11 實測：章內文 8001 bytes 被拒；章名、指南標題 ≤128）。
+_t = "Steam 指南稿：標題、章名 ≤128 bytes，摘要、每章 ≤8000 bytes"
+_guides = [g for g in ("STEAM_GUIDE.md", "STEAM_GUIDE_EN.md") if os.path.isfile(os.path.join(REPO, g))]
+_bad, _n = [], 0
+
+
+def _u8(s):
+    return len(s.encode("utf-8"))
+
+
+for _g in _guides:
+    with open(os.path.join(REPO, _g), encoding="utf-8") as fh:
+        _lines = fh.read().replace("\r\n", "\n").split("\n")
+    _meta = {}
+    for _line in _lines:
+        _m = re.match(r"^<!--\s*(指南網址|標題|摘要)：(.*?)\s*-->$", _line)
+        if _m:
+            _meta[_m[1]] = _m[2].strip()
+    for _k, _cap in (("標題", 128), ("摘要", 8000)):
+        if not _meta.get(_k):
+            _bad.append(f"{_g}：檔頭缺 <!-- {_k}：… -->")
+        elif _u8(_meta[_k]) > _cap:
+            _bad.append(f"{_g} 指南{_k} {_u8(_meta[_k])} bytes（上限 {_cap}）")
+    _chunks = re.split(r"^=== ", "\n".join(x for x in _lines if not re.match(r"^<!--.*-->$", x)), flags=re.M)[1:]
+    if not _chunks:
+        _bad.append(f"{_g}：沒有「=== 章名」開頭的章節")
+    for _c in _chunks:
+        _n += 1
+        _title, _, _body = _c.partition("\n")
+        _title = _title.strip()
+        _body = re.sub(r"([^\n])\n\[h3\]", r"\1\n\n[h3]", _body.strip())
+        if not _title or _u8(_title) > 128:
+            _bad.append(f"{_g}：章名空白或超過 128 bytes：「{_title}」")
+        if not _body:
+            _bad.append(f"{_g}「{_title}」：沒有內文")
+        _size = _u8(re.sub(r"\{\{img:([^}]+)\}\}",
+                           lambda m: f"[previewicon=000000000000;sizeOriginal,inline;{m[1]}][/previewicon]", _body))
+        if _size > 8000:
+            _bad.append(f"{_g}「{_title}」：{_size} bytes（上限 8000；中文字 3、emoji 4）")
+if not _guides:
+    skip(_t, "沒有 STEAM_GUIDE.md／STEAM_GUIDE_EN.md")
+elif _bad:
+    fail(_t, _bad + ["縮短或照功能拆章；上傳工具 pz-family-docs/scripts/steam_guide.js 用同樣的規則"])
+else:
+    ok(f"{_t}（{len(_guides)} 檔 {_n} 章）")
 
 # ---- 10. 沙盒選項翻譯配對 ----
 for m in MEDIA_DIRS:
@@ -1450,12 +1514,28 @@ warn("server／shared 不用顯示名稱 setName（名稱存檔並照原樣送�
 
 # ---- 19. repo 專屬檢查（scripts/verify_local.py，選用）----
 # 只有單一 MOD 用得到的檢查放那個檔，本檔照模板整份更新時才不會蓋掉它（Builder 2026-11-01：管理面板規則頁的標籤寬）。
+# 它的 PASS／FAIL／SKIP／WARN 行逐行轉印並算進總結（2026-11-26 以前併成一行 PASS，裡面的 SKIP 看不出來）。
+# verify_ignore.txt 不套用：ModMaps 的豁免樣式只為了模板第 3 項，套到這裡會把它真的鍵集檢查一起靜音。
 _local = os.path.join(REPO, "scripts", "verify_local.py")
 if os.path.isfile(_local):
-    _p = subprocess.run([sys.executable, _local], cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    _out = [line.strip() for line in (_p.stdout + _p.stderr).splitlines() if line.strip()]
     _t = "repo 專屬檢查（scripts/verify_local.py）"
-    fail(_t, _out or [f"結束碼 {_p.returncode}，沒有輸出"]) if _p.returncode else ok(f"{_t}：" + " ／ ".join(_out))
+    _p = subprocess.run([sys.executable, _local], cwd=REPO, capture_output=True, text=True, encoding="utf-8",
+                        errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    _lists = {"PASS": passed, "FAIL": failed, "SKIP": skipped, "WARN": warned}
+    _seen = {k: 0 for k in _lists}
+    print(f"  ---- {_t} ----")
+    for _line in (_p.stdout + _p.stderr).splitlines():
+        if not _line.strip():
+            continue
+        print(_line)
+        _m = re.match(r"^\s+(PASS|FAIL|SKIP|WARN)\s+(\S.*)$", _line)
+        if _m:
+            _lists[_m[1]].append(f"verify_local：{_m[2]}")
+            _seen[_m[1]] += 1
+    if _p.returncode and not _seen["FAIL"]:
+        fail(f"{_t}：結束碼 {_p.returncode}，沒有印 FAIL 行")
+    elif not any(_seen.values()):
+        ok(_t)
 
 # ---- 總結 ----
 print()
