@@ -900,8 +900,9 @@ function I.install()
         return
     end
     local orig = buildUtil.checkCorner
-    buildUtil.checkCorner = function(x, y, z, north, thumpable, item)
-        orig(x, y, z, north, thumpable, item)
+    -- 原版有呼叫點只傳 5 個（ISWoodenDoorFrame.lua:17）；Kahlua 少傳不補 nil，第 6 個起用 ... 原樣轉
+    buildUtil.checkCorner = function(x, y, z, north, thumpable, ...)
+        orig(x, y, z, north, thumpable, ...)
         MSH.Indoor.queueCorner(x, y, z)
     end
 end
