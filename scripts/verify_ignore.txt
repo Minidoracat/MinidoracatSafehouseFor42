@@ -1,0 +1,6 @@
+# 逐一查證後豁免的 finding（每行一個子字串樣式）。新增條目前必須先查證，並在上一行註明依據。
+
+# 「翻譯佔位與 EN 相同」：EN 是 `%1 and %3 more`、CH 是 `%1 等 %2 區`（CN 同）。CreatePanel.lua:773 同時傳區名、
+# 總數 hits（%2）與其餘數 hits - P.EXEMPT_NAMES（%3）；中文寫法是「A、B 等 N 區」，N 是總數
+# （.claude/skills/safehouse-dev/references/client-ui.md:104）。全 repo 只有這一個鍵以此字串開頭，不會蓋到別的鍵。
+IGUI_MSH_Create_ExemptNamesMore
