@@ -1,14 +1,13 @@
-[h1]Minidoracat Safehouse for B42 42.22.2-0.18.1[/h1]
-[i]2026-11-26[/i]
+[h1]Minidoracat Safehouse for B42 42.22.2-0.18.2[/h1]
+[i]2026-11-27[/i]
 
 [b]English summary[/b]
 [list]
-[*] Performance: servers with many safehouses now check safehouse permissions faster, so players working their crops (watering most of all) put less load on the server.
-[*] Nothing changes in who can do what: the same actions are allowed or blocked, and blocked players see the same message as before.
+[*] Internal stability tweak to how the mod hooks the game's wall, door frame, window frame and fence building; players and server owners will not notice any difference.
 [*] Server owners: no settings to change; the update takes effect after the server restarts.
 [/list]
 
-[h3]⚡ 效能[/h3]
+[h3]🔄 變更[/h3]
 [list]
-[*] [b]安全屋多的伺服器，玩家操作作物時比較不會拖慢伺服器[/b]：伺服器檢查安全屋權限變快了，伺服器更新重開後生效、不用改設定；澆水這類作物操作快最多。誰能做什麼、被擋時看到的提示都和以前一樣。
+[*] [b]內部穩定性調整[/b]：配合原版建造牆、門框、窗框、圍籬時的程式寫法做了調整，玩家與服主都不會察覺差異，也不用改設定。
 [/list]
