@@ -2,8 +2,9 @@
 -- Client.takeZones，和 zones 查詢的回覆同一條路；計畫 §6.3、§7.1）。
 -- upsert 走原生 SafehouseSync（伺服器 kickUserFromSafehouse 觸發），不需要這裡處理；原生沒有 remove 廣播，
 -- 伺服器送自訂 nativeRemove。只移除 owner 恰好等於 @MSH:<claimId> 的本地物件：SafehouseSync（RELIABLE 非 ORDERED）
--- 和自訂指令沒有順序保證，同 rect 可能已是新 claim，所以不比 rect；永不清空整份清單。foreign 只在管理員釋出原版屋
--- （伺服器 Foreign.lua 的 foreignRemove）時移除範圍與屋主都相同的那間。
+-- 和自訂指令沒有順序保證，同 rect 可能已是新 claim，所以不比 rect；永不清空整份清單。foreign 在伺服器送 foreignRemove 時
+-- 移除範圍與屋主都相同的那間：管理員釋出原版屋（Foreign.lua），以及伺服器換回屋主的塊（Lifecycle.sendReclaimed；
+-- 留著的塊隨後由屋主是標記的 SafehouseSync 加回）。
 -- 晚到的舊 SafehouseSync 會把屋加回來（SafehouseSyncPacket.java:87-89）：每個 remove 保留 60 秒 tombstone，
 -- 期間 OnSafehousesChanged 再移除；之後靠校正兜底（native2-mp 2026-10-10 實測）。
 -- 校正：首次在 OnGameStart 掛的一次性 OnTick（OnGameStart 當下送會走錯路徑，pitfalls.md「MP client 不可在
@@ -81,7 +82,8 @@ function M.onNativeRemove(args)
     track(args.bootId, args.seq)
 end
 
--- 管理員面板釋出原版屋（伺服器 Foreign.lua）：同 nativeRemove 留 TOMB_MS 的 tombstone（晚到的舊 SafehouseSync 會加回來）
+-- 管理員面板釋出原版屋（伺服器 Foreign.lua）與伺服器換回屋主的塊（留著的塊隨後由屋主是標記的同步加回）：
+-- 同 nativeRemove 留 TOMB_MS 的 tombstone（晚到的舊 SafehouseSync 會加回來）
 -- ponytail: 同步不帶建立時間，60 秒內同屋主在同範圍又建一間時，這個客戶端也會把新屋拿掉（伺服器照留，重新登入或下次同步
 -- 那間時回來；PlayerSafehouse 關著，只有管理員或其他 MOD 建得出來）。真的發生再讓校正請求也回 foreign 的指紋
 function M.onForeignRemove(args)

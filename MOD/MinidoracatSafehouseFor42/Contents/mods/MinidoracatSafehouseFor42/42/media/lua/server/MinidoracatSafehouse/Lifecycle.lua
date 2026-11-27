@@ -42,18 +42,85 @@ function L.findNatives(rec, idx, into)
     return out, missing and "MISSING" or nil
 end
 
+-- 換回屋主不是標記的塊：rec 的第 i 塊沒有標記原生，卻有同範圍＋同建立時間指紋、屋主是別人的原生 → setOwner 換回標記。
+-- 照標記找原生之後要拆或撤銷的路徑先叫它，每塊都處理到（2026-11-27）。
+-- 沒有建立時間的塊不換回：pieceOf 那時只比範圍，認不出是不是自己的。
+-- 每次都逐塊比指紋，呼叫端自己決定要不要叫（收斂看標記原生比塊數少、放棄與撤銷看 findNatives 回 MISSING）。
+-- 回傳 nil，或換回的 { { i, house, rect, owner＝被改成的屋主 } }；有換回時 idx 已過期，呼叫端重新 N.index()。
+-- 客戶端通知照 L.sendReclaimed。
+function L.reclaim(rec, idx, now)
+    local N = MSH.Native
+    local id, rects = rec.claimId, rec.rects
+    if rects == nil then return nil end
+    local have, took = {}, nil
+    for _, e in ipairs(idx.byClaim[id] or NONE) do
+        local i = N.pieceOf(rec, e)
+        if i then have[i] = true end
+    end
+    for i, p in ipairs(rects) do
+        if not have[i] and p.created ~= nil then
+            for _, e in ipairs(idx.byRect[N.rectKey(p)] or NONE) do
+                if e.claimId ~= id and N.pieceOf(rec, e) == i then
+                    e.house:setOwner(MSH.marker(id))   -- 也把新 owner 從 players 移除（SafeHouse.java:660-663）
+                    took = took or {}
+                    took[#took + 1] = { i = i, house = e.house, rect = e.rect, owner = e.owner }
+                    MSH.Audit.throttled("OWNER_DRIFT|" .. id, 60000, "OWNER_DRIFT",
+                        { actor = e.owner, claimId = id, code = "RESTORED" }, now)
+                    break
+                end
+            end
+        end
+    end
+    return took
+end
+
 -- defer(fn)：把網路送出排到放鎖之後；沒有給就立即送（收斂在鎖外呼叫時）
 local function send(defer, fn)
     if defer then defer(fn) else fn() end
+end
+
+-- 換回的塊的客戶端通知（放鎖後送）：客戶端那塊的屋主還是換回前的人，nativeRemove 只認標記。
+-- 一律送 foreignRemove（範圍＋換回前的屋主；Mirror.lua 留 tombstone）。伺服器還留著的塊再廣播標記屋主
+-- （foreignRemove 刪不到它）；拆掉的塊不廣播：SafehouseSync 不保證順序，會把它加回去。
+-- gone：這次拆掉的原生 → true（nil＝全部留著）
+function L.sendReclaimed(took, gone)
+    for _, t in ipairs(took or NONE) do
+        MSH.Foreign.sendRemove(t)   -- Foreign.lua 較晚載入，執行期才取
+        if not (gone and gone[t.house]) then MSH.Native.broadcast(t.house) end
+    end
+end
+
+-- 拆一串原生；拆不掉就隔離，換回的塊照實際拆了哪些通知客戶端（重畫的 defer 只在成功時送出：拆掉的塊由
+-- restorePartial 重建時廣播，留著的塊等校正）。回傳拆掉的原生集合，或 nil（失敗）
+local function removeAll(rec, list, took, defer)
+    local N, gone = MSH.Native, {}
+    for _, e in ipairs(list) do
+        if e then
+            if not N.remove(e.house) then
+                MSH.Registry.markQuarantined(rec, "RELEASE_REMOVE_FAILED")
+                if took then send(defer, function() L.sendReclaimed(took, gone) end) end
+                return nil
+            end
+            gone[e.house] = true
+        end
+    end
+    return gone
 end
 
 -- 回傳 true 或 false, 結果碼
 function L.release(rec, reason, opId, now, defer)
     if rec.rects == nil then return L.forceRelease(rec, reason, opId, now, defer) end
     local N, R = MSH.Native, MSH.Registry
-    local entries, why = L.findNatives(rec, N.index())
+    local idx = N.index()
+    local entries, why = L.findNatives(rec, idx, nil)
+    local took = nil
+    if why == "MISSING" then
+        took = L.reclaim(rec, idx, now)
+        if took then entries, why = L.findNatives(rec, N.index(), nil) end
+    end
     if entries == nil then
         R.markQuarantined(rec, "RELEASE_" .. why)
+        if took then send(defer, function() L.sendReclaimed(took, nil) end) end
         return false, CODE.RELEASE_FAILED
     end
     -- 沒有指紋的塊記下找到的原生的建立時間：tombstone 才認得出同一代原生重現
@@ -61,15 +128,14 @@ function L.release(rec, reason, opId, now, defer)
         if e and rec.rects[i].created == nil then rec.rects[i].created = e.house:getDatetimeCreated() end
     end
     R.markReleasing(rec, opId)
-    for _, e in ipairs(entries) do
-        if e and not N.remove(e.house) then
-            R.markQuarantined(rec, "RELEASE_REMOVE_FAILED")
-            return false, CODE.RELEASE_FAILED
-        end
-    end
+    local gone = removeAll(rec, entries, took, defer)
+    if gone == nil then return false, CODE.RELEASE_FAILED end
     local claimId = rec.claimId
     R.markReleased(rec, reason, now)
-    send(defer, function() N.sendRemove(claimId) end)
+    send(defer, function()
+        N.sendRemove(claimId)
+        L.sendReclaimed(took, gone)
+    end)
     return true
 end
 
@@ -77,17 +143,19 @@ end
 -- （DUPLICATE、MISMATCH、malformed 都走這裡）；全部確認不在了才寫 released，有一間移不掉就維持 quarantined。
 function L.forceRelease(rec, reason, opId, now, defer)
     local N, R = MSH.Native, MSH.Registry
-    local list = N.index().byClaim[rec.claimId] or {}
+    local idx = N.index()
+    local took = L.reclaim(rec, idx, now)   -- 隔離中的紀錄沒有收斂換回屋主
+    if took then idx = N.index() end
+    local list = idx.byClaim[rec.claimId] or {}
     R.markReleasing(rec, opId)
-    for _, e in ipairs(list) do
-        if not N.remove(e.house) then
-            R.markQuarantined(rec, "RELEASE_REMOVE_FAILED")
-            return false, CODE.RELEASE_FAILED
-        end
-    end
+    local gone = removeAll(rec, list, took, defer)
+    if gone == nil then return false, CODE.RELEASE_FAILED end
     local claimId = rec.claimId
     R.markReleased(rec, reason, now)
-    send(defer, function() N.sendRemove(claimId) end)
+    send(defer, function()
+        N.sendRemove(claimId)
+        L.sendReclaimed(took, gone)
+    end)
     return true
 end
 

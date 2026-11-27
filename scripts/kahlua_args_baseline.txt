@@ -149,7 +149,6 @@
 1	server/MinidoracatSafehouse/Indoor.lua|pushKicks|1<2
 1	server/MinidoracatSafehouse/Journal.lua|hook|3<4
 1	server/MinidoracatSafehouse/Journal.lua|ok|0<1
-1	server/MinidoracatSafehouse/Lifecycle.lua|findNatives|2~3|N.index
 1	server/MinidoracatSafehouse/Migration.lua|get|1<2
 1	server/MinidoracatSafehouse/Migration.lua|ok|0<1
 4	server/MinidoracatSafehouse/Native.lua|get|1<2
@@ -157,16 +156,13 @@
 3	server/MinidoracatSafehouse/Permissions.lua|deniesAt|5<6
 1	server/MinidoracatSafehouse/Permissions.lua|get|1<2
 2	server/MinidoracatSafehouse/Permissions.lua|hook|3<4
-1	server/MinidoracatSafehouse/Reconcile.lua|findNatives|2<3
 1	server/MinidoracatSafehouse/Reconcile.lua|get|1<2
 2	server/MinidoracatSafehouse/Reconcile.lua|hook|3<4
 1	server/MinidoracatSafehouse/Reconcile.lua|shapeError|1<2
 9	server/MinidoracatSafehouse/Respawn.lua|fail|1<2
 3	server/MinidoracatSafehouse/Respawn.lua|listContains|3<4
 13	server/MinidoracatSafehouse/Server.lua|fail|1<2
-1	server/MinidoracatSafehouse/Sharing.lua|apply|3<4
 35	server/MinidoracatSafehouse/Sharing.lua|fail|1<2
-1	server/MinidoracatSafehouse/Sharing.lua|findNatives|2<3
 2	server/MinidoracatSafehouse/Sharing.lua|get|1<2
 1	server/MinidoracatSafehouse/Sharing.lua|hook|3<4
 7	server/MinidoracatSafehouse/Storage.lua|fail|1<2

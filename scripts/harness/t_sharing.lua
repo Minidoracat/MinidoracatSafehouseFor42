@@ -386,6 +386,25 @@ return function(T)
     T.tick(math.ceil(MSH.Reconcile.SWEEP_MS / 100))
     check(not has(hs, "stranger") and notCanonical("stranger"), "原版加進來的陌生人：收掉並記 NOT_CANONICAL")
 
+    T.section("陣營輪檢：同一批前一筆換回屋主後，後一筆用新的索引照樣撤銷")
+    boot()
+    alice = T.player({ name = "alice", x = 5, y = 5 })
+    local recA, hA = seed("alice", rect(700, 700, 5, 5))
+    local recB, hB = seed("alice", rect(800, 800, 5, 5))
+    local pack = T.faction("Pack", "alice", { "kate" })
+    check(cmd(alice, "shareFaction", recA, { bits = USE }).ok and cmd(alice, "shareFaction", recB, { bits = USE }).ok
+        and has(hA, "kate") and has(hB, "kate"), "（前置）兩間都分享給 Pack")
+    hA:setOwner("@MSH:" .. recB.claimId)   -- A 的那塊被改成 B 的標記
+    pack.players:remove("kate")
+    local Sh = MSH.Sharing
+    -- 經過 2 秒：這個 tick 一批輪完兩筆（A 在 B 前面）
+    Sh.queue, Sh.cursor, Sh.cycleAt, Sh.lastTick = { recA.claimId, recB.claimId }, 1, T.now, T.now
+    T.advance(2000)
+    MSH.Reconcile.lastAttempt = T.now   -- 這個 tick 不跑收斂：只看輪檢
+    T.tick(1)
+    check(Sh.cursor == 3 and hA.owner == "@MSH:" .. recA.claimId and not has(hA, "kate") and not has(hB, "kate"),
+        "同一批：A 換回標記並撤銷 kate；B 照新索引找到自己的原生，也撤銷 kate")
+
     T.section("身分：對既有安全屋的 mutation 才綁定（Steam 模式）")
     boot({ steam = true })
     local SID_A, SID_C, SID_X = 76561198000000001, 76561198000000003, 76561198000000099

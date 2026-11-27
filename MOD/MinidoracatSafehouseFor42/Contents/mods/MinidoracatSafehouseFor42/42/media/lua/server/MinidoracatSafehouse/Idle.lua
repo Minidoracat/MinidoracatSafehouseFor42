@@ -86,10 +86,13 @@ function I.idleMs(md, anchor, now)
     return now - anchor - I.downAfter(md, anchor, now)
 end
 
--- 一間的最後到訪：這個標記每個原生的 lastVisited 取最大；沒有原生回 nil
+-- 一間的最後到訪：這個標記每個原生的 lastVisited 取最大；沒有原生回 nil。
+-- 標記原生比塊數少也回 nil（這輪不判）：只看剩下幾塊的到訪不準
 function I.lastVisit(rec, idx)
     local best
-    for _, e in ipairs(idx.byClaim[rec.claimId] or {}) do
+    local list = idx.byClaim[rec.claimId] or {}
+    if #list < #rec.rects then return nil end
+    for _, e in ipairs(list) do
         local ok, v = pcall(function() return e.house:getLastVisited() end)
         if ok and MSH.isFinite(v) and (best == nil or v > best) then best = v end
     end

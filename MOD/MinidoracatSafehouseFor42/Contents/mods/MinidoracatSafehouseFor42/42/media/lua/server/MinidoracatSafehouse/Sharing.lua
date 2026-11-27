@@ -104,7 +104,8 @@ local function pushChanged(id, names, defer)
 end
 
 -- 紀錄改完後讓原生名單跟上。old＝改之前應有的人（同步時 nil）；和 Sh.last 合併後，不在新名單的撤銷、
--- 新名單裡原生沒有的 addPlayer。回傳 affected（被撤銷＋新取得資格的人）, changed（有沒有人變動）。
+-- 新名單裡原生沒有的 addPlayer。回傳 affected（被撤銷＋新取得資格的人）, changed（有沒有人變動）, 新索引（有換回
+-- 屋主的塊時；傳進來的 idx 已過期，批次共用索引的呼叫端要換掉）。
 -- 呼叫端持鎖；撤銷與廣播 defer。idx 可省（指令自己掃一次原生清單）。
 function Sh.apply(rec, old, defer, idx)
     local id = rec.claimId
@@ -131,8 +132,21 @@ function Sh.apply(rec, old, defer, idx)
         changed = true
     end
     if not MSH.GUARDED[rec.lifecycle] then return affected, changed end
+    local L = MSH.Lifecycle
+    idx = idx or N.index()
+    local entries, why = L.findNatives(rec, idx, nil)
+    local fresh = nil
+    if why == "MISSING" then
+        -- 屋主不是標記的塊先換回，每塊都套用名單；客戶端通知照 Lifecycle.sendReclaimed（沒人增減時也要廣播）
+        local took = L.reclaim(rec, idx, getTimestampMs())
+        if took then
+            fresh = N.index()
+            entries = L.findNatives(rec, fresh, nil)
+            defer(function() L.sendReclaimed(took, nil) end)
+        end
+    end
     local houses = {}
-    for _, e in ipairs(MSH.Lifecycle.findNatives(rec, idx or N.index()) or {}) do
+    for _, e in ipairs(entries or {}) do
         if e then houses[#houses + 1] = e.house end
     end
     for _, house in ipairs(houses) do
@@ -157,12 +171,12 @@ function Sh.apply(rec, old, defer, idx)
             end)
         end
     end
-    return affected, changed
+    return affected, changed, fresh
 end
 
 -- 分享類指令的收尾：套用名單、推送 changed（extra＝另外要通知的人）、audit
 local function finish(ctx, rec, old, extra, event, detail)
-    local affected = Sh.apply(rec, old, ctx.defer)
+    local affected = Sh.apply(rec, old, ctx.defer, nil)
     affected[rec.owner] = true
     for u in pairs(extra) do affected[u] = true end
     pushChanged(rec.claimId, affected, ctx.defer)
@@ -494,7 +508,8 @@ local function syncOne(rec, st)
         if sameSet(want, Sh.last[rec.claimId]) then return end
     end
     st.idx = st.idx or N.index()
-    local affected, changed = Sh.apply(rec, nil, st.defer, st.idx)
+    local affected, changed, fresh = Sh.apply(rec, nil, st.defer, st.idx)
+    if fresh then st.idx = fresh end
     if suspended or changed then
         affected[rec.owner] = true
         pushChanged(rec.claimId, affected, st.defer)

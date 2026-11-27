@@ -82,6 +82,16 @@ return function(T)
     run(10 * DAY)
     check(released(b), "第二塊到訪後 14 天：收回")
 
+    T.section("最後到訪：標記原生比塊數少（某塊屋主不是標記）不算數")
+    local c = seed("carol", { rect(300, 300, 5, 5), rect(305, 300, 5, 5) }, 1)
+    local cs = natives(c)
+    cs[1].lastVisited, cs[2].lastVisited = T.now - 40 * DAY, T.now
+    check(MSH.Idle.lastVisit(c, MSH.Native.index()) == T.now, "（前置）兩塊都在：取最晚的到訪")
+    cs[2]:setOwner("thief")
+    check(MSH.Idle.lastVisit(c, MSH.Native.index()) == nil,
+        "剛到訪的那塊屋主不是標記：回 nil（這輪不判），不拿另一塊 40 天前的到訪")
+    cs[2]:setOwner(MSH.marker(c.claimId))
+
     T.section("停機不算：檢查間隔超過 10 分鐘記成停機，閒置時間扣掉")
     boot()
     local c = seed("carol", { rect(100, 100, 5, 5) }, 1)

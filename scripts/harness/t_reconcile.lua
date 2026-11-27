@@ -33,6 +33,14 @@ return function(T)
         for _, a in ipairs(T.broadcastsOf("nativeRemove")) do if a.claimId == id then return true end end
         return false
     end
+    -- 換回屋主的塊送給客戶端的 foreignRemove（範圍＋被改成的屋主）筆數
+    local function foreignTo(hs, owner)
+        local n = 0
+        for _, a in ipairs(T.broadcastsOf("foreignRemove")) do
+            if a.x == hs.x and a.y == hs.y and a.w == hs.w and a.h == hs.h and a.owner == owner then n = n + 1 end
+        end
+        return n
+    end
     -- 讓下一個 tick 不會因 wall-clock 掃描（只剩 sentinel／hostile 能觸發）
     local function justSwept(MSH) MSH.Reconcile.lastAttempt = T.now end
     -- 記錄每次 admin alert 送出時是否還持鎖（§6.2：網路送出在放鎖之後）
@@ -204,6 +212,7 @@ return function(T)
     check(syncsOf(h1) == 1 and #T.houses == 2 and countLogs("OWNER_DRIFT") == 1, "owner drift：一次廣播、不重建")
     sweepNow()
     check(syncsOf(h1) == 1, "收斂後的下一輪不再廣播")
+    check(foreignTo(h1, "mallory") == 1, "owner drift：送一次 foreignRemove")
 
     T.section("sentinel：偽造 release 後一個 tick 內重建")
     T.syncs = {}
@@ -369,6 +378,7 @@ return function(T)
     check(T.houseOf(MSH.marker(l2.claimId)) == lh2 and T.houseOf("mallory") == nil and not removedDelta(l2.claimId),
         "owner 被換掉的 lapsed 原生：換回標記、保留")
     check(syncsOf(lh2) == 1, "lapsed 的 owner drift 廣播一次（實際 " .. syncsOf(lh2) .. " 次）")
+    check(foreignTo(lh2, "mallory") == 1, "lapsed 的 owner drift 送一次 foreignRemove")
     local l3, lh3 = mk(MSH, 500, "alice")
     sweepNow()
     T.syncs = {}

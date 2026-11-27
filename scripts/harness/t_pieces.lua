@@ -179,6 +179,161 @@ return function(T)
     T.boot(RESTART)
     check(#housesOf("@MSH:1") == 0, "重開：同一代的那塊原生被移除")
 
+    -- 把一塊原生的屋主改成別人、標記留在名單（原版換屋主的結果）
+    local function steal(h, who, id)
+        h:setOwner(who)
+        h:addPlayer("@MSH:" .. id)
+    end
+    local function pieceAt(x)
+        for _, h in ipairs(T.houses) do if h.x == x then return h end end
+    end
+    local function oneForeign(x, owner)
+        local fr = T.broadcastsOf("foreignRemove")
+        for _, a in ipairs(fr) do if a.x == x and a.owner == owner then return #fr == 1 end end
+        return false
+    end
+
+    T.section("放棄：屋主不是標記的塊先換回，照樣全拆、另外通知客戶端移除那塊")
+    MSH = T.boot()
+    R, N = MSH.Registry, MSH.Native
+    alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+    res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+    rec = R.get(res.claimId)
+    steal(pieceAt(104), "thief", 1)
+    local realSend, lockedAt = sendServerCommand, nil
+    sendServerCommand = function(p1, p2, p3, p4)
+        if p2 == "foreignRemove" then lockedAt = MSH.Srv.locked end
+        return realSend(p1, p2, p3, p4)
+    end
+    local syncs0 = #T.syncs
+    res = T.cmd(alice, "release", { claimId = 1, expectedRevision = rec.revision })
+    sendServerCommand = realSend
+    local fr = T.broadcastsOf("foreignRemove")[1]
+    check(res.ok and #T.houses == 0 and removes(1) == 1, "那塊也拆掉，只送一次 remove delta")
+    check(oneForeign(104, "thief") and fr.y == 106 and fr.w == 8 and fr.h == 4 and lockedAt == false,
+        "那塊另送一次 foreignRemove（範圍＋換回前的屋主），在放鎖之後")
+    check(#T.syncs == syncs0 and T.logged("OWNER_DRIFT") and #R.tomb(1).rects == 2,
+        "不廣播（客戶端會把它加回去）；寫 OWNER_DRIFT；tombstone 照樣記兩塊")
+
+    T.section("放棄：兩塊屋主都不是標記（單塊屋同理：照標記一塊都找不到）")
+    MSH = T.boot()
+    R = MSH.Registry
+    alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+    res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+    rec = R.get(res.claimId)
+    steal(pieceAt(100), "thief", 1)
+    steal(pieceAt(104), "thief2", 1)
+    res = T.cmd(alice, "release", { claimId = 1, expectedRevision = rec.revision })
+    check(res.ok and #T.houses == 0 and removes(1) == 1 and #T.broadcastsOf("foreignRemove") == 2,
+        "兩塊都拆、remove delta 一次、foreignRemove 各一次")
+
+    T.section("放棄：同範圍但建立時間不同的原版屋不是自己的塊，不動")
+    MSH = T.boot()
+    R, N = MSH.Registry, MSH.Native
+    alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+    res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+    rec = R.get(res.claimId)
+    local gone = pieceAt(104)
+    N.remove(gone)
+    SafeHouse.addSafeHouse(104, 106, 8, 4, "innocent").created = gone.created + 1
+    res = T.cmd(alice, "release", { claimId = 1, expectedRevision = rec.revision })
+    check(res.ok and pieceAt(104) ~= nil and pieceAt(104).owner == "innocent" and #T.broadcastsOf("foreignRemove") == 0
+        and not T.logged("OWNER_DRIFT"), "指紋對不上：原版屋留著、屋主照舊、不送 foreignRemove、不寫 OWNER_DRIFT")
+
+    T.section("管理員放棄隔離中的屋：屋主不是標記的塊一樣換回再拆")
+    MSH = T.boot()
+    R = MSH.Registry
+    alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+    res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+    rec = R.get(res.claimId)
+    R.markQuarantined(rec, "TEST")
+    steal(pieceAt(104), "thief", 1)
+    sweepNow()
+    check(pieceAt(104).owner == "thief", "（前置）隔離中：收斂不換回")
+    res = T.cmd(T.player({ name = "admin1", admin = true }), "adminRecover", { claimId = 1, action = "release" })
+    check(res.ok and #T.houses == 0 and oneForeign(104, "thief"), "管理員放棄：兩塊都拆、那塊送 foreignRemove")
+
+    T.section("管理員放棄沒有指紋的隔離紀錄：同範圍別人的原版屋不動")
+    MSH = T.boot()
+    R, N = MSH.Registry, MSH.Native
+    alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+    res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+    rec = R.get(res.claimId)
+    R.markQuarantined(rec, "TEST")
+    N.remove(pieceAt(104))
+    rec.rects[2].created = nil
+    SafeHouse.addSafeHouse(104, 106, 8, 4, "innocent")
+    res = T.cmd(T.player({ name = "admin1", admin = true }), "adminRecover", { claimId = 1, action = "release" })
+    check(res.ok and pieceAt(104) ~= nil and pieceAt(104).owner == "innocent" and pieceAt(100) == nil
+        and #T.broadcastsOf("foreignRemove") == 0 and not T.logged("OWNER_DRIFT"),
+        "只拆自己標記的那塊；只比得到範圍的原版屋不換屋主、不拆、不送 foreignRemove")
+
+    -- 放棄拆到一半失敗：換回的塊照實際結果通知客戶端（拆了送 foreignRemove、留著的再廣播標記屋主）
+    local function failingRelease(stolenX, failX)
+        MSH = T.boot()
+        R, N = MSH.Registry, MSH.Native
+        alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+        res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+        rec = R.get(res.claimId)
+        steal(pieceAt(stolenX), "thief", 1)
+        local stuck, realRemove = pieceAt(failX), N.remove
+        N.remove = function(h)
+            if h == stuck then return false end
+            return realRemove(h)
+        end
+        local s0 = #T.syncs
+        res = T.cmd(alice, "release", { claimId = 1, expectedRevision = rec.revision })
+        N.remove = realRemove
+        local synced = nil
+        for i = s0 + 1, #T.syncs do if T.syncs[i].house.x == stolenX then synced = T.syncs[i] end end
+        return synced
+    end
+    T.section("放棄拆到一半失敗：換回的那塊已經拆掉 → 只送 foreignRemove")
+    local synced = failingRelease(100, 104)
+    check(res.code == "RELEASE_FAILED" and rec.lifecycle == "quarantined" and pieceAt(100) == nil
+        and oneForeign(100, "thief") and synced == nil and removes(1) == 0,
+        "隔離、那塊已拆：送 foreignRemove、不廣播、不送 remove delta")
+    T.section("放棄拆到一半失敗：換回的那塊還留著 → foreignRemove＋廣播標記屋主")
+    synced = failingRelease(104, 100)
+    check(res.code == "RELEASE_FAILED" and pieceAt(104).owner == "@MSH:1" and oneForeign(104, "thief")
+        and synced ~= nil and synced.owner == "@MSH:1", "那塊留著：送 foreignRemove，並廣播屋主是標記")
+
+    T.section("放棄中（releasing）：收斂換回屋主、拆掉，那塊送 foreignRemove、不廣播")
+    MSH = T.boot()
+    R = MSH.Registry
+    alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+    res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+    rec = R.get(res.claimId)
+    steal(pieceAt(104), "mallory", 1)
+    R.markReleasing(rec, "op-test")
+    syncs0 = #T.syncs
+    sweepNow()
+    check(#T.houses == 0 and removes(1) == 1 and oneForeign(104, "mallory") and #T.syncs == syncs0,
+        "兩塊都拆、remove delta 一次、換回的那塊送 foreignRemove、不廣播")
+
+    T.section("放棄中（releasing）：收斂換回的那塊拆不掉 → 隔離、foreignRemove＋廣播標記屋主")
+    MSH = T.boot()
+    R, N = MSH.Registry, MSH.Native
+    alice = T.player({ name = "alice", x = 102, y = 102, items = { D1 } })
+    res = T.cmd(alice, "create", { rects = L(100, 100), deedType = D1, title = "L" })
+    rec = R.get(res.claimId)
+    local stuck = pieceAt(104)
+    steal(stuck, "mallory", 1)
+    R.markReleasing(rec, "op-test")
+    local realRemove = N.remove
+    N.remove = function(h)
+        if h == stuck then return false end
+        return realRemove(h)
+    end
+    syncs0 = #T.syncs
+    sweepNow()
+    N.remove = realRemove
+    synced = nil
+    for i = syncs0 + 1, #T.syncs do if T.syncs[i].house == stuck then synced = T.syncs[i] end end
+    check(rec.lifecycle == "quarantined" and stuck.owner == "@MSH:1" and oneForeign(104, "mallory")
+        and synced ~= nil and synced.owner == "@MSH:1" and removes(1) == 0,
+        "隔離；那塊還在：送 foreignRemove，並廣播屋主是標記、不送 remove delta")
+
     T.section("撤銷：先把人從每一塊移掉才傳送")
     MSH = T.boot()
     R, N = MSH.Registry, MSH.Native
@@ -206,6 +361,41 @@ return function(T)
     check(res.ok and stillListed == false, "第一次傳送前，bob 已不在任何一塊的名單")
     check(bob.x == 501 and bob.y == 503 and not kb[1].players:contains("bob") and not kb[2].players:contains("bob"),
         "bob 從第二塊被傳到 (501, 503)，落進第一塊也不在名單（下一次越界檢查會再傳出）")
+
+    T.section("撤銷：屋主不是標記的塊先換回再撤銷（那塊也傳出、不留 NOT_CANONICAL）")
+    local carol = T.player({ name = "carol", x = 503.5, y = 504.5 })
+    res = T.cmd(alice, "share", { claimId = rr.claimId, expectedRevision = rr.revision, targetUsername = "carol",
+        bits = MSH.SHARE.MEMBER })
+    check(res.ok, "（前置）分享給 carol")
+    local id = rr.claimId
+    steal(kb[2], "thief", id)
+    local revoked = {}
+    N.revoke = function(house, user)
+        revoked[#revoked + 1] = house
+        return origRevoke(house, user)
+    end
+    res = T.cmd(alice, "unshareMany", { claimId = id, expectedRevision = rr.revision, users = { "carol" } })
+    N.revoke = origRevoke
+    check(res.ok and kb[2].owner == "@MSH:" .. id and not kb[1].players:contains("carol")
+        and not kb[2].players:contains("carol") and #revoked == 2, "那塊換回標記；兩塊都移掉 carol、各 revoke 一次")
+    check(carol.x == 501 and carol.y == 503 and oneForeign(502, "thief"),
+        "carol 從換回的那塊被傳出；那塊送 foreignRemove")
+    sweepNow()
+    check(not T.logged("NOT_CANONICAL"), "之後的收斂不再記 ROSTER_REMOVED NOT_CANONICAL")
+
+    T.section("改權限（沒人增減）：換回屋主的塊也要廣播標記屋主")
+    T.player({ name = "dave", x = 900, y = 900 })
+    res = T.cmd(alice, "share", { claimId = id, expectedRevision = rr.revision, targetUsername = "dave",
+        bits = MSH.SHARE.MEMBER })
+    check(res.ok, "（前置）分享給 dave")
+    steal(kb[2], "thief", id)
+    local before = #T.syncs
+    res = T.cmd(alice, "shareEdit", { claimId = id, expectedRevision = rr.revision, users = { "dave" },
+        add = MSH.SHARE.USE, remove = 0 })
+    local last = nil
+    for i = before + 1, #T.syncs do if T.syncs[i].house == kb[2] then last = T.syncs[i] end end
+    check(res.ok and kb[2].owner == "@MSH:" .. id and last ~= nil and last.owner == "@MSH:" .. id
+        and #T.broadcastsOf("foreignRemove") == 2, "那塊換回標記，並廣播一次（屋主是標記）、送 foreignRemove")
 
     T.section("校正：客戶端少報一塊就補送整間")
     MSH = T.boot()

@@ -193,39 +193,34 @@ local function fixNative(rec, e, want, wanted, marker, now, st)
     return dirty
 end
 
--- owner drift：同範圍＋同建立時間指紋的原生，owner 卻不是標記（例：owner packet，§2.2）→ 換回標記。
+-- owner drift：同範圍＋同建立時間指紋的原生，owner 卻不是標記（例：owner packet，§2.2）→ Lifecycle.reclaim 換回標記。
 -- 只看標記原生比塊數少的紀錄（常態每塊都在，不必每輪逐塊讀建立時間）。先做這步再建索引，
 -- 換回來的原生在本輪就照一般路徑收斂名單。
--- 受保護的（active、lapsed）排廣播；releasing 的原生本輪就會被移除，廣播只會讓客戶端把它加回去（只送 remove delta）。
+-- 受保護的（active、lapsed）換回的塊送 foreignRemove（客戶端那份屋主是換回前的人）並排廣播；
+-- releasing 的交給 convergeInactive 照實際拆了哪些通知（Lifecycle.sendReclaimed）。
 local function fixOwners(idx, now, st)
-    local N = MSH.Native
+    local L = MSH.Lifecycle
     local fixed = false
     for k = 1, liveN do
         local rec = live[k]
-        local id, lc = rec.claimId, rec.lifecycle
+        local id = rec.claimId
         local list = idx.byClaim[id]
         if (list and #list or 0) < #rec.rects then
-            local have = {}
-            for _, e in ipairs(list or {}) do
-                local i = N.pieceOf(rec, e)
-                if i then have[i] = true end
-            end
-            for i, p in ipairs(rec.rects) do
-                if not have[i] then
-                    for _, e in ipairs(idx.byRect[N.rectKey(p)] or {}) do
-                        if e.claimId ~= id and N.pieceOf(rec, e) == i then
-                            -- setOwner 也把新 owner 從 players 移除（SafeHouse.java:660-663）
-                            e.house:setOwner(MSH.marker(id))
-                            if MSH.GUARDED[lc] then
-                                st.changed[id .. ":" .. i] = e.house
-                                st.drift[id] = true
-                            end
-                            fixed = true
-                            MSH.Audit.throttled("OWNER_DRIFT|" .. id, 60000, "OWNER_DRIFT",
-                                { actor = e.owner, claimId = id, code = "RESTORED" }, now)
-                            break
-                        end
+            local took = L.reclaim(rec, idx, now)
+            if took then
+                fixed = true
+                if MSH.GUARDED[rec.lifecycle] then
+                    for _, t in ipairs(took) do
+                        st.sends[#st.sends + 1] = function() MSH.Foreign.sendRemove(t) end
+                        st.changed[id .. ":" .. t.i] = t.house
                     end
+                    st.drift[id] = true
+                else
+                    -- 換回當下就排通知（之後丟錯也送得出）；gone 由 convergeInactive 照實際拆掉的填，沒填＝都還在
+                    local gone = {}
+                    st.reclaimed = st.reclaimed or {}
+                    st.reclaimed[id] = gone
+                    st.sends[#st.sends + 1] = function() L.sendReclaimed(took, gone) end
                 end
             end
         end
@@ -237,10 +232,12 @@ local function sendRemove(st, id)
     st.sends[#st.sends + 1] = function() MSH.Native.sendRemove(id) end
 end
 
--- releasing：只移除原生、收尾，不重建（lapsed 保留期內照 active 收斂）
+-- releasing：只移除原生、收尾，不重建（lapsed 保留期內照 active 收斂）。
+-- fixOwners 換回的塊：拆掉的記進 st.reclaimed[id]（通知照它送，拆到一半失敗時留著的要廣播）
 local function convergeInactive(id, rec, idx, now, st)
     local N, R, L = MSH.Native, MSH.Registry, MSH.Lifecycle
-    local entries, why = L.findNatives(rec, idx)
+    local gone = st.reclaimed and st.reclaimed[id]
+    local entries, why = L.findNatives(rec, idx, nil)
     if entries == nil then
         R.markQuarantined(rec, "RELEASE_" .. why)
         return
@@ -252,6 +249,7 @@ local function convergeInactive(id, rec, idx, now, st)
                 R.markQuarantined(rec, "RELEASE_REMOVE_FAILED")
                 return
             end
+            if gone then gone[e.house] = true end
             any = true
         end
     end
