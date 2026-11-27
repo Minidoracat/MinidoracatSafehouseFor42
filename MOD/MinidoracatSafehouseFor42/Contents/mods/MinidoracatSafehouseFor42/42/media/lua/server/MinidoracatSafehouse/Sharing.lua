@@ -46,7 +46,7 @@ Sh.queue = Sh.queue or {}
 Sh.cursor = Sh.cursor or 1
 
 -- 這個名字是不是上次由分享套用進原生名單的（含陣營投影）。Reconcile 移除這些人時不記 NOT_CANONICAL：
--- 陣營退會、關閉 AllowFactionShare 時 desiredPlayers 立刻變，Reconcile 常比這裡的輪檢先跑；
+-- 陣營退會、關閉 AllowFactionShare 時 desiredPlayers 立刻變，Reconcile 可能比這裡的輪檢先跑；
 -- 撤銷（傳出屋內的人、changed 推送）由下一次同步補上（Sh.apply 比對 Sh.last）。
 function Sh.wasApplied(id, user)
     local set = Sh.last[id]

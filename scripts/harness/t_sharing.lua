@@ -372,7 +372,7 @@ return function(T)
     rec, hs = seed("alice", rect(100, 100, 10, 10))
     local otters = T.faction("Otters", "alice", { "kate", "liam" })
     check(cmd(alice, "shareFaction", rec, { bits = USE }).ok and has(hs, "kate"), "陣營分享投影 kate")
-    -- 重現競態：Reconcile 的一輪（500 ms）比 Sharing 的輪檢（1 秒）先看到 desiredPlayers 變了
+    -- 重現競態：Reconcile 的一輪比 Sharing 的輪檢（1 秒）先看到 desiredPlayers 變了
     otters.players:remove("kate")
     MSH.Reconcile.sweep(T.now)
     T.tick(20)
@@ -383,7 +383,7 @@ return function(T)
     check(not has(hs, "liam") and not notCanonical("liam"), "關閉 AllowFactionShare：撤銷、不記 NOT_CANONICAL")
     T.sandbox("AllowFactionShare", true)
     hs:addPlayer("stranger")                -- 原版成員封包加進來的人
-    T.tick(20)
+    T.tick(math.ceil(MSH.Reconcile.SWEEP_MS / 100))
     check(not has(hs, "stranger") and notCanonical("stranger"), "原版加進來的陌生人：收掉並記 NOT_CANONICAL")
 
     T.section("身分：對既有安全屋的 mutation 才綁定（Steam 模式）")

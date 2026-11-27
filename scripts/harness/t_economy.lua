@@ -36,6 +36,7 @@ return function(T)
         T.advance(60000)
         T.tick(1)
     end
+    local function sweepNow() T.tick(math.ceil(MSH.Reconcile.SWEEP_MS / 100)) end   -- 跨過一次收斂全掃週期
     local function create(p, x, y)
         p.x, p.y = x + 5, y + 5
         return T.cmd(p, "create", { rects = { rect(x, y, 10, 10) }, deedType = D1 })
@@ -202,7 +203,7 @@ return function(T)
     T.tick(1)
     check(a3.lifecycle == "lapsed" and a3.lapsedAt == T.now and a2.lifecycle == "active" and a1.lifecycle == "active"
         and a4.lifecycle == "active" and a5.lifecycle == "active", "寬限結束仍超額：停 tier1 最新一間；免費位與別級不動")
-    T.tick(5)
+    sweepNow()
     local h3 = T.houseOf(MSH.marker(a3.claimId))
     check(h3 ~= nil and removesOf(a3.claimId) == 0, "保留期內：原生留著、不送 remove delta")
     check(SafeHouse.isSafehouseAllowTrepass(inside, mal) == false and SafeHouse.isSafehouseAllowTrepass(inside, alice) == true,
@@ -226,7 +227,7 @@ return function(T)
     T.econSet("alice", 1, 0, { lease("L1", 1, "active"), lease("L2", 1, "active") })
     T.tick(1)
     check(a3.lifecycle == "active" and a3.lapsedAt == nil, "續租：恢復 active")
-    T.tick(5)
+    sweepNow()
     check(T.houseOf(MSH.marker(a3.claimId)) == h3 and #T.syncs == syncs0 and removesOf(a3.claimId) == 0,
         "續租：同一個原生、不重建、不廣播")
 
@@ -241,7 +242,7 @@ return function(T)
     minute()
     check(a3.lifecycle == "released" and a3.releaseReason == "LAPSE_EXPIRED" and R.get(a3.claimId) == nil
         and R.tomb(a3.claimId) ~= nil and a2.lifecycle == "active", "lapseKeepDays 期滿 → released（只剩 tombstone）")
-    T.tick(5)
+    sweepNow()
     check(T.houseOf(MSH.marker(a3.claimId)) == nil and removesOf(a3.claimId) == 1
         and SafeHouse.isSafehouseAllowTrepass(inside, mal) == true, "期滿：原生移除、remove delta 恰好一次、外人可以進")
 

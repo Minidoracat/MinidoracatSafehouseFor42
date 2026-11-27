@@ -1,7 +1,7 @@
 -- MinidoracatSafehouse/Reconcile.lua：原生安全屋收斂（desired-state controller，計畫 §6.2）與 tombstone GC（§4.2）。
 -- 開服：OnLoadedMapZones 之後跑一次 recovery matrix（§6.2 表；不在 OnInitGlobalModData 判 missing，§6 啟動時序）。
 -- 週期：wall-clock 每 SWEEP_MS 掃一次；hostile mode 每 tick 掃（§4.2）；每 tick 只比原生清單長度的 sentinel，
---   變小（有房子被偽造 release 或引擎刪掉）就立刻掃（§4.2 per-tick sentinel）。
+--   比這輪看過的最大值小（有房子被偽造 release 或引擎刪掉）就立刻掃（§4.2 per-tick sentinel）。
 -- 收斂只用 addPlayer／removePlayer／setTitle／setOwner，永不對真實玩家 kickUserFromSafehouse、不傳送人；
 --   一間有幾塊就有幾個原生（共用標記，使用者 2026-10-11 裁定多塊），每個有變動的原生每輪最多一次 service-owner
 --   廣播；廣播、remove delta、admin alert 都排進 sends，放鎖之後才送（§6.2 最後一段）。
@@ -30,7 +30,7 @@ MSH.Reconcile = Rc
 
 local LC = MSH.LIFECYCLE
 
-Rc.SWEEP_MS = 500              -- 健康 tick 的全掃週期（§6.2：convergence ≤ 500 ms）
+Rc.SWEEP_MS = 2000             -- 健康 tick 的全掃週期（服主 2026-11-27 從 500 拉長；原生被刪仍由每 tick 的 sentinel 立刻掃）
 Rc.INTERFERE_MAX = 5           -- 同一 (claimId, username) 一分鐘內 re-add 超過 5 次＝成員同步受干擾（§6.2）
 Rc.INTERFERE_WINDOW_MS = 60000
 
@@ -471,9 +471,12 @@ function Rc.sweep(now)
 end
 
 function Rc.tick(now)
-    -- sentinel：getSafehouseList():size()（SafeHouse.java:652-654）O(1)，每 tick 只做這個比較
+    -- sentinel：getSafehouseList():size()（SafeHouse.java:652-654）O(1)。基準是這輪看過的最大長度：本 MOD 建原生時
+    -- 當場加一（Native.buildPiece），其他來源加的在下一個 tick 帶上；之後任何減少都立刻掃，不必等下一輪全掃
+    local n = SafeHouse.getSafehouseList():size()
+    if Rc.expected == nil or n > Rc.expected then Rc.expected = n end
     if Rc.lastAttempt == nil or MSH.Health.isHostile() or now - Rc.lastAttempt >= Rc.SWEEP_MS
-        or SafeHouse.getSafehouseList():size() < (Rc.expected or 0) then
+        or n < Rc.expected then
         Rc.sweep(now)
     end
 end

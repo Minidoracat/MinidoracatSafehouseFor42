@@ -23,6 +23,8 @@ return function(T)
         for _, a in ipairs(T.broadcastsOf("nativeRemove")) do if a.claimId == id then n = n + 1 end end
         return n
     end
+    -- 跨過一次收斂全掃週期（T.tick 每次 100 ms）
+    local function sweepNow() T.tick(math.ceil(MinidoracatSafehouse.Reconcile.SWEEP_MS / 100)) end
 
     T.section("建立：L 形兩塊")
     local MSH = T.boot()
@@ -107,7 +109,7 @@ return function(T)
     local p1, p2 = hs[1], hs[2]
     N.remove(p2)
     T.advance(5000)
-    T.tick(6)
+    sweepNow()
     local now = housesOf("@MSH:1")
     local fresh = nil
     for _, h in ipairs(now) do if h ~= p1 then fresh = h end end
@@ -117,7 +119,7 @@ return function(T)
         and rec.rects[1].created == p1.created and fresh.players:contains("alice"), "只更新重建那塊的指紋，名單照紀錄")
     -- 原版 owner 封包改掉其中一塊的屋主：其他塊的標記還在，照樣要認出這塊、換回標記（不是當成缺塊去重建撞到自己）
     fresh:setOwner("thief")
-    T.tick(6)
+    sweepNow()
     check(fresh.owner == "@MSH:1" and rec.lifecycle == "active" and #housesOf("@MSH:1") == 2,
         "一塊的屋主被改：換回標記，這間照常 active")
 
@@ -129,7 +131,7 @@ return function(T)
     for _ = 1, 3 do
         for _, h in ipairs(housesOf("@MSH:1")) do h:removePlayer("carol") end
         T.advance(1000)
-        T.tick(6)
+        sweepNow()
     end
     local flags = MSH.Reconcile.claimFlags[1]
     check(housesOf("@MSH:1")[2].players:contains("carol") and not (flags and flags.interference),
@@ -154,7 +156,7 @@ return function(T)
     local blocked, bh = seed(3, L(500, 500))
     MSH2.Native.remove(bh[2])
     SafeHouse.addSafeHouse(506, 506, 2, 2, "stranger")
-    T.tick(6)
+    sweepNow()
     check(dup.lifecycle == "quarantined" and dup.quarantineReason == "DUPLICATE", "同一塊兩個原生：隔離 DUPLICATE")
     check(odd.lifecycle == "quarantined" and odd.quarantineReason == "MISMATCH", "標記原生對不上任何一塊：隔離 MISMATCH")
     check(blocked.lifecycle == "quarantined" and blocked.quarantineReason == "REBUILD_OVERLAP"
@@ -189,7 +191,7 @@ return function(T)
     local kb = N.build(rr, {})
     for i, h in ipairs(kb) do rr.rects[i].created = h:getDatetimeCreated() end
     R.put(rr)
-    T.tick(6)
+    sweepNow()
     local stillListed = nil
     local origRevoke = N.revoke
     N.revoke = function(house, user)
@@ -323,7 +325,7 @@ return function(T)
     check(#T.syncs == syncs + 5, "客戶端少報這間：五塊一起重新廣播（一次校正的上限放得下一整間）")
     MSH = T.boot({ keepGmd = true, keepFiles = true, keepHouses = true, sandbox = { MaxPieces = 4 } })
     R = MSH.Registry
-    T.tick(6)
+    sweepNow()
     rec = R.get(fiveId)
     check(rec ~= nil and rec.lifecycle == "active" and #rec.rects == 5 and #housesOf(MSH.marker(fiveId)) == 5,
         "調回 4 後重開：五塊的那間照常 active，不隔離、不拆")

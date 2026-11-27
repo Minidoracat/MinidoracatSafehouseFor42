@@ -260,6 +260,9 @@ function N.buildPiece(rec, r)
         SafeHouse.removeSafeHouse(house)
         return nil, MSH.CODE.NATIVE_FAILED
     end
+    -- 收斂的 sentinel 基準當場跟著加：建好到下一個 tick 之間別間被刪，長度才不會剛好抵掉（Reconcile.tick）
+    local Rc = MSH.Reconcile
+    if Rc ~= nil and Rc.expected ~= nil then Rc.expected = Rc.expected + 1 end
     return house
 end
 

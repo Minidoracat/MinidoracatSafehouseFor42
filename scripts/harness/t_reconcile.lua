@@ -56,7 +56,7 @@ return function(T)
         end
         return n, locked
     end
-    local function sweepNow() T.tick(5) end
+    local function sweepNow() T.tick(math.ceil(MinidoracatSafehouse.Reconcile.SWEEP_MS / 100)) end   -- 跨過一次全掃週期（T.tick 每次 100 ms）
 
     T.section("開服 recovery matrix（逐列）")
     local MSH = T.boot()
@@ -229,6 +229,29 @@ return function(T)
     check(T.houseOf(MSH.marker(c1.claimId)) ~= nil, "再次重建")
     local res = T.cmd(palice, "testRevision", { claimId = c1.claimId, expectedRevision = revBefore })
     check(res and res.ok, "重建前拿到的 expectedRevision 仍可提交")
+
+    T.section("sentinel：同一個全掃週期內先多一間、再被刪一間 → 下一個 tick 就重建")
+    justSwept(MSH)
+    local extra = SafeHouse.addSafeHouse(5000, 5000, 5, 5, "strangerS")   -- 清單比上一輪全掃時長
+    T.tick(1)
+    local cur = T.houseOf(MSH.marker(c1.claimId))
+    SafeHouse.removeSafeHouse(cur)                                       -- 長度回到上一輪全掃時的數字
+    T.tick(1)
+    local again = T.houseOf(MSH.marker(c1.claimId))
+    check(again ~= nil and again ~= cur, "長度沒比上一輪全掃少、但比這輪看過的少：下一個 tick 就重建")
+    SafeHouse.removeSafeHouse(extra)
+    T.tick(1)
+
+    T.section("sentinel：本 MOD 建好一塊、同一個 tick 內另一間被刪 → 下一個 tick 就重建")
+    justSwept(MSH)
+    local tmp = MSH.Native.buildPiece({ claimId = 777, title = "tmp", owner = "zz" }, { x = 5100, y = 5100, w = 5, h = 5 })
+    local cur2 = T.houseOf(MSH.marker(c1.claimId))
+    SafeHouse.removeSafeHouse(cur2)                                      -- 中間沒有 tick：長度剛好抵掉
+    T.tick(1)
+    local again2 = T.houseOf(MSH.marker(c1.claimId))
+    check(tmp ~= nil and again2 ~= nil and again2 ~= cur2, "建好一塊、同一個 tick 內另一間被刪：下一個 tick 就重建")
+    SafeHouse.removeSafeHouse(tmp)
+    T.tick(1)
 
     T.section("hostile mode：每 tick 掃描")
     local hb = T.houseOf(MSH.marker(c1.claimId))
