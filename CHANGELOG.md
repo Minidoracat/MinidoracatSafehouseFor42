@@ -12,8 +12,6 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版本號遵循 `{PZ版本}-{主版本}.{次版本}.{修訂}` 格式。
 
-## [Unreleased]
-
 ## [42.22.2-0.18.4] - 2026-11-28
 
 ### 修正
